@@ -5,6 +5,7 @@ signal panel_closed
 signal item_crafted(recipe_id: String)
 
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const STATIONS := ["hand", "workbench", "furnace"]
 
 var crafting
 var inventory
@@ -30,9 +31,10 @@ func setup(p_crafting, p_inventory) -> void:
 
 
 func open_station(station: String) -> void:
-	var index := ["hand", "workbench", "furnace"].find(station)
-	_station_select.select(maxi(0, index))
-	_on_station_selected(maxi(0, index))
+	var index := STATIONS.find(station)
+	index = maxi(0, index)
+	_station_select.select(index)
+	_set_station(index)
 
 
 func refresh() -> void:
@@ -47,7 +49,10 @@ func refresh() -> void:
 	var visible_count := 0
 	for recipe in recipes:
 		var recipe_station := str(recipe.get("station", "hand"))
-		if recipe_station != crafting.active_station and not (recipe_station == "hand" and crafting.active_station != "furnace"):
+		if (
+			recipe_station != crafting.active_station
+			and not (recipe_station == "hand" and crafting.active_station == "workbench")
+		):
 			continue
 		visible_count += 1
 		var button := Button.new()
@@ -56,9 +61,12 @@ func refresh() -> void:
 		button.tooltip_text = button.text
 		var recipe_id := str(recipe.get("id", ""))
 		button.disabled = not crafting.can_craft(recipe_id)
-		button.pressed.connect(func(): crafting.craft(recipe_id))
+		button.pressed.connect(func() -> void: crafting.craft(recipe_id))
 		_recipe_list.add_child(button)
-	_summary.text = "当前工位: %s   可见配方: %d / 全部 %d" % [_station_name(crafting.active_station), visible_count, crafting.recipe_count()]
+	_summary.text = (
+		"当前工位: %s   可见配方: %d / 全部 %d"
+		% [_station_name(crafting.active_station), visible_count, crafting.recipe_count()]
+	)
 
 
 func _build_ui() -> void:
@@ -76,11 +84,12 @@ func _build_ui() -> void:
 	_station_select.add_item("随身合成")
 	_station_select.add_item("工作台")
 	_station_select.add_item("熔炉")
-	_station_select.item_selected.connect(_on_station_selected)
+	_station_select.disabled = true
+	_station_select.tooltip_text = "工位由当前打开的世界方块决定"
 	header.add_child(_station_select)
 	var close_button := Button.new()
-	close_button.text = "关闭 [C]"
-	close_button.pressed.connect(func(): panel_closed.emit())
+	close_button.text = "关闭 [C / Esc]"
+	close_button.pressed.connect(func() -> void: panel_closed.emit())
 	header.add_child(close_button)
 	_summary = Label.new()
 	root.add_child(_summary)
@@ -94,9 +103,9 @@ func _build_ui() -> void:
 	scroll.add_child(_recipe_list)
 
 
-func _on_station_selected(index: int) -> void:
+func _set_station(index: int) -> void:
 	if crafting != null:
-		crafting.set_station(["hand", "workbench", "furnace"][clampi(index, 0, 2)])
+		crafting.set_station(STATIONS[clampi(index, 0, STATIONS.size() - 1)])
 	refresh()
 
 
@@ -108,12 +117,20 @@ func _on_craft_succeeded(recipe_id: String, _output: Dictionary) -> void:
 func _recipe_text(recipe: Dictionary) -> String:
 	var ingredients: Array[String] = []
 	for item_id in recipe.get("ingredients", {}):
-		var item_name: String = str(inventory.registry.get_display_name(str(item_id))) if inventory != null else str(item_id)
+		var item_name: String = (
+			str(inventory.registry.get_display_name(str(item_id)))
+			if inventory != null
+			else str(item_id)
+		)
 		ingredients.append("%s×%d" % [item_name, int(recipe["ingredients"][item_id])])
 	var output: Dictionary = recipe.get("output", {})
-	var output_name: String = str(inventory.registry.get_display_name(str(output.get("id", "")))) if inventory != null else str(output.get("id", ""))
+	var output_name: String = (
+		str(inventory.registry.get_display_name(str(output.get("id", ""))))
+		if inventory != null
+		else str(output.get("id", ""))
+	)
 	return "%s  →  %s×%d" % [" + ".join(ingredients), output_name, int(output.get("count", 1))]
 
 
 func _station_name(station: String) -> String:
-	return {"hand":"随身", "workbench":"工作台", "furnace":"熔炉"}.get(station, station)
+	return {"hand": "随身", "workbench": "工作台", "furnace": "熔炉"}.get(station, station)
