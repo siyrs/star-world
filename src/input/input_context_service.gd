@@ -11,6 +11,7 @@ const CONTEXT_INVENTORY: StringName = &"inventory"
 const CONTEXT_CRAFTING: StringName = &"crafting"
 const CONTEXT_PAUSE: StringName = &"pause"
 const CONTEXT_DEATH: StringName = &"death"
+const Actions = preload("res://src/input/gameplay_input_actions.gd")
 const VALID_CONTEXTS := [
 	CONTEXT_MENU,
 	CONTEXT_LOADING,
@@ -70,6 +71,7 @@ func unbind_player(player: Node = null) -> void:
 		_player.call("set_input_enabled", false)
 	_player = null
 	_last_gameplay_enabled = false
+	_release_action_state()
 
 
 func set_context(context: StringName) -> bool:
@@ -100,6 +102,8 @@ func reapply() -> void:
 
 func _apply_context(emit_context_change: bool = false) -> void:
 	var gameplay_enabled := is_gameplay_input_enabled()
+	if _last_gameplay_enabled and not gameplay_enabled:
+		_release_action_state()
 	_apply_player_state(gameplay_enabled)
 	_apply_mouse_mode()
 	if gameplay_enabled:
@@ -134,3 +138,8 @@ func _release_gui_focus() -> void:
 	var focus_owner := viewport.gui_get_focus_owner()
 	if focus_owner != null:
 		focus_owner.release_focus()
+
+
+func _release_action_state() -> void:
+	for raw_action in Actions.DEFAULT_KEY_BINDINGS:
+		Input.action_release(StringName(raw_action))

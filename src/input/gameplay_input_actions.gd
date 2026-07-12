@@ -71,6 +71,8 @@ static func has_required_bindings() -> bool:
 			var keycode: Key = raw_keycode
 			if not _has_key_binding(action, keycode, true):
 				return false
+			if not _has_key_binding(action, keycode, false):
+				return false
 	return true
 
 

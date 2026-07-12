@@ -43,7 +43,7 @@ func _run() -> void:
 func _test_binding_repair() -> void:
 	InputMap.erase_action(Actions.MOVE_FORWARD)
 	var input_service = GameplayInputScript.new()
-	var repaired: Array = input_service.ensure_bindings()
+	var repaired: Array = input_service.ensure_bindings(true)
 	root.add_child(input_service)
 	_check(
 		repaired.has(Actions.MOVE_FORWARD),
@@ -64,6 +64,17 @@ func _test_binding_repair() -> void:
 		"logical W fallback is mapped to forward movement",
 	)
 	_check(Actions.has_required_bindings(), "all required gameplay bindings are present")
+	var context = InputContextScript.new()
+	root.add_child(context)
+	context.set_context(InputContextScript.CONTEXT_GAMEPLAY)
+	Input.action_press(Actions.MOVE_FORWARD)
+	_check(Input.is_action_pressed(Actions.MOVE_FORWARD), "synthetic W state is active")
+	context.set_context(InputContextScript.CONTEXT_INVENTORY)
+	_check(
+		not Input.is_action_pressed(Actions.MOVE_FORWARD),
+		"leaving gameplay releases stale movement actions",
+	)
+	context.queue_free()
 	input_service.queue_free()
 
 
