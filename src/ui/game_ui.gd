@@ -5,6 +5,7 @@ signal save_requested
 signal return_to_menu_requested
 signal respawn_requested
 signal input_context_requested(context: StringName)
+signal simulation_pause_requested(paused: bool)
 
 enum Overlay {
 	NONE,
@@ -33,6 +34,7 @@ var crafting_panel
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
 var _death_title: Label
+var _pause_status: Label
 var _overlay: int = Overlay.NONE
 var _gameplay_active := false
 
@@ -92,6 +94,7 @@ func end_gameplay() -> void:
 	if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 		inventory_panel.call("cancel_swap_selection")
 	visible = false
+	simulation_pause_requested.emit(false)
 
 
 func open_inventory() -> void:
@@ -138,6 +141,14 @@ func get_active_overlay() -> int:
 
 func is_gameplay_input_blocked() -> bool:
 	return not _gameplay_active or _overlay != Overlay.NONE
+
+
+func show_save_result(saved: bool) -> void:
+	var message := "世界已保存" if saved else "保存失败，请检查磁盘空间或写入权限"
+	if _pause_status != null:
+		_pause_status.text = message
+	if hud != null:
+		hud.show_message(message, 3.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -200,9 +211,11 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 			crafting_panel.visible = true
 		Overlay.PAUSE:
 			_pause_panel.visible = true
+			_pause_status.text = ""
 		Overlay.DEATH:
 			_death_panel.visible = true
 	input_context_requested.emit(_context_for_overlay())
+	simulation_pause_requested.emit(_overlay in [Overlay.PAUSE, Overlay.DEATH])
 
 
 func _hide_all_overlays() -> void:
@@ -233,7 +246,7 @@ func _context_for_overlay() -> StringName:
 func _build_pause_panel() -> void:
 	_pause_panel = PanelContainer.new()
 	_pause_panel.theme = ThemeFactory.create_theme()
-	_center_control(_pause_panel, Vector2(420, 370))
+	_center_control(_pause_panel, Vector2(420, 390))
 	add_child(_pause_panel)
 	_pause_panel.visible = false
 	var content := VBoxContainer.new()
@@ -243,6 +256,10 @@ func _build_pause_panel() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
 	content.add_child(title)
+	_pause_status = Label.new()
+	_pause_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pause_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_pause_status)
 	var resume := Button.new()
 	resume.text = "继续游戏"
 	resume.pressed.connect(_close_overlay)
@@ -281,13 +298,13 @@ func _build_death_panel() -> void:
 
 
 func _save_from_pause() -> void:
+	_pause_status.text = "正在保存…"
+	hud.show_message("正在保存…", 1.0)
 	save_requested.emit()
-	hud.show_message("世界已保存")
 
 
 func _save_and_return_to_menu() -> void:
-	# The service hub owns the save-before-exit transaction. Emitting only the
-	# navigation intent avoids writing the same world twice from one button press.
+	_pause_status.text = "正在保存并返回…"
 	return_to_menu_requested.emit()
 
 
