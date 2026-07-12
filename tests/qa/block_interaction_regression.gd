@@ -90,6 +90,10 @@ func _test_station_and_container_interactions() -> void:
 	)
 	game_ui.close_overlay()
 	_check(
+		crafting.active_station == "hand",
+		"closing the crafting overlay revokes the temporary advanced station",
+	)
+	_check(
 		interactions.interact(world, position, "furnace") and crafting.active_station == "furnace",
 		"furnace interaction grants the furnace station",
 	)
@@ -161,6 +165,35 @@ func _test_station_and_container_interactions() -> void:
 			and restored.get_slot(saved_id, 0).get("metadata", {}).get("quality", "") == "fresh"
 		),
 		"container serialization retains item metadata and counts",
+	)
+
+	var future_slots: Array = []
+	for index in 36:
+		future_slots.append({})
+	future_slots[35] = {"item_id": "diamond", "count": 1}
+	var compatibility = ContainerStorageScript.new()
+	host.add_child(compatibility)
+	compatibility.setup(inventory.registry)
+	compatibility.deserialize(
+		{
+			"containers":
+			{
+				"chest@future":
+				{
+					"type": "chest",
+					"slot_count": 36,
+					"slots": future_slots,
+				}
+			}
+		}
+	)
+	compatibility.ensure_container("chest@future", "chest", 27)
+	_check(
+		(
+			compatibility.get_slot_count("chest@future") == 36
+			and str(compatibility.get_slot("chest@future", 35).get("item_id", "")) == "diamond"
+		),
+		"opening an existing container never truncates future or legacy capacity",
 	)
 
 	var player = PlayerScene.instantiate()
