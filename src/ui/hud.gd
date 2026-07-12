@@ -3,6 +3,7 @@ extends Control
 
 const SlotScript = preload("res://src/ui/inventory_slot.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 
 var inventory
 var survival
@@ -20,11 +21,14 @@ var _message_label: Label
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = ThemeFactory.create_theme()
 	_build_status_panel()
 	_build_hotbar()
 	_build_crosshair()
+	# HUD controls are presentation-only. In captured-mouse mode the pointer stays
+	# at the viewport center, so even a tiny crosshair Label can otherwise consume
+	# every motion and click before the player receives _unhandled_input().
+	UiInputPolicy.make_passthrough_tree(self)
 
 
 func setup(p_inventory, p_survival = null, p_day_night = null) -> void:
@@ -116,7 +120,6 @@ func _build_hotbar() -> void:
 		var slot = SlotScript.new()
 		slot.configure(index)
 		slot.custom_minimum_size = Vector2(66, 60)
-		slot.slot_clicked.connect(_on_hotbar_slot_clicked)
 		_hotbar.add_child(slot)
 		_slot_buttons.append(slot)
 	_item_label = Label.new()
@@ -142,11 +145,6 @@ func _build_crosshair() -> void:
 	crosshair.position = Vector2(-16, -20)
 	crosshair.size = Vector2(32, 40)
 	add_child(crosshair)
-
-
-func _on_hotbar_slot_clicked(index: int) -> void:
-	if inventory != null:
-		inventory.select_slot(index)
 
 
 func _on_health_changed(current: float, maximum: float) -> void:

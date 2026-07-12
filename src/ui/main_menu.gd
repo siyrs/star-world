@@ -11,6 +11,7 @@ const MapPanelScript = preload("res://src/ui/map_selection_panel.gd")
 const SaveBrowserScript = preload("res://src/ui/save_browser_panel.gd")
 const SettingsPanelScript = preload("res://src/ui/settings_panel.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 
 var save_service
 var audio_service
@@ -18,9 +19,12 @@ var _main_panel: PanelContainer
 var _map_panel
 var _save_panel
 var _settings_panel
+var _loading_panel: PanelContainer
+var _loading_label: Label
 var _status: Label
 var _local_save_service: Node
 var _menu_buttons: Array[Button] = []
+var _loading := false
 
 
 func _ready() -> void:
@@ -29,6 +33,7 @@ func _ready() -> void:
 	_build_background()
 	_build_main_panel()
 	_build_subpanels()
+	_build_loading_panel()
 	_setup_panels()
 	call_deferred("_ensure_standalone_services")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -47,11 +52,27 @@ func setup(p_save_service, p_audio_service = null) -> void:
 
 
 func show_main() -> void:
+	_loading = false
 	visible = true
+	_loading_panel.visible = false
 	_main_panel.visible = true
 	_map_panel.visible = false
 	_save_panel.visible = false
 	_settings_panel.visible = false
+	_set_menu_enabled(true)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func show_loading(message: String = "正在生成世界…") -> void:
+	_loading = true
+	visible = true
+	_main_panel.visible = false
+	_map_panel.visible = false
+	_save_panel.visible = false
+	_settings_panel.visible = false
+	_loading_panel.visible = true
+	_loading_label.text = message
+	_set_menu_enabled(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -102,7 +123,7 @@ func _build_background() -> void:
 	var background := ColorRect.new()
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.color = Color("#07111F")
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiInputPolicy.make_passthrough(background)
 	add_child(background)
 	var stars := Label.new()
 	stars.text = (
@@ -113,6 +134,7 @@ func _build_background() -> void:
 	stars.add_theme_font_size_override("font_size", 34)
 	stars.modulate = Color("#4F7899")
 	stars.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiInputPolicy.make_passthrough(stars)
 	add_child(stars)
 
 
@@ -209,6 +231,27 @@ func _build_subpanels() -> void:
 	_settings_panel.back_requested.connect(show_main)
 
 
+func _build_loading_panel() -> void:
+	_loading_panel = PanelContainer.new()
+	_center_panel(_loading_panel, Vector2(520, 220))
+	add_child(_loading_panel)
+	_loading_panel.visible = false
+	var content := VBoxContainer.new()
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	content.add_theme_constant_override("separation", 18)
+	_loading_panel.add_child(content)
+	var title := Label.new()
+	title.text = "星的世界"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	content.add_child(title)
+	_loading_label = Label.new()
+	_loading_label.text = "正在生成世界…"
+	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_loading_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_loading_label)
+
+
 func _center_panel(panel: Control, panel_size: Vector2) -> void:
 	panel.anchor_left = 0.5
 	panel.anchor_right = 0.5
@@ -228,10 +271,18 @@ func _setup_panels() -> void:
 
 
 func _show_panel(panel: Control) -> void:
+	if _loading:
+		return
+	_loading_panel.visible = false
 	_main_panel.visible = false
 	_map_panel.visible = panel == _map_panel
 	_save_panel.visible = panel == _save_panel
 	_settings_panel.visible = panel == _settings_panel
+
+
+func _set_menu_enabled(enabled: bool) -> void:
+	for button in _menu_buttons:
+		button.disabled = not enabled
 
 
 func _on_create_requested(world_name: String, map_id: String, seed_value: int) -> void:
@@ -240,20 +291,20 @@ func _on_create_requested(world_name: String, map_id: String, seed_value: int) -
 		world_name, map_id, seed_value, {"map_profile": profile}
 	)
 	if state.is_empty():
-		_status.text = "创建世界失败，请检查写入权限。"
 		show_main()
+		_status.text = "创建世界失败，请检查写入权限。"
 		return
-	visible = false
+	show_loading("正在生成 %s…" % str(profile.get("name", "世界")))
 	new_world_requested.emit(state)
 
 
 func _on_load_requested(world_id: String) -> void:
 	var state: Dictionary = save_service.load_world(world_id)
 	if state.is_empty():
-		_status.text = "无法读取该存档。"
 		show_main()
+		_status.text = "无法读取该存档。"
 		return
-	visible = false
+	show_loading("正在读取世界…")
 	continue_world_requested.emit(state)
 
 

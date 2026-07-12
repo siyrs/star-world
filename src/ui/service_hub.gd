@@ -122,6 +122,8 @@ func _begin_world(state: Dictionary) -> void:
 	input_context.unbind_player()
 	if game_ui != null:
 		game_ui.end_gameplay()
+	if main_menu != null and main_menu.has_method("show_loading"):
+		main_menu.call("show_loading", "正在准备世界和渲染资源…")
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	current_state = state.duplicate(true)
@@ -143,8 +145,6 @@ func _begin_world(state: Dictionary) -> void:
 	_pending_ambient = str(
 		profile.get("ambient", _ambient_for_map(str(metadata.get("map_id", ""))))
 	)
-	if main_menu != null:
-		main_menu.visible = false
 	start_world_requested.emit(current_state.duplicate(true))
 
 
@@ -152,6 +152,8 @@ func activate_gameplay() -> void:
 	simulation_pause.reset()
 	creature_spawner.set_active(true)
 	audio_service.start_ambient(_pending_ambient)
+	if main_menu != null:
+		main_menu.visible = false
 	if game_ui != null:
 		game_ui.begin_gameplay()
 	else:
@@ -168,6 +170,10 @@ func handle_world_start_failed(reason: String) -> void:
 		game_ui.end_gameplay()
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
 	input_context.unbind_player()
+	world_node = null
+	player_node = null
+	current_state.clear()
+	current_world_id = ""
 	if main_menu != null:
 		main_menu.show_main()
 		if main_menu.has_method("show_error"):

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   runtime-tests:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,6 +31,12 @@ jobs:
       - name: Verify Godot
         shell: pwsh
         run: godot --version
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate data registry
         shell: pwsh
@@ -78,6 +84,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/block_interaction_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Desktop input contract regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/desktop_input_contract_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Runtime stability regression
         shell: pwsh
         run: |
@@ -89,3 +101,20 @@ jobs:
         run: |
           godot --headless --path . --script res://tests/qa/settings_retest.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Desktop window acceptance
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .\build | Out-Null
+          godot --path . --rendering-method gl_compatibility --script res://tests/qa/desktop_acceptance_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload desktop acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-acceptance-${{ github.run_number }}
+          path: |
+            build/desktop-acceptance.png
+          if-no-files-found: warn
+          retention-days: 14
