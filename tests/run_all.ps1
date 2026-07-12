@@ -36,6 +36,7 @@ Invoke-GodotTest 'res://tests/developer_a/core_smoke_test.gd'
 Invoke-GodotTest 'res://tests/developer_b/run_tests.gd'
 Invoke-GodotTest 'res://tests/qa/integration_regression.gd'
 Invoke-GodotTest 'res://tests/qa/input_interaction_regression.gd'
+Invoke-GodotTest 'res://tests/qa/movement_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
 Write-Host 'PASS: data registry + Godot runtime checks'

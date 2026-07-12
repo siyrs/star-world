@@ -19,12 +19,14 @@ const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
+const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
 
 var inventory
 var crafting
 var survival
 var day_night
 var audio_service
+var gameplay_input
 var hud
 var inventory_panel
 var crafting_panel
@@ -37,6 +39,7 @@ var _gameplay_active := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	InputActionsScript.ensure_default_bindings()
 	layer = 10
 	hud = HudScript.new()
 	add_child(hud)
@@ -54,12 +57,15 @@ func _ready() -> void:
 	_build_death_panel()
 
 
-func setup(p_inventory, p_crafting, p_survival, p_day_night, p_audio = null) -> void:
+func setup(
+	p_inventory, p_crafting, p_survival, p_day_night, p_audio = null, p_gameplay_input = null
+) -> void:
 	inventory = p_inventory
 	crafting = p_crafting
 	survival = p_survival
 	day_night = p_day_night
 	audio_service = p_audio
+	gameplay_input = p_gameplay_input
 	hud.setup(inventory, survival, day_night)
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
@@ -147,15 +153,24 @@ func _unhandled_input(event: InputEvent) -> void:
 				_close_overlay()
 		get_viewport().set_input_as_handled()
 		return
-	if not event is InputEventKey or not event.pressed:
-		return
-	match event.keycode:
-		KEY_E:
-			open_inventory()
-			get_viewport().set_input_as_handled()
-		KEY_C:
-			toggle_crafting("hand")
-			get_viewport().set_input_as_handled()
+	if _event_toggles_inventory(event):
+		open_inventory()
+		get_viewport().set_input_as_handled()
+	elif _event_toggles_crafting(event):
+		toggle_crafting("hand")
+		get_viewport().set_input_as_handled()
+
+
+func _event_toggles_inventory(event: InputEvent) -> bool:
+	if gameplay_input != null and gameplay_input.has_method("event_toggles_inventory"):
+		return bool(gameplay_input.call("event_toggles_inventory", event))
+	return event.is_action_pressed(InputActionsScript.TOGGLE_INVENTORY)
+
+
+func _event_toggles_crafting(event: InputEvent) -> bool:
+	if gameplay_input != null and gameplay_input.has_method("event_toggles_crafting"):
+		return bool(gameplay_input.call("event_toggles_crafting", event))
+	return event.is_action_pressed(InputActionsScript.TOGGLE_CRAFTING)
 
 
 func _can_change_overlay() -> bool:
@@ -261,7 +276,7 @@ func _build_death_panel() -> void:
 	content.add_child(respawn)
 	var menu := Button.new()
 	menu.text = "返回主菜单"
-	menu.pressed.connect(func(): return_to_menu_requested.emit())
+	menu.pressed.connect(func() -> void: return_to_menu_requested.emit())
 	content.add_child(menu)
 
 
