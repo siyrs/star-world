@@ -6,6 +6,7 @@ signal slot_changed(index: int, slot: Dictionary)
 signal selected_slot_changed(index: int, slot: Dictionary)
 signal item_added(item_id: String, count: int)
 signal item_removed(item_id: String, count: int)
+signal slot_equipped(source_index: int, hotbar_index: int, slot: Dictionary)
 
 const SERIAL_VERSION := 1
 const ItemRegistryScript = preload("res://src/inventory/item_registry.gd")
@@ -41,7 +42,11 @@ func add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> int
 	var max_stack := registry.get_max_stack(item_id)
 	for index in slots.size():
 		var slot: Dictionary = slots[index]
-		if str(slot.get("item_id", "")) == item_id and int(slot.get("count", 0)) < max_stack and slot.get("metadata", {}) == metadata:
+		if (
+			str(slot.get("item_id", "")) == item_id
+			and int(slot.get("count", 0)) < max_stack
+			and slot.get("metadata", {}) == metadata
+		):
 			var accepted := mini(remaining, max_stack - int(slot["count"]))
 			slot["count"] = int(slot["count"]) + accepted
 			slots[index] = slot
@@ -97,7 +102,11 @@ func remove_from_slot(index: int, count: int = 1) -> Dictionary:
 		return {}
 	var slot: Dictionary = slots[index]
 	var taken := mini(count, int(slot.get("count", 0)))
-	var result := {"item_id": str(slot.get("item_id", "")), "count": taken, "metadata": slot.get("metadata", {}).duplicate(true)}
+	var result := {
+		"item_id": str(slot.get("item_id", "")),
+		"count": taken,
+		"metadata": slot.get("metadata", {}).duplicate(true)
+	}
 	slot["count"] = int(slot["count"]) - taken
 	if int(slot["count"]) <= 0:
 		slot = {}
@@ -144,6 +153,22 @@ func get_selected_item() -> Dictionary:
 	return get_slot(selected_slot)
 
 
+func is_hotbar_slot(index: int) -> bool:
+	return index >= 0 and index < hotbar_size
+
+
+func equip_slot(source_index: int, hotbar_index: int = -1) -> bool:
+	if source_index < 0 or source_index >= slots.size() or slots[source_index].is_empty():
+		return false
+	var target_index := selected_slot if hotbar_index < 0 else posmod(hotbar_index, hotbar_size)
+	if source_index != target_index and not swap_slots(source_index, target_index):
+		return false
+	if selected_slot != target_index or source_index == target_index:
+		select_slot(target_index)
+	slot_equipped.emit(source_index, target_index, get_slot(target_index))
+	return true
+
+
 func swap_slots(first: int, second: int) -> bool:
 	if first < 0 or second < 0 or first >= slots.size() or second >= slots.size():
 		return false
@@ -178,7 +203,13 @@ func serialize() -> Dictionary:
 	var saved_slots: Array = []
 	for slot in slots:
 		saved_slots.append(slot.duplicate(true))
-	return {"version": SERIAL_VERSION, "selected_slot": selected_slot, "slot_count": slot_count, "hotbar_size": hotbar_size, "slots": saved_slots}
+	return {
+		"version": SERIAL_VERSION,
+		"selected_slot": selected_slot,
+		"slot_count": slot_count,
+		"hotbar_size": hotbar_size,
+		"slots": saved_slots
+	}
 
 
 func deserialize(data: Dictionary) -> bool:
@@ -194,7 +225,11 @@ func deserialize(data: Dictionary) -> bool:
 			var item_id := str(raw_slot.get("item_id", ""))
 			var item_count := int(raw_slot.get("count", 0))
 			if registry.has_item(item_id) and item_count > 0:
-				slots[index] = {"item_id": item_id, "count": mini(item_count, registry.get_max_stack(item_id)), "metadata": raw_slot.get("metadata", {}).duplicate(true)}
+				slots[index] = {
+					"item_id": item_id,
+					"count": mini(item_count, registry.get_max_stack(item_id)),
+					"metadata": raw_slot.get("metadata", {}).duplicate(true)
+				}
 	selected_slot = clampi(int(data.get("selected_slot", 0)), 0, hotbar_size - 1)
 	inventory_changed.emit()
 	_emit_selected_slot()

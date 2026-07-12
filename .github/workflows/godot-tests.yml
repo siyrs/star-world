@@ -1,0 +1,85 @@
+name: Godot runtime tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-tests:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Verify Godot
+        shell: pwsh
+        run: godot --version
+
+      - name: Validate data registry
+        shell: pwsh
+        run: .\tests\developer_b\validate_data.ps1
+
+      - name: Core smoke test
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/developer_a/core_smoke_test.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Gameplay services test
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/developer_b/run_tests.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Integration regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/integration_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Input interaction regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/input_interaction_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Movement lifecycle regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/movement_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Physics interaction regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Runtime stability regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/runtime_stability_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Settings regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/settings_retest.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

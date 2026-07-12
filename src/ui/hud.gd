@@ -45,25 +45,13 @@ func setup(p_inventory, p_survival = null, p_day_night = null) -> void:
 	refresh_inventory()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if inventory == null:
-		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		var number: int = int(event.keycode - KEY_1)
-		if number >= 0 and number < inventory.hotbar_size:
-			inventory.select_slot(number)
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			inventory.select_relative(-1)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			inventory.select_relative(1)
-
-
 func refresh_inventory() -> void:
 	if inventory == null or _slot_buttons.is_empty():
 		return
 	for index in _slot_buttons.size():
-		_slot_buttons[index].display_slot(inventory.get_slot(index), inventory.registry, index == inventory.selected_slot)
+		_slot_buttons[index].display_slot(
+			inventory.get_slot(index), inventory.registry, index == inventory.selected_slot
+		)
 	_on_selected_slot_changed(inventory.selected_slot, inventory.get_selected_item())
 
 
@@ -128,6 +116,7 @@ func _build_hotbar() -> void:
 		var slot = SlotScript.new()
 		slot.configure(index)
 		slot.custom_minimum_size = Vector2(66, 60)
+		slot.slot_clicked.connect(_on_hotbar_slot_clicked)
 		_hotbar.add_child(slot)
 		_slot_buttons.append(slot)
 	_item_label = Label.new()
@@ -155,6 +144,11 @@ func _build_crosshair() -> void:
 	add_child(crosshair)
 
 
+func _on_hotbar_slot_clicked(index: int) -> void:
+	if inventory != null:
+		inventory.select_slot(index)
+
+
 func _on_health_changed(current: float, maximum: float) -> void:
 	_health_bar.max_value = maximum
 	_health_bar.value = current
@@ -175,6 +169,12 @@ func _on_selected_slot_changed(index: int, slot: Dictionary) -> void:
 	if inventory == null:
 		return
 	var item_id := str(slot.get("item_id", ""))
-	_item_label.text = "[%d] %s" % [index + 1, inventory.registry.get_display_name(item_id)] if not item_id.is_empty() else "[%d] 空手" % (index + 1)
+	_item_label.text = (
+		"[%d] %s" % [index + 1, inventory.registry.get_display_name(item_id)]
+		if not item_id.is_empty()
+		else "[%d] 空手" % (index + 1)
+	)
 	for button_index in _slot_buttons.size():
-		_slot_buttons[button_index].display_slot(inventory.get_slot(button_index), inventory.registry, button_index == index)
+		_slot_buttons[button_index].display_slot(
+			inventory.get_slot(button_index), inventory.registry, button_index == index
+		)

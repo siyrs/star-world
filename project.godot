@@ -16,6 +16,7 @@ common/enable_pause_aware_picking=true
 3d_physics/layer_1="Voxel World"
 3d_physics/layer_2="Player"
 3d_physics/layer_3="Entities"
+3d_physics/layer_4="Pickups"
 
 [rendering]
 renderer/rendering_method="gl_compatibility"

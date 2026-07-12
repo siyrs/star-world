@@ -5,17 +5,26 @@ signal world_saved(world_id: String)
 signal world_loaded(world_id: String, state: Dictionary)
 signal world_deleted(world_id: String)
 signal save_failed(world_id: String, reason: String)
+signal save_recovered(world_id: String, source: String)
+signal settings_saved
+signal settings_save_failed(reason: String)
+signal settings_recovered(source: String)
 
 const SAVE_VERSION := 2
 const WORLDS_DIR := "user://worlds"
 const SETTINGS_PATH := "user://settings.json"
+const AtomicJsonStoreScript = preload("res://src/save/atomic_json_store.gd")
+
+var _store = AtomicJsonStoreScript.new()
 
 
 func _ready() -> void:
 	_ensure_directory(WORLDS_DIR)
 
 
-func create_world(display_name: String, map_id: String, seed_value: int, extra: Dictionary = {}) -> Dictionary:
+func create_world(
+	display_name: String, map_id: String, seed_value: int, extra: Dictionary = {}
+) -> Dictionary:
 	_ensure_directory(WORLDS_DIR)
 	var timestamp := int(Time.get_unix_time_from_system())
 	var base_id := _sanitize_id(display_name)
@@ -34,17 +43,22 @@ func create_world(display_name: String, map_id: String, seed_value: int, extra: 
 		"seed": seed_value,
 		"created_at": now,
 		"updated_at": now,
-		"play_seconds": 0
+		"play_seconds": 0,
 	}
 	metadata.merge(extra, true)
 	var state := {
 		"save_version": SAVE_VERSION,
 		"metadata": metadata,
-		"player": {"position":[0.0, 48.0, 0.0], "rotation":[0.0, 0.0, 0.0]},
+		"player":
+		{
+			"position": [0.0, 48.0, 0.0],
+			"rotation": [0.0, 0.0, 0.0],
+			"look_pitch": 0.0,
+		},
 		"inventory": {},
-		"world": {"block_overrides":{}, "loaded_chunks":[]},
-		"survival": {"health":20.0, "hunger":20.0},
-		"day_night": {"time_of_day":8.0, "day":1}
+		"world": {"block_overrides": {}, "loaded_chunks": []},
+		"survival": {"health": 20.0, "hunger": 20.0},
+		"day_night": {"time_of_day": 8.0, "day": 1},
 	}
 	if save_world(world_id, state):
 		return state
@@ -63,8 +77,7 @@ func save_world(world_id: String, state: Dictionary) -> bool:
 	metadata["id"] = world_id
 	metadata["updated_at"] = Time.get_datetime_string_from_system()
 	payload["metadata"] = metadata
-	var json_text := JSON.stringify(payload, "\t", false)
-	if not _atomic_write("%s/world.json" % world_dir, json_text):
+	if not _store.write_dictionary("%s/world.json" % world_dir, payload):
 		save_failed.emit(world_id, "write_failed")
 		return false
 	world_saved.emit(world_id)
@@ -72,13 +85,9 @@ func save_world(world_id: String, state: Dictionary) -> bool:
 
 
 func load_world(world_id: String) -> Dictionary:
-	if not _is_safe_id(world_id):
-		return {}
-	var path := "%s/%s/world.json" % [WORLDS_DIR, world_id]
-	var payload := _read_json(path)
+	var payload := _read_world_payload(world_id, true)
 	if payload.is_empty():
 		return {}
-	payload = _migrate(payload)
 	world_loaded.emit(world_id, payload.duplicate(true))
 	return payload
 
@@ -90,10 +99,12 @@ func list_worlds() -> Array:
 	if directory == null:
 		return result
 	for world_id in directory.get_directories():
-		var payload := load_world(world_id)
+		var payload := _read_world_payload(world_id, false)
 		if not payload.is_empty():
 			result.append(payload.get("metadata", {}).duplicate(true))
-	result.sort_custom(func(a, b): return str(a.get("updated_at", "")) > str(b.get("updated_at", "")))
+	result.sort_custom(
+		func(a, b): return str(a.get("updated_at", "")) > str(b.get("updated_at", ""))
+	)
 	return result
 
 
@@ -114,58 +125,65 @@ func delete_world(world_id: String) -> bool:
 
 
 func world_exists(world_id: String) -> bool:
-	return _is_safe_id(world_id) and FileAccess.file_exists("%s/%s/world.json" % [WORLDS_DIR, world_id])
+	return (
+		_is_safe_id(world_id)
+		and (
+			FileAccess.file_exists("%s/%s/world.json" % [WORLDS_DIR, world_id])
+			or FileAccess.file_exists("%s/%s/world.json.tmp" % [WORLDS_DIR, world_id])
+			or FileAccess.file_exists("%s/%s/world.json.bak" % [WORLDS_DIR, world_id])
+		)
+	)
 
 
 func save_settings(settings: Dictionary) -> bool:
-	return _atomic_write(SETTINGS_PATH, JSON.stringify({"version":1, "settings":settings}, "\t", false))
+	var saved := _store.write_dictionary(
+		SETTINGS_PATH, {"version": 1, "settings": settings.duplicate(true)}
+	)
+	if saved:
+		settings_saved.emit()
+	else:
+		settings_save_failed.emit("write_failed")
+	return saved
 
 
 func load_settings(defaults: Dictionary = {}) -> Dictionary:
-	var payload := _read_json(SETTINGS_PATH)
-	if payload.is_empty():
+	var result := _store.read_dictionary(SETTINGS_PATH)
+	if not bool(result.get("ok", false)):
 		return defaults.duplicate(true)
-	var settings: Dictionary = payload.get("settings", {})
+	var source := str(result.get("source", "primary"))
+	if source != "primary":
+		settings_recovered.emit(source)
+	var payload: Dictionary = result.get("data", {})
+	var settings: Dictionary = payload.get("settings", {}).duplicate(true)
 	for key in defaults:
 		if not settings.has(key):
 			settings[key] = defaults[key]
 	return settings
 
 
+func _read_world_payload(world_id: String, emit_recovery: bool) -> Dictionary:
+	if not _is_safe_id(world_id):
+		return {}
+	var path := "%s/%s/world.json" % [WORLDS_DIR, world_id]
+	var result := _store.read_dictionary(path)
+	if not bool(result.get("ok", false)):
+		return {}
+	var source := str(result.get("source", "primary"))
+	if emit_recovery and source != "primary":
+		save_recovered.emit(world_id, source)
+	var payload: Dictionary = result.get("data", {}).duplicate(true)
+	return _migrate(payload)
+
+
 func _migrate(payload: Dictionary) -> Dictionary:
 	var version := int(payload.get("save_version", 1))
 	if version < 2:
 		if not payload.has("day_night"):
-			payload["day_night"] = {"time_of_day":8.0, "day":1}
+			payload["day_night"] = {"time_of_day": 8.0, "day": 1}
 		if not payload.has("survival"):
-			payload["survival"] = {"health":20.0, "hunger":20.0}
+			payload["survival"] = {"health": 20.0, "hunger": 20.0}
 		payload["save_version"] = 2
 	return payload
-
-
-func _read_json(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return {}
-	var parsed = JSON.parse_string(file.get_as_text())
-	return parsed if parsed is Dictionary else {}
-
-
-func _atomic_write(path: String, content: String) -> bool:
-	var absolute_path := ProjectSettings.globalize_path(path)
-	_ensure_directory(path.get_base_dir())
-	var temporary_path := "%s.tmp" % absolute_path
-	var file := FileAccess.open(temporary_path, FileAccess.WRITE)
-	if file == null:
-		return false
-	file.store_string(content)
-	file.flush()
-	file.close()
-	if FileAccess.file_exists(absolute_path):
-		DirAccess.remove_absolute(absolute_path)
-	return DirAccess.rename_absolute(temporary_path, absolute_path) == OK
 
 
 func _ensure_directory(path: String) -> void:
@@ -183,4 +201,10 @@ func _sanitize_id(value: String) -> String:
 
 
 func _is_safe_id(world_id: String) -> bool:
-	return not world_id.is_empty() and world_id == world_id.get_file() and ".." not in world_id and "/" not in world_id and "\\" not in world_id
+	return (
+		not world_id.is_empty()
+		and world_id == world_id.get_file()
+		and ".." not in world_id
+		and "/" not in world_id
+		and "\\" not in world_id
+	)

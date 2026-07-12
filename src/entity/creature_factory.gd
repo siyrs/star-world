@@ -2,6 +2,7 @@ class_name CreatureFactory
 extends RefCounted
 
 const DATA_PATH := "res://data/creatures.json"
+const PhysicsPolicy = preload("res://src/core/physics_interaction_policy.gd")
 const SCRIPTS := {
 	"chicken": preload("res://src/entity/chicken.gd"),
 	"cow": preload("res://src/entity/cow.gd"),
@@ -34,6 +35,11 @@ func create(species_id: String, world_position: Vector3, target: Node3D = null, 
 		push_warning("Unknown creature species: %s" % species_id)
 		return null
 	var creature = SCRIPTS[species_id].new()
+	PhysicsPolicy.configure_creature(creature)
+	creature.died.connect(
+		func(_species_id: String, _drops: Dictionary, _position: Vector3) -> void:
+			PhysicsPolicy.disable_body_collision(creature)
+	)
 	creature.apply_profile(profiles.get(species_id, {}))
 	creature.position = world_position
 	creature.target = target

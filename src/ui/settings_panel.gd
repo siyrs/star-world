@@ -5,10 +5,15 @@ signal settings_applied(settings: Dictionary)
 signal back_requested
 
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
-const DEFAULTS := {"mouse_sensitivity":0.18, "render_distance":4, "master_volume":0.8, "fullscreen":false, "cycle_minutes":10}
+const DEFAULTS := {
+	"mouse_sensitivity": 0.18,
+	"render_distance": 3,
+	"master_volume": 0.8,
+	"fullscreen": false,
+	"cycle_minutes": 10,
+}
 
 var save_service
-var audio_service
 var _sensitivity: HSlider
 var _render_distance: OptionButton
 var _volume: HSlider
@@ -23,10 +28,13 @@ func _ready() -> void:
 	_build_ui()
 
 
-func setup(p_save_service, p_audio_service = null) -> void:
+func setup(p_save_service, _p_audio_service = null) -> void:
 	save_service = p_save_service
-	audio_service = p_audio_service
 	_load_values()
+
+
+func show_apply_result(saved: bool) -> void:
+	_status.text = "已保存并应用" if saved else "已应用，但设置文件保存失败"
 
 
 func _build_ui() -> void:
@@ -42,7 +50,7 @@ func _build_ui() -> void:
 	distance_label.text = "区块视距"
 	root.add_child(distance_label)
 	_render_distance = OptionButton.new()
-	for value in [2, 3, 4, 5]:
+	for value in range(1, 6):
 		_render_distance.add_item("%d chunks" % value, value)
 	root.add_child(_render_distance)
 	_volume = _add_slider(root, "主音量", 0.0, 1.0, 0.01)
@@ -61,11 +69,13 @@ func _build_ui() -> void:
 	actions.add_child(apply_button)
 	var back := Button.new()
 	back.text = "返回"
-	back.pressed.connect(func(): back_requested.emit())
+	back.pressed.connect(func() -> void: back_requested.emit())
 	actions.add_child(back)
 
 
-func _add_slider(parent: Control, title: String, minimum: float, maximum: float, step: float) -> HSlider:
+func _add_slider(
+	parent: Control, title: String, minimum: float, maximum: float, step: float
+) -> HSlider:
 	var label := Label.new()
 	label.text = title
 	parent.add_child(label)
@@ -79,7 +89,9 @@ func _add_slider(parent: Control, title: String, minimum: float, maximum: float,
 
 
 func _load_values() -> void:
-	var settings: Dictionary = save_service.load_settings(DEFAULTS) if save_service != null else DEFAULTS.duplicate(true)
+	var settings: Dictionary = (
+		save_service.load_settings(DEFAULTS) if save_service != null else DEFAULTS.duplicate(true)
+	)
 	_sensitivity.value = float(settings.get("mouse_sensitivity", DEFAULTS.mouse_sensitivity))
 	var distance := int(settings.get("render_distance", DEFAULTS.render_distance))
 	for index in _render_distance.item_count:
@@ -91,11 +103,12 @@ func _load_values() -> void:
 
 
 func _apply() -> void:
-	var settings := {"mouse_sensitivity":_sensitivity.value, "render_distance":_render_distance.get_selected_id(), "master_volume":_volume.value, "fullscreen":_fullscreen.button_pressed, "cycle_minutes":int(_cycle.value)}
-	if save_service != null:
-		save_service.save_settings(settings)
-	if audio_service != null:
-		audio_service.set_master_volume(_volume.value)
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if _fullscreen.button_pressed else DisplayServer.WINDOW_MODE_WINDOWED)
-	_status.text = "已保存"
+	var settings := {
+		"mouse_sensitivity": _sensitivity.value,
+		"render_distance": _render_distance.get_selected_id(),
+		"master_volume": _volume.value,
+		"fullscreen": _fullscreen.button_pressed,
+		"cycle_minutes": int(_cycle.value),
+	}
+	_status.text = "正在应用…"
 	settings_applied.emit(settings)

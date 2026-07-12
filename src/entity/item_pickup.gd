@@ -3,10 +3,13 @@ extends Area3D
 
 signal collected(item_id: String, count: int)
 
+const PhysicsPolicy = preload("res://src/core/physics_interaction_policy.gd")
+
 var item_id: String = ""
 var item_count: int = 1
 var inventory_service
 var life_seconds: float = 180.0
+var _collection_locked := false
 
 
 func setup(p_item_id: String, p_count: int, p_inventory = null) -> void:
@@ -16,8 +19,7 @@ func setup(p_item_id: String, p_count: int, p_inventory = null) -> void:
 
 
 func _ready() -> void:
-	monitoring = true
-	monitorable = true
+	PhysicsPolicy.configure_pickup(self)
 	var collision := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
 	shape.radius = 0.32
@@ -46,13 +48,16 @@ func _process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if body == null:
+	if _collection_locked or not PhysicsPolicy.is_player_body(body):
 		return
+	var leftover := item_count
 	if body.has_method("collect_item"):
-		var leftover: int = int(body.call("collect_item", item_id, item_count))
-		_finish_collection(leftover)
-	elif inventory_service != null:
-		_finish_collection(int(inventory_service.add_item(item_id, item_count)))
+		leftover = int(body.call("collect_item", item_id, item_count))
+	elif inventory_service != null and inventory_service.has_method("add_item"):
+		leftover = int(inventory_service.call("add_item", item_id, item_count))
+	else:
+		return
+	_finish_collection(clampi(leftover, 0, item_count))
 
 
 func _finish_collection(leftover: int) -> void:
@@ -61,6 +66,8 @@ func _finish_collection(leftover: int) -> void:
 		collected.emit(item_id, accepted)
 	item_count = leftover
 	if item_count <= 0:
+		_collection_locked = true
+		monitoring = false
 		queue_free()
 
 
