@@ -16,7 +16,7 @@ concurrency:
 jobs:
   runtime-tests:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,10 +96,22 @@ jobs:
           godot --headless --path . --script res://tests/qa/runtime_diagnostics_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Adaptive streaming regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/adaptive_streaming_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Runtime stability regression
         shell: pwsh
         run: |
           godot --headless --path . --script res://tests/qa/runtime_stability_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Runtime lifecycle soak
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/runtime_soak_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Settings regression
