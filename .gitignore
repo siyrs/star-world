@@ -1,0 +1,14 @@
+.godot/
+.import/
+.mono/
+build/
+
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+

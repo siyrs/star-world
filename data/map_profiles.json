@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "maps": [
+    {"id":"star_continent","name":"星辰大陆","generator":"green_continent","description":"森林、河流与平原交错，资源均衡。","difficulty":"普通","sky_color":"#72B5E8","ambient":"forest"},
+    {"id":"desert_ruins","name":"荒漠遗迹","generator":"desert","description":"广阔沙海与石质遗迹，地下矿物更密集。","difficulty":"较难","sky_color":"#E8C47A","ambient":"desert"},
+    {"id":"frozen_wastes","name":"极寒冰原","generator":"ice","description":"雪原与冰峰，饥饿消耗更快。","difficulty":"困难","sky_color":"#B8D7E8","ambient":"wind"},
+    {"id":"sky_islands","name":"天空群岛","generator":"mountains","description":"漂浮空中的资源岛，需要搭桥探索。","difficulty":"较难","sky_color":"#86C9FA","ambient":"sky"},
+    {"id":"abyss_world","name":"深渊世界","generator":"caves","description":"巨型地下洞窟，敌对生物活跃。","difficulty":"困难","sky_color":"#151A2D","ambient":"cave"}
+  ]
+}

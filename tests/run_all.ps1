@@ -1,0 +1,40 @@
+param(
+    [string]$Godot = $env:GODOT_BIN
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($Godot)) {
+    foreach ($commandName in @('godot4', 'godot')) {
+        $command = Get-Command $commandName -ErrorAction SilentlyContinue
+        if ($null -ne $command) {
+            $Godot = $command.Source
+            break
+        }
+    }
+}
+
+$verifiedLocalGodot = 'C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe'
+if ([string]::IsNullOrWhiteSpace($Godot) -and (Test-Path -LiteralPath $verifiedLocalGodot)) {
+    $Godot = $verifiedLocalGodot
+}
+if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot)) {
+    throw 'Godot 4 executable not found. Pass -Godot <path> or set GODOT_BIN.'
+}
+
+& "$PSScriptRoot\developer_b\validate_data.ps1"
+
+function Invoke-GodotTest {
+    param([Parameter(Mandatory = $true)][string]$ScriptPath)
+    & $Godot --headless --path "$PSScriptRoot\.." --script $ScriptPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Godot test failed: $ScriptPath (exit $LASTEXITCODE)"
+    }
+}
+
+Invoke-GodotTest 'res://tests/developer_a/core_smoke_test.gd'
+Invoke-GodotTest 'res://tests/developer_b/run_tests.gd'
+Invoke-GodotTest 'res://tests/qa/integration_regression.gd'
+Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
+
+Write-Host 'PASS: data registry + 193 Godot runtime checks'

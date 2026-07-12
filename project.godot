@@ -1,0 +1,22 @@
+[application]
+config/name="星的世界"
+run/main_scene="res://scenes/game/game.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+
+[physics]
+common/enable_pause_aware_picking=true
+3d/default_gravity=20.0
+
+[layer_names]
+3d_physics/layer_1="Voxel World"
+3d_physics/layer_2="Player"
+3d_physics/layer_3="Entities"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
