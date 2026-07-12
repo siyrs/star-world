@@ -102,6 +102,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/adaptive_streaming_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Audio lifecycle regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/audio_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Runtime stability regression
         shell: pwsh
         run: |
