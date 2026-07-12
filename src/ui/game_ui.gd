@@ -106,6 +106,8 @@ func begin_gameplay() -> void:
 
 func end_gameplay() -> void:
 	_gameplay_active = false
+	if crafting != null:
+		crafting.set_station("hand")
 	_overlay = Overlay.NONE
 	if container_panel != null:
 		container_panel.close_container()
@@ -235,6 +237,9 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	if _overlay == Overlay.INVENTORY and next_overlay != Overlay.INVENTORY:
 		if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 			inventory_panel.call("cancel_swap_selection")
+	if _overlay == Overlay.CRAFTING and next_overlay != Overlay.CRAFTING:
+		if crafting != null:
+			crafting.set_station("hand")
 	if _overlay == Overlay.CONTAINER and next_overlay != Overlay.CONTAINER:
 		if container_panel != null:
 			container_panel.close_container()
