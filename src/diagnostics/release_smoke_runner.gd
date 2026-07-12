@@ -5,10 +5,14 @@ const VisualPolicy = preload("res://src/diagnostics/visual_acceptance_policy.gd"
 const DEFAULT_REPORT_PATH := "user://release-smoke.json"
 const SMOKE_WORLD_ID := "release-smoke-runtime"
 const TELEMETRY_STABILIZATION_FRAMES := 12
+const DEFAULT_SOAK_FRAMES := 180
+const SOAK_SAMPLE_INTERVAL_FRAMES := 30
+const SOAK_MOVE_INTERVAL_FRAMES := 60
 
 var game: Node
 var report_path := DEFAULT_REPORT_PATH
 var screenshot_path := "user://release-smoke.png"
+var soak_frames := DEFAULT_SOAK_FRAMES
 var checks := 0
 var failures: Array[String] = []
 var _world_started := false
@@ -18,22 +22,30 @@ var _world_start_failure := ""
 static func configuration_from_arguments(arguments: PackedStringArray) -> Dictionary:
 	var enabled := false
 	var output := DEFAULT_REPORT_PATH
+	var configured_soak_frames := DEFAULT_SOAK_FRAMES
 	for argument in arguments:
 		if argument == "--release-smoke":
 			enabled = true
 		elif argument.begins_with("--smoke-output="):
 			output = argument.trim_prefix("--smoke-output=").strip_edges()
+		elif argument.begins_with("--smoke-soak-frames="):
+			var raw_frames := argument.trim_prefix("--smoke-soak-frames=").strip_edges()
+			if raw_frames.is_valid_int():
+				configured_soak_frames = clampi(int(raw_frames), 60, 600)
 	if not enabled:
 		return {}
 	if output.is_empty():
 		output = DEFAULT_REPORT_PATH
-	return {"report_path": output}
+	return {"report_path": output, "soak_frames": configured_soak_frames}
 
 
 func configure(p_game: Node, configuration: Dictionary) -> void:
 	game = p_game
 	report_path = str(configuration.get("report_path", DEFAULT_REPORT_PATH))
 	screenshot_path = "%s.png" % report_path.get_basename()
+	soak_frames = clampi(
+		int(configuration.get("soak_frames", DEFAULT_SOAK_FRAMES)), 60, 600
+	)
 
 
 func _ready() -> void:
@@ -80,8 +92,14 @@ func _run() -> void:
 	if diagnostics != null:
 		_check(diagnostics.get("telemetry") != null, "runtime_telemetry_mounted")
 		_check(diagnostics.get("overlay") != null, "diagnostics_overlay_mounted")
+		_check(
+			diagnostics.get("streaming_controller") != null,
+			"adaptive_streaming_controller_mounted"
+		)
 	for _frame in TELEMETRY_STABILIZATION_FRAMES:
 		await get_tree().process_frame
+	var soak_result: Dictionary = await _run_runtime_soak(world, player, diagnostics)
+	_check(bool(soak_result.get("ok", false)), "runtime_soak_stays_bounded")
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var visual_result := VisualPolicy.evaluate(image)
@@ -89,7 +107,7 @@ func _run() -> void:
 	if image != null and not image.is_empty():
 		_ensure_output_directory(screenshot_path)
 		_check(image.save_png(screenshot_path) == OK, "screenshot_saved")
-	await _finish(visual_result, diagnostics)
+	await _finish(visual_result, diagnostics, soak_result)
 
 
 func _on_world_started(_profile_id: String, _seed: int, _world_id: String) -> void:
@@ -100,14 +118,79 @@ func _on_world_start_failed(reason: String) -> void:
 	_world_start_failure = reason
 
 
-func _finish(visual_result: Dictionary = {}, diagnostics: Node = null) -> void:
+func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictionary:
+	if world == null or player == null or diagnostics == null:
+		return {"ok": false, "reason": "runtime_missing"}
+	var max_pending := 0
+	var max_loaded := 0
+	var critical_samples := 0
+	var samples := 0
+	var start_position: Vector3 = world.call("get_spawn_position")
+	for frame_index in soak_frames:
+		if frame_index > 0 and frame_index % SOAK_MOVE_INTERVAL_FRAMES == 0:
+			var leg := floori(float(frame_index) / float(SOAK_MOVE_INTERVAL_FRAMES))
+			var candidate := start_position + Vector3(
+				float(leg * 20), 4.0, float((leg % 2) * 18)
+			)
+			var resolved = world.call("resolve_ground_position", candidate)
+			if resolved is Vector3:
+				player.global_position = resolved
+				if player.has_method("reset_motion"):
+					player.call("reset_motion")
+		await get_tree().process_frame
+		if frame_index % SOAK_SAMPLE_INTERVAL_FRAMES != 0:
+			continue
+		var snapshot: Dictionary = diagnostics.call("sample_now")
+		var streaming: Dictionary = snapshot.get("streaming", {})
+		max_pending = maxi(max_pending, int(streaming.get("pending", 0)))
+		max_loaded = maxi(max_loaded, int(streaming.get("loaded", 0)))
+		if frame_index >= SOAK_MOVE_INTERVAL_FRAMES:
+			var health: Dictionary = snapshot.get("health", {})
+			if str(health.get("status", "healthy")) == "critical":
+				critical_samples += 1
+		samples += 1
+	var final_snapshot: Dictionary = diagnostics.call("sample_now")
+	var adaptive: Dictionary = final_snapshot.get("adaptive_streaming", {})
+	var profile: Dictionary = adaptive.get("profile", {})
+	var budget_ms := float(profile.get("budget_ms", 0.0))
+	var change_count := int(adaptive.get("change_count", 0))
+	var bounded := (
+		max_pending <= 128
+		and max_loaded <= 96
+		and critical_samples <= 1
+		and change_count <= 12
+		and budget_ms >= 0.5
+		and budget_ms <= 12.0
+		and bool(adaptive.get("attached", false))
+		and bool(world.get("is_started"))
+		and player.visible
+	)
+	return {
+		"ok": bounded,
+		"frames": soak_frames,
+		"samples": samples,
+		"max_pending_chunks": max_pending,
+		"max_loaded_chunks": max_loaded,
+		"critical_samples": critical_samples,
+		"adaptive_change_count": change_count,
+		"adaptive_level": str(adaptive.get("level_name", "unknown")),
+		"adaptive_budget_ms": budget_ms,
+		"final_snapshot": final_snapshot,
+	}
+
+
+func _finish(
+	visual_result: Dictionary = {},
+	diagnostics: Node = null,
+	soak_result: Dictionary = {}
+) -> void:
 	var telemetry_snapshot: Dictionary = {}
 	if diagnostics != null and diagnostics.has_method("sample_now"):
 		telemetry_snapshot = diagnostics.call("sample_now")
 	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
 	var payload := {
-		"version": 1,
+		"version": 2,
 		"ok": failures.is_empty(),
 		"checks": checks,
 		"failures": failures,
@@ -115,6 +198,7 @@ func _finish(visual_result: Dictionary = {}, diagnostics: Node = null) -> void:
 		"report_path": report_path,
 		"screenshot_path": screenshot_path,
 		"visual": visual_result,
+		"soak": soak_result,
 		"telemetry": telemetry_snapshot,
 		"engine_version": Engine.get_version_info(),
 	}
@@ -154,12 +238,10 @@ func _cleanup_runtime() -> void:
 			spawner.call("clear_creatures")
 		var audio = hub.get("audio_service")
 		if audio != null:
-			audio.call("stop_ambient")
-			for player_name in ["Effects", "Creatures", "Ambient"]:
-				var audio_player := audio.get_node_or_null(player_name) as AudioStreamPlayer
-				if audio_player != null:
-					audio_player.stop()
-					audio_player.stream = null
+			if audio.has_method("shutdown"):
+				audio.call("shutdown")
+			else:
+				audio.call("stop_ambient")
 	var world: Node = game.get("world")
 	if world != null and world.has_method("clear_world"):
 		world.call("clear_world")
