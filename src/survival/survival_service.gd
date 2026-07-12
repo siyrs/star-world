@@ -113,9 +113,38 @@ func consume_food(item_id: String, food_points: float, saturation_points: float 
 	return true
 
 
+func consume_selected_inventory_item(inventory) -> bool:
+	if (
+		inventory == null
+		or not inventory.has_method("get_selected_item")
+		or not inventory.has_method("consume_selected")
+	):
+		return false
+	var slot: Dictionary = inventory.call("get_selected_item")
+	var item_id := str(slot.get("item_id", ""))
+	if item_id.is_empty():
+		return false
+	var item: Dictionary = inventory.registry.get_item(item_id)
+	var food_points := float(item.get("food", 0.0))
+	var saturation_points := float(item.get("saturation", 0.0))
+	if not item.has("food") or not alive or food_points <= 0.0 or hunger >= max_hunger:
+		return false
+	var consumed: Dictionary = inventory.call("consume_selected", 1)
+	if consumed.is_empty():
+		return false
+	if consume_food(item_id, food_points, saturation_points):
+		return true
+	inventory.add_item(item_id, 1, consumed.get("metadata", {}))
+	return false
+
+
 func consume_inventory_item(inventory, item_id: String) -> bool:
 	if inventory == null or inventory.count_item(item_id) <= 0:
 		return false
+	if inventory.has_method("get_selected_item"):
+		var selected: Dictionary = inventory.call("get_selected_item")
+		if str(selected.get("item_id", "")) == item_id:
+			return consume_selected_inventory_item(inventory)
 	var item: Dictionary = inventory.registry.get_item(item_id)
 	if not item.has("food"):
 		return false
@@ -127,10 +156,14 @@ func consume_inventory_item(inventory, item_id: String) -> bool:
 
 func report_player_action(action: String) -> void:
 	match action:
-		"jump": add_exhaustion(0.18)
-		"sprint": add_exhaustion(0.08)
-		"mine": add_exhaustion(0.03)
-		"attack": add_exhaustion(0.1)
+		"jump":
+			add_exhaustion(0.18)
+		"sprint":
+			add_exhaustion(0.08)
+		"mine":
+			add_exhaustion(0.03)
+		"attack":
+			add_exhaustion(0.1)
 
 
 func respawn() -> void:
@@ -146,7 +179,14 @@ func respawn() -> void:
 
 
 func serialize() -> Dictionary:
-	return {"version":SERIAL_VERSION, "health":health, "hunger":hunger, "saturation":saturation, "alive":alive, "hunger_multiplier":hunger_multiplier}
+	return {
+		"version": SERIAL_VERSION,
+		"health": health,
+		"hunger": hunger,
+		"saturation": saturation,
+		"alive": alive,
+		"hunger_multiplier": hunger_multiplier
+	}
 
 
 func deserialize(data: Dictionary) -> bool:
