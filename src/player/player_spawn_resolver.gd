@@ -30,10 +30,10 @@ func resolve(world: Node, preferred: Vector3, fallback: Vector3) -> Vector3:
 
 
 func is_position_clear(world: Node, feet_position: Vector3) -> bool:
-	if world == null or not world.has_method("get_block"):
-		return true
 	if not _is_reasonable_position(feet_position):
 		return false
+	if world == null or not world.has_method("get_block"):
+		return true
 	var minimum := feet_position + Vector3(-BODY_RADIUS, 0.05, -BODY_RADIUS)
 	var maximum := feet_position + Vector3(BODY_RADIUS, BODY_HEIGHT - 0.05, BODY_RADIUS)
 	for x in range(floori(minimum.x), floori(maximum.x) + 1):
