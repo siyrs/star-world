@@ -1,7 +1,7 @@
 class_name DiagnosticsOverlay
 extends CanvasLayer
 
-signal visibility_changed(visible: bool)
+signal overlay_visibility_changed(visible: bool)
 
 const Actions = preload("res://src/input/gameplay_input_actions.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
@@ -46,7 +46,7 @@ func _input(event: InputEvent) -> void:
 func set_overlay_visible(value: bool) -> void:
 	_overlay_visible = value
 	visible = value
-	visibility_changed.emit(_overlay_visible)
+	overlay_visibility_changed.emit(_overlay_visible)
 	if value and telemetry != null and telemetry.has_method("sample_now"):
 		_on_snapshot_updated(telemetry.call("sample_now"))
 
