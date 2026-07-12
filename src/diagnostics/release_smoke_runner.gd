@@ -8,6 +8,8 @@ const TELEMETRY_STABILIZATION_FRAMES := 12
 const DEFAULT_SOAK_FRAMES := 180
 const SOAK_SAMPLE_INTERVAL_FRAMES := 30
 const SOAK_MOVE_INTERVAL_FRAMES := 60
+const AUDIO_SHUTDOWN_SETTLE_FRAMES := 4
+const FINAL_CLEANUP_FRAMES := 6
 
 var game: Node
 var report_path := DEFAULT_REPORT_PATH
@@ -230,26 +232,37 @@ func _cleanup_runtime() -> void:
 	if get_parent() == game:
 		game.remove_child(self)
 		tree_root.add_child(self)
+	var diagnostics: Node = game.get("runtime_diagnostics")
+	if diagnostics != null and diagnostics.has_method("detach_runtime"):
+		diagnostics.call("detach_runtime")
 	var hub: Node = game.get("service_hub")
+	var audio: Node
 	if hub != null:
 		var spawner = hub.get("creature_spawner")
 		if spawner != null:
 			spawner.call("set_active", false)
 			spawner.call("clear_creatures")
-		var audio = hub.get("audio_service")
+		audio = hub.get("audio_service")
 		if audio != null:
 			if audio.has_method("shutdown"):
 				audio.call("shutdown")
 			else:
 				audio.call("stop_ambient")
+	await _wait_process_frames(AUDIO_SHUTDOWN_SETTLE_FRAMES)
+	if audio != null and is_instance_valid(audio) and audio.has_method("dispose"):
+		audio.call("dispose")
+	await _wait_process_frames(AUDIO_SHUTDOWN_SETTLE_FRAMES)
 	var world: Node = game.get("world")
 	if world != null and world.has_method("clear_world"):
 		world.call("clear_world")
 	game.queue_free()
 	game = null
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await _wait_process_frames(FINAL_CLEANUP_FRAMES)
+
+
+func _wait_process_frames(frame_count: int) -> void:
+	for _frame in maxi(0, frame_count):
+		await get_tree().process_frame
 
 
 func _smoke_world_state() -> Dictionary:
