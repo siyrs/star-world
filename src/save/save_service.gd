@@ -56,6 +56,7 @@ func create_world(
 			"look_pitch": 0.0,
 		},
 		"inventory": {},
+		"containers": {"version": 1, "containers": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
 		"survival": {"health": 20.0, "hunger": 20.0},
 		"day_night": {"time_of_day": 8.0, "day": 1},
@@ -183,6 +184,8 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		if not payload.has("survival"):
 			payload["survival"] = {"health": 20.0, "hunger": 20.0}
 		payload["save_version"] = 2
+	if not payload.has("containers") or payload["containers"] is not Dictionary:
+		payload["containers"] = {"version": 1, "containers": {}}
 	return payload
 
 
