@@ -61,8 +61,10 @@ func _run() -> void:
 	var hub: Node = game.get("service_hub")
 	var world: Node = game.get("world")
 	var player: Node3D = game.get("player")
+	var world_root := game.get("world_root") as Node3D
+	var diagnostics: Node = game.get("runtime_diagnostics")
 	_check(world != null and bool(world.get("is_started")), "world_is_started")
-	_check(bool(game.get("world_root").visible), "world_root_visible")
+	_check(world_root != null and world_root.visible, "world_root_visible")
 	_check(player != null and player.visible, "player_visible")
 	_check(_spawn_chunk_is_renderable(world), "spawn_chunk_renderable")
 	_check(
@@ -75,8 +77,10 @@ func _run() -> void:
 			input_context != null and str(input_context.call("get_context")) == "gameplay",
 			"gameplay_input_context"
 		)
-		_check(hub.get("runtime_telemetry") != null, "runtime_telemetry_mounted")
-		_check(hub.get("diagnostics_overlay") != null, "diagnostics_overlay_mounted")
+	_check(diagnostics != null, "runtime_diagnostics_mounted")
+	if diagnostics != null:
+		_check(diagnostics.get("telemetry") != null, "runtime_telemetry_mounted")
+		_check(diagnostics.get("overlay") != null, "diagnostics_overlay_mounted")
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
@@ -85,15 +89,13 @@ func _run() -> void:
 	if image != null and not image.is_empty():
 		_ensure_output_directory(screenshot_path)
 		_check(image.save_png(screenshot_path) == OK, "screenshot_saved")
-	_finish(visual_result, hub)
+	_finish(visual_result, diagnostics)
 
 
-func _finish(visual_result: Dictionary = {}, hub: Node = null) -> void:
+func _finish(visual_result: Dictionary = {}, diagnostics: Node = null) -> void:
 	var telemetry_snapshot: Dictionary = {}
-	if hub != null:
-		var telemetry = hub.get("runtime_telemetry")
-		if telemetry != null and telemetry.has_method("sample_now"):
-			telemetry_snapshot = telemetry.call("sample_now")
+	if diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
+		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
 	var payload := {
 		"version": 1,
 		"ok": failures.is_empty(),
