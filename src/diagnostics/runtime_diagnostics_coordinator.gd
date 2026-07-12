@@ -42,6 +42,12 @@ func detach_runtime() -> void:
 		telemetry.call("detach_runtime")
 
 
+func sample_now() -> Dictionary:
+	if telemetry == null:
+		return {}
+	return telemetry.call("sample_now")
+
+
 func get_latest_snapshot() -> Dictionary:
 	if telemetry == null:
 		return {}
