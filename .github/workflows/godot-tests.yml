@@ -1,0 +1,39 @@
+name: Godot runtime tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-tests:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Verify Godot
+        shell: pwsh
+        run: godot --version
+
+      - name: Run full regression suite
+        shell: pwsh
+        run: |
+          $godot = (Get-Command godot).Source
+          & .\tests\run_all.ps1 -Godot $godot
