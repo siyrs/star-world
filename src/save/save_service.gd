@@ -49,12 +49,9 @@ func create_world(
 	var state := {
 		"save_version": SAVE_VERSION,
 		"metadata": metadata,
-		"player":
-		{
-			"position": [0.0, 48.0, 0.0],
-			"rotation": [0.0, 0.0, 0.0],
-			"look_pitch": 0.0,
-		},
+		# Empty means the generator owns first spawn selection. The old fixed Y=48
+		# placeholder could leave the camera high above terrain on a sky-only view.
+		"player": {"position": [], "rotation": [0.0, 0.0, 0.0], "look_pitch": 0.0},
 		"inventory": {},
 		"containers": {"version": 1, "containers": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
