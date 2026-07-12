@@ -8,6 +8,7 @@ signal save_requested(state: Dictionary)
 const WORLD_SCRIPT_PATH := "res://src/world/voxel_world.gd"
 const PLAYER_SCENE_PATH := "res://scenes/game/player.tscn"
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
+const RuntimeGuardScript = preload("res://src/core/world_runtime_guard.gd")
 
 var world: Node3D
 var player: CharacterBody3D
@@ -16,6 +17,7 @@ var current_seed := 734521
 var current_world_id := "quick-world"
 var current_saved_state: Dictionary = {}
 var _spawn_resolver = SpawnResolverScript.new()
+var _runtime_guard = RuntimeGuardScript.new()
 
 @onready var world_root: Node3D = $WorldRoot
 @onready var sun: DirectionalLight3D = $Sun
@@ -56,7 +58,7 @@ func start_world(
 ) -> bool:
 	_ensure_core_nodes()
 	if world == null or player == null:
-		world_start_failed.emit("core_nodes_unavailable")
+		_abort_world_start("core_nodes_unavailable")
 		return false
 	current_profile_id = profile_id if not profile_id.is_empty() else "star_continent"
 	current_seed = seed
@@ -65,6 +67,10 @@ func start_world(
 	world.call(
 		"start_world", current_profile_id, current_seed, current_world_id, current_saved_state
 	)
+	var world_status := _runtime_guard.validate_world(world)
+	if not bool(world_status.get("ok", false)):
+		_abort_world_start(str(world_status.get("reason", "world_not_ready")))
+		return false
 	player.call("bind_world", world)
 	var fallback_spawn: Vector3 = world.call("get_spawn_position")
 	var player_state: Dictionary = current_saved_state.get("player", {})
@@ -80,6 +86,10 @@ func start_world(
 	world_root.visible = true
 	world.call("set_focus", player)
 	_attach_gameplay_services()
+	var camera_status := _runtime_guard.activate_and_validate_camera(player)
+	if not bool(camera_status.get("ok", false)):
+		_abort_world_start(str(camera_status.get("reason", "camera_not_ready")))
+		return false
 	world_started.emit(current_profile_id, current_seed, current_world_id)
 	return true
 
@@ -149,6 +159,17 @@ func _attach_gameplay_services() -> void:
 			world_environment,
 			Callable(world, "resolve_ground_position")
 		)
+
+
+func _abort_world_start(reason: String) -> void:
+	if player != null:
+		if player.has_method("reset_motion"):
+			player.call("reset_motion")
+		player.visible = false
+	if world != null and world.has_method("clear_world"):
+		world.call("clear_world")
+	world_root.visible = false
+	world_start_failed.emit(reason)
 
 
 func _on_world_state_requested(state: Dictionary) -> void:
