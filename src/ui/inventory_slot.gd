@@ -17,11 +17,13 @@ func configure(index: int) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	if not event is InputEventMouseButton or not event.pressed:
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event == null or not mouse_event.pressed:
 		return
-	var activates_slot := event.button_index == MOUSE_BUTTON_RIGHT
+	var activates_slot: bool = mouse_event.button_index == MOUSE_BUTTON_RIGHT
 	activates_slot = (
-		activates_slot or (event.button_index == MOUSE_BUTTON_LEFT and event.double_click)
+		activates_slot
+		or (mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.double_click)
 	)
 	if activates_slot:
 		slot_activated.emit(slot_index)
