@@ -174,7 +174,10 @@ func process_snapshot(snapshot: Dictionary) -> bool:
 			_last_decision_code = "headroom_confirmation"
 			return false
 	_prune_recent_changes(_last_snapshot_msec)
-	if _recent_change_timestamps.size() >= maxi(1, max_changes_per_minute):
+	if (
+		_recent_change_timestamps.size() >= maxi(1, max_changes_per_minute)
+		and not bool(recommendation.get("critical", false))
+	):
 		_last_reason = "一分钟内调整次数达到上限，保持当前预算"
 		_last_decision_code = "anti_thrash_hold"
 		_pressure_streak = 0
