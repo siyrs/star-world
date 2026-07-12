@@ -30,7 +30,7 @@ powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\g
   -Godot 'C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe'
 ```
 
-成功标准：命令退出码为 `0`，输出包含 `PASS: data registry + 193 Godot runtime checks`，且没有 `SCRIPT ERROR`、`Parse Error` 或泄漏警告。
+成功标准：命令退出码为 `0`，输出包含 `PASS: data registry + Godot runtime checks`，且没有 `SCRIPT ERROR`、`Parse Error` 或泄漏警告。测试套件包含输入上下文、UI 覆盖层、快捷栏装备和选中物品使用的专项回归检查。
 
 ## Windows 发行构建
 
@@ -56,7 +56,7 @@ Get-Item .\build\StarWorld.exe
 godot --path . res://scenes/ui/service_hub.tscn
 ```
 
-该场景实例化主菜单、Game UI 以及 Inventory、Crafting、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。
+该场景实例化主菜单、Game UI 以及 InputContext、Inventory、Crafting、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。
 
 ## 常见问题
 
