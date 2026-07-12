@@ -254,16 +254,23 @@ func deserialize(data: Dictionary) -> bool:
 
 
 func _normalize_existing_container(
-	container_id: String, container_type: String, slot_count: int
+	container_id: String, container_type: String, requested_slot_count: int
 ) -> void:
 	var container: Dictionary = _containers[container_id]
-	container["type"] = str(container.get("type", container_type))
+	var stored_type := str(container.get("type", container_type))
+	container["type"] = container_type if stored_type.is_empty() else stored_type
 	var slots: Array = container.get("slots", [])
-	while slots.size() < slot_count:
+	var existing_slot_count := clampi(
+		int(container.get("slot_count", maxi(1, slots.size()))), 1, 54
+	)
+	# Never shrink an existing container. A future registry change or an older
+	# save may expose more slots, and truncating them would silently lose items.
+	var target_slot_count := clampi(
+		maxi(maxi(existing_slot_count, requested_slot_count), slots.size()), 1, 54
+	)
+	while slots.size() < target_slot_count:
 		slots.append({})
-	if slots.size() > slot_count:
-		slots.resize(slot_count)
-	container["slot_count"] = slot_count
+	container["slot_count"] = target_slot_count
 	container["slots"] = slots
 	_containers[container_id] = container
 
