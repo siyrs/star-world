@@ -231,20 +231,20 @@ func _on_simulation_pause_requested(paused: bool) -> void:
 
 
 func _on_ui_save_requested() -> void:
-	var saved := save_current()
+	var saved: bool = save_current()
 	if game_ui != null and game_ui.has_method("show_save_result"):
 		game_ui.call("show_save_result", saved)
 
 
 func _on_settings_changed(settings: Dictionary) -> void:
-	var merged := DEFAULT_SETTINGS.duplicate(true)
+	var merged: Dictionary = DEFAULT_SETTINGS.duplicate(true)
 	merged.merge(current_settings, true)
 	merged.merge(settings, true)
 	merged["render_distance"] = clampi(
 		int(merged.get("render_distance", DEFAULT_SETTINGS.render_distance)), 1, 5
 	)
 	current_settings = merged
-	var saved := save_service.save_settings(current_settings)
+	var saved: bool = bool(save_service.save_settings(current_settings))
 	_apply_settings(current_settings)
 	if main_menu != null and main_menu.has_method("show_settings_result"):
 		main_menu.call("show_settings_result", saved)
@@ -293,7 +293,7 @@ func _set_property_if_present(target: Object, property_name: String, value: Vari
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
 	if current_world_id.is_empty():
 		return false
-	var payload := current_state.duplicate(true)
+	var payload: Dictionary = current_state.duplicate(true)
 	payload["inventory"] = inventory.serialize()
 	payload["containers"] = container_storage.serialize()
 	payload["survival"] = survival.serialize()
