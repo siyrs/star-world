@@ -1,6 +1,7 @@
 extends SceneTree
 
 const GameScene = preload("res://scenes/game/game.tscn")
+const GameUIScript = preload("res://src/ui/game_ui.gd")
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
 
 const OUTPUT_PATH := "res://build/desktop-acceptance.png"
@@ -68,20 +69,20 @@ func _run() -> void:
 
 	await _press_key(KEY_ESCAPE)
 	_check(
-		hub.game_ui.get_active_overlay() == hub.game_ui.Overlay.PAUSE,
+		hub.game_ui.get_active_overlay() == GameUIScript.Overlay.PAUSE,
 		"Escape opens the real pause overlay",
 	)
-	_check(get_tree().paused, "pause overlay stops simulation")
+	_check(paused, "pause overlay stops simulation")
 	_check(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED, "pause overlay releases the mouse")
 	var resume_button := _find_button(hub.game_ui, "继续游戏")
 	_check(resume_button != null, "pause overlay exposes the resume button")
 	if resume_button != null:
 		await _click_control(resume_button)
 	_check(
-		hub.game_ui.get_active_overlay() == hub.game_ui.Overlay.NONE,
+		hub.game_ui.get_active_overlay() == GameUIScript.Overlay.NONE,
 		"a real pointer click resumes gameplay",
 	)
-	_check(not get_tree().paused, "resume clears simulation pause")
+	_check(not paused, "resume clears simulation pause")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "resume recaptures the mouse")
 
 	await process_frame
@@ -137,7 +138,6 @@ func _move_pointer(relative: Vector2) -> void:
 	motion.position = center
 	motion.global_position = center
 	motion.relative = relative
-	motion.screen_relative = relative
 	root.push_input(motion)
 	await process_frame
 
@@ -176,8 +176,8 @@ func _spawn_chunk_is_renderable(world: Node) -> bool:
 
 func _image_has_visual_detail(image: Image) -> bool:
 	var unique: Dictionary = {}
-	var step_x := maxi(1, image.get_width() / 40)
-	var step_y := maxi(1, image.get_height() / 24)
+	var step_x := maxi(1, floori(float(image.get_width()) / 40.0))
+	var step_y := maxi(1, floori(float(image.get_height()) / 24.0))
 	for y in range(0, image.get_height(), step_y):
 		for x in range(0, image.get_width(), step_x):
 			var color := image.get_pixel(x, y)
