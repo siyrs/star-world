@@ -137,7 +137,7 @@ try {
     Write-DriverLog "report_argument=$reportArgumentPath"
     $runnerResult = Invoke-WaitedProcess `
         -FilePath $runnerPath `
-        -Arguments @('--', '--release-smoke', "--smoke-output=$reportArgumentPath") `
+        -Arguments @('--verbose', '--', '--release-smoke', "--smoke-output=$reportArgumentPath") `
         -WorkingDirectory $OutputDirectory `
         -StandardOutputPath $stdoutPath `
         -StandardErrorPath $stderrPath `
