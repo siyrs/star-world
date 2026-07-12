@@ -19,6 +19,8 @@ var _map_panel
 var _save_panel
 var _settings_panel
 var _status: Label
+var _local_save_service: Node
+var _menu_buttons: Array[Button] = []
 
 
 func _ready() -> void:
@@ -27,19 +29,21 @@ func _ready() -> void:
 	_build_background()
 	_build_main_panel()
 	_build_subpanels()
-	if save_service == null:
-		save_service = SaveServiceScript.new()
-		save_service.name = "LocalSaveService"
-		add_child(save_service)
 	_setup_panels()
+	call_deferred("_ensure_standalone_services")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func setup(p_save_service, p_audio_service = null) -> void:
+	_disconnect_standalone_settings()
+	if _local_save_service != null and _local_save_service != p_save_service:
+		_local_save_service.queue_free()
+		_local_save_service = null
 	save_service = p_save_service
 	audio_service = p_audio_service
 	if is_node_ready():
 		_setup_panels()
+		_bind_menu_audio()
 
 
 func show_main() -> void:
@@ -51,6 +55,49 @@ func show_main() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+func show_error(message: String) -> void:
+	_status.text = message
+
+
+func show_settings_result(saved: bool) -> void:
+	if _settings_panel != null and _settings_panel.has_method("show_apply_result"):
+		_settings_panel.call("show_apply_result", saved)
+
+
+func _ensure_standalone_services() -> void:
+	if save_service != null:
+		return
+	_local_save_service = SaveServiceScript.new()
+	_local_save_service.name = "LocalSaveService"
+	add_child(_local_save_service)
+	save_service = _local_save_service
+	_setup_panels()
+	var callback := Callable(self, "_apply_standalone_settings")
+	if not settings_changed.is_connected(callback):
+		settings_changed.connect(callback)
+
+
+func _disconnect_standalone_settings() -> void:
+	var callback := Callable(self, "_apply_standalone_settings")
+	if settings_changed.is_connected(callback):
+		settings_changed.disconnect(callback)
+
+
+func _apply_standalone_settings(settings: Dictionary) -> void:
+	var saved := save_service != null and bool(save_service.save_settings(settings))
+	if audio_service != null and audio_service.has_method("set_master_volume"):
+		audio_service.call("set_master_volume", float(settings.get("master_volume", 0.8)))
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(
+			(
+				DisplayServer.WINDOW_MODE_FULLSCREEN
+				if bool(settings.get("fullscreen", false))
+				else DisplayServer.WINDOW_MODE_WINDOWED
+			)
+		)
+	show_settings_result(saved)
+
+
 func _build_background() -> void:
 	var background := ColorRect.new()
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -58,7 +105,11 @@ func _build_background() -> void:
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
 	var stars := Label.new()
-	stars.text = "✦     ·       ✧          ·    ✦       ·        ✧\n\n       ·        ✦     ·          ✧          ·\n\n  ✧         ·           ✦       ·      ✧"
+	stars.text = (
+		"✦     ·       ✧          ·    ✦       ·        ✧\n\n"
+		+ "       ·        ✦     ·          ✧          ·\n\n"
+		+ "  ✧         ·           ✦       ·      ✧"
+	)
 	stars.add_theme_font_size_override("font_size", 34)
 	stars.modulate = Color("#4F7899")
 	stars.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -90,10 +141,16 @@ func _build_main_panel() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color("#8FD7F0")
 	content.add_child(subtitle)
-	_add_menu_button(content, "开始游戏", func(): _show_panel(_map_panel))
-	_add_menu_button(content, "地图选择", func(): _show_panel(_map_panel))
-	_add_menu_button(content, "存档 / 继续", func(): _save_panel.refresh(); _show_panel(_save_panel))
-	_add_menu_button(content, "设置", func(): _show_panel(_settings_panel))
+	_add_menu_button(content, "开始游戏", func() -> void: _show_panel(_map_panel))
+	_add_menu_button(content, "地图选择", func() -> void: _show_panel(_map_panel))
+	_add_menu_button(
+		content,
+		"存档 / 继续",
+		func() -> void:
+			_save_panel.refresh()
+			_show_panel(_save_panel)
+	)
+	_add_menu_button(content, "设置", func() -> void: _show_panel(_settings_panel))
 	_add_menu_button(content, "退出", _quit)
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -111,9 +168,22 @@ func _add_menu_button(parent: Control, label: String, callback: Callable) -> voi
 	button.text = label
 	button.custom_minimum_size = Vector2(470, 58)
 	button.pressed.connect(callback)
-	if audio_service != null:
-		button.pressed.connect(audio_service.play_ui)
 	parent.add_child(button)
+	_menu_buttons.append(button)
+	_connect_button_audio(button)
+
+
+func _bind_menu_audio() -> void:
+	for button in _menu_buttons:
+		_connect_button_audio(button)
+
+
+func _connect_button_audio(button: Button) -> void:
+	if audio_service == null or not audio_service.has_method("play_ui"):
+		return
+	var callback := Callable(audio_service, "play_ui")
+	if not button.pressed.is_connected(callback):
+		button.pressed.connect(callback)
 
 
 func _build_subpanels() -> void:
@@ -133,7 +203,9 @@ func _build_subpanels() -> void:
 	_center_panel(_settings_panel, Vector2(650, 520))
 	add_child(_settings_panel)
 	_settings_panel.visible = false
-	_settings_panel.settings_applied.connect(func(settings): settings_changed.emit(settings))
+	_settings_panel.settings_applied.connect(
+		func(settings: Dictionary) -> void: settings_changed.emit(settings)
+	)
 	_settings_panel.back_requested.connect(show_main)
 
 
@@ -164,7 +236,9 @@ func _show_panel(panel: Control) -> void:
 
 func _on_create_requested(world_name: String, map_id: String, seed_value: int) -> void:
 	var profile: Dictionary = _map_panel.get_profile(map_id)
-	var state: Dictionary = save_service.create_world(world_name, map_id, seed_value, {"map_profile":profile})
+	var state: Dictionary = save_service.create_world(
+		world_name, map_id, seed_value, {"map_profile": profile}
+	)
 	if state.is_empty():
 		_status.text = "创建世界失败，请检查写入权限。"
 		show_main()
