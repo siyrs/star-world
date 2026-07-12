@@ -30,7 +30,13 @@ powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\g
   -Godot 'C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe'
 ```
 
-成功标准：命令退出码为 `0`，输出包含 `PASS: data registry + Godot runtime checks`，且没有 `SCRIPT ERROR`、`Parse Error` 或泄漏警告。测试套件包含输入上下文、UI 覆盖层、快捷栏装备和选中物品使用的专项回归检查。
+成功标准：命令退出码为 `0`，输出包含 `PASS: data registry + Godot runtime checks`，且没有 `SCRIPT ERROR`、`Parse Error` 或泄漏警告。测试套件包含 WASD/方向键绑定修复、真实角色移动、窗口与 UI 输入生命周期、覆盖层互斥、快捷栏装备和选中物品使用的专项回归检查。
+
+只运行移动与输入生命周期专项测试：
+
+```powershell
+godot --headless --path . --script res://tests/qa/movement_lifecycle_regression.gd
+```
 
 ## Windows 发行构建
 
@@ -56,10 +62,12 @@ Get-Item .\build\StarWorld.exe
 godot --path . res://scenes/ui/service_hub.tscn
 ```
 
-该场景实例化主菜单、Game UI 以及 InputContext、Inventory、Crafting、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。
+该场景实例化主菜单、Game UI 以及 GameplayInput、InputContext、Inventory、Crafting、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。
 
 ## 常见问题
 
+- **WASD 无响应**：先运行 `movement_lifecycle_regression.gd`。默认映射会自动修复 W/A/S/D 的物理键位与逻辑键码，并提供方向键后备。
+- **从背包或暂停返回后不能移动**：确认专项测试中的 “closing the overlay restores WASD movement” 通过；输入启用只应由 `InputContextService` 管理。
 - **黑屏或显卡启动失败**：确认 `project.godot` 使用 `gl_compatibility`，更新显卡驱动。
 - **中文路径导出失败**：将临时构建输出改为英文绝对路径，但不要改动 `res://` 内资源路径。
 - **存档无法创建**：检查 `%APPDATA%\Godot\app_userdata\星的世界` 的写权限。

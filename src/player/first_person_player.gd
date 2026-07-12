@@ -8,14 +8,24 @@ signal damage_requested(amount: float, source: String)
 signal respawned(position: Vector3)
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
+const MovementControllerScript = preload("res://src/player/player_movement_controller.gd")
 const FALLBACK_HOTBAR := [
-	"grass", "dirt", "stone", "planks", "stone_bricks", "glass", "stone_slab", "oak_stairs", "torch"
+	"grass",
+	"dirt",
+	"stone",
+	"planks",
+	"stone_bricks",
+	"glass",
+	"stone_slab",
+	"oak_stairs",
+	"torch",
 ]
 const BASE_ATTACK_DAMAGE := 1.0
 
 @export var walk_speed := 5.4
 @export var sprint_speed := 8.0
-@export var jump_velocity := 6.2
+@export var jump_velocity := 7.2
 @export var acceleration := 18.0
 @export var air_acceleration := 5.0
 @export var mouse_sensitivity := 0.0022
@@ -24,10 +34,12 @@ const BASE_ATTACK_DAMAGE := 1.0
 var world: Node
 var inventory: Node
 var survival: Node
+var input_service: Node
 var selected_hotbar_index := 0
 var input_enabled := false
 var spawn_position := Vector3(0.5, 40.0, 0.5)
 var _gravity := 9.8
+var _movement_controller = MovementControllerScript.new()
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -35,8 +47,9 @@ var _gravity := 9.8
 
 
 func _ready() -> void:
-	_ensure_input_actions()
+	InputActionsScript.ensure_default_bindings()
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
+	_configure_movement_controller()
 	interaction_ray.target_position = Vector3(0.0, 0.0, -interaction_distance)
 	interaction_ray.enabled = true
 	set_process_unhandled_input(input_enabled)
@@ -67,11 +80,19 @@ func bind_survival(p_survival: Node) -> void:
 	survival = p_survival
 
 
+func bind_input_service(p_input_service: Node) -> void:
+	input_service = p_input_service
+	if input_service != null and input_service.has_method("ensure_bindings"):
+		input_service.call("ensure_bindings")
+
+
 func setup_gameplay_services(services: Dictionary) -> void:
 	if services.get("inventory") is Node:
 		bind_inventory(services["inventory"])
 	if services.get("survival") is Node:
 		bind_survival(services["survival"])
+	if services.get("input") is Node:
+		bind_input_service(services["input"])
 	var game_ui = services.get("game_ui")
 	if game_ui is Node and game_ui.has_signal("respawn_requested"):
 		var callback := Callable(self, "_on_respawn_requested")
@@ -84,32 +105,27 @@ func set_inventory_service(p_inventory: Node) -> void:
 
 
 func set_input_enabled(enabled: bool) -> void:
+	if input_enabled == enabled:
+		return
 	input_enabled = enabled
 	set_process_unhandled_input(enabled)
 	if not input_enabled:
-		velocity.x = 0.0
-		velocity.z = 0.0
+		_movement_controller.stop_horizontal(self)
+
+
+func reset_motion() -> void:
+	velocity = Vector3.ZERO
 
 
 func _physics_process(delta: float) -> void:
 	if not input_enabled:
 		return
 	var in_fluid := _is_in_fluid()
-	if not is_on_floor():
-		velocity.y -= _gravity * delta * (0.28 if in_fluid else 1.0)
-	if Input.is_action_just_pressed("jump") and (is_on_floor() or in_fluid):
-		velocity.y = jump_velocity * (0.7 if in_fluid else 1.0)
-	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
-	var direction := (
-		(global_transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)).normalized()
+	var movement_result: Dictionary = _movement_controller.step(
+		self, delta, _get_movement_vector(), _is_jump_just_pressed(), _is_sprint_pressed(), in_fluid
 	)
-	var target_speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
-	if in_fluid:
-		target_speed *= 0.55
-	var current_acceleration := acceleration if is_on_floor() else air_acceleration
-	velocity.x = move_toward(velocity.x, direction.x * target_speed, current_acceleration * delta)
-	velocity.z = move_toward(velocity.z, direction.z * target_speed, current_acceleration * delta)
-	move_and_slide()
+	if bool(movement_result.get("jumped", false)):
+		_report_player_action("jump")
 	if global_position.y < -12.0:
 		respawn()
 
@@ -117,10 +133,10 @@ func _physics_process(delta: float) -> void:
 func _process(_delta: float) -> void:
 	if not input_enabled:
 		return
-	for index in 9:
-		if Input.is_action_just_pressed("hotbar_%d" % (index + 1)):
-			select_hotbar(index)
-	if Input.is_action_just_pressed("quick_save"):
+	var hotbar_index := _get_hotbar_selection_just_pressed()
+	if hotbar_index >= 0:
+		select_hotbar(hotbar_index)
+	if _is_quick_save_just_pressed():
 		var game := get_parent()
 		if game != null and game.has_method("request_save"):
 			game.call("request_save")
@@ -165,8 +181,7 @@ func break_target_block() -> bool:
 	var collider := interaction_ray.get_collider()
 	if collider != null and collider.has_method("take_damage"):
 		collider.call("take_damage", _get_selected_attack_damage(), self)
-		if survival != null and survival.has_method("report_player_action"):
-			survival.call("report_player_action", "attack")
+		_report_player_action("attack")
 		return true
 	if world == null:
 		return false
@@ -179,8 +194,7 @@ func break_target_block() -> bool:
 	var drop_item := BlockRegistryScript.get_item_id(removed_block)
 	if inventory != null and not drop_item.is_empty() and inventory.has_method("add_item"):
 		inventory.call("add_item", drop_item, 1)
-	if survival != null and survival.has_method("report_player_action"):
-		survival.call("report_player_action", "mine")
+	_report_player_action("mine")
 	block_broken.emit(block_position, removed_block)
 	return true
 
@@ -198,26 +212,40 @@ func place_selected_block() -> bool:
 
 
 func _place_block(block_id: String) -> bool:
-	if world == null:
+	if world == null or (inventory != null and _get_selected_item_id().is_empty()):
 		return false
+	var target := _resolve_placement_target()
+	if target.is_empty():
+		return false
+	return _commit_block_placement(block_id, target)
+
+
+func _resolve_placement_target() -> Dictionary:
 	interaction_ray.force_raycast_update()
 	if not interaction_ray.is_colliding():
-		return false
+		return {}
 	var point := interaction_ray.get_collision_point()
 	var normal := interaction_ray.get_collision_normal()
 	var block_position: Vector3i = world.call("world_to_block", point + normal * 0.01)
 	var player_bounds := AABB(
 		global_position + Vector3(-0.32, 0.0, -0.32), Vector3(0.64, 1.82, 0.64)
 	)
-	var block_bounds := AABB(Vector3(block_position), Vector3.ONE)
-	if player_bounds.intersects(block_bounds):
-		return false
+	if player_bounds.intersects(AABB(Vector3(block_position), Vector3.ONE)):
+		return {}
+	return {
+		"position": block_position,
+		"previous_block": str(world.call("get_block", block_position)),
+	}
+
+
+func _commit_block_placement(block_id: String, target: Dictionary) -> bool:
+	var block_position: Vector3i = target["position"]
 	if not world.call("set_block", block_position, block_id):
 		return false
 	if inventory != null and inventory.has_method("consume_selected"):
 		var consumed: Dictionary = inventory.call("consume_selected", 1)
 		if consumed.is_empty():
-			world.call("remove_block", block_position)
+			world.call("set_block", block_position, str(target["previous_block"]))
 			return false
 	block_placed.emit(block_position, block_id)
 	return true
@@ -243,6 +271,36 @@ func take_damage(amount: float, source: String = "world") -> void:
 	damage_requested.emit(amount, source)
 	if survival != null and survival.has_method("take_damage"):
 		survival.call("take_damage", amount, source)
+
+
+func serialize_state() -> Dictionary:
+	return {
+		"position": [global_position.x, global_position.y, global_position.z],
+		"rotation": [rotation.x, rotation.y, rotation.z],
+		"look_pitch": camera_pivot.rotation.x,
+	}
+
+
+func restore_orientation(data: Dictionary) -> void:
+	var saved_rotation = data.get("rotation", [])
+	if saved_rotation is Array and saved_rotation.size() >= 2:
+		var yaw := float(saved_rotation[1])
+		if is_finite(yaw):
+			rotation = Vector3(0.0, wrapf(yaw, -PI, PI), 0.0)
+	var pitch := float(data.get("look_pitch", 0.0))
+	if not is_finite(pitch):
+		pitch = 0.0
+	camera_pivot.rotation.x = clampf(pitch, deg_to_rad(-89.0), deg_to_rad(89.0))
+
+
+func respawn() -> void:
+	global_position = spawn_position
+	reset_motion()
+	respawned.emit(global_position)
+
+
+func get_view_camera() -> Camera3D:
+	return camera
 
 
 func _get_selected_item_id() -> String:
@@ -278,21 +336,66 @@ func _consume_selected_food() -> bool:
 	return false
 
 
-func respawn() -> void:
-	global_position = spawn_position
-	velocity = Vector3.ZERO
-	respawned.emit(global_position)
-
-
-func get_view_camera() -> Camera3D:
-	return camera
-
-
 func _is_in_fluid() -> bool:
 	if world == null:
 		return false
 	var block_position: Vector3i = world.call("world_to_block", global_position + Vector3.UP * 0.8)
 	return str(world.call("get_block", block_position)) in ["water", "lava"]
+
+
+func _get_movement_vector() -> Vector2:
+	if input_service != null and input_service.has_method("get_movement_vector"):
+		return input_service.call("get_movement_vector")
+	return Input.get_vector(
+		InputActionsScript.MOVE_LEFT,
+		InputActionsScript.MOVE_RIGHT,
+		InputActionsScript.MOVE_FORWARD,
+		InputActionsScript.MOVE_BACKWARD
+	)
+
+
+func _is_jump_just_pressed() -> bool:
+	if input_service != null and input_service.has_method("is_jump_just_pressed"):
+		return bool(input_service.call("is_jump_just_pressed"))
+	return Input.is_action_just_pressed(InputActionsScript.JUMP)
+
+
+func _is_sprint_pressed() -> bool:
+	if input_service != null and input_service.has_method("is_sprint_pressed"):
+		return bool(input_service.call("is_sprint_pressed"))
+	return Input.is_action_pressed(InputActionsScript.SPRINT)
+
+
+func _is_quick_save_just_pressed() -> bool:
+	if input_service != null and input_service.has_method("is_quick_save_just_pressed"):
+		return bool(input_service.call("is_quick_save_just_pressed"))
+	return Input.is_action_just_pressed(InputActionsScript.QUICK_SAVE)
+
+
+func _get_hotbar_selection_just_pressed() -> int:
+	if input_service != null and input_service.has_method("get_hotbar_selection_just_pressed"):
+		return int(input_service.call("get_hotbar_selection_just_pressed"))
+	for index in InputActionsScript.HOTBAR_ACTIONS.size():
+		if Input.is_action_just_pressed(InputActionsScript.HOTBAR_ACTIONS[index]):
+			return index
+	return -1
+
+
+func _configure_movement_controller() -> void:
+	var config := {
+		"gravity": _gravity,
+		"walk_speed": walk_speed,
+		"sprint_speed": sprint_speed,
+		"jump_velocity": jump_velocity,
+		"ground_acceleration": acceleration,
+		"air_acceleration": air_acceleration,
+	}
+	_movement_controller.configure(config)
+
+
+func _report_player_action(action: String) -> void:
+	if survival != null and survival.has_method("report_player_action"):
+		survival.call("report_player_action", action)
 
 
 func _on_inventory_selection_changed(index: int, _slot: Dictionary) -> void:
@@ -322,24 +425,3 @@ func _on_respawn_requested() -> void:
 
 func _emit_hotbar_selection() -> void:
 	hotbar_selection_changed.emit(selected_hotbar_index, get_selected_block_id())
-
-
-func _ensure_input_actions() -> void:
-	_register_key_action("move_forward", KEY_W)
-	_register_key_action("move_backward", KEY_S)
-	_register_key_action("move_left", KEY_A)
-	_register_key_action("move_right", KEY_D)
-	_register_key_action("jump", KEY_SPACE)
-	_register_key_action("sprint", KEY_SHIFT)
-	_register_key_action("quick_save", KEY_F5)
-	for index in 9:
-		_register_key_action("hotbar_%d" % (index + 1), KEY_1 + index)
-
-
-func _register_key_action(action: StringName, keycode: Key) -> void:
-	if not InputMap.has_action(action):
-		InputMap.add_action(action)
-	if InputMap.action_get_events(action).is_empty():
-		var key_event := InputEventKey.new()
-		key_event.physical_keycode = keycode
-		InputMap.action_add_event(action, key_event)

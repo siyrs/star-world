@@ -1,3 +1,4 @@
+# gdlint: ignore=max-public-methods
 class_name VoxelWorld
 extends Node3D
 
@@ -34,7 +35,9 @@ var _focus_chunk := Vector2i(999999, 999999)
 var _stream_update_accumulator := 0.0
 
 
-func start_world(p_profile_id: String, p_seed: int, p_world_id: String, saved_state: Dictionary = {}) -> void:
+func start_world(
+	p_profile_id: String, p_seed: int, p_world_id: String, saved_state: Dictionary = {}
+) -> void:
 	clear_world()
 	profile_id = generator.normalize_profile_id(p_profile_id)
 	seed_value = p_seed
@@ -55,11 +58,13 @@ func clear_world() -> void:
 	is_started = false
 	pending_chunks.clear()
 	for chunk in chunks.values():
-		if is_instance_valid(chunk):
-			chunk.queue_free()
+		_dispose_chunk(chunk)
 	chunks.clear()
 	block_overrides.clear()
 	_focus_node = null
+	_focus_position = Vector3.ZERO
+	_focus_chunk = Vector2i(999999, 999999)
+	_stream_update_accumulator = 0.0
 
 
 func _process(delta: float) -> void:
@@ -77,7 +82,10 @@ func _process(delta: float) -> void:
 		if pending_chunks.is_empty():
 			break
 		var next_coord := Vector2i(pending_chunks.pop_front())
-		if _chunk_distance(next_coord, _focus_chunk) <= render_distance and not chunks.has(next_coord):
+		if (
+			_chunk_distance(next_coord, _focus_chunk) <= render_distance
+			and not chunks.has(next_coord)
+		):
 			_load_chunk(next_coord)
 
 
@@ -117,7 +125,11 @@ func get_initial_block(block_position: Vector3i) -> String:
 
 
 func set_block(block_position: Vector3i, block_id: String) -> bool:
-	if block_position.y <= 0 or block_position.y >= WORLD_HEIGHT or not BlockRegistryScript.has_block(block_id):
+	if (
+		block_position.y <= 0
+		or block_position.y >= WORLD_HEIGHT
+		or not BlockRegistryScript.has_block(block_id)
+	):
 		return false
 	var old_block := get_block(block_position)
 	if old_block == block_id:
@@ -159,11 +171,15 @@ func block_to_world(block_position: Vector3i) -> Vector3:
 
 
 func block_to_chunk(block_position: Vector3i) -> Vector2i:
-	return Vector2i(floori(float(block_position.x) / CHUNK_SIZE), floori(float(block_position.z) / CHUNK_SIZE))
+	return Vector2i(
+		floori(float(block_position.x) / CHUNK_SIZE), floori(float(block_position.z) / CHUNK_SIZE)
+	)
 
 
 func to_local_block(block_position: Vector3i) -> Vector3i:
-	return Vector3i(posmod(block_position.x, CHUNK_SIZE), block_position.y, posmod(block_position.z, CHUNK_SIZE))
+	return Vector3i(
+		posmod(block_position.x, CHUNK_SIZE), block_position.y, posmod(block_position.z, CHUNK_SIZE)
+	)
 
 
 func serialize_sparse_overrides() -> Dictionary:
@@ -194,7 +210,7 @@ func serialize() -> Dictionary:
 		"seed": seed_value,
 		"world_id": world_id,
 		"block_overrides": serialize_sparse_overrides(),
-		"loaded_chunks": loaded
+		"loaded_chunks": loaded,
 	}
 
 
@@ -209,7 +225,10 @@ func resolve_ground_position(candidate: Vector3) -> Vector3:
 		var block_id := get_block(Vector3i(x, y, z))
 		if not BlockRegistryScript.is_solid(block_id) or block_id == "leaves":
 			continue
-		if get_block(Vector3i(x, y + 1, z)) == BlockRegistryScript.AIR and get_block(Vector3i(x, y + 2, z)) == BlockRegistryScript.AIR:
+		if (
+			get_block(Vector3i(x, y + 1, z)) == BlockRegistryScript.AIR
+			and get_block(Vector3i(x, y + 2, z)) == BlockRegistryScript.AIR
+		):
 			return Vector3(candidate.x, y + 1.05, candidate.z)
 	return Vector3(candidate.x, maxf(candidate.y, 50.0), candidate.z)
 
@@ -233,7 +252,10 @@ func _refresh_streaming(force: bool) -> void:
 	for offset_x in range(-render_distance, render_distance + 1):
 		for offset_z in range(-render_distance, render_distance + 1):
 			wanted.append(_focus_chunk + Vector2i(offset_x, offset_z))
-	wanted.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return _distance_squared(a, _focus_chunk) < _distance_squared(b, _focus_chunk))
+	wanted.sort_custom(
+		func(a: Vector2i, b: Vector2i) -> bool:
+			return _distance_squared(a, _focus_chunk) < _distance_squared(b, _focus_chunk)
+	)
 	for coord in wanted:
 		if not chunks.has(coord) and not pending_chunks.has(coord):
 			pending_chunks.append(coord)
@@ -257,21 +279,33 @@ func _load_chunk(chunk_coord: Vector2i) -> Node:
 
 
 func _unload_chunk(chunk_coord: Vector2i) -> void:
-	var chunk = chunks.get(chunk_coord)
-	if chunk != null and is_instance_valid(chunk):
-		chunk.queue_free()
+	_dispose_chunk(chunks.get(chunk_coord))
 	chunks.erase(chunk_coord)
 	chunk_unloaded.emit(chunk_coord)
+
+
+func _dispose_chunk(chunk: Variant) -> void:
+	if not is_instance_valid(chunk):
+		return
+	# Detach immediately so stale collision bodies cannot block the player while
+	# streaming or creating another world. queue_free() alone is deferred.
+	if chunk.get_parent() == self:
+		remove_child(chunk)
+	chunk.queue_free()
 
 
 func _rebuild_affected_chunks(block_position: Vector3i) -> void:
 	var chunk_coord := block_to_chunk(block_position)
 	var local := to_local_block(block_position)
 	var affected: Array[Vector2i] = [chunk_coord]
-	if local.x == 0: affected.append(chunk_coord + Vector2i.LEFT)
-	if local.x == CHUNK_SIZE - 1: affected.append(chunk_coord + Vector2i.RIGHT)
-	if local.z == 0: affected.append(chunk_coord + Vector2i.UP)
-	if local.z == CHUNK_SIZE - 1: affected.append(chunk_coord + Vector2i.DOWN)
+	if local.x == 0:
+		affected.append(chunk_coord + Vector2i.LEFT)
+	if local.x == CHUNK_SIZE - 1:
+		affected.append(chunk_coord + Vector2i.RIGHT)
+	if local.z == 0:
+		affected.append(chunk_coord + Vector2i.UP)
+	if local.z == CHUNK_SIZE - 1:
+		affected.append(chunk_coord + Vector2i.DOWN)
 	for coord in affected:
 		var chunk = chunks.get(coord)
 		if chunk != null and is_instance_valid(chunk):

@@ -14,20 +14,21 @@ const DayNightScript = preload("res://src/survival/day_night_service.gd")
 const AudioScript = preload("res://src/audio/audio_service.gd")
 const AudioBridgeScript = preload("res://src/audio/audio_event_bridge.gd")
 const SpawnerScript = preload("res://src/entity/creature_spawner.gd")
+const GameplayInputScript = preload("res://src/input/gameplay_input_service.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const DEFAULT_SETTINGS := {
 	"mouse_sensitivity": 0.18,
 	"render_distance": 4,
 	"master_volume": 0.8,
 	"fullscreen": false,
-	"cycle_minutes": 10
+	"cycle_minutes": 10,
 }
 const AMBIENT_BY_MAP := {
 	"star_continent": "forest",
 	"desert_ruins": "desert",
 	"frozen_wastes": "wind",
 	"sky_islands": "sky",
-	"abyss_world": "cave"
+	"abyss_world": "cave",
 }
 
 var inventory
@@ -38,6 +39,7 @@ var day_night
 var audio_service
 var audio_bridge
 var creature_spawner
+var gameplay_input
 var input_context
 var main_menu
 var game_ui
@@ -46,9 +48,11 @@ var current_world_id: String = ""
 var current_settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)
 var world_node
 var player_node
+var _pending_ambient := "forest"
 
 
 func _ready() -> void:
+	gameplay_input = _add_service(GameplayInputScript.new(), "GameplayInput")
 	input_context = _add_service(InputContextScript.new(), "InputContext")
 	inventory = _add_service(InventoryScript.new(), "Inventory")
 	crafting = _add_service(CraftingScript.new(), "Crafting")
@@ -75,9 +79,9 @@ func _ready() -> void:
 		main_menu.continue_world_requested.connect(_begin_world)
 		main_menu.settings_changed.connect(_on_settings_changed)
 	if game_ui != null:
-		game_ui.setup(inventory, crafting, survival, day_night, audio_service)
+		game_ui.setup(inventory, crafting, survival, day_night, audio_service, gameplay_input)
 		game_ui.end_gameplay()
-		game_ui.save_requested.connect(func(): save_current())
+		game_ui.save_requested.connect(func() -> void: save_current())
 		game_ui.return_to_menu_requested.connect(return_to_menu)
 		game_ui.input_context_requested.connect(_on_input_context_requested)
 	audio_bridge.setup(audio_service, null, inventory, crafting, survival)
@@ -91,6 +95,10 @@ func _add_service(service: Node, service_name: String) -> Node:
 
 
 func _begin_world(state: Dictionary) -> void:
+	input_context.set_context(InputContextScript.CONTEXT_LOADING)
+	input_context.unbind_player()
+	if game_ui != null:
+		game_ui.end_gameplay()
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	current_state = state.duplicate(true)
@@ -107,16 +115,34 @@ func _begin_world(state: Dictionary) -> void:
 	day_night.deserialize(current_state.get("day_night", {}))
 	day_night.set_map_profile(str(metadata.get("map_id", "star_continent")))
 	var profile: Dictionary = metadata.get("map_profile", {})
-	audio_service.start_ambient(
-		str(profile.get("ambient", _ambient_for_map(str(metadata.get("map_id", "")))))
+	_pending_ambient = str(
+		profile.get("ambient", _ambient_for_map(str(metadata.get("map_id", ""))))
 	)
 	if main_menu != null:
 		main_menu.visible = false
+	start_world_requested.emit(current_state.duplicate(true))
+
+
+func activate_gameplay() -> void:
+	audio_service.start_ambient(_pending_ambient)
 	if game_ui != null:
 		game_ui.begin_gameplay()
 	else:
 		input_context.set_context(InputContextScript.CONTEXT_GAMEPLAY)
-	start_world_requested.emit(current_state.duplicate(true))
+
+
+func handle_world_start_failed(reason: String) -> void:
+	creature_spawner.set_active(false)
+	creature_spawner.clear_creatures()
+	audio_service.stop_ambient()
+	if game_ui != null:
+		game_ui.end_gameplay()
+	input_context.set_context(InputContextScript.CONTEXT_MENU)
+	input_context.unbind_player()
+	if main_menu != null:
+		main_menu.show_main()
+		if main_menu.has_method("show_error"):
+			main_menu.call("show_error", "世界启动失败：%s" % reason)
 
 
 func attach_game(
@@ -138,19 +164,20 @@ func attach_game(
 	if player != null:
 		audio_bridge.connect_player(player)
 		if player.has_method("setup_gameplay_services"):
-			player.call(
-				"setup_gameplay_services",
-				{
-					"inventory": inventory,
-					"survival": survival,
-					"audio": audio_service,
-					"game_ui": game_ui
-				}
-			)
+			var services := {
+				"inventory": inventory,
+				"survival": survival,
+				"audio": audio_service,
+				"game_ui": game_ui,
+				"input": gameplay_input,
+			}
+			player.call("setup_gameplay_services", services)
 		elif player.has_method("bind_inventory"):
 			player.call("bind_inventory", inventory)
 			if player.has_method("bind_survival"):
 				player.call("bind_survival", survival)
+			if player.has_method("bind_input_service"):
+				player.call("bind_input_service", gameplay_input)
 		elif player.has_method("set_inventory_service"):
 			player.call("set_inventory_service", inventory)
 	_apply_settings(current_settings)
@@ -247,6 +274,9 @@ func return_to_menu() -> void:
 	if game_ui != null:
 		game_ui.end_gameplay()
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
+	input_context.unbind_player(player_node)
+	world_node = null
+	player_node = null
 	if main_menu != null:
 		main_menu.show_main()
 	return_to_menu_requested.emit()
@@ -257,9 +287,16 @@ func _on_creature_spawned(creature: Node3D) -> void:
 
 
 func _player_state(player: Node3D) -> Dictionary:
+	if player.has_method("serialize_state"):
+		return player.call("serialize_state")
 	return {
-		"position": [player.global_position.x, player.global_position.y, player.global_position.z],
-		"rotation": [player.rotation.x, player.rotation.y, player.rotation.z]
+		"position":
+			[
+				player.global_position.x,
+				player.global_position.y,
+				player.global_position.z,
+			],
+		"rotation": [player.rotation.x, player.rotation.y, player.rotation.z],
 	}
 
 
