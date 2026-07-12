@@ -49,9 +49,9 @@ func _run() -> void:
 		return
 	_world_started = false
 	_world_start_failure = ""
-	game.world_started.connect(Callable(self, "_on_world_started"), CONNECT_ONE_SHOT)
-	game.world_start_failed.connect(Callable(self, "_on_world_start_failed"), CONNECT_ONE_SHOT)
-	game.begin_world_state(_smoke_world_state())
+	game.connect("world_started", Callable(self, "_on_world_started"), CONNECT_ONE_SHOT)
+	game.connect("world_start_failed", Callable(self, "_on_world_start_failed"), CONNECT_ONE_SHOT)
+	game.call("begin_world_state", _smoke_world_state())
 	await get_tree().process_frame
 	await get_tree().physics_frame
 	await get_tree().process_frame
