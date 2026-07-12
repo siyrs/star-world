@@ -2,7 +2,7 @@
 
 ## 目标
 
-项目使用 Godot 4 的场景树和模块化 GDScript，而非自建 3D 引擎。生成世界与玩法服务通过小而稳定的公开方法和 signal 交互，使得网格重建、输入、移动、UI、存档和生物可以独立测试。
+项目使用 Godot 4 的场景树和模块化 GDScript。世界、输入、交互、UI、存档和生物通过小而稳定的公开方法与 signal 协作；高成本任务有明确预算，运行时状态有唯一所有者，新增玩法必须附带真实 Godot 回归。
 
 ## 运行时结构
 
@@ -10,49 +10,63 @@
 Game (Node3D)
 ├─ VoxelWorld
 │  ├─ WorldGenerator
+│  ├─ ChunkStreamingScheduler
 │  └─ VoxelChunk[]
 ├─ Player
 ├─ Sun + WorldEnvironment
 └─ GameplayServiceHub (`service_hub.tscn`)
    ├─ GameplayInput
    ├─ InputContext
+   ├─ SimulationPause
    ├─ Inventory
+   ├─ ContainerStorage
    ├─ Crafting
+   ├─ BlockInteraction
    ├─ Save
    ├─ Survival
    ├─ DayNight
    ├─ AudioService + AudioBridge
    ├─ CreatureSpawner
    ├─ MainMenu
-   └─ GameUI (HUD / Inventory / Crafting / Pause / Death)
+   └─ GameUI (HUD / Inventory / Crafting / Container / Pause / Death)
 ```
 
-`res://scenes/ui/service_hub.tscn` 是游戏服务的组合根。它会在 `_ready()` 中实例化所有服务，并将合成系统连接到背包、将 UI 连接到生存/时间状态、将输入动作查询和 UI 覆盖层连接到统一输入上下文。
+`GameplayServiceHub` 是组合根。它负责创建领域服务、连接信号、装载世界状态、注入 Player 依赖并将所有领域状态写入同一个世界保存事务。领域服务之间不通过硬编码场景路径互相查找。
 
-世界启动采用显式生命周期：
+## 世界生命周期
 
 ```text
-menu → loading → attach world/player/services → gameplay
+menu
+  → loading
+  → start world
+  → restore safe player state
+  → attach input / interaction / gameplay services
+  → gameplay
+  → save transaction
+  → menu
 ```
 
-`loading` 阶段始终禁用玩家输入。只有世界、玩家、输入服务和 UI 全部完成绑定后，`Game.world_started` 才会触发 `activate_gameplay()`，避免启动过程中出现输入开关竞争。
+`loading` 阶段始终禁用玩家输入。只有世界、玩家、输入服务、交互服务和 UI 全部完成绑定后，`Game.world_started` 才触发 `activate_gameplay()`。
+
+返回主菜单前必须先完成保存。写入失败时保留当前世界和 UI，不会静默丢失状态。
 
 ## 模块责任
 
 | 模块 | 路径 | 责任 |
 |---|---|---|
-| Core | `src/core` | 启动场景、世界生命周期、恢复安全出生点、收集完整存档状态 |
-| Block | `src/block` | 方块 ID、材质/碰撞属性、方块到物品的映射 |
-| World / Chunk | `src/world`, `src/chunk` | Seed 生成、区块流式加载、表面网格和碰撞重建；世界切换时立即移除旧碰撞体 |
-| Input | `src/input` | 默认按键注册与修复、输入查询、菜单/加载/游戏/UI/死亡上下文和窗口焦点处理 |
-| Player | `src/player` | 第一人称协调器、独立移动控制器、安全出生点解析、RayCast 交互和快捷栏动作 |
-| Inventory | `src/inventory` | 物品注册、堆叠、槽位交换、快捷装备、选中槽和序列化 |
-| Crafting | `src/crafting` | 配方注册、工位限制、原子检查/消耗/产出 |
-| Save | `src/save` | 多世界目录、版本迁移、原子 JSON 写入、设置持久化 |
-| Survival | `src/survival` | 生命、饥饿、精确消费选中食物、死亡/重生以及昼夜光照 |
-| Entity | `src/entity` | 程序化模型、有限状态 AI、刷新、掉落物和拾取 |
-| UI | `src/ui`, `scenes/ui` | 主菜单、地图/存档/设置、HUD、背包、合成和覆盖层状态机 |
-| Audio | `src/audio` | 运行时 PCM 合成和游戏 signal 音效桥接 |
+| Core | `src/core` | 世界生命周期、安全出生点、物理层策略、真实暂停 |
+| Block | `src/block` | 方块 ID、材质/碰撞属性、方块到物品映射 |
+| World / Chunk | `src/world`, `src/chunk` | Seed 生成、渐进区块流式加载、共享材质、网格与碰撞 |
+| Input | `src/input` | 默认按键修复、输入查询、菜单/加载/游戏/UI/死亡上下文、窗口焦点 |
+| Player | `src/player` | 第一人称协调器、移动控制器、RayCast 命中与玩法意图 |
+| Interaction | `src/interaction` | 方块能力注册、工作台/熔炉/箱子交互协调、拆除策略 |
+| Inventory | `src/inventory` | 玩家背包、容器存储、堆叠、转移、快捷装备和序列化 |
+| Crafting | `src/crafting` | 配方注册、真实工位权限、原子消耗和产出 |
+| Save | `src/save` | 多世界目录、兼容迁移、带备份的原子 JSON 写入 |
+| Survival | `src/survival` | 生命、饥饿、食物、死亡/重生和昼夜光照 |
+| Entity | `src/entity` | 程序化模型、有限状态 AI、种群维护、掉落物和拾取 |
+| UI | `src/ui`, `scenes/ui` | 主菜单、HUD、背包、合成、容器和覆盖层状态机 |
+| Audio | `src/audio` | 运行时 PCM 合成和 gameplay signal 音效桥接 |
 | Data | `data` | JSON 物品、配方、地图与生物注册表 |
 
 ## 公开集成合同
@@ -60,79 +74,167 @@ menu → loading → attach world/player/services → gameplay
 ### 服务组合与世界启动
 
 ```gdscript
-service_hub.start_world_requested.connect(_on_start_world_requested)
+service_hub.start_world_requested.connect(_on_world_state_requested)
 world_started.connect(func(_profile, _seed, _world_id): service_hub.activate_gameplay())
 
-func _on_start_world_requested(state: Dictionary) -> void:
-    var meta: Dictionary = state["metadata"]
-    start_world(meta["map_id"], int(meta["seed"]), meta["id"], state)
-    service_hub.attach_game(world, player, sun, world_environment, ground_resolver)
+func _on_world_state_requested(state: Dictionary) -> void:
+    var metadata: Dictionary = state["metadata"]
+    start_world(
+        metadata["map_id"],
+        int(metadata["seed"]),
+        metadata["id"],
+        state
+    )
 ```
 
-`attach_game` 使用鸭子类型合同：玩家可实现 `setup_gameplay_services` / `bind_inventory` / `bind_survival` / `bind_input_service` / `set_input_enabled`，世界可实现 `serialize` 或 `serialize_overrides`。服务不依赖具体世界类。
+`attach_game` 使用鸭子类型合同。Player 可实现：
+
+```text
+setup_gameplay_services
+bind_inventory
+bind_survival
+bind_input_service
+bind_interaction_service
+set_input_enabled
+```
+
+世界可实现 `serialize_state`、`serialize` 或 `serialize_overrides`。ServiceHub 不依赖具体世界类。
 
 ### GameplayInputActions / GameplayInputService
 
-- `GameplayInputActions.ensure_default_bindings()` 是默认按键注册的唯一入口。
-- WASD 同时注册物理键位与逻辑键码，并提供方向键后备；残缺动作会逐项修复，而不是只在动作完全为空时注册。
-- `GameplayInputService` 封装移动向量、跳跃、冲刺、快捷栏、快速保存以及背包/合成切换查询。
-- Player 和 GameUI 通过输入服务或公开 action 合同查询输入，不再各自创建私有按键映射。
+- `ensure_default_bindings()` 是默认按键注册的唯一入口。
+- WASD 同时注册物理键位和逻辑键码，并提供方向键后备。
+- 残缺 action 会逐项修复，不要求 action 完全为空。
+- 输入服务封装移动、跳跃、冲刺、快捷栏、保存、背包和合成查询。
+- Player 与 GameUI 不各自维护另一套按键定义。
 
 ### InputContextService
 
-- 上下文：`menu`, `loading`, `gameplay`, `inventory`, `crafting`, `pause`, `death`。
-- `set_context` 是鼠标模式和玩家输入开关的唯一游戏内协调入口；Core 不再直接写玩家输入状态。
-- 只有应用窗口聚焦且处于 `gameplay` 上下文时才捕获鼠标并启用玩家控制。
-- 窗口失焦会立即释放鼠标并停止玩家输入；恢复焦点后按当前上下文重新应用。
-- 从 UI 返回游戏时会释放残留 GUI 焦点，避免键盘仍被按钮或输入框占用。
-- Signals：`context_changed`, `gameplay_input_changed`。
+支持：
+
+```text
+menu
+loading
+gameplay
+inventory
+crafting
+container
+pause
+death
+```
+
+只有窗口聚焦且处于 `gameplay` 时才捕获鼠标并启用 Player。离开 gameplay 或窗口失焦时会释放残留 action 状态，防止 W/Shift 粘键。
+
+背包、合成和容器只阻断玩家输入；暂停与死亡还会请求 `SimulationPauseService` 停止真实世界模拟。
+
+### SimulationPauseService
+
+- 是 `SceneTree.paused` 的唯一写入者。
+- 暂停菜单和死亡界面停止世界、生物、昼夜和物理。
+- 继续、重生、返回菜单和服务退出都会清除残留暂停。
+- UI 只发布暂停意图，不直接写 SceneTree。
 
 ### PlayerMovementController / PlayerSpawnResolver
 
-- `PlayerMovementController.step` 只负责重力、跳跃、方向归一化、地面/空中加速度和 `move_and_slide`。
-- `StarWorldPlayer` 负责读取输入、协调移动结果和发出玩法事件，不再内嵌输入映射注册。
-- `PlayerSpawnResolver.resolve` 校验存档位置是否有限且具有角色碰撞体净空；无效位置会落地或在出生点附近搜索安全位置。
-- 玩家状态保存 `position`, `rotation`, `look_pitch`，恢复时同时还原水平朝向和第一人称俯仰。
+- `PlayerMovementController.step` 只处理重力、跳跃、方向归一化、加速度和 `move_and_slide`。
+- `PlayerSpawnResolver.resolve` 校验有限坐标、世界边界和角色净空。
+- Player 保存 `position`、yaw 和独立 `look_pitch`。
+- 世界切换和重生都会清除残留速度。
+
+### BlockInteractionRegistry / BlockInteractionService
+
+- 注册表描述方块能力，不保存运行时状态。
+- Player 右键只把命中结果交给交互服务。
+- 工作台和熔炉由真实世界方块授予工位能力。
+- 箱子使用位置稳定 ID 打开 `ContainerStorageService`。
+- 非空箱子拒绝拆除，避免内容静默丢失。
+- 详细合同见 [BLOCK_INTERACTIONS.md](BLOCK_INTERACTIONS.md)。
+
+右键优先级：
+
+```text
+可交互方块 → 放置选中方块 → 食用选中食物
+```
 
 ### GameUI
 
-- 背包、合成、暂停和死亡界面由单一覆盖层状态机管理，任一时刻最多只有一个阻塞层。
-- UI 通过 `input_context_requested` 请求上下文，不直接修改鼠标捕获状态。
-- `begin_gameplay` / `end_gameplay` 负责清理跨世界遗留状态。
+覆盖层状态：
+
+```text
+NONE
+INVENTORY
+CRAFTING
+CONTAINER
+PAUSE
+DEATH
+```
+
+任一时刻最多一个阻塞层。GameUI 请求输入上下文和暂停意图，但不直接写鼠标模式、Player 输入或 SceneTree 暂停。
 
 ### InventoryService
 
-- 写入：`add_item` / `remove_item` / `remove_from_slot` / `swap_slots` / `clear`
-- 查询：`count_item` / `has_items` / `get_slot` / `get_selected_item` / `is_hotbar_slot`
-- 选择与装备：`select_slot` / `select_relative` / `equip_slot` / `consume_selected`
-- 持久化：`serialize` / `deserialize`
-- Signals：`inventory_changed`, `slot_changed`, `selected_slot_changed`, `slot_equipped`, `item_added`, `item_removed`
+- 写入：`add_item`, `remove_item`, `remove_from_slot`, `swap_slots`, `clear`
+- 查询：`count_item`, `has_items`, `get_slot`, `get_selected_item`, `is_hotbar_slot`
+- 选择与装备：`select_slot`, `select_relative`, `equip_slot`, `consume_selected`
+- 持久化：`serialize`, `deserialize`
 
-背包 UI 将“当前可使用快捷栏槽位”和“等待交换的源槽位”作为两个独立状态。单击快捷栏会更新真实选中槽；右键或双击背包物品会把它装备到当前快捷栏槽位。
+黄色高亮表示真实快捷栏选择；蓝色高亮表示待交换源槽。快速装备会同步真实 `selected_slot`。
+
+### ContainerStorageService
+
+- 每个位置型容器拥有独立槽位数组。
+- 所有物品写入都经过 ItemRegistry 校验和最大堆叠限制。
+- 玩家背包与容器之间的转移保证数量守恒，空间不足时回滚剩余数量。
+- 容器状态与世界状态在同一个保存事务中持久化。
+- 当前箱子为 27 格；UI 不直接修改容器数据。
 
 ### CraftingService
 
-- `setup(inventory)` 注入背包。
-- `set_station("hand" | "workbench" | "furnace")` 切换工位。
-- `can_craft` 先验证数量和工位；`craft` 消耗输入并写入输出。若输出没有空间，会回滚已消耗材料。
+- `setup(inventory)` 注入玩家背包。
+- `set_station(hand | workbench | furnace)` 由可信交互路径设置。
+- `C` 只打开随身合成。
+- 工位下拉框只读，不能绕过世界方块使用高级配方。
+- 输出空间不足时回滚材料。
 
-### Survival / DayNight
+### AtomicJsonStore / SaveService
 
-- 伤害入口：`take_damage(amount, cause)`；为玩家合同同时保留 `damage` 别名。
-- 食物：`consume_food`, `consume_inventory_item`, `consume_selected_inventory_item`。玩家右键使用食物时只消耗当前选中槽，不会误删其他同名堆叠。
-- 昼夜：`attach_lighting(sun, world_environment)`, `set_time`, `set_map_profile`, `is_night`。
+写入顺序：
 
-### SaveService
+```text
+new data → .tmp
+old primary → .bak
+.tmp → primary
+failure → restore .bak
+```
 
-- `create_world(name, map_id, seed, extra)` 创建默认状态并立即落盘。
-- `save_world` / `load_world` / `list_worlds` / `delete_world` 实现多存档生命周期。
-- 世界 ID 要求为安全单路径段，防止路径穿越。
+读取依次尝试主文件、有效临时文件和备份。存档浏览使用无副作用读取，不发出 `world_loaded`。
+
+### ChunkStreamingScheduler / VoxelChunk
+
+- 出生区块同步完成，确保进入世界后立即有地形与碰撞。
+- 周边区块拆分为体素生成和网格/碰撞构建阶段。
+- 构建受单步数量、单帧步骤和软时间预算约束。
+- 移出视距的未完成任务可取消。
+- 区块共享体素材质，避免重复资源分配。
+- `get_streaming_stats()` 为性能 HUD 和后续自适应策略提供数据。
+
+### CreaturePopulationPolicy
+
+- 只统计当前 Spawner 的直接子生物。
+- 定期回收远离玩家的生物，防止长时间游玩累积 AI 与物理对象。
+- 生物只在完整 gameplay 生命周期激活后开始刷新。
 
 ## 数据合同
 
 ### 物品
 
-`data/items.json` 每项至少包含 `id`, `name`, `category`, `max_stack`。可放置物品通过 `block_id` 映射世界方块；食物使用 `food` 和 `saturation`；工具/武器可包含 `durability`, `power`, `damage`。
+`data/items.json` 每项至少包含：
+
+```text
+id, name, category, max_stack
+```
+
+可放置物品通过 `block_id` 映射方块；食物使用 `food` 和 `saturation`；工具和武器可包含 `durability`, `power`, `damage`。
 
 ### 配方
 
@@ -151,16 +253,28 @@ func _on_start_world_requested(state: Dictionary) -> void:
 
 ```text
 save_version
-metadata { id, name, map_id, seed, created_at, updated_at, play_seconds }
-player   { position[3], rotation[3], look_pitch }
-inventory{ version, selected_slot, slot_count, hotbar_size, slots[] }
-world    { block_overrides, loaded_chunks }
-survival { health, hunger, saturation, alive }
-day_night{ time_of_day, day, cycle_duration, map_id }
+metadata   { id, name, map_id, seed, created_at, updated_at, play_seconds }
+player     { position[3], rotation[3], look_pitch }
+inventory  { version, selected_slot, slot_count, hotbar_size, slots[] }
+containers { version, containers { stable_id → type, slot_count, slots[] } }
+world      { block_overrides, loaded_chunks }
+survival   { health, hunger, saturation, alive }
+day_night  { time_of_day, day, cycle_duration, map_id }
 ```
 
-地形由 `map_id + seed` 重建，存档仅保存玩家改动的稀疏 `block_overrides`，因此建筑可恢复而存档不会随探索范围无界增长。`SaveService` 在读取 v1 时补齐生存和昼夜字段并升级到 v2。
+地形由 `map_id + seed` 重建，存档只保存稀疏方块修改。`containers` 是 v2 的兼容扩展字段；旧存档缺失该字段时自动补为空容器状态。
 
 ## 测试边界
 
-`tests/developer_a/core_smoke_test.gd` 覆盖五类 Seed 地形、出生净空、体素网格/碰撞、Chunk 流式装卸和世界修改恢复；`tests/developer_b/run_tests.gd` 覆盖堆叠、合成原子性、存档往返、生存、昼夜、生物与设置；`tests/qa/integration_regression.gd` 覆盖菜单路由、多存档闭包、战斗/食用/掉落、音效和退出生命周期；`tests/qa/input_interaction_regression.gd` 覆盖输入上下文所有权、覆盖层互斥、快捷栏装备和精确消费选中物品；`tests/qa/movement_lifecycle_regression.gd` 覆盖 WASD 映射修复、方向计算、安全出生点、世界激活顺序以及 UI 打开/关闭后的移动恢复。`validate_data.ps1` 独立校验 JSON 数量、唯一 ID 和配方引用完整性。
+- `core_smoke_test.gd`：五地图、出生净空、Chunk、世界修改和组合根。
+- `run_tests.gd`：物品、合成、存档、生存、昼夜、生物和设置。
+- `integration_regression.gd`：菜单、存档、战斗、食用、音频和退出。
+- `input_interaction_regression.gd`：输入所有权、覆盖层和选中物品。
+- `movement_lifecycle_regression.gd`：真实 WASD、窗口焦点和移动恢复。
+- `physics_interaction_regression.gd`：物理层、生物攻击和玩家专用拾取。
+- `block_interaction_regression.gd`：工作台、熔炉、箱子、转移守恒、拆除保护和持久化。
+- `runtime_stability_regression.gd`：真实暂停、渐进区块、备份恢复和种群回收。
+- `settings_retest.gd`：设置保存和运行时应用。
+- `validate_data.ps1`：JSON 数量、唯一 ID 和配方引用完整性。
+
+每个 PR 和 `master` 更新都会在 Windows + Godot 4.7 上执行完整运行时套件。

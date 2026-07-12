@@ -35,6 +35,7 @@ var world: Node
 var inventory: Node
 var survival: Node
 var input_service: Node
+var interaction_service: Node
 var selected_hotbar_index := 0
 var input_enabled := false
 var spawn_position := Vector3(0.5, 40.0, 0.5)
@@ -86,6 +87,10 @@ func bind_input_service(p_input_service: Node) -> void:
 		input_service.call("ensure_bindings")
 
 
+func bind_interaction_service(p_interaction_service: Node) -> void:
+	interaction_service = p_interaction_service
+
+
 func setup_gameplay_services(services: Dictionary) -> void:
 	if services.get("inventory") is Node:
 		bind_inventory(services["inventory"])
@@ -93,6 +98,8 @@ func setup_gameplay_services(services: Dictionary) -> void:
 		bind_survival(services["survival"])
 	if services.get("input") is Node:
 		bind_input_service(services["input"])
+	if services.get("interaction") is Node:
+		bind_interaction_service(services["interaction"])
 	var game_ui = services.get("game_ui")
 	if game_ui is Node and game_ui.has_signal("respawn_requested"):
 		var callback := Callable(self, "_on_respawn_requested")
@@ -164,7 +171,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		MOUSE_BUTTON_LEFT:
 			break_target_block()
 		MOUSE_BUTTON_RIGHT:
-			use_selected_item()
+			interact_or_use_selected_item()
 		MOUSE_BUTTON_WHEEL_UP:
 			select_hotbar(selected_hotbar_index - 1)
 		MOUSE_BUTTON_WHEEL_DOWN:
@@ -188,15 +195,32 @@ func break_target_block() -> bool:
 	var point := interaction_ray.get_collision_point()
 	var normal := interaction_ray.get_collision_normal()
 	var block_position: Vector3i = world.call("world_to_block", point - normal * 0.01)
+	var target_block := str(world.call("get_block", block_position))
+	if (
+		interaction_service != null
+		and interaction_service.has_method("can_break_block")
+		and not bool(
+			interaction_service.call("can_break_block", world, block_position, target_block)
+		)
+	):
+		return false
 	var removed_block: String = world.call("remove_block", block_position)
 	if removed_block == BlockRegistryScript.AIR:
 		return false
+	if interaction_service != null and interaction_service.has_method("on_block_removed"):
+		interaction_service.call("on_block_removed", world, block_position, removed_block)
 	var drop_item := BlockRegistryScript.get_item_id(removed_block)
 	if inventory != null and not drop_item.is_empty() and inventory.has_method("add_item"):
 		inventory.call("add_item", drop_item, 1)
 	_report_player_action("mine")
 	block_broken.emit(block_position, removed_block)
 	return true
+
+
+func interact_or_use_selected_item() -> bool:
+	if _try_interact_target():
+		return true
+	return use_selected_item()
 
 
 func use_selected_item() -> bool:
@@ -209,6 +233,21 @@ func use_selected_item() -> bool:
 # Compatibility entry point kept for existing integrations and tests.
 func place_selected_block() -> bool:
 	return use_selected_item()
+
+
+func _try_interact_target() -> bool:
+	if interaction_service == null or world == null:
+		return false
+	if not interaction_service.has_method("interact"):
+		return false
+	interaction_ray.force_raycast_update()
+	if not interaction_ray.is_colliding():
+		return false
+	var point := interaction_ray.get_collision_point()
+	var normal := interaction_ray.get_collision_normal()
+	var block_position: Vector3i = world.call("world_to_block", point - normal * 0.01)
+	var block_id := str(world.call("get_block", block_position))
+	return bool(interaction_service.call("interact", world, block_position, block_id))
 
 
 func _place_block(block_id: String) -> bool:

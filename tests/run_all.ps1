@@ -38,6 +38,7 @@ Invoke-GodotTest 'res://tests/qa/integration_regression.gd'
 Invoke-GodotTest 'res://tests/qa/input_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/movement_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/physics_interaction_regression.gd'
+Invoke-GodotTest 'res://tests/qa/block_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
