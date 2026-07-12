@@ -112,20 +112,20 @@ func profile_for_level(baseline: Dictionary, level: int) -> Dictionary:
 	var chunks_per_frame := base_chunks
 	match normalized_level:
 		LEVEL_CONSERVATIVE:
-			budget_ms = clampf(base_budget_ms * 0.4, 0.75, 2.0)
+			budget_ms = minf(base_budget_ms, clampf(base_budget_ms * 0.4, 0.5, 2.0))
 			cells_per_step = _quantize_cells(int(round(float(base_cells) * 0.5)))
 			max_steps_per_frame = 1
 			chunks_per_frame = 1
 		LEVEL_GUARDED:
-			budget_ms = clampf(base_budget_ms * 0.7, 1.0, 3.5)
+			budget_ms = minf(base_budget_ms, clampf(base_budget_ms * 0.7, 0.5, 3.5))
 			cells_per_step = _quantize_cells(int(round(float(base_cells) * 0.75)))
 			max_steps_per_frame = 1
 			chunks_per_frame = 1
 		LEVEL_THROUGHPUT:
-			budget_ms = clampf(base_budget_ms * 1.25, base_budget_ms, 6.0)
+			budget_ms = minf(12.0, base_budget_ms * 1.25)
 			cells_per_step = _quantize_cells(int(round(float(base_cells) * 1.5)))
-			max_steps_per_frame = clampi(base_steps + 1, base_steps, 4)
-			chunks_per_frame = clampi(base_chunks + 1, base_chunks, 2)
+			max_steps_per_frame = mini(8, base_steps + 1)
+			chunks_per_frame = mini(4, base_chunks + 1)
 		_:
 			pass
 	return {
