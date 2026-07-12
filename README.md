@@ -19,6 +19,7 @@
 - 10 分钟默认昼夜循环，太阳、环境光和天空颜色随时间变化。
 - 鸡、牛、猪和僵尸：程序化模型、漫游/追击 AI、伤害、死亡动画和种群回收。
 - 主菜单、多存档、设置、HUD、背包、合成、容器、真实暂停和死亡 UI。
+- F3 运行诊断：帧时间、卡顿、区块队列、内存、节点、生物、掉落物和输入状态。
 - 带临时文件与备份恢复的可靠 JSON 保存。
 - 无外部版权资产：生物模型和环境/方块/生物音效均在运行时程序化生成。
 
@@ -29,7 +30,7 @@
 3. 按 `F6/F5` 运行，或启动已导出的 `StarWorld.exe`。
 4. 在主菜单选择“开始游戏”，选择地图、输入世界名和 Seed，然后创建世界。
 
-命令行构建和 Windows 导出方法见 [BUILD.md](BUILD.md)，总体架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，方块交互扩展合同见 [BLOCK_INTERACTIONS.md](BLOCK_INTERACTIONS.md)。
+命令行构建和 Windows 导出方法见 [BUILD.md](BUILD.md)，总体架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，方块交互扩展合同见 [BLOCK_INTERACTIONS.md](BLOCK_INTERACTIONS.md)，运行诊断与发行验收见 [RUNTIME_DIAGNOSTICS.md](RUNTIME_DIAGNOSTICS.md)。
 
 ## 操作
 
@@ -46,10 +47,11 @@
 | 快捷栏 | `1` 至 `9` 或滚轮 |
 | 背包 | `E` |
 | 随身合成 | `C` |
+| 运行诊断 | `F3` |
 | 关闭界面/暂停 | `Esc` |
 | 快速保存 | `F5` |
 
-右键优先处理面前的可交互方块，然后才尝试放置或食用。
+右键优先处理面前的可交互方块，然后才尝试放置或食用。F3 面板是纯展示层，不会改变鼠标捕获、暂停或玩家输入状态。
 
 ## 世界存档
 
@@ -66,9 +68,13 @@
 ```powershell
 # 一键运行数据校验和全部 Godot 测试
 powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\godot.exe
+
+# 导出并启动真实 Windows Release，检查画面、相机、区块、输入和诊断报告
+powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 `
+  -Godot C:\path\to\godot.exe
 ```
 
-测试集覆盖五地图和体素 Chunk、真实 WASD、输入/暂停生命周期、物品与配方、工作台/熔炉权限、箱子转移与持久化、物理层、战斗、拾取、存档恢复、渐进区块生成、种群回收、菜单和设置。每个 PR 以及 `master` 更新都会在 Windows + Godot 4.7 上执行完整运行时回归。
+测试集覆盖五地图和体素 Chunk、真实 WASD、输入/暂停生命周期、物品与配方、工作台/熔炉权限、箱子转移与持久化、物理层、战斗、拾取、存档恢复、渐进区块生成、种群回收、菜单、设置和运行诊断。每个 PR 以及 `master` 更新都会在 Windows + Godot 4.7 上执行源码桌面验收，并导出、启动真实 Windows Release，上传 EXE、PCK、截图和 JSON 报告。
 
 ## 当前边界
 

@@ -125,7 +125,7 @@ func _rebuild_container_buttons() -> void:
 	for child in _container_grid.get_children():
 		child.queue_free()
 	_container_buttons.clear()
-	var slot_count := container_storage.get_slot_count(_active_container_id)
+	var slot_count: int = int(container_storage.get_slot_count(_active_container_id))
 	for index in slot_count:
 		var slot = SlotScript.new()
 		slot.configure(index)
@@ -137,7 +137,9 @@ func _rebuild_container_buttons() -> void:
 func _on_container_slot_clicked(index: int) -> void:
 	if container_storage == null or _active_container_id.is_empty():
 		return
-	var moved := container_storage.transfer_to_inventory(inventory, index, _active_container_id)
+	var moved: bool = bool(
+		container_storage.transfer_to_inventory(inventory, index, _active_container_id)
+	)
 	_status.text = "已移入背包" if moved else "背包空间不足或槽位为空"
 	refresh()
 
@@ -145,7 +147,9 @@ func _on_container_slot_clicked(index: int) -> void:
 func _on_inventory_slot_clicked(index: int) -> void:
 	if container_storage == null or _active_container_id.is_empty():
 		return
-	var moved := container_storage.transfer_from_inventory(inventory, index, _active_container_id)
+	var moved: bool = bool(
+		container_storage.transfer_from_inventory(inventory, index, _active_container_id)
+	)
 	_status.text = "已存入箱子" if moved else "箱子空间不足或槽位为空"
 	refresh()
 

@@ -18,6 +18,18 @@ func _ready() -> void:
 	_build_cache()
 
 
+func _exit_tree() -> void:
+	shutdown()
+
+
+func shutdown() -> void:
+	for player in [_effects_player, _creature_player, _ambient_player]:
+		if player != null and is_instance_valid(player):
+			player.stop()
+			player.stream = null
+	_cache.clear()
+
+
 func _create_player(player_name: String) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
 	player.name = player_name
@@ -79,10 +91,18 @@ func start_ambient(profile: String = "forest") -> void:
 	var frequency := 84.0
 	var waveform := "sine"
 	match profile:
-		"desert": frequency = 64.0; waveform = "noise"
-		"wind": frequency = 110.0; waveform = "noise"
-		"sky": frequency = 160.0; waveform = "sine"
-		"cave": frequency = 47.0; waveform = "saw"
+		"desert":
+			frequency = 64.0
+			waveform = "noise"
+		"wind":
+			frequency = 110.0
+			waveform = "noise"
+		"sky":
+			frequency = 160.0
+			waveform = "sine"
+		"cave":
+			frequency = 47.0
+			waveform = "saw"
 	var key := "ambient_%s" % profile
 	if not _cache.has(key):
 		var stream := _make_wave(frequency, 2.5, 0.055, waveform, 1.015)
@@ -115,7 +135,13 @@ func _play_effect(key: String) -> void:
 	sound_played.emit(key)
 
 
-func _make_wave(frequency: float, duration: float, volume: float, waveform: String, end_pitch_ratio: float = 1.0) -> AudioStreamWAV:
+func _make_wave(
+	frequency: float,
+	duration: float,
+	volume: float,
+	waveform: String,
+	end_pitch_ratio: float = 1.0
+) -> AudioStreamWAV:
 	var mix_rate := 22050
 	var sample_count := maxi(1, int(duration * mix_rate))
 	var bytes := PackedByteArray()
@@ -126,12 +152,19 @@ func _make_wave(frequency: float, duration: float, volume: float, waveform: Stri
 		var phase := TAU * current_frequency * float(sample_index) / float(mix_rate)
 		var sample_value := 0.0
 		match waveform:
-			"square": sample_value = 1.0 if sin(phase) >= 0.0 else -1.0
-			"saw": sample_value = fmod(phase / PI, 2.0) - 1.0
-			"noise": sample_value = _rng.randf_range(-1.0, 1.0) * 0.75 + sin(phase) * 0.25
-			_: sample_value = sin(phase)
+			"square":
+				sample_value = 1.0 if sin(phase) >= 0.0 else -1.0
+			"saw":
+				sample_value = fmod(phase / PI, 2.0) - 1.0
+			"noise":
+				sample_value = _rng.randf_range(-1.0, 1.0) * 0.75 + sin(phase) * 0.25
+			_:
+				sample_value = sin(phase)
 		var envelope := minf(1.0, progress * 18.0) * pow(1.0 - progress, 1.45)
-		bytes.encode_s16(sample_index * 2, int(clampf(sample_value * volume * envelope, -1.0, 1.0) * 32767.0))
+		bytes.encode_s16(
+			sample_index * 2,
+			int(clampf(sample_value * volume * envelope, -1.0, 1.0) * 32767.0)
+		)
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.mix_rate = mix_rate

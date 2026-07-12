@@ -19,6 +19,7 @@ func setup(p_item_id: String, p_count: int, p_inventory = null) -> void:
 
 
 func _ready() -> void:
+	add_to_group("pickups")
 	PhysicsPolicy.configure_pickup(self)
 	var collision := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
