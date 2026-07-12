@@ -8,7 +8,9 @@ signal damage_requested(amount: float, source: String)
 signal respawned(position: Vector3)
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
-const FALLBACK_HOTBAR := ["grass", "dirt", "stone", "planks", "stone_bricks", "glass", "stone_slab", "oak_stairs", "torch"]
+const FALLBACK_HOTBAR := [
+	"grass", "dirt", "stone", "planks", "stone_bricks", "glass", "stone_slab", "oak_stairs", "torch"
+]
 const BASE_ATTACK_DAMAGE := 1.0
 
 @export var walk_speed := 5.4
@@ -19,17 +21,17 @@ const BASE_ATTACK_DAMAGE := 1.0
 @export var mouse_sensitivity := 0.0022
 @export var interaction_distance := 6.0
 
-@onready var camera_pivot: Node3D = $CameraPivot
-@onready var camera: Camera3D = $CameraPivot/Camera3D
-@onready var interaction_ray: RayCast3D = $CameraPivot/Camera3D/InteractionRay
-
 var world: Node
 var inventory: Node
 var survival: Node
 var selected_hotbar_index := 0
-var input_enabled := true
+var input_enabled := false
 var spawn_position := Vector3(0.5, 40.0, 0.5)
 var _gravity := 9.8
+
+@onready var camera_pivot: Node3D = $CameraPivot
+@onready var camera: Camera3D = $CameraPivot/Camera3D
+@onready var interaction_ray: RayCast3D = $CameraPivot/Camera3D/InteractionRay
 
 
 func _ready() -> void:
@@ -37,8 +39,7 @@ func _ready() -> void:
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 	interaction_ray.target_position = Vector3(0.0, 0.0, -interaction_distance)
 	interaction_ray.enabled = true
-	if DisplayServer.get_name() != "headless":
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	set_process_unhandled_input(input_enabled)
 	_emit_hotbar_selection()
 
 
@@ -49,11 +50,16 @@ func bind_world(p_world: Node) -> void:
 
 
 func bind_inventory(p_inventory: Node) -> void:
-	inventory = p_inventory
+	if inventory != p_inventory:
+		_disconnect_inventory_selection()
+		inventory = p_inventory
 	if inventory != null and inventory.has_signal("selected_slot_changed"):
 		var callback := Callable(self, "_on_inventory_selection_changed")
 		if not inventory.is_connected("selected_slot_changed", callback):
 			inventory.connect("selected_slot_changed", callback)
+		selected_hotbar_index = clampi(
+			int(inventory.get("selected_slot")), 0, _get_hotbar_size() - 1
+		)
 	_emit_hotbar_selection()
 
 
@@ -79,6 +85,7 @@ func set_inventory_service(p_inventory: Node) -> void:
 
 func set_input_enabled(enabled: bool) -> void:
 	input_enabled = enabled
+	set_process_unhandled_input(enabled)
 	if not input_enabled:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -93,7 +100,9 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("jump") and (is_on_floor() or in_fluid):
 		velocity.y = jump_velocity * (0.7 if in_fluid else 1.0)
 	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
-	var direction := (global_transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)).normalized()
+	var direction := (
+		(global_transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)).normalized()
+	)
 	var target_speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
 	if in_fluid:
 		target_speed *= 0.55
@@ -118,22 +127,35 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
-		get_viewport().set_input_as_handled()
-		return
 	if not input_enabled:
 		return
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if event is InputEventMouseMotion:
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			return
 		rotate_y(-event.relative.x * mouse_sensitivity)
 		camera_pivot.rotate_x(-event.relative.y * mouse_sensitivity)
-		camera_pivot.rotation.x = clampf(camera_pivot.rotation.x, deg_to_rad(-89.0), deg_to_rad(89.0))
-	elif event is InputEventMouseButton and event.pressed:
-		match event.button_index:
-			MOUSE_BUTTON_LEFT: break_target_block()
-			MOUSE_BUTTON_RIGHT: place_selected_block()
-			MOUSE_BUTTON_WHEEL_UP: select_hotbar(selected_hotbar_index - 1)
-			MOUSE_BUTTON_WHEEL_DOWN: select_hotbar(selected_hotbar_index + 1)
+		camera_pivot.rotation.x = clampf(
+			camera_pivot.rotation.x, deg_to_rad(-89.0), deg_to_rad(89.0)
+		)
+		return
+	if (
+		not event is InputEventMouseButton
+		or not event.pressed
+		or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
+	):
+		return
+	match event.button_index:
+		MOUSE_BUTTON_LEFT:
+			break_target_block()
+		MOUSE_BUTTON_RIGHT:
+			use_selected_item()
+		MOUSE_BUTTON_WHEEL_UP:
+			select_hotbar(selected_hotbar_index - 1)
+		MOUSE_BUTTON_WHEEL_DOWN:
+			select_hotbar(selected_hotbar_index + 1)
+		_:
+			return
+	get_viewport().set_input_as_handled()
 
 
 func break_target_block() -> bool:
@@ -163,10 +185,19 @@ func break_target_block() -> bool:
 	return true
 
 
-func place_selected_block() -> bool:
+func use_selected_item() -> bool:
 	var block_id := get_selected_block_id()
-	if block_id == BlockRegistryScript.AIR:
-		return _consume_selected_food()
+	if block_id != BlockRegistryScript.AIR:
+		return _place_block(block_id)
+	return _consume_selected_food()
+
+
+# Compatibility entry point kept for existing integrations and tests.
+func place_selected_block() -> bool:
+	return use_selected_item()
+
+
+func _place_block(block_id: String) -> bool:
 	if world == null:
 		return false
 	interaction_ray.force_raycast_update()
@@ -175,22 +206,28 @@ func place_selected_block() -> bool:
 	var point := interaction_ray.get_collision_point()
 	var normal := interaction_ray.get_collision_normal()
 	var block_position: Vector3i = world.call("world_to_block", point + normal * 0.01)
-	var player_bounds := AABB(global_position + Vector3(-0.32, 0.0, -0.32), Vector3(0.64, 1.82, 0.64))
+	var player_bounds := AABB(
+		global_position + Vector3(-0.32, 0.0, -0.32), Vector3(0.64, 1.82, 0.64)
+	)
 	var block_bounds := AABB(Vector3(block_position), Vector3.ONE)
 	if player_bounds.intersects(block_bounds):
 		return false
 	if not world.call("set_block", block_position, block_id):
 		return false
 	if inventory != null and inventory.has_method("consume_selected"):
-		inventory.call("consume_selected", 1)
+		var consumed: Dictionary = inventory.call("consume_selected", 1)
+		if consumed.is_empty():
+			world.call("remove_block", block_position)
+			return false
 	block_placed.emit(block_position, block_id)
 	return true
 
 
 func select_hotbar(index: int) -> void:
-	selected_hotbar_index = posmod(index, 9)
+	selected_hotbar_index = posmod(index, _get_hotbar_size())
 	if inventory != null and inventory.has_method("select_slot"):
 		inventory.call("select_slot", selected_hotbar_index)
+		return
 	_emit_hotbar_selection()
 
 
@@ -232,9 +269,13 @@ func _get_selected_attack_damage() -> float:
 func _consume_selected_food() -> bool:
 	var item_id := _get_selected_item_id()
 	var item := _get_selected_item_definition(item_id)
-	if not item.has("food") or survival == null or not survival.has_method("consume_inventory_item"):
+	if not item.has("food") or survival == null:
 		return false
-	return bool(survival.call("consume_inventory_item", inventory, item_id))
+	if survival.has_method("consume_selected_inventory_item"):
+		return bool(survival.call("consume_selected_inventory_item", inventory))
+	if survival.has_method("consume_inventory_item"):
+		return bool(survival.call("consume_inventory_item", inventory, item_id))
+	return false
 
 
 func respawn() -> void:
@@ -255,8 +296,24 @@ func _is_in_fluid() -> bool:
 
 
 func _on_inventory_selection_changed(index: int, _slot: Dictionary) -> void:
-	selected_hotbar_index = clampi(index, 0, 8)
+	selected_hotbar_index = clampi(index, 0, _get_hotbar_size() - 1)
 	_emit_hotbar_selection()
+
+
+func _disconnect_inventory_selection() -> void:
+	if inventory == null or not inventory.has_signal("selected_slot_changed"):
+		return
+	var callback := Callable(self, "_on_inventory_selection_changed")
+	if inventory.is_connected("selected_slot_changed", callback):
+		inventory.disconnect("selected_slot_changed", callback)
+
+
+func _get_hotbar_size() -> int:
+	var fallback_size := FALLBACK_HOTBAR.size()
+	if inventory == null:
+		return fallback_size
+	var configured_size := int(inventory.get("hotbar_size"))
+	return clampi(configured_size, 1, fallback_size)
 
 
 func _on_respawn_requested() -> void:
