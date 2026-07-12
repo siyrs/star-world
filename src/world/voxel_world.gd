@@ -339,6 +339,7 @@ func _begin_next_chunk_build() -> bool:
 		_active_build_chunk = chunk
 		_active_build_coord = coord
 		return true
+	return false
 
 
 func _finalize_active_build() -> void:
