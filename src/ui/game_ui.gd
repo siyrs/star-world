@@ -11,6 +11,7 @@ enum Overlay {
 	NONE,
 	INVENTORY,
 	CRAFTING,
+	CONTAINER,
 	PAUSE,
 	DEATH,
 }
@@ -18,6 +19,7 @@ enum Overlay {
 const HudScript = preload("res://src/ui/hud.gd")
 const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
+const ContainerPanelScript = preload("res://src/ui/container_panel.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
@@ -28,9 +30,11 @@ var survival
 var day_night
 var audio_service
 var gameplay_input
+var container_storage
 var hud
 var inventory_panel
 var crafting_panel
+var container_panel
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
 var _death_title: Label
@@ -55,12 +59,23 @@ func _ready() -> void:
 	add_child(crafting_panel)
 	crafting_panel.visible = false
 	crafting_panel.panel_closed.connect(_close_overlay)
+	container_panel = ContainerPanelScript.new()
+	_center_control(container_panel, Vector2(780, 680))
+	add_child(container_panel)
+	container_panel.visible = false
+	container_panel.panel_closed.connect(_close_overlay)
 	_build_pause_panel()
 	_build_death_panel()
 
 
 func setup(
-	p_inventory, p_crafting, p_survival, p_day_night, p_audio = null, p_gameplay_input = null
+	p_inventory,
+	p_crafting,
+	p_survival,
+	p_day_night,
+	p_audio = null,
+	p_gameplay_input = null,
+	p_container_storage = null
 ) -> void:
 	inventory = p_inventory
 	crafting = p_crafting
@@ -68,9 +83,11 @@ func setup(
 	day_night = p_day_night
 	audio_service = p_audio
 	gameplay_input = p_gameplay_input
+	container_storage = p_container_storage
 	hud.setup(inventory, survival, day_night)
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
+	container_panel.setup(inventory, container_storage)
 	if survival != null and survival.has_signal("player_died"):
 		var callback := Callable(self, "_on_player_died")
 		if not survival.is_connected("player_died", callback):
@@ -90,6 +107,8 @@ func begin_gameplay() -> void:
 func end_gameplay() -> void:
 	_gameplay_active = false
 	_overlay = Overlay.NONE
+	if container_panel != null:
+		container_panel.close_container()
 	_hide_all_overlays()
 	if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 		inventory_panel.call("cancel_swap_selection")
@@ -125,6 +144,16 @@ func open_furnace() -> void:
 	open_crafting("furnace")
 
 
+func open_container(container_id: String, title: String = "箱子") -> bool:
+	if not _can_change_overlay() or container_panel == null:
+		return false
+	if not container_panel.open_container(container_id, title):
+		show_message("无法打开该容器", 2.5)
+		return false
+	_set_overlay(Overlay.CONTAINER)
+	return true
+
+
 func toggle_pause() -> void:
 	if not _can_change_overlay():
 		return
@@ -143,12 +172,16 @@ func is_gameplay_input_blocked() -> bool:
 	return not _gameplay_active or _overlay != Overlay.NONE
 
 
+func show_message(message: String, seconds: float = 2.0) -> void:
+	if hud != null:
+		hud.show_message(message, seconds)
+
+
 func show_save_result(saved: bool) -> void:
 	var message := "世界已保存" if saved else "保存失败，请检查磁盘空间或写入权限"
 	if _pause_status != null:
 		_pause_status.text = message
-	if hud != null:
-		hud.show_message(message, 3.0)
+	show_message(message, 3.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -202,6 +235,9 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	if _overlay == Overlay.INVENTORY and next_overlay != Overlay.INVENTORY:
 		if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 			inventory_panel.call("cancel_swap_selection")
+	if _overlay == Overlay.CONTAINER and next_overlay != Overlay.CONTAINER:
+		if container_panel != null:
+			container_panel.close_container()
 	_overlay = next_overlay
 	_hide_all_overlays()
 	match _overlay:
@@ -209,6 +245,8 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 			inventory_panel.visible = true
 		Overlay.CRAFTING:
 			crafting_panel.visible = true
+		Overlay.CONTAINER:
+			container_panel.visible = true
 		Overlay.PAUSE:
 			_pause_panel.visible = true
 			_pause_status.text = ""
@@ -223,6 +261,8 @@ func _hide_all_overlays() -> void:
 		inventory_panel.visible = false
 	if crafting_panel != null:
 		crafting_panel.visible = false
+	if container_panel != null:
+		container_panel.visible = false
 	if _pause_panel != null:
 		_pause_panel.visible = false
 	if _death_panel != null:
@@ -235,6 +275,8 @@ func _context_for_overlay() -> StringName:
 			return InputContextScript.CONTEXT_INVENTORY
 		Overlay.CRAFTING:
 			return InputContextScript.CONTEXT_CRAFTING
+		Overlay.CONTAINER:
+			return InputContextScript.CONTEXT_CONTAINER
 		Overlay.PAUSE:
 			return InputContextScript.CONTEXT_PAUSE
 		Overlay.DEATH:
@@ -299,7 +341,7 @@ func _build_death_panel() -> void:
 
 func _save_from_pause() -> void:
 	_pause_status.text = "正在保存…"
-	hud.show_message("正在保存…", 1.0)
+	show_message("正在保存…", 1.0)
 	save_requested.emit()
 
 
