@@ -25,7 +25,7 @@ const BASE_ATTACK_DAMAGE := 1.0
 
 @export var walk_speed := 5.4
 @export var sprint_speed := 8.0
-@export var jump_velocity := 6.2
+@export var jump_velocity := 7.2
 @export var acceleration := 18.0
 @export var air_acceleration := 5.0
 @export var mouse_sensitivity := 0.0022
@@ -111,6 +111,10 @@ func set_input_enabled(enabled: bool) -> void:
 	set_process_unhandled_input(enabled)
 	if not input_enabled:
 		_movement_controller.stop_horizontal(self)
+
+
+func reset_motion() -> void:
+	velocity = Vector3.ZERO
 
 
 func _physics_process(delta: float) -> void:
@@ -279,17 +283,19 @@ func serialize_state() -> Dictionary:
 
 func restore_orientation(data: Dictionary) -> void:
 	var saved_rotation = data.get("rotation", [])
-	if saved_rotation is Array and saved_rotation.size() >= 3:
-		rotation = Vector3(
-			float(saved_rotation[0]), float(saved_rotation[1]), float(saved_rotation[2])
-		)
+	if saved_rotation is Array and saved_rotation.size() >= 2:
+		var yaw := float(saved_rotation[1])
+		if is_finite(yaw):
+			rotation = Vector3(0.0, wrapf(yaw, -PI, PI), 0.0)
 	var pitch := float(data.get("look_pitch", 0.0))
+	if not is_finite(pitch):
+		pitch = 0.0
 	camera_pivot.rotation.x = clampf(pitch, deg_to_rad(-89.0), deg_to_rad(89.0))
 
 
 func respawn() -> void:
 	global_position = spawn_position
-	velocity = Vector3.ZERO
+	reset_motion()
 	respawned.emit(global_position)
 
 

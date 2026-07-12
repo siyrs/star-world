@@ -25,11 +25,6 @@ func repair_bindings() -> Array[StringName]:
 	return ensure_bindings(true)
 
 
-func release_all_actions() -> void:
-	for raw_action in Actions.DEFAULT_KEY_BINDINGS:
-		Input.action_release(StringName(raw_action))
-
-
 func get_movement_vector() -> Vector2:
 	return Input.get_vector(
 		Actions.MOVE_LEFT, Actions.MOVE_RIGHT, Actions.MOVE_FORWARD, Actions.MOVE_BACKWARD

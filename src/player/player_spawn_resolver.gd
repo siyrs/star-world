@@ -8,29 +8,31 @@ const SEARCH_RADIUS := 8
 
 
 func resolve(world: Node, preferred: Vector3, fallback: Vector3) -> Vector3:
-	if _is_finite_vector(preferred) and is_position_clear(world, preferred):
+	var safe_fallback := fallback if _is_reasonable_position(fallback) else Vector3(0.5, 50.0, 0.5)
+	if _is_reasonable_position(preferred) and is_position_clear(world, preferred):
 		return preferred
-	var grounded_preferred := _resolve_ground(world, preferred)
+	var grounding_source := preferred if _is_finite_vector(preferred) else safe_fallback
+	var grounded_preferred := _resolve_ground(world, grounding_source)
 	if is_position_clear(world, grounded_preferred):
 		return grounded_preferred
-	if is_position_clear(world, fallback):
-		return fallback
+	if is_position_clear(world, safe_fallback):
+		return safe_fallback
 	for radius in range(1, SEARCH_RADIUS + 1):
 		for offset_x in range(-radius, radius + 1):
 			for offset_z in range(-radius, radius + 1):
 				if absi(offset_x) != radius and absi(offset_z) != radius:
 					continue
-				var candidate := fallback + Vector3(offset_x, 0.0, offset_z)
+				var candidate := safe_fallback + Vector3(offset_x, 0.0, offset_z)
 				candidate = _resolve_ground(world, candidate)
 				if is_position_clear(world, candidate):
 					return candidate
-	return fallback
+	return safe_fallback
 
 
 func is_position_clear(world: Node, feet_position: Vector3) -> bool:
 	if world == null or not world.has_method("get_block"):
 		return true
-	if not _is_finite_vector(feet_position):
+	if not _is_reasonable_position(feet_position):
 		return false
 	var minimum := feet_position + Vector3(-BODY_RADIUS, 0.05, -BODY_RADIUS)
 	var maximum := feet_position + Vector3(BODY_RADIUS, BODY_HEIGHT - 0.05, BODY_RADIUS)
@@ -47,6 +49,10 @@ func _resolve_ground(world: Node, candidate: Vector3) -> Vector3:
 	if world != null and world.has_method("resolve_ground_position"):
 		return world.call("resolve_ground_position", candidate)
 	return candidate
+
+
+func _is_reasonable_position(value: Vector3) -> bool:
+	return _is_finite_vector(value) and value.y >= 0.0 and value.y <= 256.0
 
 
 func _is_finite_vector(value: Vector3) -> bool:

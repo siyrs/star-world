@@ -72,6 +72,8 @@ func start_world(
 	if player_state.has("position"):
 		preferred_spawn = _array_to_vector3(player_state.get("position", []), fallback_spawn)
 	player.global_position = _spawn_resolver.resolve(world, preferred_spawn, fallback_spawn)
+	if player.has_method("reset_motion"):
+		player.call("reset_motion")
 	if player.has_method("restore_orientation"):
 		player.call("restore_orientation", player_state)
 	player.visible = true
@@ -159,6 +161,8 @@ func _on_world_state_requested(state: Dictionary) -> void:
 
 func _on_return_to_menu_requested() -> void:
 	if player != null:
+		if player.has_method("reset_motion"):
+			player.call("reset_motion")
 		player.visible = false
 	if world != null and world.has_method("clear_world"):
 		world.call("clear_world")

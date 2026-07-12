@@ -6,6 +6,7 @@ const InputContextScript = preload("res://src/input/input_context_service.gd")
 const MovementControllerScript = preload("res://src/player/player_movement_controller.gd")
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
 const GameScene = preload("res://scenes/game/game.tscn")
+const PlayerScene = preload("res://scenes/game/player.tscn")
 
 var checks := 0
 var failures: Array[String] = []
@@ -29,6 +30,7 @@ func _run() -> void:
 	_test_binding_repair()
 	_test_movement_direction()
 	_test_spawn_recovery()
+	await _test_player_state_recovery()
 	await _test_integrated_wasd_lifecycle()
 	if failures.is_empty():
 		print("QA MOVEMENT LIFECYCLE PASS | checks=%d" % checks)
@@ -97,6 +99,34 @@ func _test_spawn_recovery() -> void:
 		resolver.is_position_clear(world, resolved),
 		"the recovered player position has body clearance",
 	)
+	var below_world: Vector3 = resolver.resolve(
+		world, Vector3(0.5, -50.0, 0.5), Vector3(2.5, 1.05, 2.5)
+	)
+	_check(below_world.y >= 1.0, "a saved position below the world is rejected")
+
+
+func _test_player_state_recovery() -> void:
+	var player = PlayerScene.instantiate()
+	root.add_child(player)
+	await process_frame
+	player.velocity = Vector3(4.0, -9.0, 3.0)
+	player.reset_motion()
+	_check(player.velocity == Vector3.ZERO, "world transitions clear stale player velocity")
+	player.restore_orientation({"rotation": [1.2, 9.0, -0.8], "look_pitch": deg_to_rad(120.0)})
+	_check(
+		is_zero_approx(player.rotation.x) and is_zero_approx(player.rotation.z),
+		"restored player orientation remains yaw-only",
+	)
+	_check(
+		player.camera_pivot.rotation.x <= deg_to_rad(89.0),
+		"restored camera pitch is clamped to a usable range",
+	)
+	_check(
+		player.jump_velocity >= sqrt(2.0 * 20.0),
+		"default jump velocity can clear a one-block voxel under project gravity",
+	)
+	player.queue_free()
+	await process_frame
 
 
 func _test_integrated_wasd_lifecycle() -> void:

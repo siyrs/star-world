@@ -58,13 +58,7 @@ func clear_world() -> void:
 	is_started = false
 	pending_chunks.clear()
 	for chunk in chunks.values():
-		if not is_instance_valid(chunk):
-			continue
-		# Detach immediately so stale collision bodies cannot block a player while
-		# another world is created in the same frame. queue_free() alone is deferred.
-		if chunk.get_parent() == self:
-			remove_child(chunk)
-		chunk.queue_free()
+		_dispose_chunk(chunk)
 	chunks.clear()
 	block_overrides.clear()
 	_focus_node = null
@@ -285,11 +279,19 @@ func _load_chunk(chunk_coord: Vector2i) -> Node:
 
 
 func _unload_chunk(chunk_coord: Vector2i) -> void:
-	var chunk = chunks.get(chunk_coord)
-	if chunk != null and is_instance_valid(chunk):
-		chunk.queue_free()
+	_dispose_chunk(chunks.get(chunk_coord))
 	chunks.erase(chunk_coord)
 	chunk_unloaded.emit(chunk_coord)
+
+
+func _dispose_chunk(chunk: Variant) -> void:
+	if not is_instance_valid(chunk):
+		return
+	# Detach immediately so stale collision bodies cannot block the player while
+	# streaming or creating another world. queue_free() alone is deferred.
+	if chunk.get_parent() == self:
+		remove_child(chunk)
+	chunk.queue_free()
 
 
 func _rebuild_affected_chunks(block_position: Vector3i) -> void:
