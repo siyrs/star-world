@@ -5,6 +5,7 @@ const STATUS_HEALTHY := "healthy"
 const STATUS_WARNING := "warning"
 const STATUS_CRITICAL := "critical"
 
+var minimum_frame_samples := 10
 var warning_average_frame_ms := 25.0
 var critical_average_frame_ms := 40.0
 var warning_peak_frame_ms := 45.0
@@ -23,7 +24,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 	var severity := 0
 	var issues: Array[String] = []
 	var frame_sample_count := int(snapshot.get("frame_sample_count", 0))
-	if frame_sample_count > 0:
+	var frame_metrics_ready: bool = frame_sample_count >= maxi(1, minimum_frame_samples)
+	if frame_metrics_ready:
 		severity = maxi(
 			severity,
 			_evaluate_upper_bound(
@@ -95,6 +97,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		"severity": severity,
 		"healthy": severity == 0,
 		"issues": issues,
+		"frame_metrics_ready": frame_metrics_ready,
+		"frame_sample_count": frame_sample_count,
 	}
 
 
