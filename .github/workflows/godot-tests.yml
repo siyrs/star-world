@@ -16,7 +16,7 @@ concurrency:
 jobs:
   runtime-tests:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
         with:
           version: 4.7.0
           use-dotnet: false
-          include-templates: false
+          include-templates: true
 
       - name: Verify Godot
         shell: pwsh
@@ -90,6 +90,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/desktop_input_contract_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Runtime diagnostics regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/runtime_diagnostics_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Runtime stability regression
         shell: pwsh
         run: |
@@ -109,6 +115,12 @@ jobs:
           godot --path . --rendering-method gl_compatibility --script res://tests/qa/desktop_acceptance_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Exported Windows release smoke
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\release\run_windows_export_smoke.ps1 -Godot $godotPath -OutputDirectory .\build\release-smoke
+
       - name: Upload desktop acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -116,5 +128,19 @@ jobs:
           name: desktop-acceptance-${{ github.run_number }}
           path: |
             build/desktop-acceptance.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload exported release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-smoke-${{ github.run_number }}
+          path: |
+            build/release-smoke/StarWorld.exe
+            build/release-smoke/StarWorld.console.exe
+            build/release-smoke/StarWorld.pck
+            build/release-smoke/release-smoke.json
+            build/release-smoke/release-smoke.png
           if-no-files-found: warn
           retention-days: 14
