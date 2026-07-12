@@ -4,11 +4,21 @@ extends CanvasLayer
 signal save_requested
 signal return_to_menu_requested
 signal respawn_requested
+signal input_context_requested(context: StringName)
+
+enum Overlay {
+	NONE,
+	INVENTORY,
+	CRAFTING,
+	PAUSE,
+	DEATH,
+}
 
 const HudScript = preload("res://src/ui/hud.gd")
 const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const InputContextScript = preload("res://src/input/input_context_service.gd")
 
 var inventory
 var crafting
@@ -20,9 +30,13 @@ var inventory_panel
 var crafting_panel
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
+var _death_title: Label
+var _overlay: int = Overlay.NONE
+var _gameplay_active := false
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
 	hud = HudScript.new()
 	add_child(hud)
@@ -30,12 +44,12 @@ func _ready() -> void:
 	_center_control(inventory_panel, Vector2(710, 520))
 	add_child(inventory_panel)
 	inventory_panel.visible = false
-	inventory_panel.panel_closed.connect(func(): _close_panels())
+	inventory_panel.panel_closed.connect(_close_overlay)
 	crafting_panel = CraftingPanelScript.new()
 	_center_control(crafting_panel, Vector2(760, 590))
 	add_child(crafting_panel)
 	crafting_panel.visible = false
-	crafting_panel.panel_closed.connect(func(): _close_panels())
+	crafting_panel.panel_closed.connect(_close_overlay)
 	_build_pause_panel()
 	_build_death_panel()
 
@@ -49,50 +63,156 @@ func setup(p_inventory, p_crafting, p_survival, p_day_night, p_audio = null) -> 
 	hud.setup(inventory, survival, day_night)
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
-	if survival != null:
-		survival.player_died.connect(_on_player_died)
+	if survival != null and survival.has_signal("player_died"):
+		var callback := Callable(self, "_on_player_died")
+		if not survival.is_connected("player_died", callback):
+			survival.connect("player_died", callback)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible or not event is InputEventKey or not event.pressed or event.echo:
+func begin_gameplay() -> void:
+	_gameplay_active = true
+	visible = true
+	if survival != null and not bool(survival.get("alive")):
+		_death_title.text = "你倒下了"
+		_set_overlay(Overlay.DEATH, true)
+	else:
+		_set_overlay(Overlay.NONE, true)
+
+
+func end_gameplay() -> void:
+	_gameplay_active = false
+	_overlay = Overlay.NONE
+	_hide_all_overlays()
+	if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
+		inventory_panel.call("cancel_swap_selection")
+	visible = false
+
+
+func open_inventory() -> void:
+	if not _can_change_overlay():
 		return
-	if event.keycode == KEY_E:
-		inventory_panel.visible = not inventory_panel.visible
-		crafting_panel.visible = false
-		_pause_panel.visible = false
-		_update_mouse_mode()
-	elif event.keycode == KEY_C:
-		crafting_panel.visible = not crafting_panel.visible
-		inventory_panel.visible = false
-		_pause_panel.visible = false
-		_update_mouse_mode()
-	elif event.keycode == KEY_ESCAPE:
-		if inventory_panel.visible or crafting_panel.visible:
-			_close_panels()
-		else:
-			_pause_panel.visible = not _pause_panel.visible
-			_update_mouse_mode()
+	_set_overlay(Overlay.NONE if _overlay == Overlay.INVENTORY else Overlay.INVENTORY)
+
+
+func open_crafting(station: String = "hand") -> void:
+	if not _can_change_overlay():
+		return
+	crafting_panel.open_station(station)
+	_set_overlay(Overlay.CRAFTING)
+
+
+func toggle_crafting(station: String = "hand") -> void:
+	if _overlay == Overlay.CRAFTING:
+		_set_overlay(Overlay.NONE)
+	else:
+		open_crafting(station)
 
 
 func open_workbench() -> void:
-	crafting_panel.open_station("workbench")
-	crafting_panel.visible = true
-	inventory_panel.visible = false
-	_update_mouse_mode()
+	open_crafting("workbench")
 
 
 func open_furnace() -> void:
-	crafting_panel.open_station("furnace")
-	crafting_panel.visible = true
-	inventory_panel.visible = false
-	_update_mouse_mode()
+	open_crafting("furnace")
 
 
-func _close_panels() -> void:
-	inventory_panel.visible = false
-	crafting_panel.visible = false
-	_pause_panel.visible = false
-	_update_mouse_mode()
+func toggle_pause() -> void:
+	if not _can_change_overlay():
+		return
+	_set_overlay(Overlay.NONE if _overlay == Overlay.PAUSE else Overlay.PAUSE)
+
+
+func close_overlay() -> void:
+	_close_overlay()
+
+
+func get_active_overlay() -> int:
+	return _overlay
+
+
+func is_gameplay_input_blocked() -> bool:
+	return not _gameplay_active or _overlay != Overlay.NONE
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _gameplay_active or not visible:
+		return
+	if event is InputEventKey and event.echo:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		if _overlay != Overlay.DEATH:
+			if _overlay in [Overlay.NONE, Overlay.PAUSE]:
+				toggle_pause()
+			else:
+				_close_overlay()
+		get_viewport().set_input_as_handled()
+		return
+	if not event is InputEventKey or not event.pressed:
+		return
+	match event.keycode:
+		KEY_E:
+			open_inventory()
+			get_viewport().set_input_as_handled()
+		KEY_C:
+			toggle_crafting("hand")
+			get_viewport().set_input_as_handled()
+
+
+func _can_change_overlay() -> bool:
+	return _gameplay_active and _overlay != Overlay.DEATH
+
+
+func _close_overlay() -> void:
+	if _overlay == Overlay.DEATH:
+		return
+	_set_overlay(Overlay.NONE)
+
+
+func _set_overlay(next_overlay: int, force: bool = false) -> void:
+	if not _gameplay_active:
+		return
+	if next_overlay == _overlay and not force:
+		return
+	if _overlay == Overlay.INVENTORY and next_overlay != Overlay.INVENTORY:
+		if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
+			inventory_panel.call("cancel_swap_selection")
+	_overlay = next_overlay
+	_hide_all_overlays()
+	match _overlay:
+		Overlay.INVENTORY:
+			inventory_panel.visible = true
+		Overlay.CRAFTING:
+			crafting_panel.visible = true
+		Overlay.PAUSE:
+			_pause_panel.visible = true
+		Overlay.DEATH:
+			_death_panel.visible = true
+	input_context_requested.emit(_context_for_overlay())
+
+
+func _hide_all_overlays() -> void:
+	if inventory_panel != null:
+		inventory_panel.visible = false
+	if crafting_panel != null:
+		crafting_panel.visible = false
+	if _pause_panel != null:
+		_pause_panel.visible = false
+	if _death_panel != null:
+		_death_panel.visible = false
+
+
+func _context_for_overlay() -> StringName:
+	match _overlay:
+		Overlay.INVENTORY:
+			return InputContextScript.CONTEXT_INVENTORY
+		Overlay.CRAFTING:
+			return InputContextScript.CONTEXT_CRAFTING
+		Overlay.PAUSE:
+			return InputContextScript.CONTEXT_PAUSE
+		Overlay.DEATH:
+			return InputContextScript.CONTEXT_DEATH
+		_:
+			return InputContextScript.CONTEXT_GAMEPLAY
 
 
 func _build_pause_panel() -> void:
@@ -110,15 +230,15 @@ func _build_pause_panel() -> void:
 	content.add_child(title)
 	var resume := Button.new()
 	resume.text = "继续游戏"
-	resume.pressed.connect(_close_panels)
+	resume.pressed.connect(_close_overlay)
 	content.add_child(resume)
 	var save := Button.new()
 	save.text = "保存世界"
-	save.pressed.connect(func(): save_requested.emit(); hud.show_message("世界已保存"))
+	save.pressed.connect(_save_from_pause)
 	content.add_child(save)
 	var exit := Button.new()
 	exit.text = "保存并返回主菜单"
-	exit.pressed.connect(func(): save_requested.emit(); return_to_menu_requested.emit())
+	exit.pressed.connect(_save_and_return_to_menu)
 	content.add_child(exit)
 
 
@@ -130,11 +250,11 @@ func _build_death_panel() -> void:
 	_death_panel.visible = false
 	var content := VBoxContainer.new()
 	_death_panel.add_child(content)
-	var title := Label.new()
-	title.text = "你倒下了"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 34)
-	content.add_child(title)
+	_death_title = Label.new()
+	_death_title.text = "你倒下了"
+	_death_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_death_title.add_theme_font_size_override("font_size", 34)
+	content.add_child(_death_title)
 	var respawn := Button.new()
 	respawn.text = "重生"
 	respawn.pressed.connect(_respawn)
@@ -145,22 +265,29 @@ func _build_death_panel() -> void:
 	content.add_child(menu)
 
 
+func _save_from_pause() -> void:
+	save_requested.emit()
+	hud.show_message("世界已保存")
+
+
+func _save_and_return_to_menu() -> void:
+	# The service hub owns the save-before-exit transaction. Emitting only the
+	# navigation intent avoids writing the same world twice from one button press.
+	return_to_menu_requested.emit()
+
+
 func _on_player_died(cause: String) -> void:
-	_death_panel.visible = true
-	_death_panel.get_child(0).get_child(0).text = "你倒下了\n%s" % cause
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if not _gameplay_active:
+		return
+	_death_title.text = "你倒下了\n%s" % cause
+	_set_overlay(Overlay.DEATH)
 
 
 func _respawn() -> void:
 	if survival != null:
 		survival.respawn()
-	_death_panel.visible = false
 	respawn_requested.emit()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-
-func _update_mouse_mode() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if inventory_panel.visible or crafting_panel.visible or _pause_panel.visible else Input.MOUSE_MODE_CAPTURED
+	_set_overlay(Overlay.NONE)
 
 
 func _center_control(control: Control, desired_size: Vector2) -> void:
