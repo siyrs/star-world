@@ -9,14 +9,19 @@ const SEARCH_RADIUS := 8
 
 func resolve(world: Node, preferred: Vector3, fallback: Vector3) -> Vector3:
 	var safe_fallback := fallback if _is_reasonable_position(fallback) else Vector3(0.5, 50.0, 0.5)
-	if _is_reasonable_position(preferred) and is_position_clear(world, preferred):
+	if (
+		_is_reasonable_position(preferred)
+		and is_position_clear(world, preferred)
+		and is_position_supported(world, preferred)
+	):
 		return preferred
 	var grounding_source := preferred if _is_finite_vector(preferred) else safe_fallback
 	var grounded_preferred := _resolve_ground(world, grounding_source)
-	if is_position_clear(world, grounded_preferred):
+	if is_position_clear(world, grounded_preferred) and is_position_supported(world, grounded_preferred):
 		return grounded_preferred
-	if is_position_clear(world, safe_fallback):
-		return safe_fallback
+	var grounded_fallback := _resolve_ground(world, safe_fallback)
+	if is_position_clear(world, grounded_fallback) and is_position_supported(world, grounded_fallback):
+		return grounded_fallback
 	for radius in range(1, SEARCH_RADIUS + 1):
 		for offset_x in range(-radius, radius + 1):
 			for offset_z in range(-radius, radius + 1):
@@ -24,9 +29,9 @@ func resolve(world: Node, preferred: Vector3, fallback: Vector3) -> Vector3:
 					continue
 				var candidate := safe_fallback + Vector3(offset_x, 0.0, offset_z)
 				candidate = _resolve_ground(world, candidate)
-				if is_position_clear(world, candidate):
+				if is_position_clear(world, candidate) and is_position_supported(world, candidate):
 					return candidate
-	return safe_fallback
+	return grounded_fallback
 
 
 func is_position_clear(world: Node, feet_position: Vector3) -> bool:
@@ -43,6 +48,22 @@ func is_position_clear(world: Node, feet_position: Vector3) -> bool:
 				if BlockRegistryScript.is_solid(block_id):
 					return false
 	return true
+
+
+func is_position_supported(world: Node, feet_position: Vector3) -> bool:
+	if world == null or not world.has_method("get_block"):
+		return true
+	var support_y := floori(feet_position.y - 0.1)
+	var minimum_x := floori(feet_position.x - BODY_RADIUS)
+	var maximum_x := floori(feet_position.x + BODY_RADIUS)
+	var minimum_z := floori(feet_position.z - BODY_RADIUS)
+	var maximum_z := floori(feet_position.z + BODY_RADIUS)
+	for x in range(minimum_x, maximum_x + 1):
+		for z in range(minimum_z, maximum_z + 1):
+			var block_id := str(world.call("get_block", Vector3i(x, support_y, z)))
+			if BlockRegistryScript.is_solid(block_id):
+				return true
+	return false
 
 
 func _resolve_ground(world: Node, candidate: Vector3) -> Vector3:
