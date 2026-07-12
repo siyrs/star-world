@@ -105,6 +105,29 @@ function Show-ReleaseSmokeLogs {
     Show-LogFile -Title 'exported game stderr' -Path $stderrPath
 }
 
+function Assert-NoFatalGodotLog {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    $fatalPatterns = @(
+        'SCRIPT ERROR',
+        'Parse Error',
+        'ObjectDB instances were leaked',
+        'Leaked instance:',
+        'Resources still in use at exit'
+    )
+    foreach ($path in $Paths) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        $matches = @(Select-String -LiteralPath $path -Pattern $fatalPatterns -SimpleMatch)
+        if ($matches.Count -le 0) {
+            continue
+        }
+        $details = ($matches | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line)" }) -join [Environment]::NewLine
+        throw "Fatal Godot runtime diagnostics were found:$([Environment]::NewLine)$details"
+    }
+}
+
 Write-DriverLog "project_root=$ProjectRoot"
 Write-DriverLog "godot=$Godot"
 Write-DriverLog "output_directory=$OutputDirectory"
@@ -137,7 +160,7 @@ try {
     Write-DriverLog "report_argument=$reportArgumentPath"
     $runnerResult = Invoke-WaitedProcess `
         -FilePath $runnerPath `
-        -Arguments @('--verbose', '--', '--release-smoke', "--smoke-output=$reportArgumentPath") `
+        -Arguments @('--verbose', '--', '--release-smoke', '--smoke-soak-frames=180', "--smoke-output=$reportArgumentPath") `
         -WorkingDirectory $OutputDirectory `
         -StandardOutputPath $stdoutPath `
         -StandardErrorPath $stderrPath `
@@ -145,6 +168,7 @@ try {
     Write-DriverLog "runner_process_id=$($runnerResult.ProcessId)"
     Write-DriverLog "runner_exit_code=$($runnerResult.ExitCode)"
     Show-ReleaseSmokeLogs
+    Assert-NoFatalGodotLog -Paths @($exportStdoutPath, $exportStderrPath, $stdoutPath, $stderrPath)
     if ($runnerResult.ExitCode -ne 0) {
         throw "Exported Windows release smoke failed with exit code $($runnerResult.ExitCode)"
     }
@@ -160,6 +184,9 @@ try {
         $failureText = ($report.failures -join ', ')
         throw "Release smoke report failed: $failureText"
     }
+    if (-not [bool]$report.soak.ok) {
+        throw 'Release smoke soak report is not healthy.'
+    }
     if ([int64](Get-Item -LiteralPath $exePath).Length -le 0) {
         throw 'Exported executable is empty.'
     }
@@ -170,7 +197,7 @@ try {
         throw 'Release smoke screenshot is empty.'
     }
 
-    Write-DriverLog "release_smoke_pass=checks:$($report.checks)"
+    Write-DriverLog "release_smoke_pass=checks:$($report.checks),soak_frames:$($report.soak.frames)"
     Write-Host "PASS: exported Windows release smoke | checks=$($report.checks) | output=$OutputDirectory"
 }
 catch {
