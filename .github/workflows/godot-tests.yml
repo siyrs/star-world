@@ -16,7 +16,7 @@ concurrency:
 jobs:
   runtime-tests:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,8 +32,48 @@ jobs:
         shell: pwsh
         run: godot --version
 
-      - name: Run full regression suite
+      - name: Validate data registry
+        shell: pwsh
+        run: .\tests\developer_b\validate_data.ps1
+
+      - name: Core smoke test
         shell: pwsh
         run: |
-          $godot = (Get-Command godot).Source
-          & .\tests\run_all.ps1 -Godot $godot
+          godot --headless --path . --script res://tests/developer_a/core_smoke_test.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Gameplay services test
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/developer_b/run_tests.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Integration regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/integration_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Input interaction regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/input_interaction_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Movement lifecycle regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/movement_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Physics interaction regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Settings regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/settings_retest.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
