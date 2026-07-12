@@ -73,10 +73,10 @@ func _build_ui() -> void:
 	_panel.anchor_right = 1.0
 	_panel.anchor_top = 0.0
 	_panel.anchor_bottom = 0.0
-	_panel.offset_left = -570.0
+	_panel.offset_left = -620.0
 	_panel.offset_right = -18.0
 	_panel.offset_top = 18.0
-	_panel.offset_bottom = 330.0
+	_panel.offset_bottom = 410.0
 	root.add_child(_panel)
 	_label = Label.new()
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -107,6 +107,15 @@ func _format_snapshot(snapshot: Dictionary) -> String:
 	}
 	var status_text: String = str(status_labels.get(status, status))
 	var streaming: Dictionary = snapshot.get("streaming", {})
+	var adaptive: Dictionary = snapshot.get("adaptive_streaming", {})
+	var adaptive_profile: Dictionary = adaptive.get("profile", {})
+	var adaptive_state := "关闭"
+	if bool(adaptive.get("enabled", false)):
+		adaptive_state = (
+			_adaptive_level_name(str(adaptive.get("level_name", "balanced")))
+			if bool(adaptive.get("attached", false))
+			else "等待世界"
+		)
 	var position_text := "未连接"
 	var player_position: Array = snapshot.get("player_position", [])
 	if player_position.size() >= 3:
@@ -127,6 +136,14 @@ func _format_snapshot(snapshot: Dictionary) -> String:
 			int(streaming.get("pending", 0)),
 			float(streaming.get("last_work_usec", 0)) / 1000.0,
 		],
+		"流式策略 %s  |  预算 %.1f ms / %d 格 / %d 步  |  调整 %d" % [
+			adaptive_state,
+			float(adaptive_profile.get("budget_ms", 0.0)),
+			int(adaptive_profile.get("cells_per_step", 0)),
+			int(adaptive_profile.get("max_steps_per_frame", 0)),
+			int(adaptive.get("change_count", 0)),
+		],
+		"策略原因：%s" % str(adaptive.get("last_reason", "无")),
 		"节点 %d  |  内存 %.1f MiB  |  Draw calls %d" % [
 			int(snapshot.get("node_count", 0)),
 			float(snapshot.get("memory_mib", 0.0)),
@@ -150,6 +167,17 @@ func _format_snapshot(snapshot: Dictionary) -> String:
 		for issue in issues:
 			lines.append("• %s" % str(issue))
 	return "\n".join(lines)
+
+
+func _adaptive_level_name(level_name: String) -> String:
+	return str(
+		{
+			"conservative": "保守",
+			"guarded": "受限",
+			"balanced": "均衡",
+			"throughput": "吞吐",
+		}.get(level_name, level_name)
+	)
 
 
 func _mouse_mode_name(mode: int) -> String:
