@@ -99,12 +99,13 @@ func _on_snapshot_updated(snapshot: Dictionary) -> void:
 
 func _format_snapshot(snapshot: Dictionary) -> String:
 	var health: Dictionary = snapshot.get("health", {})
-	var status := str(health.get("status", "healthy"))
-	var status_text := {
+	var status: String = str(health.get("status", "healthy"))
+	var status_labels: Dictionary = {
 		"healthy": "正常",
 		"warning": "警告",
 		"critical": "严重",
-	}.get(status, status)
+	}
+	var status_text: String = str(status_labels.get(status, status))
 	var streaming: Dictionary = snapshot.get("streaming", {})
 	var position_text := "未连接"
 	var player_position: Array = snapshot.get("player_position", [])
