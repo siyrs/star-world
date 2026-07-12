@@ -72,6 +72,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Runtime stability regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/runtime_stability_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Settings regression
         shell: pwsh
         run: |
