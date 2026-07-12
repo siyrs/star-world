@@ -137,10 +137,6 @@ jobs:
         with:
           name: windows-release-smoke-${{ github.run_number }}
           path: |
-            build/release-smoke/StarWorld.exe
-            build/release-smoke/StarWorld.console.exe
-            build/release-smoke/StarWorld.pck
-            build/release-smoke/release-smoke.json
-            build/release-smoke/release-smoke.png
+            build/release-smoke/**
           if-no-files-found: warn
           retention-days: 14
