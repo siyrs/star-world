@@ -10,6 +10,8 @@ var report_path := DEFAULT_REPORT_PATH
 var screenshot_path := "user://release-smoke.png"
 var checks := 0
 var failures: Array[String] = []
+var _world_started := false
+var _world_start_failure := ""
 
 
 static func configuration_from_arguments(arguments: PackedStringArray) -> Dictionary:
@@ -45,19 +47,15 @@ func _run() -> void:
 	if game == null:
 		_finish()
 		return
-	var started := false
-	var start_failure := ""
-	var started_callback := func(_profile_id: String, _seed: int, _world_id: String) -> void:
-		started = true
-	var failed_callback := func(reason: String) -> void:
-		start_failure = reason
-	game.world_started.connect(started_callback, CONNECT_ONE_SHOT)
-	game.world_start_failed.connect(failed_callback, CONNECT_ONE_SHOT)
+	_world_started = false
+	_world_start_failure = ""
+	game.world_started.connect(Callable(self, "_on_world_started"), CONNECT_ONE_SHOT)
+	game.world_start_failed.connect(Callable(self, "_on_world_start_failed"), CONNECT_ONE_SHOT)
 	game.begin_world_state(_smoke_world_state())
 	await get_tree().process_frame
 	await get_tree().physics_frame
 	await get_tree().process_frame
-	_check(started, "world_started:%s" % start_failure)
+	_check(_world_started, "world_started:%s" % _world_start_failure)
 	var hub: Node = game.get("service_hub")
 	var world: Node = game.get("world")
 	var player: Node3D = game.get("player")
@@ -90,6 +88,14 @@ func _run() -> void:
 		_ensure_output_directory(screenshot_path)
 		_check(image.save_png(screenshot_path) == OK, "screenshot_saved")
 	_finish(visual_result, diagnostics)
+
+
+func _on_world_started(_profile_id: String, _seed: int, _world_id: String) -> void:
+	_world_started = true
+
+
+func _on_world_start_failed(reason: String) -> void:
+	_world_start_failure = reason
 
 
 func _finish(visual_result: Dictionary = {}, diagnostics: Node = null) -> void:
