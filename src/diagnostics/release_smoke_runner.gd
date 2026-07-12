@@ -4,6 +4,7 @@ extends Node
 const VisualPolicy = preload("res://src/diagnostics/visual_acceptance_policy.gd")
 const DEFAULT_REPORT_PATH := "user://release-smoke.json"
 const SMOKE_WORLD_ID := "release-smoke-runtime"
+const TELEMETRY_STABILIZATION_FRAMES := 12
 
 var game: Node
 var report_path := DEFAULT_REPORT_PATH
@@ -45,7 +46,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	_check(game != null, "game_root_available")
 	if game == null:
-		_finish()
+		await _finish()
 		return
 	_world_started = false
 	_world_start_failure = ""
@@ -79,7 +80,8 @@ func _run() -> void:
 	if diagnostics != null:
 		_check(diagnostics.get("telemetry") != null, "runtime_telemetry_mounted")
 		_check(diagnostics.get("overlay") != null, "diagnostics_overlay_mounted")
-	await get_tree().process_frame
+	for _frame in TELEMETRY_STABILIZATION_FRAMES:
+		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var visual_result := VisualPolicy.evaluate(image)
@@ -87,7 +89,7 @@ func _run() -> void:
 	if image != null and not image.is_empty():
 		_ensure_output_directory(screenshot_path)
 		_check(image.save_png(screenshot_path) == OK, "screenshot_saved")
-	_finish(visual_result, diagnostics)
+	await _finish(visual_result, diagnostics)
 
 
 func _on_world_started(_profile_id: String, _seed: int, _world_id: String) -> void:
@@ -100,7 +102,9 @@ func _on_world_start_failed(reason: String) -> void:
 
 func _finish(visual_result: Dictionary = {}, diagnostics: Node = null) -> void:
 	var telemetry_snapshot: Dictionary = {}
-	if diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
+	if diagnostics != null and diagnostics.has_method("sample_now"):
+		telemetry_snapshot = diagnostics.call("sample_now")
+	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
 	var payload := {
 		"version": 1,
@@ -124,14 +128,46 @@ func _finish(visual_result: Dictionary = {}, diagnostics: Node = null) -> void:
 		file.store_string(JSON.stringify(payload, "\t", false))
 		file.flush()
 		file.close()
+	var exit_code := 0 if failures.is_empty() else 1
 	if failures.is_empty():
 		print("RELEASE SMOKE PASS | checks=%d | report=%s" % [checks, report_path])
-		get_tree().quit(0)
 	else:
 		for failure in failures:
 			push_error("RELEASE SMOKE FAILURE: %s" % failure)
 		print("RELEASE SMOKE FAIL | checks=%d | failures=%d" % [checks, failures.size()])
-		get_tree().quit(1)
+	await _cleanup_runtime()
+	get_tree().quit(exit_code)
+
+
+func _cleanup_runtime() -> void:
+	if game == null or not is_instance_valid(game):
+		return
+	var tree_root := get_tree().root
+	if get_parent() == game:
+		game.remove_child(self)
+		tree_root.add_child(self)
+	var hub: Node = game.get("service_hub")
+	if hub != null:
+		var spawner = hub.get("creature_spawner")
+		if spawner != null:
+			spawner.call("set_active", false)
+			spawner.call("clear_creatures")
+		var audio = hub.get("audio_service")
+		if audio != null:
+			audio.call("stop_ambient")
+			for player_name in ["Effects", "Creatures", "Ambient"]:
+				var audio_player := audio.get_node_or_null(player_name) as AudioStreamPlayer
+				if audio_player != null:
+					audio_player.stop()
+					audio_player.stream = null
+	var world: Node = game.get("world")
+	if world != null and world.has_method("clear_world"):
+		world.call("clear_world")
+	game.queue_free()
+	game = null
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
 
 
 func _smoke_world_state() -> Dictionary:
