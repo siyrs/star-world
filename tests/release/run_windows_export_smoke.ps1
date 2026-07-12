@@ -21,6 +21,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $ProjectRoot 'build\release-smoke'
 }
+$OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 $exePath = Join-Path $OutputDirectory 'StarWorld.exe'
@@ -28,9 +29,24 @@ $consolePath = Join-Path $OutputDirectory 'StarWorld.console.exe'
 $pckPath = Join-Path $OutputDirectory 'StarWorld.pck'
 $reportPath = Join-Path $OutputDirectory 'release-smoke.json'
 $screenshotPath = Join-Path $OutputDirectory 'release-smoke.png'
+$stdoutPath = Join-Path $OutputDirectory 'release-smoke.stdout.log'
+$stderrPath = Join-Path $OutputDirectory 'release-smoke.stderr.log'
 
-Remove-Item -Force -ErrorAction SilentlyContinue $exePath, $consolePath, $pckPath, $reportPath, $screenshotPath
+Remove-Item -Force -ErrorAction SilentlyContinue `
+    $exePath, $consolePath, $pckPath, $reportPath, $screenshotPath, $stdoutPath, $stderrPath
 
+function Show-ReleaseSmokeLogs {
+    if (Test-Path -LiteralPath $stdoutPath) {
+        Write-Host '--- exported game stdout ---'
+        Get-Content -LiteralPath $stdoutPath | Write-Host
+    }
+    if (Test-Path -LiteralPath $stderrPath) {
+        Write-Host '--- exported game stderr ---'
+        Get-Content -LiteralPath $stderrPath | Write-Host
+    }
+}
+
+Write-Host "Exporting Windows release to $exePath"
 & $Godot --headless --path $ProjectRoot --export-release 'Windows Desktop' $exePath
 if ($LASTEXITCODE -ne 0) {
     throw "Windows release export failed with exit code $LASTEXITCODE"
@@ -43,18 +59,23 @@ if (-not (Test-Path -LiteralPath $pckPath)) {
 }
 
 $runnerPath = if (Test-Path -LiteralPath $consolePath) { $consolePath } else { $exePath }
-$quotedReportPath = '"' + $reportPath + '"'
+$reportArgumentPath = ([System.IO.Path]::GetFullPath($reportPath)).Replace('\', '/')
+Write-Host "Launching exported smoke runner: $runnerPath"
 $process = Start-Process `
     -FilePath $runnerPath `
     -WorkingDirectory $OutputDirectory `
-    -ArgumentList @('--', '--release-smoke', "--smoke-output=$quotedReportPath") `
+    -ArgumentList @('--', '--release-smoke', "--smoke-output=$reportArgumentPath") `
+    -RedirectStandardOutput $stdoutPath `
+    -RedirectStandardError $stderrPath `
     -PassThru
 
 if (-not $process.WaitForExit(60000)) {
     $process.Kill($true)
+    Show-ReleaseSmokeLogs
     throw 'Exported Windows release smoke timed out after 60 seconds.'
 }
 $process.Refresh()
+Show-ReleaseSmokeLogs
 if ($process.ExitCode -ne 0) {
     throw "Exported Windows release smoke failed with exit code $($process.ExitCode)"
 }
