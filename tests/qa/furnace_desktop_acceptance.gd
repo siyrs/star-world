@@ -31,7 +31,10 @@ func _run() -> void:
 	await process_frame
 	await physics_frame
 	await process_frame
-	_check(game.world != null and bool(game.world.get("is_started")), "desktop furnace test starts a real world")
+	_check(
+		game.world != null and bool(game.world.get("is_started")),
+		"desktop furnace test starts a real world",
+	)
 
 	hub.inventory.clear()
 	hub.inventory.add_item("raw_iron", 1)
@@ -91,7 +94,10 @@ func _run() -> void:
 	_check(output_button != null, "the output slot is a real clickable control")
 	if output_button != null:
 		await _click_control(output_button)
-	_check(hub.inventory.count_item("iron_ingot") == 1, "clicking output returns the item to the player inventory")
+	_check(
+		hub.inventory.count_item("iron_ingot") == 1,
+		"clicking output returns the item to the player inventory",
+	)
 	var close_button := _find_button(panel, "关闭 [Esc]")
 	_check(close_button != null, "the furnace exposes a clear close action")
 	if close_button != null:
@@ -104,7 +110,19 @@ func _run() -> void:
 		hub.furnace_service.get_active_machine_id().is_empty(),
 		"closing the surface releases the active machine reference",
 	)
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing the furnace recaptures the gameplay mouse")
+	_check(
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
+		"closing the furnace recaptures the gameplay mouse",
+	)
+	_check(
+		hub.block_interaction.can_break_block(game.world, block_position, "furnace"),
+		"an empty furnace can be dismantled even when consumed fuel left residual heat",
+	)
+	hub.block_interaction.on_block_removed(game.world, block_position, "furnace")
+	_check(
+		not hub.furnace_service.has_machine(machine_id),
+		"dismantling an empty furnace discards transient heat and removes its record",
+	)
 
 	_cleanup(game, hub)
 	await process_frame
