@@ -2,15 +2,16 @@
 
 ## 目标
 
-项目使用 Godot 4 的场景树和模块化 GDScript。世界、输入、交互、UI、存档、诊断和性能控制通过小而稳定的公开方法与 signal 协作。
+项目使用 Godot 4 的场景树和模块化 GDScript。世界、输入、交互、机器、UI、存档、玩家体验、诊断和性能控制通过小而稳定的公开方法与 signal 协作。
 
 工程约束：
 
 - 运行时状态必须有唯一所有者；
 - 高成本工作必须有预算和上限；
 - UI 只表达用户意图，不直接修改领域数据；
-- Player 不承载存档、面板、容器或性能策略；
-- 诊断展示不能参与鼠标命中；
+- Player 不承载存档、面板、容器、机器或性能策略；
+- 诊断与引导展示不能参与鼠标命中；
+- 持续加工不能伪装成即时合成；
 - 新功能必须通过真实 Godot、桌面窗口和 Windows Release 验收；
 - 退出码为 0 不能掩盖脚本错误或资源泄漏。
 
@@ -25,7 +26,8 @@ Game (Node3D)
 ├─ Player
 │  ├─ PlayerMovementController
 │  ├─ PlayerSpawnResolver
-│  └─ PlayerPhysicsProfile
+│  ├─ PlayerPhysicsProfile
+│  └─ PlayerFocusResolver
 ├─ Sun + WorldEnvironment
 ├─ RuntimeDiagnosticsCoordinator
 │  ├─ RuntimeTelemetryService
@@ -39,8 +41,15 @@ Game (Node3D)
    ├─ SimulationPause
    ├─ Inventory
    ├─ ContainerStorage
+   ├─ FurnaceService
+   │  ├─ FurnaceRecipeRegistry
+   │  └─ FurnaceFuelRegistry
    ├─ Crafting
    ├─ BlockInteraction
+   ├─ PlayerExperienceCoordinator
+   │  ├─ GameplayFeedbackService
+   │  ├─ OnboardingService
+   │  └─ InteractionPromptResolver
    ├─ Save
    ├─ Survival
    ├─ DayNight
@@ -49,36 +58,42 @@ Game (Node3D)
    ├─ MainMenu
    └─ GameUI
       ├─ HUD
+      ├─ GuidanceOverlay
       ├─ InventoryPanel
       ├─ CraftingPanel
+      ├─ FurnacePanel
       ├─ ContainerPanel
       ├─ Pause
       └─ Death
 ```
 
-`Game` 是世界和最终运行诊断的组合根。`GameplayServiceHub` 是玩法服务组合根。两者职责不同：
+组合根职责：
 
-- `Game` 创建世界、玩家、相机、运行诊断并执行世界生命周期；
-- `GameplayServiceHub` 创建领域服务、装载状态、注入 Player 依赖并执行保存事务；
-- `RuntimeDiagnosticsCoordinator` 只观察运行状态和协调性能预算，不保存玩法数据。
+- `Game` 创建世界、玩家、相机和运行诊断，执行世界生命周期；
+- `GameplayServiceHub` 创建领域服务、装载状态、注入依赖并执行保存事务；
+- `RuntimeDiagnosticsCoordinator` 观察运行状态并协调性能预算，不保存玩法数据；
+- `PlayerExperienceCoordinator` 把领域事实转换为提示和引导，不拥有世界数据；
+- `GameUI` 管理互斥界面状态，不直接修改 Player、SceneTree 或领域 Dictionary。
 
 ## 世界生命周期
 
 ```text
 menu
   → loading
-  → create/start world
+  → reset pause / input / transient experience
+  → deserialize inventory / containers / machines / survival / time / onboarding
+  → create or start world
   → validate spawn chunk mesh + collision
   → resolve supported player spawn
-  → attach gameplay services
+  → attach gameplay services and player experience
   → activate and validate player camera
   → attach diagnostics and adaptive streaming
   → gameplay
-  → save transaction
+  → save one atomic world transaction
   → stop simulation services
   → restore streaming baseline
-  → detach diagnostics
-  → clear chunks / collisions / creatures
+  → detach diagnostics and player experience
+  → clear chunks / collisions / creatures / containers / machines
   → menu
 ```
 
@@ -88,7 +103,7 @@ menu
 
 - 隐藏无效 Player；
 - 清理半启动世界；
-- 解除运行时引用；
+- 解除 Player、Prompt、诊断和机器活动引用；
 - 恢复 menu InputContext；
 - 恢复可点击主菜单；
 - 显示具体错误原因。
@@ -105,16 +120,18 @@ menu
 | Performance | `src/performance` | 纯预算策略、世界能力适配、热身/冷却/防抖控制 |
 | Diagnostics | `src/diagnostics` | 遥测、健康评价、报告、最终 Release smoke |
 | Input | `src/input` | 默认按键修复、输入查询、上下文和窗口焦点 |
-| Player | `src/player` | 第一人称协调器、移动、RayCast 命中和玩法意图 |
-| Interaction | `src/interaction` | 方块能力注册、工作台/熔炉/箱子路由、拆除策略 |
+| Player | `src/player` | 第一人称协调、移动、RayCast 焦点和玩法意图 |
+| Interaction | `src/interaction` | 方块能力注册、工作台/机器/箱子路由、拆除策略 |
 | Inventory | `src/inventory` | 玩家背包、容器存储、堆叠、转移、装备和序列化 |
-| Crafting | `src/crafting` | 配方注册、真实工位权限、原子消耗和产出 |
+| Machine | `src/machine` | 熔炉配方、燃料、机器槽位、时间推进、离线恢复和序列化 |
+| Crafting | `src/crafting` | 随身/工作台配方、工位权限、原子消耗和产出 |
+| Experience | `src/experience` | 即时反馈、上下文提示、持久引导和体验协调 |
 | Save | `src/save` | 多世界目录、兼容迁移、带备份的原子 JSON 写入 |
 | Survival | `src/survival` | 生命、饥饿、食物、死亡/重生和昼夜光照 |
 | Entity | `src/entity` | 程序化模型、有限状态 AI、种群维护、掉落物和拾取 |
-| UI | `src/ui`, `scenes/ui` | 主菜单、HUD、背包、合成、容器和覆盖层状态机 |
+| UI | `src/ui`, `scenes/ui` | 主菜单、HUD、引导、背包、合成、熔炉、容器和覆盖层状态机 |
 | Audio | `src/audio` | 程序化 PCM、音效桥接、明确停止与资源释放 |
-| Data | `data` | JSON 物品、配方、地图与生物注册表 |
+| Data | `data` | JSON 物品、普通配方、熔炉配方、燃料、地图与生物注册表 |
 
 ## 公开集成合同
 
@@ -134,7 +151,7 @@ func _on_world_state_requested(state: Dictionary) -> void:
     )
 ```
 
-`attach_game` 使用鸭子类型合同。Player 可实现：
+`attach_game` 使用能力合同。Player 可实现：
 
 ```text
 setup_gameplay_services
@@ -160,7 +177,7 @@ ServiceHub 不依赖具体世界实现类。
 
 ### WorldRuntimeGuard
 
-在隐藏加载界面前验证：
+隐藏加载界面前验证：
 
 ```text
 world.is_started
@@ -179,7 +196,7 @@ Viewport current camera == Player Camera
 - `ensure_default_bindings()` 是默认按键注册的唯一入口；
 - WASD 同时注册物理键位和逻辑键码，并提供方向键后备；
 - 残缺 action 会逐项修复；
-- 输入服务封装移动、跳跃、冲刺、快捷栏、保存、背包、合成和 F3；
+- 输入服务封装移动、跳跃、冲刺、快捷栏、保存、背包、合成、F1 和 F3；
 - Player 与 GameUI 不维护第二套按键定义。
 
 ### InputContextService
@@ -192,6 +209,7 @@ loading
 gameplay
 inventory
 crafting
+machine
 container
 pause
 death
@@ -199,30 +217,42 @@ death
 
 只有窗口聚焦且处于 `gameplay` 时才捕获鼠标并启用 Player。离开 gameplay 或窗口失焦时释放残留 action，避免粘键。
 
-背包、合成和容器只阻断玩家输入；暂停与死亡还会请求 `SimulationPauseService` 停止真实模拟。
+背包、合成、机器和容器只阻断玩家输入；暂停与死亡还会请求 `SimulationPauseService` 停止真实模拟。
 
 ### SimulationPauseService
 
 - 是 `SceneTree.paused` 的唯一写入者；
-- 暂停和死亡停止世界、生物、昼夜和物理；
+- 暂停和死亡停止世界、生物、昼夜、机器和物理；
 - 继续、重生、返回菜单和服务退出都会清除暂停；
 - UI 只发布暂停意图。
 
-### PlayerMovementController / PlayerSpawnResolver
+### PlayerMovementController / PlayerSpawnResolver / PlayerFocusResolver
 
 - `PlayerMovementController.step` 只处理重力、跳跃、方向、加速度和 `move_and_slide`；
 - `PlayerSpawnResolver.resolve` 同时校验有限坐标、身体净空和脚下支撑；
+- `PlayerFocusResolver` 将 RayCast 命中统一转换为 block/entity 描述；
 - Player 保存 `position`、yaw 和独立 `look_pitch`；
 - 世界切换和重生清除残留速度；
-- Player 不创建面板、不保存容器、不判断性能阈值。
+- Player 只发布 `interaction_focus_changed` 与 `gameplay_action_reported`；
+- Player 不创建面板、不保存容器/机器、不判断性能阈值。
 
 ### BlockInteractionRegistry / BlockInteractionService
 
-- 注册表描述静态方块能力；
-- Player 右键只把命中结果交给交互服务；
-- 工作台和熔炉由真实世界方块授予权限；
-- 箱子使用稳定位置 ID；
-- 非空箱子拒绝拆除。
+注册表描述静态能力：
+
+```text
+crafting_table → crafting(workbench)
+furnace        → machine(furnace)
+chest          → container(chest, 27)
+```
+
+交互服务：
+
+- 接收 Player 的世界命中；
+- 生成稳定位置 ID；
+- 路由到 Crafting、Furnace 或 Container 域；
+- 执行非空拆除保护；
+- 方块移除后清理领域记录。
 
 右键优先级：
 
@@ -234,12 +264,13 @@ death
 
 ### GameUI
 
-覆盖层状态：
+覆盖层：
 
 ```text
 NONE
 INVENTORY
 CRAFTING
+FURNACE
 CONTAINER
 PAUSE
 DEATH
@@ -247,7 +278,7 @@ DEATH
 
 任一时刻最多一个阻塞层。GameUI 请求输入上下文和暂停意图，但不直接写鼠标模式、Player 输入或 SceneTree 暂停。
 
-HUD 和 F3 面板是纯展示层，整棵 Control 树必须使用鼠标透传策略。
+HUD、GuidanceOverlay 和 F3 面板是展示层，整棵 Control 树必须使用鼠标透传策略。
 
 ### InventoryService / ContainerStorageService
 
@@ -277,11 +308,38 @@ ContainerStorage：
 
 ### CraftingService
 
+- 只拥有 `hand` 与 `workbench` 配方；
 - `C` 只打开随身合成；
-- 工作台和熔炉权限只能通过可信世界交互获得；
+- 工作台权限只能通过可信世界交互获得；
 - 工位展示不可手动绕过；
 - 输出空间不足时回滚材料；
-- 关闭高级工位界面时回收权限。
+- 关闭工作台界面时回收权限。
+
+### FurnaceService
+
+- 每个 `furnace@x,y,z` 拥有独立原料、燃料、产出和计时；
+- 配方来自 `furnace_recipes.json`；
+- 燃料来自 `fuels.json`；
+- 产出满时不消费输入或燃料；
+- UI 关闭后继续运行，SceneTree 暂停时停止；
+- 保存时记录机器状态和时间戳；
+- 加载时执行有上限的离线模拟；
+- 三槽非空时阻止拆除；
+- UI 只调用转移 API，不修改内部 Dictionary。
+
+详细合同见 [FURNACE_MACHINES.md](FURNACE_MACHINES.md)。
+
+### PlayerExperienceCoordinator
+
+- 连接 Player、Inventory、GameUI、BlockInteraction 和 FurnaceService；
+- 焦点描述交给 `InteractionPromptResolver`；
+- 玩法动作交给 `OnboardingService` 与 `GameplayFeedbackService`；
+- 熔炉完成事件转换为去重 Toast；
+- 世界进入/退出时挂载或释放 Player 引用；
+- 引导状态进入世界保存事务；
+- 不修改世界、背包或机器数据。
+
+详细合同见 [PLAYER_EXPERIENCE.md](PLAYER_EXPERIENCE.md)。
 
 ### AtomicJsonStore / SaveService
 
@@ -372,32 +430,26 @@ metadata   { id, name, map_id, seed, created_at, updated_at, play_seconds }
 player     { position[3], rotation[3], look_pitch }
 inventory  { version, selected_slot, slot_count, hotbar_size, slots[] }
 containers { version, containers { stable_id → type, slot_count, slots[] } }
+machines   { version, saved_at_unix, furnaces { stable_id → slots + progress + fuel } }
 world      { block_overrides, loaded_chunks }
 survival   { health, hunger, saturation, alive }
 day_night  { time_of_day, day, cycle_duration, map_id }
+experience { version, onboarding }
 ```
 
-地形由 `map_id + seed` 重建，存档只保存稀疏方块修改。缺失 `containers` 的旧存档会迁移为空容器状态。
+地形由 `map_id + seed` 重建，存档只保存稀疏方块修改。缺失 `containers`、`machines` 或 `experience` 的旧存档会迁移为空状态。
 
 ## 测试边界
 
-```text
-core_smoke_test.gd                 五地图、出生、Chunk、世界修改、组合根
-run_tests.gd                       物品、合成、存档、生存、昼夜、生物、设置
-integration_regression.gd          菜单、存档、战斗、食用、音频、退出
-input_interaction_regression.gd    输入所有权、覆盖层、选中物品
-movement_lifecycle_regression.gd   真实 WASD、焦点、安全出生、移动恢复
-physics_interaction_regression.gd  物理层、生物攻击、玩家专用拾取
-block_interaction_regression.gd    工位、箱子、转移、拆除、持久化
-desktop_input_contract_regression  HUD 透传、真实控件命中
-runtime_diagnostics_regression.gd  遥测、健康策略、F3 透传
-adaptive_streaming_regression.gd   档位、边界、滞后、冷却、恢复
- audio_lifecycle_regression.gd     程序化音频停止、缓存和播放器释放
-runtime_stability_regression.gd    暂停、渐进区块、备份恢复、种群回收
-runtime_soak_regression.gd         三轮世界启动、跨区块、返回和资源回收
-settings_retest.gd                 设置保存和运行时应用
-desktop_acceptance_regression.gd   真实窗口、按钮、鼠标、画面
-Windows release smoke              最终 EXE、跨区块 soak、截图、日志、泄漏
-```
+自动门禁分为：
 
-每个 PR 和 `master` 更新都会在 Windows + Godot 4.7 上执行完整套件。只有源码、桌面窗口和最终 Release 三层均通过才允许合并。
+- 数据：物品、普通配方、熔炉配方、燃料、地图、生物引用完整；
+- 领域：背包、合成、容器、熔炉、存档、生存、输入和性能策略；
+- 集成：世界启动、鼠标、WASD、覆盖层、交互路由和保存事务；
+- 布局：最低 `1024×576` 下关键界面完整且互不遮挡；
+- 桌面：真实鼠标点击主菜单、暂停和熔炉原料/燃料/产出/关闭按钮；
+- 视觉：世界中央区域不能是空白或单一天空；
+- 发行：实际 Windows Release 导出、启动、跨区块 soak、截图、JSON 和日志扫描；
+- 生命周期：多轮进入/退出、资源释放、无 ObjectDB 泄漏。
+
+任何新增领域都必须至少补充一个纯领域回归、一个集成回归，并在涉及 UI 时补真实桌面鼠标验收。
