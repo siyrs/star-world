@@ -57,6 +57,7 @@ func create_world(
 		"world": {"block_overrides": {}, "loaded_chunks": []},
 		"survival": {"health": 20.0, "hunger": 20.0},
 		"day_night": {"time_of_day": 8.0, "day": 1},
+		"experience": {"version": 1, "onboarding": {}},
 	}
 	if save_world(world_id, state):
 		return state
@@ -183,6 +184,8 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		payload["save_version"] = 2
 	if not payload.has("containers") or payload["containers"] is not Dictionary:
 		payload["containers"] = {"version": 1, "containers": {}}
+	if not payload.has("experience") or payload["experience"] is not Dictionary:
+		payload["experience"] = {"version": 1, "onboarding": {}}
 	return payload
 
 
