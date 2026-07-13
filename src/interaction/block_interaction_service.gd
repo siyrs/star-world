@@ -175,7 +175,13 @@ func get_machine_id(world, block_position: Vector3i, machine_type: String = "fur
 	return _stable_position_id(world, block_position, machine_type)
 
 
-func get_interaction_hint(block_id: String, selected_item_id: String = "") -> String:
+# Stable one-argument contract retained for existing extensions, tests and mods.
+func get_interaction_hint(block_id: String) -> String:
+	return get_interaction_hint_for_item(block_id, "")
+
+
+# Context-aware contract used by the current experience layer.
+func get_interaction_hint_for_item(block_id: String, selected_item_id: String = "") -> String:
 	_prune_extensions()
 	for extension in _extensions:
 		if not extension.has_method("get_interaction_hint"):
