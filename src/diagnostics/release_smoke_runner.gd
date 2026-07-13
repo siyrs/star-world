@@ -8,6 +8,7 @@ const TELEMETRY_STABILIZATION_FRAMES := 12
 const DEFAULT_SOAK_FRAMES := 180
 const SOAK_SAMPLE_INTERVAL_FRAMES := 30
 const SOAK_MOVE_INTERVAL_FRAMES := 60
+const EVIDENCE_SETTLE_FRAMES := 18
 const AUDIO_SHUTDOWN_SETTLE_FRAMES := 4
 const FINAL_CLEANUP_FRAMES := 6
 
@@ -102,14 +103,16 @@ func _run() -> void:
 		await get_tree().process_frame
 	var soak_result: Dictionary = await _run_runtime_soak(world, player, diagnostics)
 	_check(bool(soak_result.get("ok", false)), "runtime_soak_stays_bounded")
+	var evidence_result: Dictionary = await _prepare_visual_evidence(world, player)
+	_check(bool(evidence_result.get("ok", false)), "final_focus_chunk_and_camera_ready")
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var visual_result := VisualPolicy.evaluate(image)
-	_check(bool(visual_result.get("ok", false)), "rendered_frame_has_visual_detail")
+	_check(bool(visual_result.get("ok", false)), "rendered_world_region_has_visual_detail")
 	if image != null and not image.is_empty():
 		_ensure_output_directory(screenshot_path)
 		_check(image.save_png(screenshot_path) == OK, "screenshot_saved")
-	await _finish(visual_result, diagnostics, soak_result)
+	await _finish(visual_result, diagnostics, soak_result, evidence_result)
 
 
 func _on_world_started(_profile_id: String, _seed: int, _world_id: String) -> void:
@@ -181,10 +184,62 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	}
 
 
+func _prepare_visual_evidence(world: Node, player: Node3D) -> Dictionary:
+	if world == null or player == null:
+		return {"ok": false, "reason": "runtime_missing"}
+	var evidence_position: Vector3 = world.call("get_spawn_position")
+	if world.has_method("resolve_ground_position"):
+		var grounded = world.call("resolve_ground_position", evidence_position)
+		if grounded is Vector3:
+			evidence_position = grounded
+	player.global_position = evidence_position
+	if player.has_method("reset_motion"):
+		player.call("reset_motion")
+	if player.has_method("restore_orientation"):
+		player.call(
+			"restore_orientation",
+			{
+				"rotation": [0.0, deg_to_rad(35.0), 0.0],
+				"look_pitch": deg_to_rad(-24.0),
+			}
+		)
+	if world.has_method("set_focus"):
+		world.call("set_focus", player)
+	var focus_coord = null
+	if world.has_method("world_to_block") and world.has_method("block_to_chunk"):
+		var block_position = world.call("world_to_block", player.global_position)
+		var raw_coord = world.call("block_to_chunk", block_position)
+		if raw_coord is Vector2i:
+			focus_coord = raw_coord
+	var focus_chunk = null
+	if focus_coord is Vector2i and world.has_method("force_load_chunk"):
+		focus_chunk = world.call("force_load_chunk", focus_coord)
+	await _wait_process_frames(EVIDENCE_SETTLE_FRAMES)
+	var camera := player.call("get_view_camera") as Camera3D if player.has_method("get_view_camera") else null
+	var camera_ready := camera != null and get_viewport().get_camera_3d() == camera
+	var chunk_ready := _chunk_is_renderable(focus_chunk)
+	var focus_value: Array = []
+	if focus_coord is Vector2i:
+		focus_value = [focus_coord.x, focus_coord.y]
+	return {
+		"ok": chunk_ready and camera_ready and player.visible,
+		"focus_chunk": focus_value,
+		"focus_chunk_renderable": chunk_ready,
+		"camera_current": camera_ready,
+		"look_pitch_degrees": -24.0,
+		"player_position": [
+			player.global_position.x,
+			player.global_position.y,
+			player.global_position.z,
+		],
+	}
+
+
 func _finish(
 	visual_result: Dictionary = {},
 	diagnostics: Node = null,
-	soak_result: Dictionary = {}
+	soak_result: Dictionary = {},
+	evidence_result: Dictionary = {}
 ) -> void:
 	var telemetry_snapshot: Dictionary = {}
 	if diagnostics != null and diagnostics.has_method("sample_now"):
@@ -192,7 +247,7 @@ func _finish(
 	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
 	var payload := {
-		"version": 2,
+		"version": 3,
 		"ok": failures.is_empty(),
 		"checks": checks,
 		"failures": failures,
@@ -200,6 +255,7 @@ func _finish(
 		"report_path": report_path,
 		"screenshot_path": screenshot_path,
 		"visual": visual_result,
+		"visual_evidence": evidence_result,
 		"soak": soak_result,
 		"telemetry": telemetry_snapshot,
 		"engine_version": Engine.get_version_info(),
@@ -289,7 +345,10 @@ func _spawn_chunk_is_renderable(world: Node) -> bool:
 	var chunks = world.get("chunks")
 	if chunks is not Dictionary or chunks.is_empty():
 		return false
-	var chunk = chunks.values()[0]
+	return _chunk_is_renderable(chunks.values()[0])
+
+
+func _chunk_is_renderable(chunk: Variant) -> bool:
 	if not is_instance_valid(chunk) or int(chunk.get("surface_face_count")) <= 0:
 		return false
 	var mesh_instance := chunk.get_node_or_null("Mesh") as MeshInstance3D
