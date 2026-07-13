@@ -12,6 +12,7 @@ enum Overlay {
 	NONE,
 	INVENTORY,
 	CRAFTING,
+	FURNACE,
 	CONTAINER,
 	PAUSE,
 	DEATH,
@@ -21,6 +22,7 @@ const HudScript = preload("res://src/ui/hud.gd")
 const GuidanceOverlayScript = preload("res://src/ui/guidance_overlay.gd")
 const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
+const FurnacePanelScript = preload("res://src/ui/furnace_panel.gd")
 const ContainerPanelScript = preload("res://src/ui/container_panel.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
@@ -33,11 +35,13 @@ var day_night
 var audio_service
 var gameplay_input
 var container_storage
+var furnace_service
 var experience_coordinator
 var hud
 var guidance_overlay
 var inventory_panel
 var crafting_panel
+var furnace_panel
 var container_panel
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
@@ -65,6 +69,11 @@ func _ready() -> void:
 	add_child(crafting_panel)
 	crafting_panel.visible = false
 	crafting_panel.panel_closed.connect(_close_overlay)
+	furnace_panel = FurnacePanelScript.new()
+	_center_control(furnace_panel, Vector2(900, 540))
+	add_child(furnace_panel)
+	furnace_panel.visible = false
+	furnace_panel.panel_closed.connect(_close_overlay)
 	container_panel = ContainerPanelScript.new()
 	_center_control(container_panel, Vector2(780, 680))
 	add_child(container_panel)
@@ -82,6 +91,7 @@ func setup(
 	p_audio = null,
 	p_gameplay_input = null,
 	p_container_storage = null,
+	p_furnace_service = null,
 	p_experience_coordinator = null
 ) -> void:
 	inventory = p_inventory
@@ -91,11 +101,13 @@ func setup(
 	audio_service = p_audio
 	gameplay_input = p_gameplay_input
 	container_storage = p_container_storage
+	furnace_service = p_furnace_service
 	experience_coordinator = p_experience_coordinator
 	hud.setup(inventory, survival, day_night)
 	guidance_overlay.setup(experience_coordinator)
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
+	furnace_panel.setup(inventory, furnace_service)
 	container_panel.setup(inventory, container_storage)
 	if survival != null and survival.has_signal("player_died"):
 		var callback := Callable(self, "_on_player_died")
@@ -121,6 +133,8 @@ func end_gameplay() -> void:
 	_overlay = Overlay.NONE
 	if container_panel != null:
 		container_panel.close_container()
+	if furnace_panel != null:
+		furnace_panel.close_machine()
 	_hide_all_overlays()
 	if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 		inventory_panel.call("cancel_swap_selection")
@@ -139,7 +153,8 @@ func open_inventory() -> void:
 func open_crafting(station: String = "hand") -> void:
 	if not _can_change_overlay():
 		return
-	crafting_panel.open_station(station)
+	var resolved_station := station if station in ["hand", "workbench"] else "hand"
+	crafting_panel.open_station(resolved_station)
 	_set_overlay(Overlay.CRAFTING)
 
 
@@ -154,15 +169,21 @@ func open_workbench() -> void:
 	open_crafting("workbench")
 
 
-func open_furnace() -> void:
-	open_crafting("furnace")
+func open_furnace(machine_id: String, title: String = "熔炉") -> bool:
+	if not _can_change_overlay() or furnace_panel == null:
+		return false
+	if not furnace_panel.open_machine(machine_id, title):
+		show_message("无法打开该熔炉", 2.5, "error", "furnace_open_failed")
+		return false
+	_set_overlay(Overlay.FURNACE)
+	return true
 
 
 func open_container(container_id: String, title: String = "箱子") -> bool:
 	if not _can_change_overlay() or container_panel == null:
 		return false
 	if not container_panel.open_container(container_id, title):
-		show_message("无法打开该容器", 2.5, "error")
+		show_message("无法打开该容器", 2.5, "error", "container_open_failed")
 		return false
 	_set_overlay(Overlay.CONTAINER)
 	return true
@@ -184,6 +205,10 @@ func get_active_overlay() -> int:
 
 func get_guidance_overlay() -> Node:
 	return guidance_overlay
+
+
+func get_furnace_panel() -> Node:
+	return furnace_panel
 
 
 func is_gameplay_input_blocked() -> bool:
@@ -260,6 +285,9 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	if _overlay == Overlay.CRAFTING and next_overlay != Overlay.CRAFTING:
 		if crafting != null:
 			crafting.set_station("hand")
+	if _overlay == Overlay.FURNACE and next_overlay != Overlay.FURNACE:
+		if furnace_panel != null:
+			furnace_panel.close_machine()
 	if _overlay == Overlay.CONTAINER and next_overlay != Overlay.CONTAINER:
 		if container_panel != null:
 			container_panel.close_container()
@@ -270,6 +298,8 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 			inventory_panel.visible = true
 		Overlay.CRAFTING:
 			crafting_panel.visible = true
+		Overlay.FURNACE:
+			furnace_panel.visible = true
 		Overlay.CONTAINER:
 			container_panel.visible = true
 		Overlay.PAUSE:
@@ -290,6 +320,8 @@ func _hide_all_overlays() -> void:
 		inventory_panel.visible = false
 	if crafting_panel != null:
 		crafting_panel.visible = false
+	if furnace_panel != null:
+		furnace_panel.visible = false
 	if container_panel != null:
 		container_panel.visible = false
 	if _pause_panel != null:
@@ -304,6 +336,8 @@ func _context_for_overlay() -> StringName:
 			return InputContextScript.CONTEXT_INVENTORY
 		Overlay.CRAFTING:
 			return InputContextScript.CONTEXT_CRAFTING
+		Overlay.FURNACE:
+			return InputContextScript.CONTEXT_MACHINE
 		Overlay.CONTAINER:
 			return InputContextScript.CONTEXT_CONTAINER
 		Overlay.PAUSE:
