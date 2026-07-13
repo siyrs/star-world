@@ -26,9 +26,10 @@ func try_interact(
 		if _is_crop_block(crop_block):
 			target_position = crop_position
 			target_block = crop_block
-	return agriculture_service.call(
+	var raw_result: Variant = agriculture_service.call(
 		"try_interact", world, inventory, target_position, target_block
 	)
+	return raw_result.duplicate(true) if raw_result is Dictionary else {"handled": false}
 
 
 func get_interaction_hint(block_id: String, selected_item_id: String = "") -> String:
