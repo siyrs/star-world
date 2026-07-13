@@ -153,55 +153,24 @@ jobs:
       - name: Desktop window acceptance
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force .\build | Out-Null
-          godot --path . --rendering-method gl_compatibility --script res://tests/qa/desktop_acceptance_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/desktop_acceptance_regression.gd' `
+            -CaptureMarker 'DESKTOP_ACCEPTANCE_CAPTURE' `
+            -OutputPath 'build\desktop-acceptance.png'
 
       - name: Furnace desktop acceptance
         shell: pwsh
         run: |
-          $output = @(& godot --path . --rendering-method gl_compatibility --script res://tests/qa/furnace_desktop_acceptance.gd 2>&1)
-          $exitCode = $LASTEXITCODE
-          $output | ForEach-Object { Write-Host ([string]$_) }
-          if ($exitCode -ne 0) { exit $exitCode }
-
-          $captureLine = @(
-            $output |
-              ForEach-Object { [string]$_ } |
-              Where-Object { $_ -match 'FURNACE_DESKTOP_CAPTURE=(.+)$' } |
-              Select-Object -Last 1
-          )
-          if ($captureLine.Count -eq 0) {
-            throw 'Furnace desktop test did not report its capture path.'
-          }
-          $captureMatch = [regex]::Match($captureLine[0], 'FURNACE_DESKTOP_CAPTURE=(.+)$')
-          $sourcePath = $captureMatch.Groups[1].Value.Trim()
-          if (-not (Test-Path -LiteralPath $sourcePath)) {
-            throw "Reported furnace screenshot does not exist: $sourcePath"
-          }
-          $targetPath = [System.IO.Path]::GetFullPath((Join-Path $PWD 'build\furnace-desktop-acceptance.png'))
-          $sourceFullPath = [System.IO.Path]::GetFullPath($sourcePath)
-          if (-not [string]::Equals($sourceFullPath, $targetPath, [System.StringComparison]::OrdinalIgnoreCase)) {
-            Copy-Item -LiteralPath $sourceFullPath -Destination $targetPath -Force
-          }
-          if (-not (Test-Path -LiteralPath $targetPath) -or (Get-Item -LiteralPath $targetPath).Length -le 0) {
-            throw "Furnace desktop screenshot was not preserved: $targetPath"
-          }
-
-      - name: Verify desktop evidence
-        shell: pwsh
-        run: |
-          $mainCapture = '.\build\desktop-acceptance.png'
-          $furnaceCapture = '.\build\furnace-desktop-acceptance.png'
-          foreach ($capture in @($mainCapture, $furnaceCapture)) {
-            if (-not (Test-Path -LiteralPath $capture)) {
-              Get-ChildItem -Recurse .\build | Select-Object FullName, Length | Format-Table -AutoSize
-              throw "Desktop acceptance screenshot missing: $capture"
-            }
-            if ((Get-Item -LiteralPath $capture).Length -le 0) {
-              throw "Desktop acceptance screenshot is empty: $capture"
-            }
-          }
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/furnace_desktop_acceptance.gd' `
+            -CaptureMarker 'FURNACE_DESKTOP_CAPTURE' `
+            -OutputPath 'build\furnace-desktop-acceptance.png'
 
       - name: Upload desktop acceptance evidence
         uses: actions/upload-artifact@v4
