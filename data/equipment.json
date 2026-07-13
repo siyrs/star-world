@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "slots": [
+    {"id":"helmet","name":"头盔","allowed":["armor"]},
+    {"id":"chestplate","name":"胸甲","allowed":["armor"]},
+    {"id":"leggings","name":"护腿","allowed":["armor"]},
+    {"id":"boots","name":"靴子","allowed":["armor"]},
+    {"id":"main_hand","name":"主手","allowed":["weapon","tool"]}
+  ],
+  "attributes": {
+    "attack_damage": 0,
+    "defense": 0,
+    "movement_speed": 0
+  }
+}
