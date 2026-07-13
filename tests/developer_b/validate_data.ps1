@@ -3,6 +3,7 @@ $items = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\items.json" 
 $recipes = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\recipes.json" | ConvertFrom-Json).recipes
 $furnaceRecipes = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\furnace_recipes.json" | ConvertFrom-Json).recipes
 $fuels = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\fuels.json" | ConvertFrom-Json).fuels
+$harvestRules = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\block_harvest.json" | ConvertFrom-Json).rules
 $maps = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\map_profiles.json" | ConvertFrom-Json).maps
 $creatures = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\creatures.json" | ConvertFrom-Json).creatures
 
@@ -10,15 +11,26 @@ if ($items.Count -lt 30) { throw "Expected >=30 items, got $($items.Count)" }
 if ($recipes.Count -lt 30) { throw "Expected >=30 crafting recipes, got $($recipes.Count)" }
 if ($furnaceRecipes.Count -lt 5) { throw "Expected >=5 furnace recipes, got $($furnaceRecipes.Count)" }
 if ($fuels.Count -lt 2) { throw "Expected >=2 fuels, got $($fuels.Count)" }
+if ($harvestRules.Count -lt 10) { throw "Expected >=10 harvest rules, got $($harvestRules.Count)" }
 if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
 $creatureCount = @($creatures.PSObject.Properties).Count
 if ($creatureCount -ne 4) { throw "Expected 4 creatures, got $creatureCount" }
 
 $ids = @{}
+$toolCount = 0
 foreach ($item in $items) {
   if ($ids.ContainsKey($item.id)) { throw "Duplicate item id: $($item.id)" }
   $ids[$item.id] = $true
   if ($item.max_stack -lt 1) { throw "Invalid stack limit: $($item.id)" }
+  if ($item.category -in @('tool', 'weapon')) {
+    $toolCount += 1
+    if ([string]::IsNullOrWhiteSpace([string]$item.tool_type)) { throw "Missing tool_type: $($item.id)" }
+    if ($item.tool_type -notin @('pickaxe', 'axe', 'sword')) { throw "Unsupported tool_type $($item.tool_type): $($item.id)" }
+    if ([int]$item.max_stack -ne 1) { throw "Durable item must not stack: $($item.id)" }
+    if ([int]$item.durability -le 0) { throw "Invalid durability: $($item.id)" }
+    if ([int]$item.power -lt 1) { throw "Invalid tool power: $($item.id)" }
+    if ([double]$item.mining_speed -le 0) { throw "Invalid mining speed: $($item.id)" }
+  }
 }
 foreach ($recipe in $recipes) {
   if ($recipe.station -eq 'furnace') { throw "Furnace recipe leaked into crafting registry: $($recipe.id)" }
@@ -37,4 +49,31 @@ foreach ($fuel in $fuels) {
   if ([double]$fuel.burn_seconds -le 0) { throw "Invalid fuel duration for $($fuel.id)" }
 }
 
-Write-Host "PASS items=$($items.Count) crafting=$($recipes.Count) furnace=$($furnaceRecipes.Count) fuels=$($fuels.Count) maps=$($maps.Count) creatures=$creatureCount"
+$knownBlocks = @(
+  'air','grass','dirt','stone','cobblestone','sand','snow','wood','leaves','water','lava',
+  'planks','stone_bricks','glass','stone_slab','oak_stairs','coal_ore','iron_ore','gold_ore',
+  'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','ladder','torch','wool','ice','bedrock'
+)
+$harvestIds = @{}
+foreach ($rule in $harvestRules) {
+  if ($harvestIds.ContainsKey($rule.block_id)) { throw "Duplicate harvest rule: $($rule.block_id)" }
+  $harvestIds[$rule.block_id] = $true
+  if ($rule.block_id -notin $knownBlocks) { throw "Unknown harvest block: $($rule.block_id)" }
+  foreach ($field in @('preferred_tool', 'required_tool')) {
+    $toolType = [string]$rule.$field
+    if (-not [string]::IsNullOrWhiteSpace($toolType) -and $toolType -notin @('pickaxe', 'axe')) {
+      throw "Invalid $field '$toolType' for $($rule.block_id)"
+    }
+  }
+  if ($null -ne $rule.minimum_power -and [int]$rule.minimum_power -lt 0) { throw "Invalid minimum power for $($rule.block_id)" }
+  if ($null -ne $rule.drop_count -and [int]$rule.drop_count -lt 0) { throw "Invalid drop count for $($rule.block_id)" }
+  if (-not [string]::IsNullOrWhiteSpace([string]$rule.drop_item) -and -not $ids.ContainsKey($rule.drop_item)) {
+    throw "Unknown harvest drop $($rule.drop_item) for $($rule.block_id)"
+  }
+  if ($null -ne $rule.wrong_tool_speed_multiplier) {
+    $multiplier = [double]$rule.wrong_tool_speed_multiplier
+    if ($multiplier -le 0 -or $multiplier -gt 1) { throw "Invalid wrong-tool speed for $($rule.block_id)" }
+  }
+}
+
+Write-Host "PASS items=$($items.Count) tools=$toolCount crafting=$($recipes.Count) furnace=$($furnaceRecipes.Count) fuels=$($fuels.Count) harvest=$($harvestRules.Count) maps=$($maps.Count) creatures=$creatureCount"

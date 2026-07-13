@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {"block_id":"stone","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"drop_item":"cobblestone","wrong_tool_speed_multiplier":0.35},
+    {"block_id":"cobblestone","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
+    {"block_id":"stone_bricks","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
+    {"block_id":"stone_slab","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
+    {"block_id":"glass","preferred_tool":"pickaxe","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"ice","preferred_tool":"pickaxe","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"coal_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.25},
+    {"block_id":"iron_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":2,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.25},
+    {"block_id":"gold_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":3,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.20},
+    {"block_id":"diamond_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":3,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.20},
+    {"block_id":"furnace","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
+    {"block_id":"wood","preferred_tool":"axe","wrong_tool_speed_multiplier":0.45},
+    {"block_id":"planks","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},
+    {"block_id":"crafting_table","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},
+    {"block_id":"chest","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},
+    {"block_id":"oak_door","preferred_tool":"axe","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"oak_fence","preferred_tool":"axe","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"oak_stairs","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},
+    {"block_id":"water","breakable":false},
+    {"block_id":"lava","breakable":false},
+    {"block_id":"bedrock","breakable":false}
+  ]
+}

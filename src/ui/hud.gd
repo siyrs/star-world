@@ -219,11 +219,22 @@ func _on_selected_slot_changed(index: int, slot: Dictionary) -> void:
 	if inventory == null:
 		return
 	var item_id := str(slot.get("item_id", ""))
-	_item_label.text = (
-		"[%d] %s" % [index + 1, inventory.registry.get_display_name(item_id)]
-		if not item_id.is_empty()
-		else "[%d] 空手" % (index + 1)
-	)
+	if item_id.is_empty():
+		_item_label.text = "[%d] 空手" % (index + 1)
+	else:
+		var definition: Dictionary = inventory.registry.get_item(item_id)
+		var display_name: String = str(inventory.registry.get_display_name(item_id))
+		var maximum_durability := maxi(0, int(definition.get("durability", 0)))
+		if maximum_durability > 0:
+			var metadata: Dictionary = slot.get("metadata", {})
+			var remaining := clampi(
+				int(metadata.get("durability", maximum_durability)), 0, maximum_durability
+			)
+			_item_label.text = "[%d] %s · 耐久 %d / %d" % [
+				index + 1, display_name, remaining, maximum_durability
+			]
+		else:
+			_item_label.text = "[%d] %s" % [index + 1, display_name]
 	for button_index in _slot_buttons.size():
 		_slot_buttons[button_index].display_slot(
 			inventory.get_slot(button_index), inventory.registry, button_index == index

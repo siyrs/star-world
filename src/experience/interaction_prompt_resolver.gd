@@ -2,6 +2,11 @@ class_name InteractionPromptResolver
 extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const HarvestRegistryScript = preload("res://src/harvest/block_harvest_registry.gd")
+const HarvestPolicyScript = preload("res://src/harvest/block_harvest_policy.gd")
+
+var _harvest_registry = HarvestRegistryScript.new()
+var _harvest_policy = HarvestPolicyScript.new()
 
 
 func resolve(focus: Dictionary, inventory: Node, interaction_service: Node) -> Dictionary:
@@ -36,9 +41,10 @@ func _block_prompt(
 	focus: Dictionary, selected: Dictionary, interaction_service: Node
 ) -> Dictionary:
 	var block_id := str(focus.get("block_id", ""))
-	var primary := ""
-	if bool(focus.get("collectible", false)):
-		primary = "[鼠标左键] 采集"
+	var profile: Dictionary = _harvest_registry.get_profile(block_id)
+	var evaluation: Dictionary = _harvest_policy.evaluate(profile, selected)
+	var breakable := bool(evaluation.get("breakable", false))
+	var primary := "[按住鼠标左键] 采集" if breakable else ""
 	var secondary := ""
 	if interaction_service != null and interaction_service.has_method("get_interaction_hint"):
 		var interaction_hint := str(interaction_service.call("get_interaction_hint", block_id))
@@ -47,13 +53,35 @@ func _block_prompt(
 	if secondary.is_empty():
 		secondary = _selected_use_hint(selected)
 	return {
-		"visible": not primary.is_empty() or not secondary.is_empty(),
+		"visible": breakable or not secondary.is_empty() or not profile.is_empty(),
 		"title": str(focus.get("display_name", block_id)),
-		"subtitle": "世界方块",
+		"subtitle": _harvest_subtitle(evaluation, selected),
 		"primary": primary,
 		"secondary": secondary,
-		"tone": "info",
+		"tone": "info" if bool(evaluation.get("can_drop", false)) else "warning",
 	}
+
+
+func _harvest_subtitle(evaluation: Dictionary, selected: Dictionary) -> String:
+	if not bool(evaluation.get("breakable", false)):
+		return "无法破坏"
+	var duration := float(evaluation.get("duration_seconds", 0.0))
+	var preferred := str(evaluation.get("preferred_tool", ""))
+	var required := str(evaluation.get("required_tool", ""))
+	if not bool(evaluation.get("can_drop", false)):
+		var minimum := int(evaluation.get("minimum_power", 0))
+		var requirement := HarvestPolicyScript.tool_type_label(required)
+		if minimum > 0:
+			requirement = "至少%s%s" % [
+				HarvestPolicyScript.power_label(minimum), requirement
+			]
+		return "%s才能获得掉落 · 当前约 %.1f 秒" % [requirement, duration]
+	if not preferred.is_empty() and not bool(evaluation.get("matches_preferred", false)):
+		return "推荐使用%s · 当前约 %.1f 秒" % [
+			HarvestPolicyScript.tool_type_label(preferred), duration
+		]
+	var tool_name := str(selected.get("display_name", "空手"))
+	return "%s · 约 %.1f 秒" % [tool_name, duration]
 
 
 func _held_item_prompt(selected: Dictionary) -> Dictionary:
@@ -79,12 +107,22 @@ func _selected_use_hint(selected: Dictionary) -> String:
 
 
 func _selected_item_context(inventory: Node) -> Dictionary:
+	var hand := {
+		"item_id": "",
+		"display_name": "空手",
+		"block_id": "",
+		"is_food": false,
+		"tool_type": "hand",
+		"power": 0,
+		"mining_speed": 1.0,
+		"is_durable": false,
+	}
 	if inventory == null or not inventory.has_method("get_selected_item"):
-		return {}
+		return hand
 	var slot: Dictionary = inventory.call("get_selected_item")
 	var item_id := str(slot.get("item_id", ""))
 	if item_id.is_empty():
-		return {}
+		return hand
 	var registry = inventory.get("registry")
 	var definition: Dictionary = {}
 	var display_name := item_id
@@ -93,13 +131,14 @@ func _selected_item_context(inventory: Node) -> Dictionary:
 			definition = registry.call("get_item", item_id)
 		if registry.has_method("get_display_name"):
 			display_name = str(registry.call("get_display_name", item_id))
+	var block_id := BlockRegistryScript.get_block_for_item(item_id)
 	return {
 		"item_id": item_id,
 		"display_name": display_name,
-		"block_id": (
-			BlockRegistryScript.get_block_for_item(item_id)
-			if BlockRegistryScript.get_block_for_item(item_id) != BlockRegistryScript.AIR
-			else ""
-		),
+		"block_id": block_id if block_id != BlockRegistryScript.AIR else "",
 		"is_food": definition.has("food"),
+		"tool_type": str(definition.get("tool_type", "hand")),
+		"power": maxi(0, int(definition.get("power", 0))),
+		"mining_speed": maxf(0.1, float(definition.get("mining_speed", 1.0))),
+		"is_durable": int(definition.get("durability", 0)) > 0,
 	}
