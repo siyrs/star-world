@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "crops": [
+    {
+      "id": "wheat",
+      "name": "小麦",
+      "seed_item": "wheat_seeds",
+      "produce_item": "wheat",
+      "stage_blocks": [
+        "wheat_stage_0",
+        "wheat_stage_1",
+        "wheat_stage_2",
+        "wheat_stage_3"
+      ],
+      "stage_seconds": [25.0, 35.0, 45.0],
+      "harvest": {
+        "produce_count": 1,
+        "seed_count": 2
+      }
+    }
+  ]
+}
