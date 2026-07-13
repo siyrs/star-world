@@ -4,7 +4,7 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const FurnaceScript = preload("res://src/machine/furnace_service.gd")
 
-const OUTPUT_PATH := "user://furnace-desktop-acceptance.png"
+const OUTPUT_PATH := "res://build/furnace-desktop-acceptance.png"
 
 var checks := 0
 var failures: Array[String] = []
@@ -179,9 +179,9 @@ func _rect_inside(container_rect: Rect2, candidate: Rect2) -> bool:
 
 func _save_image(image: Image) -> void:
 	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
-	var error := image.save_png(OUTPUT_PATH)
+	var error := image.save_png(_capture_path)
 	_check(
-		error == OK and FileAccess.file_exists(OUTPUT_PATH),
+		error == OK and FileAccess.file_exists(_capture_path),
 		"furnace desktop screenshot is saved",
 	)
 
