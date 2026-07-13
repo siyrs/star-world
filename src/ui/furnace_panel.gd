@@ -197,7 +197,7 @@ func _build_ui() -> void:
 	var inventory_title := Label.new()
 	inventory_title.text = "玩家背包"
 	inventory_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inventory_title.add_theme_font_size_override("font_size", Tokens.FONT_SECTION)
+	inventory_title.add_theme_font_size_override("font_size", 22)
 	inventory_header.add_child(inventory_title)
 	var inventory_hint := Label.new()
 	inventory_hint.text = "单击物品：自动投入   ·   单击上方槽位：取回背包"
@@ -228,7 +228,6 @@ func _make_machine_slot(label: String) -> Button:
 	button.text = label
 	button.custom_minimum_size = Vector2(150, 116)
 	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return button
 
 
