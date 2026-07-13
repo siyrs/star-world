@@ -174,7 +174,6 @@ func _run() -> void:
 	)
 	player.global_position = Vector3(0.5, 0.05, 0.5)
 	player.reset_motion()
-	player.restore_orientation({"rotation":[0.0,0.0,0.0],"look_pitch":deg_to_rad(8.0)})
 	player.get_view_camera().current = true
 	player.set_input_enabled(true)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -185,6 +184,8 @@ func _run() -> void:
 		str(interactions.get_interaction_hint_for_item("grass", "wooden_hoe")).contains("开垦"),
 		"the real interaction layer explains hoe usage",
 	)
+	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
+	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves the soil target")
 	await _right_click()
 	_check(world.get_block(SOIL_POSITION) == "farmland", "a real right click tills the soil")
 	_check(
@@ -193,6 +194,8 @@ func _run() -> void:
 	)
 	inventory.select_slot(1)
 	await process_frame
+	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
+	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves tilled farmland")
 	await _right_click()
 	_check(world.get_block(CROP_POSITION) == "wheat_stage_0", "a second real right click plants wheat seeds")
 	_check(inventory.count_item("wheat_seeds") == 2, "desktop planting consumes one seed")
@@ -203,9 +206,8 @@ func _run() -> void:
 		str(interactions.get_interaction_hint_for_item("wheat_stage_3", "")).contains("收获"),
 		"mature crops expose a clear harvest prompt",
 	)
-	player.restore_orientation({"rotation":[0.0,0.0,0.0],"look_pitch":deg_to_rad(-16.0)})
-	await physics_frame
-	await process_frame
+	await _aim_at(player, Vector3(CROP_POSITION) + Vector3(0.5, 0.5, 0.5))
+	_check(_ray_hits_block(player, world, CROP_POSITION), "the real player ray resolves mature wheat")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "agriculture desktop viewport produces a rendered frame")
@@ -238,6 +240,30 @@ func _run() -> void:
 			% [checks, failures.size()]
 		)
 		quit(1)
+
+
+func _aim_at(player: Node3D, target: Vector3) -> void:
+	var camera := player.call("get_view_camera") as Camera3D
+	if camera != null:
+		camera.look_at(target, Vector3.UP)
+	await physics_frame
+	await process_frame
+	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	if ray != null:
+		ray.force_raycast_update()
+
+
+func _ray_hits_block(player: Node3D, world: Node, expected: Vector3i) -> bool:
+	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	if ray == null:
+		return false
+	ray.force_raycast_update()
+	if not ray.is_colliding():
+		return false
+	var point := ray.get_collision_point()
+	var normal := ray.get_collision_normal()
+	var resolved: Vector3i = world.call("world_to_block", point - normal * 0.01)
+	return resolved == expected
 
 
 func _right_click() -> void:
