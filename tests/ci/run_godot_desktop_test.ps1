@@ -25,9 +25,12 @@ $arguments = @(
     "--capture-output=$outputArgumentPath"
 )
 
-$processOutput = @(& $Godot @arguments 2>&1)
+# Keep Godot's stdout/stderr attached to the Actions log. Windows PowerShell can
+# promote redirected native stderr records to terminating errors even when the
+# process succeeds, which would make the evidence wrapper less reliable than the
+# desktop test it is running.
+& $Godot @arguments
 $exitCode = $LASTEXITCODE
-$processOutput | ForEach-Object { Write-Host ([string]$_) }
 
 if ($exitCode -ne 0) {
     throw "Godot desktop test failed: $ScriptPath (exit $exitCode)"
