@@ -149,8 +149,6 @@ func _on_gameplay_action_reported(action: StringName, payload: Dictionary) -> vo
 		"eat":
 			var item_name := str(payload.get("display_name", "食物"))
 			publish_message("已食用 %s" % item_name, "success", 1.8, "eat:%s" % item_name)
-		"save":
-			publish_message("世界已保存", "success", 2.0, "world_saved")
 
 
 func _on_selected_slot_changed(_index: int, _slot: Dictionary) -> void:
@@ -169,7 +167,12 @@ func _on_overlay_changed(_overlay: int, context: StringName) -> void:
 
 
 func _on_tutorial_completed() -> void:
-	publish_message("基础引导完成，开始创造属于你的星世界吧！", "success", 4.0, "tutorial_complete")
+	publish_message(
+		"基础引导完成，开始创造属于你的星世界吧！",
+		"success",
+		4.0,
+		"tutorial_complete"
+	)
 
 
 func _refresh_prompt() -> void:
