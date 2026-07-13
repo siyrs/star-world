@@ -45,8 +45,8 @@ const CROP_PLANES := [
 	],
 ]
 const CROP_NORMALS := [
-	Vector3(1.0, 0.0, -1.0).normalized(),
-	Vector3(1.0, 0.0, 1.0).normalized(),
+	Vector3(0.70710678, 0.0, -0.70710678),
+	Vector3(0.70710678, 0.0, 0.70710678),
 ]
 
 static var _shared_voxel_material: StandardMaterial3D
