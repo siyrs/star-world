@@ -9,7 +9,8 @@ const BLOCK_IDS := [
 	"wood", "leaves", "water", "lava", "planks", "stone_bricks", "glass",
 	"stone_slab", "oak_stairs", "coal_ore", "iron_ore", "gold_ore",
 	"diamond_ore", "crafting_table", "furnace", "chest", "oak_door",
-	"oak_fence", "ladder", "torch", "wool", "ice", "bedrock"
+	"oak_fence", "ladder", "torch", "wool", "ice", "bedrock",
+	"farmland", "wheat_stage_0", "wheat_stage_1", "wheat_stage_2", "wheat_stage_3"
 ]
 
 const DEFINITIONS := {
@@ -42,7 +43,12 @@ const DEFINITIONS := {
 	"torch": {"name":"火把", "color":"#F3B63F", "solid":false, "transparent":true, "collectible":true, "item_id":"torch", "hardness":0.1, "emissive":true},
 	"wool": {"name":"羊毛", "color":"#F0EFE8", "solid":true, "transparent":false, "collectible":true, "item_id":"wool", "hardness":0.5},
 	"ice": {"name":"冰", "color":"#A8DDEB", "solid":true, "transparent":true, "collectible":true, "item_id":"snow_block", "hardness":0.5},
-	"bedrock": {"name":"基岩", "color":"#25272A", "solid":true, "transparent":false, "collectible":false, "item_id":"", "hardness":-1.0}
+	"bedrock": {"name":"基岩", "color":"#25272A", "solid":true, "transparent":false, "collectible":false, "item_id":"", "hardness":-1.0},
+	"farmland": {"name":"耕地", "color":"#5C3924", "solid":true, "transparent":false, "collectible":true, "item_id":"dirt", "hardness":0.65},
+	"wheat_stage_0": {"name":"小麦幼苗", "color":"#5F9E49", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.28},
+	"wheat_stage_1": {"name":"生长中的小麦", "color":"#7AAA48", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.48},
+	"wheat_stage_2": {"name":"抽穗的小麦", "color":"#A9B84A", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.72},
+	"wheat_stage_3": {"name":"成熟小麦", "color":"#D8B94F", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.96}
 }
 
 
@@ -88,4 +94,3 @@ static func get_block_for_item(item_id: String) -> String:
 		if str(get_definition(block_id).get("item_id", "")) == item_id:
 			return block_id
 	return AIR
-
