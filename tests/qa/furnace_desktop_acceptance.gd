@@ -4,7 +4,7 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const FurnaceScript = preload("res://src/machine/furnace_service.gd")
 
-const OUTPUT_PATH := "res://build/furnace-desktop-acceptance.png"
+const OUTPUT_PATH := "user://furnace-desktop-acceptance.png"
 
 var checks := 0
 var failures: Array[String] = []
