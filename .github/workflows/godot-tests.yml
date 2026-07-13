@@ -84,6 +84,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/block_interaction_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Furnace machine regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/furnace_machine_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Desktop input contract regression
         shell: pwsh
         run: |
