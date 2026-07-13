@@ -113,9 +113,10 @@ tone
 
 纯展示组件：
 
-- 顶部 Toast；
-- 准星下方上下文操作提示；
-- 左下角新手目标与进度；
+- 顶部居中的 Toast；
+- 快捷栏上方的上下文操作提示；
+- 右上角的新手目标与进度；
+- 右上引导、左上状态卡和底部快捷栏使用互不重叠的安全区；
 - 背包、合成、容器、暂停和死亡时隐藏世界提示；
 - Toast 可以继续展示保存或错误结果。
 
@@ -135,6 +136,8 @@ focus_mode = Control.FOCUS_NONE
 ```text
 health / hunger / success / warning / danger
 ```
+
+当前最低桌面布局基线为 `1024×576`。设置页、状态卡、引导、上下文提示、选中物品和快捷栏必须全部位于视口内，并且不能互相覆盖。
 
 ## 数据合同
 
@@ -172,7 +175,21 @@ show_interaction_prompts
 4. InteractionPromptResolver 增加通用能力提示；
 5. GuidanceOverlay 只展示，不新增业务判断；
 6. `player_experience_regression.gd` 覆盖新合同；
-7. 桌面窗口和 Windows Release 截图确认信息不遮挡玩法。
+7. `ui_layout_regression.gd` 覆盖最低分辨率安全区；
+8. 桌面窗口和 Windows Release 截图确认信息不遮挡玩法。
+
+## 发行画面证据
+
+全屏颜色数量不能证明世界真正可见，因为彩色 HUD 可能掩盖只有天空的画面。最终 Windows Release 门禁还必须：
+
+- 将玩家返回一个可验证的安全地面位置；
+- 强制加载并验证玩家所在区块的网格和碰撞；
+- 将摄像机调整到能看到地形的验收角度；
+- 单独采样屏幕中央的世界区域；
+- 检查中央区域具有足够的颜色层次，且不能被单一天空颜色主导；
+- 报告 `focus_chunk_renderable`、`camera_current`、世界区域颜色数量和主导色比例。
+
+这项门禁由 `visual_acceptance_regression.gd` 和导出后的 `ReleaseSmokeRunner` 共同约束。
 
 ## 验收标准
 
@@ -185,5 +202,7 @@ show_interaction_prompts
 - Prompt 在覆盖层打开时隐藏，关闭后恢复；
 - Toast 去重且队列有界；
 - 引导跨保存恢复；
+- 设置页和游戏 HUD 在 `1024×576` 内无裁切、无重叠；
 - 返回菜单后 Player 和 Prompt 引用被释放；
-- 最终导出包画面不是空白，信息层级无明显遮挡。
+- 最终导出包中央区域能看到真实世界几何，而不是仅凭 HUD 颜色通过；
+- 发行报告、截图、日志和进程退出码全部有效。
