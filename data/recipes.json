@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "recipes": [
     {"id":"planks_from_log","name":"原木分解","station":"hand","ingredients":{"oak_log":1},"output":{"id":"oak_planks","count":4}},
     {"id":"sticks","name":"木棍","station":"hand","ingredients":{"oak_planks":2},"output":{"id":"stick","count":4}},
@@ -18,6 +18,14 @@
     {"id":"diamond_axe","name":"钻石斧","station":"workbench","ingredients":{"diamond":3,"stick":2},"output":{"id":"diamond_axe","count":1}},
     {"id":"diamond_sword","name":"钻石剑","station":"workbench","ingredients":{"diamond":2,"stick":1},"output":{"id":"diamond_sword","count":1}},
     {"id":"gold_sword","name":"金剑","station":"workbench","ingredients":{"gold_ingot":2,"stick":1},"output":{"id":"gold_sword","count":1}},
+    {"id":"leather_cap","name":"皮革帽","station":"workbench","ingredients":{"leather":5},"output":{"id":"leather_cap","count":1}},
+    {"id":"leather_tunic","name":"皮革衣","station":"workbench","ingredients":{"leather":8},"output":{"id":"leather_tunic","count":1}},
+    {"id":"leather_pants","name":"皮革裤","station":"workbench","ingredients":{"leather":7},"output":{"id":"leather_pants","count":1}},
+    {"id":"leather_boots","name":"皮革靴","station":"workbench","ingredients":{"leather":4},"output":{"id":"leather_boots","count":1}},
+    {"id":"iron_helmet","name":"铁头盔","station":"workbench","ingredients":{"iron_ingot":5},"output":{"id":"iron_helmet","count":1}},
+    {"id":"iron_chestplate","name":"铁胸甲","station":"workbench","ingredients":{"iron_ingot":8},"output":{"id":"iron_chestplate","count":1}},
+    {"id":"iron_leggings","name":"铁护腿","station":"workbench","ingredients":{"iron_ingot":7},"output":{"id":"iron_leggings","count":1}},
+    {"id":"iron_boots","name":"铁靴","station":"workbench","ingredients":{"iron_ingot":4},"output":{"id":"iron_boots","count":1}},
     {"id":"furnace","name":"熔炉","station":"workbench","ingredients":{"cobblestone":8},"output":{"id":"furnace","count":1}},
     {"id":"chest","name":"箱子","station":"workbench","ingredients":{"oak_planks":8},"output":{"id":"chest","count":1}},
     {"id":"oak_door","name":"木门","station":"workbench","ingredients":{"oak_planks":6},"output":{"id":"oak_door","count":3}},

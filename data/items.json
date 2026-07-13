@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "items": [
     {"id":"grass_block","name":"草方块","category":"block","max_stack":64,"block_id":"grass","color":"#61A84B"},
     {"id":"dirt","name":"泥土","category":"block","max_stack":64,"block_id":"dirt","color":"#79533A"},
@@ -58,10 +58,18 @@
     {"id":"stone_axe","name":"石斧","category":"tool","tool_type":"axe","max_stack":1,"durability":132,"power":2,"mining_speed":3.2,"color":"#777C82"},
     {"id":"iron_axe","name":"铁斧","category":"tool","tool_type":"axe","max_stack":1,"durability":251,"power":3,"mining_speed":4.8,"color":"#D4D8D9"},
     {"id":"diamond_axe","name":"钻石斧","category":"tool","tool_type":"axe","max_stack":1,"durability":1562,"power":4,"mining_speed":7.0,"color":"#5BE0DB"},
-    {"id":"wooden_sword","name":"木剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":60,"power":1,"mining_speed":1.0,"damage":4,"color":"#9A6A3B"},
-    {"id":"stone_sword","name":"石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":132,"power":2,"mining_speed":1.0,"damage":5,"color":"#777C82"},
-    {"id":"iron_sword","name":"铁剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":251,"power":3,"mining_speed":1.0,"damage":6,"color":"#D4D8D9"},
-    {"id":"gold_sword","name":"金剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":33,"power":2,"mining_speed":1.0,"damage":4,"color":"#F0D253"},
-    {"id":"diamond_sword","name":"钻石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":1562,"power":4,"mining_speed":1.0,"damage":7,"color":"#5BE0DB"}
+    {"id":"wooden_sword","name":"木剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":60,"power":1,"mining_speed":1.0,"damage":4,"equipment":{"slot":"main_hand","attributes":{"attack_damage":3}},"color":"#9A6A3B"},
+    {"id":"stone_sword","name":"石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":132,"power":2,"mining_speed":1.0,"damage":5,"equipment":{"slot":"main_hand","attributes":{"attack_damage":4}},"color":"#777C82"},
+    {"id":"iron_sword","name":"铁剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":251,"power":3,"mining_speed":1.0,"damage":6,"equipment":{"slot":"main_hand","attributes":{"attack_damage":5}},"color":"#D4D8D9"},
+    {"id":"gold_sword","name":"金剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":33,"power":2,"mining_speed":1.0,"damage":4,"equipment":{"slot":"main_hand","attributes":{"attack_damage":3}},"color":"#F0D253"},
+    {"id":"diamond_sword","name":"钻石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":1562,"power":4,"mining_speed":1.0,"damage":7,"equipment":{"slot":"main_hand","attributes":{"attack_damage":6}},"color":"#5BE0DB"},
+    {"id":"leather_cap","name":"皮革帽","category":"armor","max_stack":1,"durability":80,"rarity":"common","equipment":{"slot":"helmet","attributes":{"defense":1}},"color":"#9A613C"},
+    {"id":"leather_tunic","name":"皮革衣","category":"armor","max_stack":1,"durability":120,"rarity":"common","equipment":{"slot":"chestplate","attributes":{"defense":3}},"color":"#8E5637"},
+    {"id":"leather_pants","name":"皮革裤","category":"armor","max_stack":1,"durability":110,"rarity":"common","equipment":{"slot":"leggings","attributes":{"defense":2}},"color":"#865033"},
+    {"id":"leather_boots","name":"皮革靴","category":"armor","max_stack":1,"durability":70,"rarity":"common","equipment":{"slot":"boots","attributes":{"defense":1}},"color":"#78462F"},
+    {"id":"iron_helmet","name":"铁头盔","category":"armor","max_stack":1,"durability":165,"rarity":"uncommon","equipment":{"slot":"helmet","attributes":{"defense":2}},"color":"#D4D8D9"},
+    {"id":"iron_chestplate","name":"铁胸甲","category":"armor","max_stack":1,"durability":240,"rarity":"uncommon","equipment":{"slot":"chestplate","attributes":{"defense":6}},"color":"#C9CED0"},
+    {"id":"iron_leggings","name":"铁护腿","category":"armor","max_stack":1,"durability":225,"rarity":"uncommon","equipment":{"slot":"leggings","attributes":{"defense":5}},"color":"#BEC4C7"},
+    {"id":"iron_boots","name":"铁靴","category":"armor","max_stack":1,"durability":195,"rarity":"uncommon","equipment":{"slot":"boots","attributes":{"defense":2}},"color":"#B5BCC0"}
   ]
 }

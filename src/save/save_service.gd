@@ -53,6 +53,8 @@ func create_world(
 		# placeholder could leave the camera high above terrain on a sky-only view.
 		"player": {"position": [], "rotation": [0.0, 0.0, 0.0], "look_pitch": 0.0},
 		"inventory": {},
+		"equipment": {"version": 2, "slots": {}},
+		"attributes": {"version": 1, "base": {}, "sources": {}},
 		"containers": {"version": 1, "containers": {}},
 		"machines": {"version": 1, "saved_at_unix": timestamp, "furnaces": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
@@ -183,6 +185,10 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		if not payload.has("survival"):
 			payload["survival"] = {"health": 20.0, "hunger": 20.0}
 		payload["save_version"] = 2
+	if not payload.has("equipment") or payload["equipment"] is not Dictionary:
+		payload["equipment"] = {"version": 2, "slots": {}}
+	if not payload.has("attributes") or payload["attributes"] is not Dictionary:
+		payload["attributes"] = {"version": 1, "base": {}, "sources": {}}
 	if not payload.has("containers") or payload["containers"] is not Dictionary:
 		payload["containers"] = {"version": 1, "containers": {}}
 	if not payload.has("machines") or payload["machines"] is not Dictionary:

@@ -1,15 +1,17 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "slots": [
-    {"id":"helmet","name":"头盔","allowed":["armor"]},
-    {"id":"chestplate","name":"胸甲","allowed":["armor"]},
-    {"id":"leggings","name":"护腿","allowed":["armor"]},
-    {"id":"boots","name":"靴子","allowed":["armor"]},
-    {"id":"main_hand","name":"主手","allowed":["weapon","tool"]}
+    {"id":"main_hand","name":"主手武器","allowed":["weapon"],"order":0},
+    {"id":"helmet","name":"头盔","allowed":["armor"],"order":1},
+    {"id":"chestplate","name":"胸甲","allowed":["armor"],"order":2},
+    {"id":"leggings","name":"护腿","allowed":["armor"],"order":3},
+    {"id":"boots","name":"靴子","allowed":["armor"],"order":4}
   ],
   "attributes": {
-    "attack_damage": 0,
-    "defense": 0,
-    "movement_speed": 0
+    "max_health":{"name":"最大生命","base":20,"format":"number","order":0},
+    "attack_damage":{"name":"攻击","base":1,"format":"number","order":1},
+    "defense":{"name":"防御","base":0,"format":"number","order":2},
+    "movement_speed":{"name":"移动速度","base":1,"format":"percent","order":3},
+    "mining_speed":{"name":"采集速度","base":1,"format":"percent","order":4}
   }
 }
