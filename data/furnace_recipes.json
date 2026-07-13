@@ -8,6 +8,7 @@
     {"id":"smelt_stone","name":"烧制石头","input":{"id":"cobblestone","count":1},"output":{"id":"stone","count":1},"duration_seconds":5.0},
     {"id":"cook_chicken","name":"烤鸡肉","input":{"id":"raw_chicken","count":1},"output":{"id":"cooked_chicken","count":1},"duration_seconds":5.0},
     {"id":"cook_beef","name":"烤牛排","input":{"id":"raw_beef","count":1},"output":{"id":"steak","count":1},"duration_seconds":5.0},
-    {"id":"cook_pork","name":"烤猪排","input":{"id":"raw_pork","count":1},"output":{"id":"cooked_pork","count":1},"duration_seconds":5.0}
+    {"id":"cook_pork","name":"烤猪排","input":{"id":"raw_pork","count":1},"output":{"id":"cooked_pork","count":1},"duration_seconds":5.0},
+    {"id":"bake_potato","name":"烤马铃薯","input":{"id":"potato","count":1},"output":{"id":"baked_potato","count":1},"duration_seconds":4.0}
   ]
 }
