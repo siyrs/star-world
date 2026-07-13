@@ -3,6 +3,7 @@ extends SceneTree
 const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const FurnaceScript = preload("res://src/machine/furnace_service.gd")
+const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://furnace-desktop-acceptance.png"
 
@@ -17,7 +18,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	_capture_path = ProjectSettings.globalize_path(OUTPUT_PATH)
+	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
 	root.size = Vector2i(1024, 576)
 	var game = GameScene.instantiate()
 	root.add_child(game)
