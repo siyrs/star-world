@@ -19,6 +19,31 @@ $stderrPath = Join-Path $outputDirectory "$outputBaseName.stderr.log"
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 Remove-Item -LiteralPath $outputFullPath, $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 
+function Assert-NoFatalGodotLog {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    $fatalPatterns = @(
+        'SCRIPT ERROR',
+        'Parse Error',
+        'ObjectDB instances were leaked',
+        'Leaked instance:',
+        'Resources still in use at exit'
+    )
+    foreach ($path in $Paths) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        $matches = @(Select-String -LiteralPath $path -Pattern $fatalPatterns -SimpleMatch)
+        if ($matches.Count -eq 0) {
+            continue
+        }
+        $details = ($matches | ForEach-Object {
+            "$($_.Path):$($_.LineNumber): $($_.Line)"
+        }) -join [Environment]::NewLine
+        throw "Fatal Godot desktop diagnostics were found:$([Environment]::NewLine)$details"
+    }
+}
+
 $outputArgumentPath = $outputFullPath.Replace('\', '/')
 $arguments = @(
     '--path', $projectFullPath,
@@ -72,6 +97,7 @@ if (-not [string]::IsNullOrWhiteSpace($stderr)) {
 if ($timedOut) {
     throw "Godot desktop test timed out after $TimeoutMilliseconds ms: $ScriptPath"
 }
+Assert-NoFatalGodotLog -Paths @($stdoutPath, $stderrPath)
 if ($process.ExitCode -ne 0) {
     throw "Godot desktop test failed: $ScriptPath (exit $($process.ExitCode)); logs=$stdoutPath,$stderrPath"
 }
