@@ -179,8 +179,8 @@ func _rect_inside(container_rect: Rect2, candidate: Rect2) -> bool:
 func _resolve_capture_path() -> String:
 	var workspace := OS.get_environment("GITHUB_WORKSPACE").strip_edges()
 	if not workspace.is_empty():
-		return workspace.path_join("build").path_join(OUTPUT_FILE_NAME)
-	return ProjectSettings.globalize_path("res://build/%s" % OUTPUT_FILE_NAME)
+		return workspace.path_join("build").path_join("release-smoke").path_join(OUTPUT_FILE_NAME)
+	return ProjectSettings.globalize_path("res://build/release-smoke/%s" % OUTPUT_FILE_NAME)
 
 
 func _save_image(image: Image) -> void:
