@@ -30,6 +30,24 @@ const FACE_VERTICES := [
 ]
 const FACE_VERTEX_ORDER := [0, 1, 2, 0, 2, 3]
 const UVS := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
+const CROP_PLANES := [
+	[
+		Vector3(0.14, 0.02, 0.14),
+		Vector3(0.86, 0.02, 0.86),
+		Vector3(0.86, 1.0, 0.86),
+		Vector3(0.14, 1.0, 0.14),
+	],
+	[
+		Vector3(0.86, 0.02, 0.14),
+		Vector3(0.14, 0.02, 0.86),
+		Vector3(0.14, 1.0, 0.86),
+		Vector3(0.86, 1.0, 0.14),
+	],
+]
+const CROP_NORMALS := [
+	Vector3(0.70710678, 0.0, -0.70710678),
+	Vector3(0.70710678, 0.0, 0.70710678),
+]
 
 static var _shared_voxel_material: StandardMaterial3D
 
@@ -204,17 +222,22 @@ func _mesh_cells(count: int) -> void:
 		if block_id != BlockRegistryScript.AIR:
 			var global_block := origin + local_position
 			var local_origin := Vector3(local_position)
-			for face_index in FACE_DIRECTIONS.size():
-				var neighbor_id := _get_neighbor_block(
-					global_block, local_position, FACE_DIRECTIONS[face_index]
-				)
-				if not _should_draw_face(block_id, neighbor_id):
-					continue
-				_append_face(_visual_tool, local_origin, face_index, block_id)
-				_visual_faces += 1
-				if BlockRegistryScript.is_solid(block_id):
-					_append_face(_collision_tool, local_origin, face_index, block_id)
-					_collision_faces += 1
+			var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", "cube"))
+			if shape == "crop":
+				_append_crop(_visual_tool, local_origin, block_id)
+				_visual_faces += CROP_PLANES.size()
+			else:
+				for face_index in FACE_DIRECTIONS.size():
+					var neighbor_id := _get_neighbor_block(
+						global_block, local_position, FACE_DIRECTIONS[face_index]
+					)
+					if not _should_draw_face(block_id, neighbor_id):
+						continue
+					_append_face(_visual_tool, local_origin, face_index, block_id)
+					_visual_faces += 1
+					if BlockRegistryScript.is_solid(block_id):
+						_append_face(_collision_tool, local_origin, face_index, block_id)
+						_collision_faces += 1
 		_build_cursor += 1
 
 
@@ -271,6 +294,22 @@ func _append_face(
 		tool.set_color(color)
 		tool.set_uv(UVS[corner_index])
 		tool.add_vertex(local_origin + Vector3(corners[corner_index]))
+
+
+func _append_crop(tool: SurfaceTool, local_origin: Vector3, block_id: String) -> void:
+	var definition := BlockRegistryScript.get_definition(block_id)
+	var height := clampf(float(definition.get("crop_height", 1.0)), 0.08, 1.0)
+	var color := BlockRegistryScript.get_color(block_id)
+	for plane_index in CROP_PLANES.size():
+		var corners: Array = CROP_PLANES[plane_index]
+		var normal: Vector3 = CROP_NORMALS[plane_index]
+		for corner_index in FACE_VERTEX_ORDER:
+			var corner: Vector3 = corners[corner_index]
+			corner.y = minf(corner.y, height)
+			tool.set_normal(normal)
+			tool.set_color(color)
+			tool.set_uv(UVS[corner_index])
+			tool.add_vertex(local_origin + corner)
 
 
 static func _get_shared_voxel_material() -> StandardMaterial3D:

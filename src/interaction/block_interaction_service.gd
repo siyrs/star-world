@@ -11,6 +11,7 @@ var game_ui
 var container_storage
 var inventory
 var furnace_service
+var _extensions: Array[Node] = []
 
 
 func setup(p_game_ui, p_container_storage, p_inventory, p_furnace_service = null) -> void:
@@ -18,6 +19,26 @@ func setup(p_game_ui, p_container_storage, p_inventory, p_furnace_service = null
 	container_storage = p_container_storage
 	inventory = p_inventory
 	furnace_service = p_furnace_service
+
+
+func register_extension(extension: Node) -> bool:
+	if extension == null or not is_instance_valid(extension) or extension in _extensions:
+		return false
+	_extensions.append(extension)
+	return true
+
+
+func unregister_extension(extension: Node) -> bool:
+	var index := _extensions.find(extension)
+	if index < 0:
+		return false
+	_extensions.remove_at(index)
+	return true
+
+
+func get_extension_count() -> int:
+	_prune_extensions()
+	return _extensions.size()
 
 
 func detach() -> void:
@@ -28,6 +49,29 @@ func detach() -> void:
 
 
 func interact(world, block_position: Vector3i, block_id: String) -> bool:
+	var extension_result := _try_extensions(world, block_position, block_id)
+	if bool(extension_result.get("handled", false)):
+		var action := StringName(extension_result.get("action", "extension"))
+		var succeeded := bool(extension_result.get("success", false))
+		var message := str(extension_result.get("message", "")).strip_edges()
+		if succeeded:
+			interaction_opened.emit(action, block_position, block_id)
+			if not message.is_empty():
+				_show_message(
+					message,
+					str(extension_result.get("severity", "success")),
+					"interaction:%s:%s" % [action, block_id]
+				)
+		else:
+			var reason := str(extension_result.get("reason", "extension_rejected"))
+			_reject(reason, block_position, block_id)
+			if not message.is_empty():
+				_show_message(
+					message,
+					str(extension_result.get("severity", "warning")),
+					"interaction_rejected:%s:%s" % [reason, block_id]
+				)
+		return true
 	var definition := Registry.get_interaction(block_id)
 	if definition.is_empty() or game_ui == null:
 		return false
@@ -78,6 +122,13 @@ func interact(world, block_position: Vector3i, block_id: String) -> bool:
 
 
 func can_break_block(world, block_position: Vector3i, block_id: String) -> bool:
+	_prune_extensions()
+	for extension in _extensions:
+		if extension.has_method("can_break_block") and not bool(
+			extension.call("can_break_block", world, block_position, block_id)
+		):
+			_reject("extension_protected", block_position, block_id)
+			return false
 	if Registry.is_container(block_id):
 		if container_storage == null:
 			return true
@@ -110,6 +161,10 @@ func on_block_removed(world, block_position: Vector3i, block_id: String) -> void
 		# Empty furnaces may be dismantled even if a consumed fuel item left residual
 		# heat. Removing the block intentionally discards that transient heat only.
 		furnace_service.remove_machine(machine_id, false)
+	_prune_extensions()
+	for extension in _extensions:
+		if extension.has_method("on_block_removed"):
+			extension.call("on_block_removed", world, block_position, block_id)
 
 
 func get_container_id(world, block_position: Vector3i, block_id: String = "chest") -> String:
@@ -120,11 +175,43 @@ func get_machine_id(world, block_position: Vector3i, machine_type: String = "fur
 	return _stable_position_id(world, block_position, machine_type)
 
 
+# Stable one-argument contract retained for existing extensions, tests and mods.
 func get_interaction_hint(block_id: String) -> String:
+	return get_interaction_hint_for_item(block_id, "")
+
+
+# Context-aware contract used by the current experience layer.
+func get_interaction_hint_for_item(block_id: String, selected_item_id: String = "") -> String:
+	_prune_extensions()
+	for extension in _extensions:
+		if not extension.has_method("get_interaction_hint"):
+			continue
+		var hint := str(extension.call("get_interaction_hint", block_id, selected_item_id))
+		if not hint.is_empty():
+			return hint
 	var definition := Registry.get_interaction(block_id)
 	if definition.is_empty():
 		return ""
 	return "右键打开%s" % str(definition.get("label", block_id))
+
+
+func _try_extensions(world, block_position: Vector3i, block_id: String) -> Dictionary:
+	_prune_extensions()
+	for extension in _extensions:
+		if not extension.has_method("try_interact"):
+			continue
+		var raw_result = extension.call(
+			"try_interact", world, inventory, block_position, block_id
+		)
+		if raw_result is Dictionary and bool(raw_result.get("handled", false)):
+			return raw_result.duplicate(true)
+	return {}
+
+
+func _prune_extensions() -> void:
+	for index in range(_extensions.size() - 1, -1, -1):
+		if _extensions[index] == null or not is_instance_valid(_extensions[index]):
+			_extensions.remove_at(index)
 
 
 func _machine_slots_are_empty(machine_id: String) -> bool:
@@ -148,6 +235,16 @@ func _reject(reason: String, block_position: Vector3i, block_id: String) -> void
 	interaction_rejected.emit(reason, block_position, block_id)
 
 
-func _show_message(message: String) -> void:
+func _show_message(
+	message: String,
+	severity: String = "warning",
+	dedupe_key: String = ""
+) -> void:
 	if game_ui != null and game_ui.has_method("show_message"):
-		game_ui.call("show_message", message, 3.0, "warning", message)
+		game_ui.call(
+			"show_message",
+			message,
+			3.0,
+			severity,
+			dedupe_key if not dedupe_key.is_empty() else message
+		)

@@ -1,6 +1,15 @@
 {
   "schema_version": 1,
   "rules": [
+    {"block_id":"grass","preferred_tool":"shovel","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"dirt","preferred_tool":"shovel","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"sand","preferred_tool":"shovel","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"snow","preferred_tool":"shovel","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"farmland","preferred_tool":"shovel","drop_item":"dirt","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"wheat_stage_0","drop_item":"wheat_seeds","drop_count":1,"wrong_tool_speed_multiplier":1.0},
+    {"block_id":"wheat_stage_1","drop_item":"wheat_seeds","drop_count":1,"wrong_tool_speed_multiplier":1.0},
+    {"block_id":"wheat_stage_2","drop_item":"wheat_seeds","drop_count":1,"wrong_tool_speed_multiplier":1.0},
+    {"block_id":"wheat_stage_3","drop_item":"wheat","drop_count":1,"wrong_tool_speed_multiplier":1.0},
     {"block_id":"stone","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"drop_item":"cobblestone","wrong_tool_speed_multiplier":0.35},
     {"block_id":"cobblestone","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
     {"block_id":"stone_bricks","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
