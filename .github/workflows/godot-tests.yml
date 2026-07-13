@@ -163,22 +163,36 @@ jobs:
           godot --path . --rendering-method gl_compatibility --script res://tests/qa/furnace_desktop_acceptance.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Exported Windows release smoke
+      - name: Verify desktop evidence
         shell: pwsh
         run: |
-          $godotPath = (Get-Command godot).Source
-          .\tests\release\run_windows_export_smoke.ps1 -Godot $godotPath -OutputDirectory .\build\release-smoke
+          $mainCapture = '.\build\desktop-acceptance.png'
+          $furnaceCapture = '.\build\release-smoke\furnace-desktop-acceptance.png'
+          foreach ($capture in @($mainCapture, $furnaceCapture)) {
+            if (-not (Test-Path -LiteralPath $capture)) {
+              Get-ChildItem -Recurse .\build | Select-Object FullName, Length | Format-Table -AutoSize
+              throw "Desktop acceptance screenshot missing: $capture"
+            }
+            if ((Get-Item -LiteralPath $capture).Length -le 0) {
+              throw "Desktop acceptance screenshot is empty: $capture"
+            }
+          }
 
       - name: Upload desktop acceptance evidence
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: desktop-acceptance-${{ github.run_number }}
           path: |
             build/desktop-acceptance.png
             build/release-smoke/furnace-desktop-acceptance.png
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
+
+      - name: Exported Windows release smoke
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\release\run_windows_export_smoke.ps1 -Godot $godotPath -OutputDirectory .\build\release-smoke
 
       - name: Upload exported release evidence
         if: always()
