@@ -8,6 +8,7 @@ var _creature_player: AudioStreamPlayer
 var _ambient_player: AudioStreamPlayer
 var _cache: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
+var _disposed := false
 
 
 func _ready() -> void:
@@ -19,7 +20,8 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	shutdown()
+	if not _disposed:
+		shutdown()
 
 
 func shutdown() -> void:
@@ -30,6 +32,31 @@ func shutdown() -> void:
 	_cache.clear()
 
 
+func dispose() -> void:
+	if _disposed:
+		return
+	shutdown()
+	_dispose_player(_effects_player)
+	_dispose_player(_creature_player)
+	_dispose_player(_ambient_player)
+	_effects_player = null
+	_creature_player = null
+	_ambient_player = null
+	_disposed = true
+
+
+func is_disposed() -> bool:
+	return _disposed
+
+
+func _dispose_player(player: AudioStreamPlayer) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	if player.get_parent() == self:
+		remove_child(player)
+	player.free()
+
+
 func _create_player(player_name: String) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
 	player.name = player_name
@@ -38,6 +65,8 @@ func _create_player(player_name: String) -> AudioStreamPlayer:
 
 
 func _build_cache() -> void:
+	if _disposed:
+		return
 	_cache["break_soft"] = _make_wave(135.0, 0.12, 0.34, "noise")
 	_cache["break_hard"] = _make_wave(82.0, 0.16, 0.42, "noise")
 	_cache["place"] = _make_wave(220.0, 0.09, 0.28, "square")
@@ -52,6 +81,8 @@ func _build_cache() -> void:
 
 
 func play_block_break(block_id: String = "stone") -> void:
+	if _disposed:
+		return
 	var soft_blocks := ["grass", "dirt", "sand", "snow", "leaves", "wood", "planks"]
 	_play_effect("break_soft" if block_id in soft_blocks else "break_hard")
 
@@ -77,7 +108,12 @@ func play_craft() -> void:
 
 
 func play_creature(species_id: String) -> void:
-	if _creature_player == null or not _cache.has(species_id):
+	if (
+		_disposed
+		or _creature_player == null
+		or not is_instance_valid(_creature_player)
+		or not _cache.has(species_id)
+	):
 		return
 	_creature_player.stream = _cache[species_id]
 	_creature_player.pitch_scale = _rng.randf_range(0.92, 1.08)
@@ -86,7 +122,7 @@ func play_creature(species_id: String) -> void:
 
 
 func start_ambient(profile: String = "forest") -> void:
-	if _ambient_player == null:
+	if _disposed or _ambient_player == null or not is_instance_valid(_ambient_player):
 		return
 	var frequency := 84.0
 	var waveform := "sine"
@@ -116,8 +152,9 @@ func start_ambient(profile: String = "forest") -> void:
 
 
 func stop_ambient() -> void:
-	if _ambient_player != null:
+	if _ambient_player != null and is_instance_valid(_ambient_player):
 		_ambient_player.stop()
+		_ambient_player.stream = null
 
 
 func set_master_volume(linear_value: float) -> void:
@@ -127,7 +164,12 @@ func set_master_volume(linear_value: float) -> void:
 
 
 func _play_effect(key: String) -> void:
-	if _effects_player == null or not _cache.has(key):
+	if (
+		_disposed
+		or _effects_player == null
+		or not is_instance_valid(_effects_player)
+		or not _cache.has(key)
+	):
 		return
 	_effects_player.stream = _cache[key]
 	_effects_player.pitch_scale = _rng.randf_range(0.94, 1.06)

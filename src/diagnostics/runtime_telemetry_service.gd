@@ -15,6 +15,7 @@ var _world: Node
 var _player: Node3D
 var _input_context: Node
 var _creature_spawner: Node
+var _streaming_controller: Node
 var _health_policy = HealthPolicyScript.new()
 var _sample_accumulator := 0.0
 var _frame_sample_count := 0
@@ -31,9 +32,14 @@ func _ready() -> void:
 	set_process(true)
 
 
-func setup(p_input_context: Node = null, p_creature_spawner: Node = null) -> void:
+func setup(
+	p_input_context: Node = null,
+	p_creature_spawner: Node = null,
+	p_streaming_controller: Node = null
+) -> void:
 	_input_context = p_input_context
 	_creature_spawner = p_creature_spawner
+	_streaming_controller = p_streaming_controller
 
 
 func attach_runtime(world: Node, player: Node3D) -> void:
@@ -90,6 +96,7 @@ func sample_now() -> Dictionary:
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 		),
 		"streaming": streaming,
+		"adaptive_streaming": _get_adaptive_streaming_status(),
 		"creature_count": _count_creatures(),
 		"pickup_count": get_tree().get_nodes_in_group(&"pickups").size() if get_tree() != null else 0,
 		"input_context": _get_input_context(),
@@ -138,7 +145,7 @@ func write_report(path: String) -> bool:
 	if file == null:
 		return false
 	var payload := {
-		"version": 1,
+		"version": 2,
 		"generated_at": Time.get_datetime_string_from_system(),
 		"latest": get_latest_snapshot(),
 		"history": get_history(),
@@ -154,6 +161,16 @@ func _get_streaming_stats() -> Dictionary:
 		return {"loaded": 0, "building": 0, "pending": 0, "last_work_usec": 0}
 	var stats = _world.call("get_streaming_stats")
 	return stats.duplicate(true) if stats is Dictionary else {}
+
+
+func _get_adaptive_streaming_status() -> Dictionary:
+	if (
+		not is_instance_valid(_streaming_controller)
+		or not _streaming_controller.has_method("get_status")
+	):
+		return {"enabled": false, "attached": false, "level_name": "unavailable"}
+	var status = _streaming_controller.call("get_status")
+	return status.duplicate(true) if status is Dictionary else {}
 
 
 func _count_creatures() -> int:
