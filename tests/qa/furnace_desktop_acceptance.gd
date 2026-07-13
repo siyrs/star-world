@@ -4,11 +4,12 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const FurnaceScript = preload("res://src/machine/furnace_service.gd")
 
-const OUTPUT_PATH := "res://build/furnace-desktop-acceptance.png"
+const OUTPUT_FILE_NAME := "furnace-desktop-acceptance.png"
 
 var checks := 0
 var failures: Array[String] = []
 var _created_world_id := ""
+var _capture_path := ""
 
 
 func _initialize() -> void:
@@ -16,6 +17,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	_capture_path = _resolve_capture_path()
 	root.size = Vector2i(1024, 576)
 	var game = GameScene.instantiate()
 	root.add_child(game)
@@ -128,7 +130,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	if failures.is_empty():
-		print("QA FURNACE DESKTOP PASS | checks=%d | capture=%s" % [checks, OUTPUT_PATH])
+		print("QA FURNACE DESKTOP PASS | checks=%d | capture=%s" % [checks, _capture_path])
 		quit(0)
 	else:
 		for failure in failures:
@@ -174,11 +176,19 @@ func _rect_inside(container_rect: Rect2, candidate: Rect2) -> bool:
 	)
 
 
+func _resolve_capture_path() -> String:
+	var workspace := OS.get_environment("GITHUB_WORKSPACE").strip_edges()
+	if not workspace.is_empty():
+		return workspace.path_join("build").path_join(OUTPUT_FILE_NAME)
+	return ProjectSettings.globalize_path("res://build/%s" % OUTPUT_FILE_NAME)
+
+
 func _save_image(image: Image) -> void:
-	var absolute_directory := ProjectSettings.globalize_path(OUTPUT_PATH.get_base_dir())
-	DirAccess.make_dir_recursive_absolute(absolute_directory)
-	var error := image.save_png(ProjectSettings.globalize_path(OUTPUT_PATH))
-	_check(error == OK, "furnace desktop acceptance screenshot is saved")
+	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
+	var error := image.save_png(_capture_path)
+	_check(error == OK and FileAccess.file_exists(_capture_path), "furnace desktop screenshot is saved")
+	if error == OK:
+		print("FURNACE_DESKTOP_CAPTURE=%s" % _capture_path)
 
 
 func _find_button(node: Node, text: String) -> Button:
