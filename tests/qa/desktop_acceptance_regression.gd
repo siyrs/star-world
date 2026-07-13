@@ -4,11 +4,12 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
 
-const OUTPUT_PATH := "res://build/desktop-acceptance.png"
+const OUTPUT_PATH := "user://desktop-acceptance.png"
 
 var checks := 0
 var failures: Array[String] = []
 var _created_world_id := ""
+var _capture_path := ""
 
 
 func _initialize() -> void:
@@ -16,6 +17,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	_capture_path = ProjectSettings.globalize_path(OUTPUT_PATH)
 	var game = GameScene.instantiate()
 	root.add_child(game)
 	await process_frame
@@ -97,7 +99,8 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	if failures.is_empty():
-		print("QA DESKTOP ACCEPTANCE PASS | checks=%d | capture=%s" % [checks, OUTPUT_PATH])
+		print("DESKTOP_ACCEPTANCE_CAPTURE=%s" % _capture_path)
+		print("QA DESKTOP ACCEPTANCE PASS | checks=%d" % checks)
 		quit(0)
 	else:
 		for failure in failures:
@@ -191,10 +194,12 @@ func _image_has_visual_detail(image: Image) -> bool:
 
 
 func _save_image(image: Image) -> void:
-	var absolute_directory := ProjectSettings.globalize_path(OUTPUT_PATH.get_base_dir())
-	DirAccess.make_dir_recursive_absolute(absolute_directory)
-	var error := image.save_png(ProjectSettings.globalize_path(OUTPUT_PATH))
-	_check(error == OK, "desktop acceptance screenshot is saved")
+	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
+	var error := image.save_png(_capture_path)
+	_check(
+		error == OK and FileAccess.file_exists(_capture_path),
+		"desktop acceptance screenshot is saved",
+	)
 
 
 func _find_button(node: Node, text: String) -> Button:
