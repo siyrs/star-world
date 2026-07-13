@@ -218,7 +218,7 @@ func _run() -> void:
 		str(interactions.get_interaction_hint_for_item("wheat_stage_3", "")).contains("收获"),
 		"mature crops expose a clear harvest prompt",
 	)
-	await _aim_at(player, Vector3(CROP_POSITION) + Vector3(0.5, 0.5, 0.5))
+	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
 	_check(_ray_hits_block(player, world, SOIL_POSITION), "non-colliding crops leave the real ray on supporting soil")
 	player.call("_update_interaction_focus", true)
 	var focus: Dictionary = player.get_interaction_focus()
