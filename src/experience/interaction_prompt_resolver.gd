@@ -46,14 +46,18 @@ func _block_prompt(
 	var breakable := bool(evaluation.get("breakable", false))
 	var primary := "[按住鼠标左键] 采集" if breakable else ""
 	var secondary := ""
-	if interaction_service != null and interaction_service.has_method("get_interaction_hint"):
-		var interaction_hint := str(
-			interaction_service.call(
-				"get_interaction_hint",
-				block_id,
-				str(selected.get("item_id", ""))
+	if interaction_service != null:
+		var interaction_hint := ""
+		if interaction_service.has_method("get_interaction_hint_for_item"):
+			interaction_hint = str(
+				interaction_service.call(
+					"get_interaction_hint_for_item",
+					block_id,
+					str(selected.get("item_id", ""))
+				)
 			)
-		)
+		elif interaction_service.has_method("get_interaction_hint"):
+			interaction_hint = str(interaction_service.call("get_interaction_hint", block_id))
 		if not interaction_hint.is_empty():
 			secondary = "[鼠标右键] %s" % interaction_hint.trim_prefix("右键")
 	if secondary.is_empty():
