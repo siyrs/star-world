@@ -20,7 +20,8 @@ func setup(p_attribute_service: Node, p_equipment_service: Node = null) -> void:
 func has_equipped_weapon() -> bool:
 	if equipment_service == null or not equipment_service.has_method("get_slot"):
 		return false
-	return not Dictionary(equipment_service.call("get_slot", MAIN_HAND_SLOT)).is_empty()
+	var raw_slot = equipment_service.call("get_slot", MAIN_HAND_SLOT)
+	return raw_slot is Dictionary and not raw_slot.is_empty()
 
 
 func get_attack_damage(fallback_damage: float = 1.0) -> float:
