@@ -24,7 +24,7 @@ var _inventory_surface: Control
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
-	custom_minimum_size = Vector2(960, 540)
+	custom_minimum_size = Vector2(920, 520)
 	_build_ui()
 
 
@@ -84,43 +84,44 @@ func get_inventory_button(index: int) -> Button:
 
 func _build_ui() -> void:
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	add_child(root)
 	var header := HBoxContainer.new()
 	root.add_child(header)
 	var title := Label.new()
 	title.text = "角色与背包"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_font_size_override("font_size", 24)
 	header.add_child(title)
 	var subtitle := Label.new()
 	subtitle.text = "右键装备 · 点击装备槽卸下"
 	subtitle.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	subtitle.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	header.add_child(subtitle)
 	var close_button := Button.new()
 	close_button.text = "关闭 [E]"
-	close_button.custom_minimum_size = Vector2(112, 42)
+	close_button.custom_minimum_size = Vector2(108, 38)
 	close_button.pressed.connect(func() -> void: panel_closed.emit())
 	header.add_child(close_button)
 
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", Tokens.SPACE_LG)
+	body.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(body)
 	var left := VBoxContainer.new()
-	left.custom_minimum_size.x = 286.0
-	left.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	left.custom_minimum_size.x = 260.0
+	left.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	body.add_child(left)
 	_equipment_surface = left
 	var equipment_title := Label.new()
 	equipment_title.text = "装备"
-	equipment_title.add_theme_font_size_override("font_size", 20)
+	equipment_title.add_theme_font_size_override("font_size", 18)
 	equipment_title.modulate = Tokens.color(Tokens.COLOR_ACCENT)
 	left.add_child(equipment_title)
 	for slot_id in ["main_hand", "helmet", "chestplate", "leggings", "boots"]:
 		var button := Button.new()
-		button.custom_minimum_size = Vector2(270, 52)
+		button.custom_minimum_size = Vector2(250, 42)
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		button.pressed.connect(_on_equipment_pressed.bind(slot_id))
@@ -130,29 +131,30 @@ func _build_ui() -> void:
 	left.add_child(separator)
 	var attributes_title := Label.new()
 	attributes_title.text = "角色属性"
-	attributes_title.add_theme_font_size_override("font_size", 20)
+	attributes_title.add_theme_font_size_override("font_size", 18)
 	attributes_title.modulate = Tokens.color(Tokens.COLOR_ACCENT_WARM)
 	left.add_child(attributes_title)
 	var attribute_panel := PanelContainer.new()
 	attribute_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style(Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_MD, 10.0)
+		Tokens.panel_style(Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_MD, 8.0)
 	)
 	left.add_child(attribute_panel)
 	_attributes_surface = attribute_panel
 	_attributes_label = Label.new()
 	_attributes_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_attributes_label.add_theme_font_size_override("font_size", Tokens.FONT_BODY)
+	_attributes_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	attribute_panel.add_child(_attributes_label)
 
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	right.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	body.add_child(right)
 	_inventory_surface = right
 	_selection_label = Label.new()
 	_selection_label.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
+	_selection_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	right.add_child(_selection_label)
 	_inventory_grid = GridContainer.new()
 	_inventory_grid.columns = 9
@@ -163,20 +165,21 @@ func _build_ui() -> void:
 	for index in 36:
 		var slot = SlotScript.new()
 		slot.configure(index)
-		slot.custom_minimum_size = Vector2(60, 50)
+		slot.custom_minimum_size = Vector2(58, 46)
 		slot.slot_clicked.connect(_on_inventory_slot_clicked)
 		slot.slot_activated.connect(_on_inventory_slot_activated)
 		_inventory_grid.add_child(slot)
 		_inventory_buttons.append(slot)
 	var hint := Label.new()
-	hint.text = "单击快捷栏切换；单击背包槽位后再点目标槽可交换。右键或双击武器/防具会装备，其他物品快速放入当前快捷栏。"
+	hint.text = "单击切换/交换；右键或双击武器、防具可装备，其他物品快速放入当前快捷栏。"
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	hint.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	right.add_child(hint)
 	_status_label = Label.new()
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_label.custom_minimum_size.y = 26.0
+	_status_label.custom_minimum_size.y = 22.0
+	_status_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	_status_label.modulate = Tokens.color(Tokens.COLOR_ACCENT)
 	right.add_child(_status_label)
 
@@ -245,7 +248,7 @@ func _refresh_attributes() -> void:
 	var defense := maxf(0.0, float(values.get("defense", 0.0)))
 	var mitigation := minf(0.80, defense / (defense + 20.0)) if defense > 0.0 else 0.0
 	_attributes_label.text = (
-		"生命上限   %.0f\n攻击       %.1f\n防御       %.1f\n预计减伤   %.0f%%\n移动速度   %.0f%%\n采集速度   %.0f%%"
+		"生命上限  %.0f\n攻击      %.1f\n防御      %.1f\n预计减伤  %.0f%%\n移动速度  %.0f%%\n采集速度  %.0f%%"
 		% [
 			float(values.get("max_health", 20.0)),
 			float(values.get("attack_damage", 1.0)),
