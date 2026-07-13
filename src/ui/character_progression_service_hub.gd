@@ -4,10 +4,12 @@ extends "res://src/ui/tool_progression_service_hub.gd"
 const EquipmentServiceScript = preload("res://src/equipment/equipment_service.gd")
 const AttributeServiceScript = preload("res://src/attribute/attribute_service.gd")
 const CombatServiceScript = preload("res://src/combat/combat_service.gd")
+const AgricultureServiceScript = preload("res://src/agriculture/agriculture_service.gd")
 
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
+var agriculture_service: Node
 
 
 func _ready() -> void:
@@ -18,11 +20,16 @@ func _ready() -> void:
 	attribute_service.call("setup", equipment_service)
 	combat_service = _add_service(CombatServiceScript.new(), "CombatService")
 	combat_service.call("setup", attribute_service, equipment_service)
+	agriculture_service = _add_service(AgricultureServiceScript.new(), "AgricultureService")
+	agriculture_service.call("setup", inventory.registry, tool_service)
+	if block_interaction != null and block_interaction.has_method("register_extension"):
+		block_interaction.call("register_extension", agriculture_service)
 	if game_ui != null and game_ui.has_method("setup_character_progression"):
 		game_ui.call(
 			"setup_character_progression", equipment_service, attribute_service, combat_service
 		)
 	_connect_character_feedback()
+	_connect_agriculture_audio()
 
 
 func _begin_world(state: Dictionary) -> void:
@@ -30,6 +37,8 @@ func _begin_world(state: Dictionary) -> void:
 		equipment_service.call("deserialize", state.get("equipment", {}))
 	if attribute_service != null:
 		attribute_service.call("deserialize", state.get("attributes", {}))
+	if agriculture_service != null:
+		agriculture_service.call("deserialize", state.get("agriculture", {}))
 	super._begin_world(state)
 
 
@@ -41,6 +50,8 @@ func attach_game(
 	ground_resolver: Callable = Callable()
 ) -> void:
 	super.attach_game(world, player, sun, environment, ground_resolver)
+	if agriculture_service != null:
+		agriculture_service.call("attach_world", world, inventory)
 	if player == null:
 		return
 	if player.has_method("bind_equipment_service"):
@@ -56,18 +67,20 @@ func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -
 		current_state["equipment"] = equipment_service.call("serialize")
 	if attribute_service != null:
 		current_state["attributes"] = attribute_service.call("serialize")
+	if agriculture_service != null:
+		current_state["agriculture"] = agriculture_service.call("serialize")
 	return super.save_current(world_state, player_state)
 
 
 func handle_world_start_failed(reason: String) -> void:
-	_clear_character_state()
+	_clear_progression_state()
 	super.handle_world_start_failed(reason)
 
 
 func return_to_menu() -> void:
 	super.return_to_menu()
 	if current_world_id.is_empty():
-		_clear_character_state()
+		_clear_progression_state()
 
 
 func get_character_snapshot() -> Dictionary:
@@ -79,11 +92,20 @@ func get_character_snapshot() -> Dictionary:
 			attribute_service.call("get_snapshot") if attribute_service != null else {}
 		),
 		"combat": combat_service.call("get_snapshot") if combat_service != null else {},
+		"agriculture": (
+			agriculture_service.call("get_snapshot") if agriculture_service != null else {}
+		),
 	}
 
 
 func _exit_tree() -> void:
-	_clear_character_state()
+	if (
+		block_interaction != null
+		and agriculture_service != null
+		and block_interaction.has_method("unregister_extension")
+	):
+		block_interaction.call("unregister_extension", agriculture_service)
+	_clear_progression_state()
 	super._exit_tree()
 
 
@@ -93,6 +115,14 @@ func _connect_character_feedback() -> void:
 	equipment_service.connect("item_equipped", Callable(self, "_on_item_equipped"))
 	equipment_service.connect("item_unequipped", Callable(self, "_on_item_unequipped"))
 	equipment_service.connect("item_broken", Callable(self, "_on_equipped_item_broken"))
+
+
+func _connect_agriculture_audio() -> void:
+	if agriculture_service == null:
+		return
+	agriculture_service.connect("soil_tilled", Callable(self, "_on_soil_tilled"))
+	agriculture_service.connect("crop_planted", Callable(self, "_on_crop_planted"))
+	agriculture_service.connect("crop_harvested", Callable(self, "_on_crop_harvested"))
 
 
 func _on_item_equipped(slot_id: String, item: Dictionary, _previous: Dictionary) -> void:
@@ -121,6 +151,21 @@ func _on_equipped_item_broken(
 	)
 
 
+func _on_soil_tilled(_position: Vector3i, _previous_block: String) -> void:
+	if audio_service != null and audio_service.has_method("play_block_place"):
+		audio_service.call("play_block_place", "dirt")
+
+
+func _on_crop_planted(_position: Vector3i, _crop_id: String) -> void:
+	if audio_service != null and audio_service.has_method("play_block_place"):
+		audio_service.call("play_block_place", "leaves")
+
+
+func _on_crop_harvested(_position: Vector3i, _crop_id: String, _outputs: Array) -> void:
+	if audio_service != null and audio_service.has_method("play_pickup"):
+		audio_service.call("play_pickup")
+
+
 func _publish_character_message(
 	message: String, severity: String, dedupe_key: String, duration: float = 2.2
 ) -> void:
@@ -128,7 +173,9 @@ func _publish_character_message(
 		player_experience.call("publish_message", message, severity, duration, dedupe_key)
 
 
-func _clear_character_state() -> void:
+func _clear_progression_state() -> void:
+	if agriculture_service != null and agriculture_service.has_method("clear"):
+		agriculture_service.call("clear")
 	if equipment_service != null and equipment_service.has_method("clear"):
 		equipment_service.call("clear")
 	if attribute_service != null and attribute_service.has_method("reset"):
