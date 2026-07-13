@@ -11,6 +11,7 @@ const RegistryScript = preload("res://src/harvest/block_harvest_registry.gd")
 const PolicyScript = preload("res://src/harvest/block_harvest_policy.gd")
 
 const MAX_STEP_SECONDS := 0.25
+const MAX_IMMEDIATE_STEPS := 64
 const COMPLETION_EPSILON := 0.0001
 
 var tool_service: Node
@@ -93,10 +94,25 @@ func advance(
 func harvest_immediately(
 	world: Node, inventory: Node, block_position: Vector3i, block_id: String
 ) -> Dictionary:
-	var preview := get_preview(block_id, inventory)
-	var duration := float(preview.get("duration_seconds", PolicyScript.MIN_BREAK_SECONDS))
 	_reset_active(false)
-	return advance(world, inventory, block_position, block_id, duration + COMPLETION_EPSILON)
+	var preview := get_preview(block_id, inventory)
+	var remaining := maxf(
+		PolicyScript.MIN_BREAK_SECONDS,
+		float(preview.get("duration_seconds", PolicyScript.MIN_BREAK_SECONDS))
+	) + COMPLETION_EPSILON
+	var result: Dictionary = {}
+	var steps := 0
+	while remaining > 0.0 and steps < MAX_IMMEDIATE_STEPS:
+		steps += 1
+		var step := minf(MAX_STEP_SECONDS, remaining)
+		result = advance(world, inventory, block_position, block_id, step)
+		var status := str(result.get("status", ""))
+		if status in ["completed", "rejected"]:
+			return result
+		remaining = maxf(0.0, remaining - step)
+	if str(result.get("status", "")) == "progress":
+		return _reject_once("simulation_limit", block_position, block_id, result)
+	return result
 
 
 func cancel(reason: String = "cancelled") -> void:
