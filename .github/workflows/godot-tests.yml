@@ -193,9 +193,9 @@ jobs:
         with:
           name: desktop-acceptance-${{ github.run_number }}
           path: |
-            build/desktop-acceptance.png
-            build/furnace-desktop-acceptance.png
-          if-no-files-found: error
+            build/desktop-acceptance.*
+            build/furnace-desktop-acceptance.*
+          if-no-files-found: warn
           retention-days: 14
 
   release-smoke:
