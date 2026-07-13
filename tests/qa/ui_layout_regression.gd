@@ -14,12 +14,23 @@ func _initialize() -> void:
 func _run() -> void:
 	root.size = Vector2i(1024, 576)
 	Actions.ensure_default_bindings()
+	var viewport_rect := Rect2(Vector2.ZERO, Vector2(root.size))
 	var game = GameScene.instantiate()
 	root.add_child(game)
 	await process_frame
 	await process_frame
 	await process_frame
 	var hub: Node = game.get("service_hub")
+	var main_menu: Node = hub.get("main_menu")
+	var settings_panel := main_menu.get("_settings_panel") as Control
+	main_menu.call("_show_panel", settings_panel)
+	await process_frame
+	_check(settings_panel != null and settings_panel.visible, "settings surface opens at compact resolution")
+	_check(
+		settings_panel != null and _rect_inside(viewport_rect, settings_panel.get_global_rect()),
+		"settings surface remains fully inside the 576p viewport",
+	)
+	main_menu.call("show_main")
 	var settings: Dictionary = hub.current_settings.duplicate(true)
 	settings["show_tutorial"] = true
 	settings["show_interaction_prompts"] = true
@@ -52,7 +63,6 @@ func _run() -> void:
 	_check(not tutorial_rect.intersects(hotbar_rect), "tutorial does not overlap the hotbar")
 	_check(not prompt_rect.intersects(item_rect), "context prompt remains above selected item feedback")
 	_check(not prompt_rect.intersects(hotbar_rect), "context prompt remains above the hotbar")
-	var viewport_rect := Rect2(Vector2.ZERO, Vector2(root.size))
 	_check(_rect_inside(viewport_rect, status_rect), "status card remains inside the compact viewport")
 	_check(_rect_inside(viewport_rect, tutorial_rect), "tutorial remains inside the compact viewport")
 	_check(_rect_inside(viewport_rect, prompt_rect), "context prompt remains inside the compact viewport")
