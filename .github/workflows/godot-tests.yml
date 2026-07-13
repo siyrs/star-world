@@ -160,8 +160,33 @@ jobs:
       - name: Furnace desktop acceptance
         shell: pwsh
         run: |
-          godot --path . --rendering-method gl_compatibility --script res://tests/qa/furnace_desktop_acceptance.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $output = @(& godot --path . --rendering-method gl_compatibility --script res://tests/qa/furnace_desktop_acceptance.gd 2>&1)
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host ([string]$_) }
+          if ($exitCode -ne 0) { exit $exitCode }
+
+          $captureLine = @(
+            $output |
+              ForEach-Object { [string]$_ } |
+              Where-Object { $_ -match 'FURNACE_DESKTOP_CAPTURE=(.+)$' } |
+              Select-Object -Last 1
+          )
+          if ($captureLine.Count -eq 0) {
+            throw 'Furnace desktop test did not report its capture path.'
+          }
+          $captureMatch = [regex]::Match($captureLine[0], 'FURNACE_DESKTOP_CAPTURE=(.+)$')
+          $sourcePath = $captureMatch.Groups[1].Value.Trim()
+          if (-not (Test-Path -LiteralPath $sourcePath)) {
+            throw "Reported furnace screenshot does not exist: $sourcePath"
+          }
+          $targetPath = [System.IO.Path]::GetFullPath((Join-Path $PWD 'build\furnace-desktop-acceptance.png'))
+          $sourceFullPath = [System.IO.Path]::GetFullPath($sourcePath)
+          if (-not [string]::Equals($sourceFullPath, $targetPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            Copy-Item -LiteralPath $sourceFullPath -Destination $targetPath -Force
+          }
+          if (-not (Test-Path -LiteralPath $targetPath) -or (Get-Item -LiteralPath $targetPath).Length -le 0) {
+            throw "Furnace desktop screenshot was not preserved: $targetPath"
+          }
 
       - name: Verify desktop evidence
         shell: pwsh
