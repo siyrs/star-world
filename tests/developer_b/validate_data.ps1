@@ -4,16 +4,19 @@ $recipes = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\recipes.js
 $furnaceRecipes = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\furnace_recipes.json" | ConvertFrom-Json).recipes
 $fuels = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\fuels.json" | ConvertFrom-Json).fuels
 $harvestRules = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\block_harvest.json" | ConvertFrom-Json).rules
+$cropData = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\crops.json" | ConvertFrom-Json
+$crops = @($cropData.crops)
 $equipmentData = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\equipment.json" | ConvertFrom-Json
 $equipmentSlots = @($equipmentData.slots)
 $maps = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\map_profiles.json" | ConvertFrom-Json).maps
 $creatures = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\creatures.json" | ConvertFrom-Json).creatures
 
-if ($items.Count -lt 60) { throw "Expected >=60 items, got $($items.Count)" }
-if ($recipes.Count -lt 38) { throw "Expected >=38 crafting recipes, got $($recipes.Count)" }
+if ($items.Count -lt 80) { throw "Expected >=80 items, got $($items.Count)" }
+if ($recipes.Count -lt 50) { throw "Expected >=50 crafting recipes, got $($recipes.Count)" }
 if ($furnaceRecipes.Count -lt 5) { throw "Expected >=5 furnace recipes, got $($furnaceRecipes.Count)" }
 if ($fuels.Count -lt 2) { throw "Expected >=2 fuels, got $($fuels.Count)" }
-if ($harvestRules.Count -lt 10) { throw "Expected >=10 harvest rules, got $($harvestRules.Count)" }
+if ($harvestRules.Count -lt 25) { throw "Expected >=25 harvest rules, got $($harvestRules.Count)" }
+if ($crops.Count -lt 1) { throw 'Expected at least one crop definition' }
 if ($equipmentSlots.Count -ne 5) { throw "Expected 5 equipment slots, got $($equipmentSlots.Count)" }
 if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
 $creatureCount = @($creatures.PSObject.Properties).Count
@@ -50,7 +53,7 @@ foreach ($item in $items) {
   if ($item.category -in @('tool', 'weapon')) {
     $toolCount += 1
     if ([string]::IsNullOrWhiteSpace([string]$item.tool_type)) { throw "Missing tool_type: $($item.id)" }
-    if ($item.tool_type -notin @('pickaxe', 'axe', 'sword')) { throw "Unsupported tool_type $($item.tool_type): $($item.id)" }
+    if ($item.tool_type -notin @('pickaxe', 'axe', 'shovel', 'hoe', 'sword')) { throw "Unsupported tool_type $($item.tool_type): $($item.id)" }
     if ([int]$item.max_stack -ne 1) { throw "Durable item must not stack: $($item.id)" }
     if ([int]$item.durability -le 0) { throw "Invalid durability: $($item.id)" }
     if ([int]$item.power -lt 1) { throw "Invalid tool power: $($item.id)" }
@@ -77,6 +80,9 @@ foreach ($item in $items) {
 }
 if ($armorCount -lt 8) { throw "Expected >=8 armor items, got $armorCount" }
 if ($equippableCount -lt 13) { throw "Expected >=13 equippable items, got $equippableCount" }
+foreach ($requiredItem in @('wheat_seeds','wheat','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
+  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool item: $requiredItem" }
+}
 
 foreach ($recipe in $recipes) {
   if ($recipe.station -eq 'furnace') { throw "Furnace recipe leaked into crafting registry: $($recipe.id)" }
@@ -98,7 +104,8 @@ foreach ($fuel in $fuels) {
 $knownBlocks = @(
   'air','grass','dirt','stone','cobblestone','sand','snow','wood','leaves','water','lava',
   'planks','stone_bricks','glass','stone_slab','oak_stairs','coal_ore','iron_ore','gold_ore',
-  'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','ladder','torch','wool','ice','bedrock'
+  'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','ladder','torch','wool','ice','bedrock',
+  'farmland','wheat_stage_0','wheat_stage_1','wheat_stage_2','wheat_stage_3'
 )
 $harvestIds = @{}
 foreach ($rule in $harvestRules) {
@@ -107,7 +114,7 @@ foreach ($rule in $harvestRules) {
   if ($rule.block_id -notin $knownBlocks) { throw "Unknown harvest block: $($rule.block_id)" }
   foreach ($field in @('preferred_tool', 'required_tool')) {
     $toolType = [string]$rule.$field
-    if (-not [string]::IsNullOrWhiteSpace($toolType) -and $toolType -notin @('pickaxe', 'axe')) {
+    if (-not [string]::IsNullOrWhiteSpace($toolType) -and $toolType -notin @('pickaxe', 'axe', 'shovel', 'hoe')) {
       throw "Invalid $field '$toolType' for $($rule.block_id)"
     }
   }
@@ -122,4 +129,27 @@ foreach ($rule in $harvestRules) {
   }
 }
 
-Write-Host "PASS items=$($items.Count) tools=$toolCount armor=$armorCount equippable=$equippableCount equipment_slots=$($equipmentSlots.Count) crafting=$($recipes.Count) furnace=$($furnaceRecipes.Count) fuels=$($fuels.Count) harvest=$($harvestRules.Count) maps=$($maps.Count) creatures=$creatureCount"
+$cropIds = @{}
+foreach ($crop in $crops) {
+  $cropId = [string]$crop.id
+  if ([string]::IsNullOrWhiteSpace($cropId)) { throw 'Crop id is empty' }
+  if ($cropIds.ContainsKey($cropId)) { throw "Duplicate crop: $cropId" }
+  $cropIds[$cropId] = $true
+  if (-not $ids.ContainsKey([string]$crop.seed_item)) { throw "Unknown crop seed $($crop.seed_item) for $cropId" }
+  if (-not $ids.ContainsKey([string]$crop.produce_item)) { throw "Unknown crop produce $($crop.produce_item) for $cropId" }
+  $stageBlocks = @($crop.stage_blocks)
+  $stageSeconds = @($crop.stage_seconds)
+  if ($stageBlocks.Count -lt 2) { throw "Crop requires at least two stages: $cropId" }
+  if ($stageSeconds.Count -ne $stageBlocks.Count - 1) { throw "Crop stage duration mismatch: $cropId" }
+  foreach ($stageBlock in $stageBlocks) {
+    if ($stageBlock -notin $knownBlocks) { throw "Unknown crop stage block $stageBlock for $cropId" }
+  }
+  foreach ($seconds in $stageSeconds) {
+    if ([double]$seconds -le 0) { throw "Invalid crop stage duration for $cropId" }
+  }
+  if ([int]$crop.harvest.produce_count -lt 1 -or [int]$crop.harvest.seed_count -lt 1) {
+    throw "Invalid harvest output for $cropId"
+  }
+}
+
+Write-Host "PASS items=$($items.Count) tools=$toolCount armor=$armorCount equippable=$equippableCount equipment_slots=$($equipmentSlots.Count) crafting=$($recipes.Count) furnace=$($furnaceRecipes.Count) fuels=$($fuels.Count) harvest=$($harvestRules.Count) crops=$($crops.Count) maps=$($maps.Count) creatures=$creatureCount"
