@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "items": [
     {"id":"grass_block","name":"草方块","category":"block","max_stack":64,"block_id":"grass","color":"#61A84B"},
     {"id":"dirt","name":"泥土","category":"block","max_stack":64,"block_id":"dirt","color":"#79533A"},
@@ -50,18 +50,18 @@
     {"id":"steak","name":"熟牛排","category":"food","max_stack":64,"food":8,"saturation":8,"color":"#733B2D"},
     {"id":"raw_pork","name":"生猪排","category":"food","max_stack":64,"food":3,"saturation":1,"color":"#E6A39E"},
     {"id":"cooked_pork","name":"熟猪排","category":"food","max_stack":64,"food":8,"saturation":8,"color":"#B96B50"},
-    {"id":"wooden_pickaxe","name":"木镐","category":"tool","max_stack":1,"durability":60,"power":1,"color":"#9A6A3B"},
-    {"id":"stone_pickaxe","name":"石镐","category":"tool","max_stack":1,"durability":132,"power":2,"color":"#777C82"},
-    {"id":"iron_pickaxe","name":"铁镐","category":"tool","max_stack":1,"durability":251,"power":3,"color":"#D4D8D9"},
-    {"id":"diamond_pickaxe","name":"钻石镐","category":"tool","max_stack":1,"durability":1562,"power":4,"color":"#5BE0DB"},
-    {"id":"wooden_axe","name":"木斧","category":"tool","max_stack":1,"durability":60,"power":1,"color":"#9A6A3B"},
-    {"id":"stone_axe","name":"石斧","category":"tool","max_stack":1,"durability":132,"power":2,"color":"#777C82"},
-    {"id":"iron_axe","name":"铁斧","category":"tool","max_stack":1,"durability":251,"power":3,"color":"#D4D8D9"},
-    {"id":"diamond_axe","name":"钻石斧","category":"tool","max_stack":1,"durability":1562,"power":4,"color":"#5BE0DB"},
-    {"id":"wooden_sword","name":"木剑","category":"weapon","max_stack":1,"durability":60,"damage":4,"color":"#9A6A3B"},
-    {"id":"stone_sword","name":"石剑","category":"weapon","max_stack":1,"durability":132,"damage":5,"color":"#777C82"},
-    {"id":"iron_sword","name":"铁剑","category":"weapon","max_stack":1,"durability":251,"damage":6,"color":"#D4D8D9"},
-    {"id":"gold_sword","name":"金剑","category":"weapon","max_stack":1,"durability":33,"damage":4,"color":"#F0D253"},
-    {"id":"diamond_sword","name":"钻石剑","category":"weapon","max_stack":1,"durability":1562,"damage":7,"color":"#5BE0DB"}
+    {"id":"wooden_pickaxe","name":"木镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":60,"power":1,"mining_speed":2.0,"color":"#9A6A3B"},
+    {"id":"stone_pickaxe","name":"石镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":132,"power":2,"mining_speed":3.2,"color":"#777C82"},
+    {"id":"iron_pickaxe","name":"铁镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":251,"power":3,"mining_speed":4.8,"color":"#D4D8D9"},
+    {"id":"diamond_pickaxe","name":"钻石镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":1562,"power":4,"mining_speed":7.0,"color":"#5BE0DB"},
+    {"id":"wooden_axe","name":"木斧","category":"tool","tool_type":"axe","max_stack":1,"durability":60,"power":1,"mining_speed":2.0,"color":"#9A6A3B"},
+    {"id":"stone_axe","name":"石斧","category":"tool","tool_type":"axe","max_stack":1,"durability":132,"power":2,"mining_speed":3.2,"color":"#777C82"},
+    {"id":"iron_axe","name":"铁斧","category":"tool","tool_type":"axe","max_stack":1,"durability":251,"power":3,"mining_speed":4.8,"color":"#D4D8D9"},
+    {"id":"diamond_axe","name":"钻石斧","category":"tool","tool_type":"axe","max_stack":1,"durability":1562,"power":4,"mining_speed":7.0,"color":"#5BE0DB"},
+    {"id":"wooden_sword","name":"木剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":60,"power":1,"mining_speed":1.0,"damage":4,"color":"#9A6A3B"},
+    {"id":"stone_sword","name":"石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":132,"power":2,"mining_speed":1.0,"damage":5,"color":"#777C82"},
+    {"id":"iron_sword","name":"铁剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":251,"power":3,"mining_speed":1.0,"damage":6,"color":"#D4D8D9"},
+    {"id":"gold_sword","name":"金剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":33,"power":2,"mining_speed":1.0,"damage":4,"color":"#F0D253"},
+    {"id":"diamond_sword","name":"钻石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":1562,"power":4,"mining_speed":1.0,"damage":7,"color":"#5BE0DB"}
   ]
 }
