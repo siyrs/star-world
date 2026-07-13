@@ -1,4 +1,4 @@
-name: Godot runtime tests
+name: Godot quality gates
 
 on:
   pull_request:
@@ -10,13 +10,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: godot-tests-${{ github.workflow }}-${{ github.ref }}
+  group: godot-gates-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   runtime-tests:
+    name: Runtime and domain regressions
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,7 +27,7 @@ jobs:
         with:
           version: 4.7.0
           use-dotnet: false
-          include-templates: true
+          include-templates: false
 
       - name: Verify Godot
         shell: pwsh
@@ -150,6 +151,22 @@ jobs:
           godot --headless --path . --script res://tests/qa/settings_retest.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  desktop-acceptance:
+    name: Real desktop input and UI acceptance
+    needs: runtime-tests
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
       - name: Desktop window acceptance
         shell: pwsh
         run: |
@@ -171,6 +188,7 @@ jobs:
             -OutputPath 'build\furnace-desktop-acceptance.png'
 
       - name: Upload desktop acceptance evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: desktop-acceptance-${{ github.run_number }}
@@ -180,11 +198,29 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Exported Windows release smoke
+  release-smoke:
+    name: Exported Windows release smoke
+    needs: desktop-acceptance
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot with export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Export and run Windows release
         shell: pwsh
         run: |
           $godotPath = (Get-Command godot).Source
-          .\tests\release\run_windows_export_smoke.ps1 -Godot $godotPath -OutputDirectory .\build\release-smoke
+          .\tests\release\run_windows_export_smoke.ps1 `
+            -Godot $godotPath `
+            -OutputDirectory .\build\release-smoke
 
       - name: Upload exported release evidence
         if: always()
