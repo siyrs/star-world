@@ -6,6 +6,8 @@ const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://desktop-acceptance.png"
+const AUDIO_SETTLE_FRAMES := 4
+const FINAL_CLEANUP_FRAMES := 6
 
 var checks := 0
 var failures: Array[String] = []
@@ -97,9 +99,7 @@ func _run() -> void:
 		_check(_image_has_visual_detail(image), "rendered frame is not a blank or flat-color screen")
 		_save_image(image)
 
-	_cleanup(game, hub)
-	await process_frame
-	await process_frame
+	await _cleanup(game, hub)
 	if failures.is_empty():
 		print("DESKTOP_ACCEPTANCE_CAPTURE=%s" % _capture_path)
 		print("QA DESKTOP ACCEPTANCE PASS | checks=%d" % checks)
@@ -215,11 +215,24 @@ func _find_button(node: Node, text: String) -> Button:
 
 
 func _cleanup(game: Node, hub: Node) -> void:
-	if hub != null and hub.get("audio_service") != null:
-		hub.audio_service.stop_ambient()
+	if hub != null and not str(hub.get("current_world_id")).is_empty():
+		hub.call("return_to_menu")
+		await process_frame
+		await process_frame
 	if not _created_world_id.is_empty() and hub != null and hub.get("save_service") != null:
 		hub.save_service.delete_world(_created_world_id)
+	var audio: Node = hub.get("audio_service") if hub != null else null
+	if audio != null and audio.has_method("shutdown"):
+		audio.call("shutdown")
+	for _frame in AUDIO_SETTLE_FRAMES:
+		await process_frame
+	if audio != null and is_instance_valid(audio) and audio.has_method("dispose"):
+		audio.call("dispose")
+	for _frame in AUDIO_SETTLE_FRAMES:
+		await process_frame
 	game.queue_free()
+	for _frame in FINAL_CLEANUP_FRAMES:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:
