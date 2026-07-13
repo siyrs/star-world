@@ -163,6 +163,16 @@ jobs:
           godot --path . --rendering-method gl_compatibility --script res://tests/qa/furnace_desktop_acceptance.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Preserve furnace desktop evidence
+        shell: pwsh
+        run: |
+          $source = '.\build\furnace-desktop-acceptance.png'
+          if (-not (Test-Path -LiteralPath $source)) {
+            throw "Furnace desktop screenshot missing: $source"
+          }
+          New-Item -ItemType Directory -Force .\build\release-smoke | Out-Null
+          Copy-Item -LiteralPath $source -Destination .\build\release-smoke\furnace-desktop-acceptance.png -Force
+
       - name: Exported Windows release smoke
         shell: pwsh
         run: |
