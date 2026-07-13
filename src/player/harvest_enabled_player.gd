@@ -1,8 +1,6 @@
 class_name HarvestEnabledPlayer
 extends "res://src/player/first_person_player.gd"
 
-const BlockRegistryScript = preload("res://src/block/block_registry.gd")
-
 var tool_service: Node
 var harvest_service: Node
 var _primary_action_held := false
