@@ -194,9 +194,9 @@ func _left_click_control(control: Control) -> void:
 	await _click_control(control, MOUSE_BUTTON_LEFT, MOUSE_BUTTON_MASK_LEFT)
 
 
-func _click_control(control: Control, button_index: MouseButton, button_mask: MouseButtonMask) -> void:
+func _click_control(control: Control, button_index: int, button_mask: int) -> void:
 	await process_frame
-	var pointer_position := control.get_global_rect().get_center()
+	var pointer_position := _canvas_to_viewport(control.get_global_rect().get_center())
 	var motion := InputEventMouseMotion.new()
 	motion.position = pointer_position
 	motion.global_position = pointer_position
@@ -240,13 +240,20 @@ func _find_button(node: Node, text: String) -> Button:
 
 
 func _rect_is_inside_viewport(rect: Rect2) -> bool:
+	var transformed_start := _canvas_to_viewport(rect.position)
+	var transformed_end := _canvas_to_viewport(rect.end)
+	var transformed_rect := Rect2(transformed_start, transformed_end - transformed_start)
 	var bounds := Rect2(Vector2.ZERO, Vector2(root.size))
-	return bounds.encloses(rect) or (
-		rect.position.x >= 0.0
-		and rect.position.y >= 0.0
-		and rect.end.x <= bounds.end.x + 0.5
-		and rect.end.y <= bounds.end.y + 0.5
+	return (
+		transformed_rect.position.x >= -0.5
+		and transformed_rect.position.y >= -0.5
+		and transformed_rect.end.x <= bounds.end.x + 0.5
+		and transformed_rect.end.y <= bounds.end.y + 0.5
 	)
+
+
+func _canvas_to_viewport(position: Vector2) -> Vector2:
+	return root.get_final_transform() * position
 
 
 func _save_image(image: Image) -> void:
