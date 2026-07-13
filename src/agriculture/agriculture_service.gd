@@ -12,6 +12,7 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const SERIAL_VERSION := 1
 const PROCESS_INTERVAL_SECONDS := 0.5
 const MAX_OFFLINE_SECONDS := 6.0 * 60.0 * 60.0
+const INVALID_POSITION := Vector3i(2147483647, 2147483647, 2147483647)
 
 var item_registry
 var tool_service: Node
@@ -57,28 +58,38 @@ func clear() -> void:
 func deserialize(data: Dictionary) -> bool:
 	_crops.clear()
 	_process_accumulator = 0.0
-	var raw_crops = data.get("crops", {})
-	if raw_crops is Dictionary:
+	var raw_crops_value: Variant = data.get("crops", {})
+	if raw_crops_value is Dictionary:
+		var raw_crops: Dictionary = raw_crops_value
 		for raw_key in raw_crops:
-			var raw_state = raw_crops[raw_key]
-			if raw_state is not Dictionary:
+			var raw_state_value: Variant = raw_crops[raw_key]
+			if raw_state_value is not Dictionary:
 				continue
-			var crop_id := str(raw_state.get("crop_id", ""))
+			var raw_state: Dictionary = raw_state_value
+			var crop_id: String = str(raw_state.get("crop_id", ""))
 			var crop_definition: Dictionary = crop_registry.get_crop(crop_id)
-			var position := _position_from_value(raw_state.get("position", []))
-			if crop_definition.is_empty() or position == null:
+			var position: Vector3i = _position_from_value(raw_state.get("position", []))
+			if crop_definition.is_empty() or position == INVALID_POSITION:
 				continue
 			var stage_blocks: Array = crop_definition.get("stage_blocks", [])
-			var stage := clampi(int(raw_state.get("stage", 0)), 0, stage_blocks.size() - 1)
-			var key := _position_key(position)
+			if stage_blocks.is_empty():
+				continue
+			var stage: int = clampi(
+				int(raw_state.get("stage", 0)), 0, stage_blocks.size() - 1
+			)
+			var key: String = _position_key(position)
 			_crops[key] = {
 				"crop_id": crop_id,
 				"position": [position.x, position.y, position.z],
 				"stage": stage,
-				"elapsed_seconds": maxf(0.0, float(raw_state.get("elapsed_seconds", 0.0))),
+				"elapsed_seconds": maxf(
+					0.0, float(raw_state.get("elapsed_seconds", 0.0))
+				),
 			}
-	var saved_at := int(data.get("saved_at_unix", Time.get_unix_time_from_system()))
-	var now := int(Time.get_unix_time_from_system())
+	var saved_at: int = int(
+		data.get("saved_at_unix", Time.get_unix_time_from_system())
+	)
+	var now: int = int(Time.get_unix_time_from_system())
 	_offline_seconds = clampf(float(now - saved_at), 0.0, MAX_OFFLINE_SECONDS)
 	return true
 
@@ -115,14 +126,14 @@ func try_interact(
 ) -> Dictionary:
 	if p_world == null or p_inventory == null:
 		return {"handled": false}
-	var selected_item_id := _selected_item_id(p_inventory)
-	var tool_type := _tool_type(selected_item_id)
+	var selected_item_id: String = _selected_item_id(p_inventory)
+	var tool_type: String = _tool_type(selected_item_id)
 	if block_id in ["grass", "dirt"] and tool_type == "hoe":
 		return _till_soil(p_world, p_inventory, block_position, block_id)
 	if block_id == "farmland":
-		var crop_definition: Dictionary = crop_registry.get_crop_by_seed(selected_item_id)
-		if not crop_definition.is_empty():
-			return _plant_crop(p_world, p_inventory, block_position, crop_definition)
+		var seed_crop: Dictionary = crop_registry.get_crop_by_seed(selected_item_id)
+		if not seed_crop.is_empty():
+			return _plant_crop(p_world, p_inventory, block_position, seed_crop)
 		return {"handled": false}
 	var focused_crop: Dictionary = crop_registry.get_crop_by_stage_block(block_id)
 	if not focused_crop.is_empty():
@@ -134,19 +145,21 @@ func get_interaction_hint(block_id: String, selected_item_id: String = "") -> St
 	if block_id in ["grass", "dirt"] and _tool_type(selected_item_id) == "hoe":
 		return "右键开垦耕地"
 	if block_id == "farmland":
-		var crop_definition: Dictionary = crop_registry.get_crop_by_seed(selected_item_id)
-		if not crop_definition.is_empty():
-			return "右键播种%s" % str(crop_definition.get("name", "作物"))
-	var crop_definition: Dictionary = crop_registry.get_crop_by_stage_block(block_id)
-	if crop_definition.is_empty():
+		var seed_crop: Dictionary = crop_registry.get_crop_by_seed(selected_item_id)
+		if not seed_crop.is_empty():
+			return "右键播种%s" % str(seed_crop.get("name", "作物"))
+	var focused_crop: Dictionary = crop_registry.get_crop_by_stage_block(block_id)
+	if focused_crop.is_empty():
 		return ""
-	var crop_id := str(crop_definition.get("id", ""))
-	var stage_blocks: Array = crop_definition.get("stage_blocks", [])
-	var stage := crop_registry.get_stage_index(crop_id, block_id)
+	var crop_id: String = str(focused_crop.get("id", ""))
+	var stage_blocks: Array = focused_crop.get("stage_blocks", [])
+	var stage: int = crop_registry.get_stage_index(crop_id, block_id)
 	if stage >= stage_blocks.size() - 1:
-		return "右键收获并补种%s" % str(crop_definition.get("name", "作物"))
-	var progress := roundi(100.0 * float(stage + 1) / float(stage_blocks.size()))
-	return "右键查看%s生长 %d%%" % [str(crop_definition.get("name", "作物")), progress]
+		return "右键收获并补种%s" % str(focused_crop.get("name", "作物"))
+	var progress: int = roundi(
+		100.0 * float(stage + 1) / float(maxi(1, stage_blocks.size()))
+	)
+	return "右键查看%s生长 %d%%" % [str(focused_crop.get("name", "作物")), progress]
 
 
 func on_block_removed(p_world: Node, block_position: Vector3i, block_id: String) -> void:
@@ -155,8 +168,9 @@ func on_block_removed(p_world: Node, block_position: Vector3i, block_id: String)
 		return
 	if block_id != "farmland":
 		return
-	var crop_position := block_position + Vector3i.UP
-	if _crops.erase(_position_key(crop_position)) and p_world != null:
+	var crop_position: Vector3i = block_position + Vector3i.UP
+	var removed: bool = _crops.erase(_position_key(crop_position))
+	if removed and p_world != null:
 		if str(p_world.call("get_block", crop_position)) != BlockRegistryScript.AIR:
 			p_world.call("set_block", crop_position, BlockRegistryScript.AIR)
 
@@ -175,7 +189,7 @@ func _process(delta: float) -> void:
 	_process_accumulator += delta
 	if _process_accumulator < PROCESS_INTERVAL_SECONDS:
 		return
-	var elapsed := _process_accumulator
+	var elapsed: float = _process_accumulator
 	_process_accumulator = 0.0
 	advance_time(elapsed)
 
@@ -186,7 +200,7 @@ func _till_soil(
 	block_position: Vector3i,
 	block_id: String
 ) -> Dictionary:
-	var above := block_position + Vector3i.UP
+	var above: Vector3i = block_position + Vector3i.UP
 	if str(p_world.call("get_block", above)) != BlockRegistryScript.AIR:
 		return _reject("space_blocked", block_position, block_id, "上方空间被占用，无法开垦")
 	if not bool(p_world.call("set_block", block_position, "farmland")):
@@ -215,27 +229,22 @@ func _plant_crop(
 	farmland_position: Vector3i,
 	crop_definition: Dictionary
 ) -> Dictionary:
-	var crop_position := farmland_position + Vector3i.UP
+	var crop_position: Vector3i = farmland_position + Vector3i.UP
 	if str(p_world.call("get_block", crop_position)) != BlockRegistryScript.AIR:
 		return _reject("space_blocked", farmland_position, "farmland", "耕地上方已有方块")
-	var seed_item := str(crop_definition.get("seed_item", ""))
+	var seed_item: String = str(crop_definition.get("seed_item", ""))
 	if _selected_item_id(p_inventory) != seed_item:
 		return {"handled": false}
-	var selected_slot := int(p_inventory.get("selected_slot"))
+	var selected_slot: int = int(p_inventory.get("selected_slot"))
 	var removed: Dictionary = p_inventory.call("remove_from_slot", selected_slot, 1)
 	if removed.is_empty():
 		return _reject("seed_remove_failed", farmland_position, "farmland", "种子消耗失败")
-	var crop_id := str(crop_definition.get("id", ""))
-	var stage_block := crop_registry.get_stage_block(crop_id, 0)
+	var crop_id: String = str(crop_definition.get("id", ""))
+	var stage_block: String = crop_registry.get_stage_block(crop_id, 0)
 	if stage_block.is_empty() or not bool(p_world.call("set_block", crop_position, stage_block)):
-		p_inventory.call(
-			"add_item",
-			seed_item,
-			1,
-			removed.get("metadata", {})
-		)
+		p_inventory.call("add_item", seed_item, 1, removed.get("metadata", {}))
 		return _reject("world_update_failed", farmland_position, "farmland", "播种失败，种子已退回")
-	var key := _position_key(crop_position)
+	var key: String = _position_key(crop_position)
 	_crops[key] = {
 		"crop_id": crop_id,
 		"position": [crop_position.x, crop_position.y, crop_position.z],
@@ -261,13 +270,15 @@ func _harvest_crop(
 	crop_definition: Dictionary,
 	block_id: String
 ) -> Dictionary:
-	var crop_id := str(crop_definition.get("id", ""))
+	var crop_id: String = str(crop_definition.get("id", ""))
 	var stage_blocks: Array = crop_definition.get("stage_blocks", [])
-	var stage := crop_registry.get_stage_index(crop_id, block_id)
+	var stage: int = crop_registry.get_stage_index(crop_id, block_id)
 	if stage < 0:
 		return _reject("crop_state_invalid", crop_position, block_id, "作物状态无效")
 	if stage < stage_blocks.size() - 1:
-		var progress := roundi(100.0 * float(stage + 1) / float(stage_blocks.size()))
+		var progress: int = roundi(
+			100.0 * float(stage + 1) / float(maxi(1, stage_blocks.size()))
+		)
 		return _reject(
 			"crop_growing",
 			crop_position,
@@ -287,18 +298,18 @@ func _harvest_crop(
 	]
 	if not _can_store_outputs(p_inventory, outputs):
 		return _reject("inventory_full", crop_position, block_id, "背包空间不足，作物保持成熟状态")
-	var first_stage := crop_registry.get_stage_block(crop_id, 0)
+	var first_stage: String = crop_registry.get_stage_block(crop_id, 0)
 	if first_stage.is_empty() or not bool(p_world.call("set_block", crop_position, first_stage)):
 		return _reject("world_update_failed", crop_position, block_id, "作物重置失败")
 	var granted: Array = []
 	for output_value in outputs:
 		var output: Dictionary = output_value
-		var item_id := str(output.get("item_id", ""))
-		var count := maxi(0, int(output.get("count", 0)))
+		var item_id: String = str(output.get("item_id", ""))
+		var count: int = maxi(0, int(output.get("count", 0)))
 		if item_id.is_empty() or count <= 0:
 			continue
-		var remaining := int(p_inventory.call("add_item", item_id, count))
-		var accepted := count - remaining
+		var remaining: int = int(p_inventory.call("add_item", item_id, count))
+		var accepted: int = count - remaining
 		if accepted > 0:
 			granted.append({"item_id": item_id, "count": accepted})
 		if remaining > 0:
@@ -311,7 +322,7 @@ func _harvest_crop(
 				)
 			p_world.call("set_block", crop_position, block_id)
 			return _reject("inventory_race", crop_position, block_id, "背包状态变化，收获已回滚")
-	var key := _position_key(crop_position)
+	var key: String = _position_key(crop_position)
 	_crops[key] = {
 		"crop_id": crop_id,
 		"position": [crop_position.x, crop_position.y, crop_position.z],
@@ -335,11 +346,11 @@ func _advance_crop(key: String, seconds: float) -> void:
 	if not _crops.has(key):
 		return
 	var state: Dictionary = _crops[key]
-	var position = _position_from_value(state.get("position", []))
-	if position == null:
+	var position: Vector3i = _position_from_value(state.get("position", []))
+	if position == INVALID_POSITION:
 		_crops.erase(key)
 		return
-	var crop_id := str(state.get("crop_id", ""))
+	var crop_id: String = str(state.get("crop_id", ""))
 	var crop_definition: Dictionary = crop_registry.get_crop(crop_id)
 	if crop_definition.is_empty():
 		_crops.erase(key)
@@ -347,21 +358,27 @@ func _advance_crop(key: String, seconds: float) -> void:
 	if str(world.call("get_block", position + Vector3i.DOWN)) != "farmland":
 		_crops.erase(key)
 		return
-	var current_block := str(world.call("get_block", position))
-	var current_stage := crop_registry.get_stage_index(crop_id, current_block)
+	var current_block: String = str(world.call("get_block", position))
+	var current_stage: int = crop_registry.get_stage_index(crop_id, current_block)
 	if current_stage < 0:
 		_crops.erase(key)
 		return
 	var stage_blocks: Array = crop_definition.get("stage_blocks", [])
-	var stage := clampi(maxi(current_stage, int(state.get("stage", 0))), 0, stage_blocks.size() - 1)
-	var elapsed := maxf(0.0, float(state.get("elapsed_seconds", 0.0))) + seconds
+	var stage: int = clampi(
+		maxi(current_stage, int(state.get("stage", 0))),
+		0,
+		stage_blocks.size() - 1
+	)
+	var elapsed: float = maxf(
+		0.0, float(state.get("elapsed_seconds", 0.0))
+	) + seconds
 	while stage < stage_blocks.size() - 1:
-		var duration := crop_registry.get_stage_duration(crop_id, stage)
+		var duration: float = crop_registry.get_stage_duration(crop_id, stage)
 		if duration <= 0.0 or elapsed < duration:
 			break
 		elapsed -= duration
 		stage += 1
-		var next_block := crop_registry.get_stage_block(crop_id, stage)
+		var next_block: String = crop_registry.get_stage_block(crop_id, stage)
 		if str(world.call("get_block", position)) != next_block:
 			world.call("set_block", position, next_block)
 		crop_stage_changed.emit(position, crop_id, stage)
@@ -375,20 +392,25 @@ func _sync_world_from_state() -> void:
 		return
 	var keys: Array = _crops.keys().duplicate()
 	for key_value in keys:
-		var key := str(key_value)
+		var key: String = str(key_value)
 		var state: Dictionary = _crops[key]
-		var position = _position_from_value(state.get("position", []))
-		var crop_id := str(state.get("crop_id", ""))
+		var position: Vector3i = _position_from_value(state.get("position", []))
+		var crop_id: String = str(state.get("crop_id", ""))
 		var crop_definition: Dictionary = crop_registry.get_crop(crop_id)
-		if position == null or crop_definition.is_empty():
+		if position == INVALID_POSITION or crop_definition.is_empty():
 			_crops.erase(key)
 			continue
 		if str(world.call("get_block", position + Vector3i.DOWN)) != "farmland":
 			_crops.erase(key)
 			continue
 		var stage_blocks: Array = crop_definition.get("stage_blocks", [])
-		var stage := clampi(int(state.get("stage", 0)), 0, stage_blocks.size() - 1)
-		var stage_block := crop_registry.get_stage_block(crop_id, stage)
+		if stage_blocks.is_empty():
+			_crops.erase(key)
+			continue
+		var stage: int = clampi(
+			int(state.get("stage", 0)), 0, stage_blocks.size() - 1
+		)
+		var stage_block: String = crop_registry.get_stage_block(crop_id, stage)
 		if str(world.call("get_block", position)) != stage_block:
 			world.call("set_block", position, stage_block)
 
@@ -397,29 +419,32 @@ func _can_store_outputs(p_inventory: Node, outputs: Array) -> bool:
 	if p_inventory == null or not p_inventory.has_method("serialize"):
 		return false
 	var inventory_state: Dictionary = p_inventory.call("serialize")
-	var raw_slots = inventory_state.get("slots", [])
-	if raw_slots is not Array:
+	var raw_slots_value: Variant = inventory_state.get("slots", [])
+	if raw_slots_value is not Array:
 		return false
-	var slots: Array = raw_slots.duplicate(true)
-	var registry = p_inventory.get("registry")
+	var slots: Array = raw_slots_value.duplicate(true)
+	var registry: Object = p_inventory.get("registry")
 	if registry == null or not registry.has_method("get_max_stack"):
 		return false
 	for output_value in outputs:
 		if output_value is not Dictionary:
 			continue
 		var output: Dictionary = output_value
-		var item_id := str(output.get("item_id", ""))
-		var remaining := maxi(0, int(output.get("count", 0)))
+		var item_id: String = str(output.get("item_id", ""))
+		var remaining: int = maxi(0, int(output.get("count", 0)))
 		if item_id.is_empty() or remaining <= 0:
 			continue
-		var maximum := maxi(1, int(registry.call("get_max_stack", item_id)))
+		var maximum: int = maxi(1, int(registry.call("get_max_stack", item_id)))
 		for index in slots.size():
 			if remaining <= 0:
 				break
-			var slot: Dictionary = slots[index] if slots[index] is Dictionary else {}
+			var raw_slot_value: Variant = slots[index]
+			var slot: Dictionary = raw_slot_value if raw_slot_value is Dictionary else {}
 			if str(slot.get("item_id", "")) != item_id:
 				continue
-			var accepted := mini(remaining, maximum - int(slot.get("count", 0)))
+			var accepted: int = mini(
+				remaining, maximum - int(slot.get("count", 0))
+			)
 			if accepted <= 0:
 				continue
 			slot["count"] = int(slot.get("count", 0)) + accepted
@@ -428,10 +453,13 @@ func _can_store_outputs(p_inventory: Node, outputs: Array) -> bool:
 		for index in slots.size():
 			if remaining <= 0:
 				break
-			var slot: Dictionary = slots[index] if slots[index] is Dictionary else {}
-			if not slot.is_empty():
+			var raw_empty_value: Variant = slots[index]
+			var empty_slot: Dictionary = (
+				raw_empty_value if raw_empty_value is Dictionary else {}
+			)
+			if not empty_slot.is_empty():
 				continue
-			var accepted := mini(remaining, maximum)
+			var accepted: int = mini(remaining, maximum)
 			slots[index] = {"item_id": item_id, "count": accepted}
 			remaining -= accepted
 		if remaining > 0:
@@ -459,7 +487,7 @@ func _reject(
 	block_id: String,
 	message: String
 ) -> Dictionary:
-	var context := {
+	var context: Dictionary = {
 		"position": [position.x, position.y, position.z],
 		"block_id": block_id,
 		"message": message,
@@ -481,9 +509,9 @@ func _position_key(position: Vector3i) -> String:
 	return "crop@%d,%d,%d" % [position.x, position.y, position.z]
 
 
-func _position_from_value(value: Variant) -> Variant:
+func _position_from_value(value: Variant) -> Vector3i:
 	if value is Vector3i:
 		return value
 	if value is Array and value.size() >= 3:
 		return Vector3i(int(value[0]), int(value[1]), int(value[2]))
-	return null
+	return INVALID_POSITION
