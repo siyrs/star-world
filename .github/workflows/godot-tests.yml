@@ -158,7 +158,6 @@ jobs:
             -Godot $godotPath `
             -ProjectRoot . `
             -ScriptPath 'res://tests/qa/desktop_acceptance_regression.gd' `
-            -CaptureMarker 'DESKTOP_ACCEPTANCE_CAPTURE' `
             -OutputPath 'build\desktop-acceptance.png'
 
       - name: Furnace desktop acceptance
@@ -169,7 +168,6 @@ jobs:
             -Godot $godotPath `
             -ProjectRoot . `
             -ScriptPath 'res://tests/qa/furnace_desktop_acceptance.gd' `
-            -CaptureMarker 'FURNACE_DESKTOP_CAPTURE' `
             -OutputPath 'build\furnace-desktop-acceptance.png'
 
       - name: Upload desktop acceptance evidence
