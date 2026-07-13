@@ -54,6 +54,7 @@ func create_world(
 		"player": {"position": [], "rotation": [0.0, 0.0, 0.0], "look_pitch": 0.0},
 		"inventory": {},
 		"containers": {"version": 1, "containers": {}},
+		"machines": {"version": 1, "saved_at_unix": timestamp, "furnaces": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
 		"survival": {"health": 20.0, "hunger": 20.0},
 		"day_night": {"time_of_day": 8.0, "day": 1},
@@ -184,6 +185,12 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		payload["save_version"] = 2
 	if not payload.has("containers") or payload["containers"] is not Dictionary:
 		payload["containers"] = {"version": 1, "containers": {}}
+	if not payload.has("machines") or payload["machines"] is not Dictionary:
+		payload["machines"] = {
+			"version": 1,
+			"saved_at_unix": int(Time.get_unix_time_from_system()),
+			"furnaces": {},
+		}
 	if not payload.has("experience") or payload["experience"] is not Dictionary:
 		payload["experience"] = {"version": 1, "onboarding": {}}
 	return payload

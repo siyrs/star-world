@@ -3,12 +3,16 @@ extends SceneTree
 const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
+const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
-const OUTPUT_PATH := "res://build/desktop-acceptance.png"
+const OUTPUT_PATH := "user://desktop-acceptance.png"
+const AUDIO_SETTLE_FRAMES := 4
+const FINAL_CLEANUP_FRAMES := 6
 
 var checks := 0
 var failures: Array[String] = []
 var _created_world_id := ""
+var _capture_path := ""
 
 
 func _initialize() -> void:
@@ -16,6 +20,8 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
+	root.size = Vector2i(1024, 576)
 	var game = GameScene.instantiate()
 	root.add_child(game)
 	await process_frame
@@ -93,11 +99,10 @@ func _run() -> void:
 		_check(_image_has_visual_detail(image), "rendered frame is not a blank or flat-color screen")
 		_save_image(image)
 
-	_cleanup(game, hub)
-	await process_frame
-	await process_frame
+	await _cleanup(game, hub)
 	if failures.is_empty():
-		print("QA DESKTOP ACCEPTANCE PASS | checks=%d | capture=%s" % [checks, OUTPUT_PATH])
+		print("DESKTOP_ACCEPTANCE_CAPTURE=%s" % _capture_path)
+		print("QA DESKTOP ACCEPTANCE PASS | checks=%d" % checks)
 		quit(0)
 	else:
 		for failure in failures:
@@ -112,7 +117,7 @@ func _click_control(control: Control) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = pointer_position
 	motion.global_position = pointer_position
-	root.push_input(motion)
+	root.push_input(motion, true)
 	await process_frame
 	var press := InputEventMouseButton.new()
 	press.position = pointer_position
@@ -120,7 +125,7 @@ func _click_control(control: Control) -> void:
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.button_mask = MOUSE_BUTTON_MASK_LEFT
 	press.pressed = true
-	root.push_input(press)
+	root.push_input(press, true)
 	await process_frame
 	var release := InputEventMouseButton.new()
 	release.position = pointer_position
@@ -128,7 +133,7 @@ func _click_control(control: Control) -> void:
 	release.button_index = MOUSE_BUTTON_LEFT
 	release.button_mask = 0
 	release.pressed = false
-	root.push_input(release)
+	root.push_input(release, true)
 	await process_frame
 
 
@@ -138,7 +143,7 @@ func _move_pointer(relative: Vector2) -> void:
 	motion.position = center
 	motion.global_position = center
 	motion.relative = relative
-	root.push_input(motion)
+	root.push_input(motion, true)
 	await process_frame
 
 
@@ -191,10 +196,12 @@ func _image_has_visual_detail(image: Image) -> bool:
 
 
 func _save_image(image: Image) -> void:
-	var absolute_directory := ProjectSettings.globalize_path(OUTPUT_PATH.get_base_dir())
-	DirAccess.make_dir_recursive_absolute(absolute_directory)
-	var error := image.save_png(ProjectSettings.globalize_path(OUTPUT_PATH))
-	_check(error == OK, "desktop acceptance screenshot is saved")
+	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
+	var error := image.save_png(_capture_path)
+	_check(
+		error == OK and FileAccess.file_exists(_capture_path),
+		"desktop acceptance screenshot is saved",
+	)
 
 
 func _find_button(node: Node, text: String) -> Button:
@@ -208,11 +215,24 @@ func _find_button(node: Node, text: String) -> Button:
 
 
 func _cleanup(game: Node, hub: Node) -> void:
-	if hub != null and hub.get("audio_service") != null:
-		hub.audio_service.stop_ambient()
+	if hub != null and not str(hub.get("current_world_id")).is_empty():
+		hub.call("return_to_menu")
+		await process_frame
+		await process_frame
 	if not _created_world_id.is_empty() and hub != null and hub.get("save_service") != null:
 		hub.save_service.delete_world(_created_world_id)
+	var audio: Node = hub.get("audio_service") if hub != null else null
+	if audio != null and audio.has_method("shutdown"):
+		audio.call("shutdown")
+	for _frame in AUDIO_SETTLE_FRAMES:
+		await process_frame
+	if audio != null and is_instance_valid(audio) and audio.has_method("dispose"):
+		audio.call("dispose")
+	for _frame in AUDIO_SETTLE_FRAMES:
+		await process_frame
 	game.queue_free()
+	for _frame in FINAL_CLEANUP_FRAMES:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:

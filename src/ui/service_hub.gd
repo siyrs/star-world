@@ -8,6 +8,7 @@ signal settings_applied(settings: Dictionary)
 
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 const ContainerStorageScript = preload("res://src/inventory/container_storage_service.gd")
+const FurnaceScript = preload("res://src/machine/furnace_service.gd")
 const CraftingScript = preload("res://src/crafting/crafting_service.gd")
 const SaveScript = preload("res://src/save/save_service.gd")
 const SurvivalScript = preload("res://src/survival/survival_service.gd")
@@ -39,6 +40,7 @@ const AMBIENT_BY_MAP := {
 
 var inventory
 var container_storage
+var furnace_service
 var crafting
 var save_service
 var survival
@@ -69,6 +71,8 @@ func _ready() -> void:
 	inventory = _add_service(InventoryScript.new(), "Inventory")
 	container_storage = _add_service(ContainerStorageScript.new(), "ContainerStorage")
 	container_storage.setup(inventory.registry)
+	furnace_service = _add_service(FurnaceScript.new(), "FurnaceService")
+	furnace_service.setup(inventory.registry)
 	crafting = _add_service(CraftingScript.new(), "Crafting")
 	save_service = _add_service(SaveScript.new(), "Save")
 	survival = _add_service(SurvivalScript.new(), "Survival")
@@ -81,6 +85,9 @@ func _ready() -> void:
 	var creature_callback := Callable(self, "_on_creature_spawned")
 	if not creature_spawner.creature_spawned.is_connected(creature_callback):
 		creature_spawner.creature_spawned.connect(creature_callback)
+	var smelt_callback := Callable(self, "_on_item_smelted")
+	if not furnace_service.item_smelted.is_connected(smelt_callback):
+		furnace_service.item_smelted.connect(smelt_callback)
 	crafting.setup(inventory)
 	current_settings = save_service.load_settings(DEFAULT_SETTINGS)
 	current_settings["render_distance"] = clampi(
@@ -88,7 +95,7 @@ func _ready() -> void:
 	)
 	main_menu = get_node_or_null("MainMenu")
 	game_ui = get_node_or_null("GameUI")
-	player_experience.setup(inventory, game_ui, block_interaction)
+	player_experience.setup(inventory, game_ui, block_interaction, furnace_service)
 	if main_menu != null:
 		main_menu.setup(save_service, audio_service)
 		main_menu.new_world_requested.connect(_begin_world)
@@ -103,6 +110,7 @@ func _ready() -> void:
 			audio_service,
 			gameplay_input,
 			container_storage,
+			furnace_service,
 			player_experience
 		)
 		game_ui.end_gameplay()
@@ -110,7 +118,7 @@ func _ready() -> void:
 		game_ui.return_to_menu_requested.connect(return_to_menu)
 		game_ui.input_context_requested.connect(_on_input_context_requested)
 		game_ui.simulation_pause_requested.connect(_on_simulation_pause_requested)
-	block_interaction.setup(game_ui, container_storage, inventory)
+	block_interaction.setup(game_ui, container_storage, inventory, furnace_service)
 	audio_bridge.setup(audio_service, null, inventory, crafting, survival)
 	_apply_settings(current_settings)
 	simulation_pause.reset()
@@ -147,6 +155,7 @@ func _begin_world(state: Dictionary) -> void:
 	else:
 		inventory.deserialize(inventory_data)
 	container_storage.deserialize(current_state.get("containers", {}))
+	furnace_service.deserialize(current_state.get("machines", {}))
 	crafting.set_station("hand")
 	survival.deserialize(current_state.get("survival", {}))
 	survival.set_map_profile(str(metadata.get("map_id", "star_continent")))
@@ -177,6 +186,7 @@ func handle_world_start_failed(reason: String) -> void:
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	container_storage.clear()
+	furnace_service.clear()
 	audio_service.stop_ambient()
 	player_experience.end_gameplay()
 	player_experience.detach_player()
@@ -203,7 +213,7 @@ func attach_game(
 ) -> void:
 	world_node = world
 	player_node = player
-	block_interaction.setup(game_ui, container_storage, inventory)
+	block_interaction.setup(game_ui, container_storage, inventory, furnace_service)
 	if player != null:
 		input_context.bind_player(player)
 		player_experience.attach_player(player)
@@ -314,6 +324,7 @@ func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -
 	var payload: Dictionary = current_state.duplicate(true)
 	payload["inventory"] = inventory.serialize()
 	payload["containers"] = container_storage.serialize()
+	payload["machines"] = furnace_service.serialize()
 	payload["survival"] = survival.serialize()
 	payload["day_night"] = day_night.serialize()
 	payload["experience"] = player_experience.serialize()
@@ -353,6 +364,7 @@ func return_to_menu() -> void:
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
 	input_context.unbind_player(player_node)
 	container_storage.clear()
+	furnace_service.clear()
 	world_node = null
 	player_node = null
 	current_state.clear()
@@ -364,6 +376,11 @@ func return_to_menu() -> void:
 
 func _on_creature_spawned(creature: Node3D) -> void:
 	audio_bridge.connect_creature(creature)
+
+
+func _on_item_smelted(_machine_id: String, _recipe_id: String, _output: Dictionary) -> void:
+	if audio_service != null and audio_service.has_method("play_craft"):
+		audio_service.call("play_craft")
 
 
 func _player_state(player: Node3D) -> Dictionary:

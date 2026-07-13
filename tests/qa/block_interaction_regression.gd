@@ -3,6 +3,7 @@ extends SceneTree
 const InteractionRegistry = preload("res://src/interaction/block_interaction_registry.gd")
 const InteractionServiceScript = preload("res://src/interaction/block_interaction_service.gd")
 const ContainerStorageScript = preload("res://src/inventory/container_storage_service.gd")
+const FurnaceScript = preload("res://src/machine/furnace_service.gd")
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 const CraftingScript = preload("res://src/crafting/crafting_service.gd")
 const SurvivalScript = preload("res://src/survival/survival_service.gd")
@@ -28,7 +29,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_test_registry_contract()
-	await _test_station_and_container_interactions()
+	await _test_station_machine_and_container_interactions()
 	await _test_service_hub_persistence()
 	if failures.is_empty():
 		print("QA BLOCK INTERACTION PASS | checks=%d" % checks)
@@ -43,6 +44,7 @@ func _run() -> void:
 func _test_registry_contract() -> void:
 	_check(InteractionRegistry.has_interaction("crafting_table"), "workbench is interactable")
 	_check(InteractionRegistry.has_interaction("furnace"), "furnace is interactable")
+	_check(InteractionRegistry.is_machine("furnace"), "furnace is registered as a machine")
 	_check(InteractionRegistry.is_container("chest"), "chest is registered as a container")
 	_check(
 		not InteractionRegistry.has_interaction("stone"),
@@ -50,22 +52,24 @@ func _test_registry_contract() -> void:
 	)
 
 
-func _test_station_and_container_interactions() -> void:
+func _test_station_machine_and_container_interactions() -> void:
 	var host := Node.new()
 	root.add_child(host)
 	var inventory = InventoryScript.new()
 	var crafting = CraftingScript.new()
 	var survival = SurvivalScript.new()
 	var storage = ContainerStorageScript.new()
+	var furnace = FurnaceScript.new()
 	var game_ui = GameUIScript.new()
 	var interactions = InteractionServiceScript.new()
-	for service in [inventory, crafting, survival, storage, game_ui, interactions]:
+	for service in [inventory, crafting, survival, storage, furnace, game_ui, interactions]:
 		host.add_child(service)
 	await process_frame
 	crafting.setup(inventory)
 	storage.setup(inventory.registry)
-	game_ui.setup(inventory, crafting, survival, null, null, null, storage)
-	interactions.setup(game_ui, storage, inventory)
+	furnace.setup(inventory.registry)
+	game_ui.setup(inventory, crafting, survival, null, null, null, storage, furnace)
+	interactions.setup(game_ui, storage, inventory, furnace)
 	var contexts: Array[StringName] = []
 	game_ui.input_context_requested.connect(func(context: StringName): contexts.append(context))
 	game_ui.begin_gameplay()
@@ -91,11 +95,21 @@ func _test_station_and_container_interactions() -> void:
 	game_ui.close_overlay()
 	_check(
 		crafting.active_station == "hand",
-		"closing the crafting overlay revokes the temporary advanced station",
+		"closing the crafting overlay revokes the temporary workbench station",
+	)
+	_check(interactions.interact(world, position, "furnace"), "furnace interaction opens a machine")
+	var machine_id := interactions.get_machine_id(world, position, "furnace")
+	_check(
+		(
+			game_ui.get_active_overlay() == GameUIScript.Overlay.FURNACE
+			and furnace.get_active_machine_id() == machine_id
+			and crafting.active_station == "hand"
+		),
+		"furnace interaction is isolated from the crafting station state",
 	)
 	_check(
-		interactions.interact(world, position, "furnace") and crafting.active_station == "furnace",
-		"furnace interaction grants the furnace station",
+		contexts.back() == InputContextScript.CONTEXT_MACHINE,
+		"furnace overlay owns the machine input context",
 	)
 	game_ui.close_overlay()
 
@@ -219,6 +233,7 @@ func _test_service_hub_persistence() -> void:
 	await process_frame
 	await process_frame
 	_check(hub.get_node_or_null("ContainerStorage") != null, "service hub mounts container storage")
+	_check(hub.get_node_or_null("FurnaceService") != null, "service hub mounts furnace machines")
 	_check(
 		hub.get_node_or_null("BlockInteraction") != null, "service hub mounts block interactions"
 	)
@@ -228,6 +243,10 @@ func _test_service_hub_persistence() -> void:
 	_check(
 		state.get("containers", {}).get("containers", {}) is Dictionary,
 		"new worlds include an empty container state",
+	)
+	_check(
+		state.get("machines", {}).get("furnaces", {}) is Dictionary,
+		"new worlds include an empty machine state",
 	)
 	if state.is_empty():
 		hub.queue_free()
@@ -249,7 +268,8 @@ func _test_service_hub_persistence() -> void:
 		saved_count = int(saved_slots[0].get("count", 0))
 	_check(saved_count == 2, "saved chest contents survive a world reload")
 	hub.save_service.delete_world(world_id)
-	hub.audio_service.stop_ambient()
+	if hub.audio_service.has_method("shutdown"):
+		hub.audio_service.shutdown()
 	hub.queue_free()
 	await process_frame
 	await process_frame

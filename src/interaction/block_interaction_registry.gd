@@ -3,6 +3,7 @@ extends RefCounted
 
 const ACTION_CRAFTING: StringName = &"crafting"
 const ACTION_CONTAINER: StringName = &"container"
+const ACTION_MACHINE: StringName = &"machine"
 
 const INTERACTIONS := {
 	"crafting_table":
@@ -13,8 +14,8 @@ const INTERACTIONS := {
 	},
 	"furnace":
 	{
-		"action": ACTION_CRAFTING,
-		"station": "furnace",
+		"action": ACTION_MACHINE,
+		"machine_type": "furnace",
 		"label": "熔炉",
 	},
 	"chest":
@@ -37,3 +38,7 @@ static func get_interaction(block_id: String) -> Dictionary:
 
 static func is_container(block_id: String) -> bool:
 	return str(get_interaction(block_id).get("action", "")) == ACTION_CONTAINER
+
+
+static func is_machine(block_id: String) -> bool:
+	return str(get_interaction(block_id).get("action", "")) == ACTION_MACHINE

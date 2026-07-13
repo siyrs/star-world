@@ -6,6 +6,7 @@ signal craft_succeeded(recipe_id: String, output: Dictionary)
 signal craft_failed(recipe_id: String, reason: String)
 
 const DEFAULT_DATA_PATH := "res://data/recipes.json"
+const VALID_STATIONS := ["hand", "workbench"]
 
 var inventory
 var active_station: String = "hand"
@@ -36,16 +37,19 @@ func load_recipes(path: String = DEFAULT_DATA_PATH) -> bool:
 		push_error("Invalid recipe registry: %s" % path)
 		return false
 	for raw_recipe in parsed["recipes"]:
-		if raw_recipe is Dictionary:
-			var recipe_id := str(raw_recipe.get("id", ""))
-			if not recipe_id.is_empty():
-				_recipes[recipe_id] = raw_recipe.duplicate(true)
+		if raw_recipe is not Dictionary:
+			continue
+		var recipe_id := str(raw_recipe.get("id", ""))
+		var station := str(raw_recipe.get("station", "hand"))
+		if recipe_id.is_empty() or station not in VALID_STATIONS:
+			continue
+		_recipes[recipe_id] = raw_recipe.duplicate(true)
 	recipes_loaded.emit(_recipes.size())
 	return not _recipes.is_empty()
 
 
 func set_station(station: String) -> void:
-	active_station = station if station in ["hand", "workbench", "furnace"] else "hand"
+	active_station = station if station in VALID_STATIONS else "hand"
 
 
 func recipe_count() -> int:

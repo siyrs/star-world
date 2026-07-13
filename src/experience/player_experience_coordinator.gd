@@ -16,6 +16,7 @@ var onboarding
 var inventory: Node
 var game_ui: Node
 var interaction_service: Node
+var furnace_service: Node
 var player: Node
 var prompts_enabled := true
 
@@ -36,15 +37,23 @@ func _ready() -> void:
 	experience_ready.emit()
 
 
-func setup(p_inventory: Node, p_game_ui: Node, p_interaction_service: Node) -> void:
+func setup(
+	p_inventory: Node,
+	p_game_ui: Node,
+	p_interaction_service: Node,
+	p_furnace_service: Node = null
+) -> void:
 	_disconnect_static_dependencies()
 	inventory = p_inventory
 	game_ui = p_game_ui
 	interaction_service = p_interaction_service
+	furnace_service = p_furnace_service
 	if inventory != null and inventory.has_signal("selected_slot_changed"):
 		inventory.connect("selected_slot_changed", Callable(self, "_on_selected_slot_changed"))
 	if game_ui != null and game_ui.has_signal("overlay_changed"):
 		game_ui.connect("overlay_changed", Callable(self, "_on_overlay_changed"))
+	if furnace_service != null and furnace_service.has_signal("item_smelted"):
+		furnace_service.connect("item_smelted", Callable(self, "_on_item_smelted"))
 	_refresh_prompt()
 
 
@@ -151,6 +160,22 @@ func _on_gameplay_action_reported(action: StringName, payload: Dictionary) -> vo
 			publish_message("已食用 %s" % item_name, "success", 1.8, "eat:%s" % item_name)
 
 
+func _on_item_smelted(machine_id: String, _recipe_id: String, output: Dictionary) -> void:
+	if not _gameplay_active:
+		return
+	var item_id := str(output.get("item_id", ""))
+	var count := maxi(1, int(output.get("count", 1)))
+	var display_name := item_id
+	if inventory != null and inventory.get("registry") != null:
+		display_name = str(inventory.registry.get_display_name(item_id))
+	publish_message(
+		"熔炉完成：%s ×%d" % [display_name, count],
+		"success",
+		2.2,
+		"smelt:%s:%s" % [machine_id, item_id]
+	)
+
+
 func _on_selected_slot_changed(_index: int, _slot: Dictionary) -> void:
 	_refresh_prompt()
 
@@ -230,3 +255,9 @@ func _disconnect_static_dependencies() -> void:
 			"overlay_changed", overlay_callback
 		):
 			game_ui.disconnect("overlay_changed", overlay_callback)
+	if furnace_service != null:
+		var smelt_callback := Callable(self, "_on_item_smelted")
+		if furnace_service.has_signal("item_smelted") and furnace_service.is_connected(
+			"item_smelted", smelt_callback
+		):
+			furnace_service.disconnect("item_smelted", smelt_callback)

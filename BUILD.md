@@ -37,9 +37,9 @@ powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\g
 - 没有 `SCRIPT ERROR` 或 `Parse Error`；
 - 没有 ObjectDB 或资源泄漏警告。
 
-完整套件覆盖移动、输入生命周期、物理层、方块交互、容器持久化、暂停、存档恢复、渐进区块、自适应预算、程序化音频释放、三轮世界生命周期 soak、种群回收、快捷栏和设置。
+完整套件覆盖移动、输入生命周期、物理层、方块交互、普通合成、熔炉机器、容器/机器持久化、暂停、存档恢复、玩家体验、紧凑布局、世界视觉、渐进区块、自适应预算、程序化音频释放、三轮世界生命周期 soak、种群回收、快捷栏和设置。
 
-### 专项测试
+## 专项测试
 
 移动与输入生命周期：
 
@@ -53,10 +53,28 @@ godot --headless --path . --script res://tests/qa/movement_lifecycle_regression.
 godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
 ```
 
-工作台、熔炉与箱子：
+工作台、熔炉与箱子路由：
 
 ```powershell
 godot --headless --path . --script res://tests/qa/block_interaction_regression.gd
+```
+
+熔炉燃料、时间、离线恢复和存档：
+
+```powershell
+godot --headless --path . --script res://tests/qa/furnace_machine_regression.gd
+```
+
+玩家引导与上下文提示：
+
+```powershell
+godot --headless --path . --script res://tests/qa/player_experience_regression.gd
+```
+
+最低分辨率 UI：
+
+```powershell
+godot --headless --path . --script res://tests/qa/ui_layout_regression.gd
 ```
 
 运行诊断与 F3：
@@ -88,6 +106,33 @@ godot --headless --path . --script res://tests/qa/runtime_stability_regression.g
 ```powershell
 godot --headless --path . --script res://tests/qa/runtime_soak_regression.gd
 ```
+
+## 真实桌面验收
+
+普通菜单、鼠标、暂停和画面：
+
+```powershell
+godot --path . --rendering-method gl_compatibility `
+  --script res://tests/qa/desktop_acceptance_regression.gd
+```
+
+熔炉真实鼠标按钮与 `1024×576` 布局：
+
+```powershell
+godot --path . --rendering-method gl_compatibility `
+  --script res://tests/qa/furnace_desktop_acceptance.gd
+```
+
+第二项会用真实指针依次点击：
+
+```text
+背包原料
+→ 背包燃料
+→ 产出槽
+→ 关闭按钮
+```
+
+并验证机器输入上下文、鼠标释放/重新捕获、物品守恒和截图写入。
 
 ## Windows 发行构建
 
@@ -121,7 +166,7 @@ powershell -ExecutionPolicy Bypass `
 
 1. 导出 `StarWorld.exe` 和 `StarWorld.pck`；
 2. 启动实际导出程序；
-3. 创建真实世界并验证网格、碰撞、相机和输入；
+3. 创建真实世界并验证网格、碰撞、相机、输入和服务组合；
 4. 跨越多个区块运行至少 180 帧；
 5. 验证区块队列、已加载区块、自适应预算和健康状态有界；
 6. 保存真实截图与 JSON 报告；
@@ -151,20 +196,22 @@ release-smoke.driver.log
 godot --path . res://scenes/ui/service_hub.tscn
 ```
 
-该场景实例化主菜单、Game UI 以及 GameplayInput、InputContext、SimulationPause、Inventory、ContainerStorage、Crafting、BlockInteraction、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。运行诊断与自适应流式由正式 `Game` 组合根挂载。
+该场景实例化主菜单、Game UI 以及 GameplayInput、InputContext、SimulationPause、Inventory、ContainerStorage、FurnaceService、Crafting、BlockInteraction、PlayerExperience、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。运行诊断与自适应流式由正式 `Game` 组合根挂载。
 
 ## 方块交互验收
 
 进入世界后至少检查：
 
 1. `C` 只能打开随身合成，不能手动切换到工作台或熔炉。
-2. 右键工作台打开工作台配方。
-3. 右键熔炉只打开熔炉配方。
-4. 右键箱子打开 27 格容器。
-5. 箱子与玩家背包之间转移后总数量不变。
-6. 非空箱子不能拆除；清空后可以拆除。
-7. 保存、返回菜单并重新进入后，箱子内容仍存在。
-8. 关闭容器后，鼠标重新捕获且 WASD 恢复。
+2. 右键工作台打开随身与工作台配方。
+3. 右键熔炉打开独立机器界面，不打开普通配方列表。
+4. 将粗铁和煤炭投入熔炉，观察燃料余量与烧制进度。
+5. 关闭熔炉后等待，再次打开时进度继续。
+6. 产出槽满时不继续消耗原料和燃料。
+7. 非空熔炉不能拆除；清空三个槽位后可以拆除。
+8. 保存、返回菜单并重新进入后，熔炉内容和进度仍存在。
+9. 右键箱子打开 27 格容器，转移后总数量不变。
+10. 关闭机器或容器后，鼠标重新捕获且 WASD 恢复。
 
 ## 性能验收
 
@@ -180,9 +227,13 @@ godot --path . res://scenes/ui/service_hub.tscn
 ## 常见问题
 
 - **WASD 无响应**：运行 `movement_lifecycle_regression.gd`。默认映射会修复 W/A/S/D 的物理键位和逻辑键码，并提供方向键后备。
-- **从背包、容器或暂停返回后不能移动**：输入启用只能由 `InputContextService` 管理；先运行移动和方块交互专项测试。
-- **工作台或熔炉配方无法使用**：高级工位必须右键世界中的对应方块；`C` 只提供随身合成。
-- **箱子无法拆除**：这是内容保护策略。先把箱子中的物品全部转回背包。
+- **从背包、熔炉、容器或暂停返回后不能移动**：输入启用只能由 `InputContextService` 管理；先运行移动、方块交互和熔炉桌面专项。
+- **工作台配方无法使用**：必须右键世界中的工作台；`C` 只提供随身合成。
+- **物品无法放入熔炉**：确认物品存在于 `furnace_recipes.json` 或 `fuels.json`，再运行 `furnace_machine_regression.gd`。
+- **熔炉没有继续工作**：普通机器界面不会暂停世界；暂停菜单和死亡状态会通过 `SimulationPauseService` 停止机器。
+- **熔炉无法拆除**：先取走原料、燃料和产出。剩余热量不会阻止空熔炉拆除。
+- **熔炉重载后丢失**：确认存档包含顶层 `machines` 字段，并运行熔炉专项测试。
+- **箱子无法拆除**：先把箱子中的物品全部转回背包。
 - **箱子内容重载后消失**：运行 `block_interaction_regression.gd`，并确认保存文件包含顶层 `containers` 字段。
 - **暂停后世界仍在运行**：运行 `runtime_stability_regression.gd`，确认暂停由 `SimulationPauseService` 写入并恢复 `SceneTree.paused`。
 - **存档损坏或无法读取**：不要删除同目录下的 `.bak`；加载会尝试有效临时文件和上一版本备份。
