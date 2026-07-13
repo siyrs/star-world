@@ -55,6 +55,7 @@ func create_world(
 		"inventory": {},
 		"equipment": {"version": 2, "slots": {}},
 		"attributes": {"version": 1, "base": {}, "sources": {}},
+		"agriculture": {"version": 1, "saved_at_unix": timestamp, "crops": {}},
 		"containers": {"version": 1, "containers": {}},
 		"machines": {"version": 1, "saved_at_unix": timestamp, "furnaces": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
@@ -189,6 +190,12 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		payload["equipment"] = {"version": 2, "slots": {}}
 	if not payload.has("attributes") or payload["attributes"] is not Dictionary:
 		payload["attributes"] = {"version": 1, "base": {}, "sources": {}}
+	if not payload.has("agriculture") or payload["agriculture"] is not Dictionary:
+		payload["agriculture"] = {
+			"version": 1,
+			"saved_at_unix": int(Time.get_unix_time_from_system()),
+			"crops": {},
+		}
 	if not payload.has("containers") or payload["containers"] is not Dictionary:
 		payload["containers"] = {"version": 1, "containers": {}}
 	if not payload.has("machines") or payload["machines"] is not Dictionary:
