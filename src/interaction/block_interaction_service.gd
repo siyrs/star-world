@@ -5,6 +5,7 @@ signal interaction_opened(action: StringName, block_position: Vector3i, block_id
 signal interaction_rejected(reason: String, block_position: Vector3i, block_id: String)
 
 const Registry = preload("res://src/interaction/block_interaction_registry.gd")
+const MACHINE_SLOTS := ["input", "fuel", "output"]
 
 var game_ui
 var container_storage
@@ -92,9 +93,9 @@ func can_break_block(world, block_position: Vector3i, block_id: String) -> bool:
 			_reject("machine_service_missing", block_position, block_id)
 			return false
 		var machine_id := get_machine_id(world, block_position, block_id)
-		if furnace_service.can_remove_machine(machine_id):
+		if _machine_slots_are_empty(machine_id):
 			return true
-		_show_message("熔炉中仍有物品、加工进度或余火，请先清空")
+		_show_message("熔炉中仍有物品，请先清空三个槽位后再拆除")
 		_reject("machine_not_empty", block_position, block_id)
 		return false
 	return true
@@ -106,7 +107,9 @@ func on_block_removed(world, block_position: Vector3i, block_id: String) -> void
 		container_storage.remove_container(container_id, true)
 	elif Registry.is_machine(block_id) and furnace_service != null:
 		var machine_id := get_machine_id(world, block_position, block_id)
-		furnace_service.remove_machine(machine_id, true)
+		# Empty furnaces may be dismantled even if a consumed fuel item left residual
+		# heat. Removing the block intentionally discards that transient heat only.
+		furnace_service.remove_machine(machine_id, false)
 
 
 func get_container_id(world, block_position: Vector3i, block_id: String = "chest") -> String:
@@ -122,6 +125,16 @@ func get_interaction_hint(block_id: String) -> String:
 	if definition.is_empty():
 		return ""
 	return "右键打开%s" % str(definition.get("label", block_id))
+
+
+func _machine_slots_are_empty(machine_id: String) -> bool:
+	if furnace_service == null or not furnace_service.has_machine(machine_id):
+		return true
+	for slot_name in MACHINE_SLOTS:
+		var slot: Dictionary = furnace_service.get_slot(machine_id, slot_name)
+		if not slot.is_empty() and int(slot.get("count", 0)) > 0:
+			return false
+	return true
 
 
 func _stable_position_id(world, block_position: Vector3i, prefix: String) -> String:
