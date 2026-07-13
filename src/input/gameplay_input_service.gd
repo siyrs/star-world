@@ -62,6 +62,10 @@ func event_toggles_diagnostics(event: InputEvent) -> bool:
 	return event.is_action_pressed(Actions.TOGGLE_DIAGNOSTICS)
 
 
+func event_toggles_guidance(event: InputEvent) -> bool:
+	return event.is_action_pressed(Actions.TOGGLE_GUIDANCE)
+
+
 func get_binding_status() -> Dictionary:
 	return {
 		"initialized": _bindings_initialized,

@@ -19,12 +19,15 @@ const GameplayInputScript = preload("res://src/input/gameplay_input_service.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const SimulationPauseScript = preload("res://src/core/simulation_pause_service.gd")
 const BlockInteractionScript = preload("res://src/interaction/block_interaction_service.gd")
+const PlayerExperienceScript = preload("res://src/experience/player_experience_coordinator.gd")
 const DEFAULT_SETTINGS := {
 	"mouse_sensitivity": 0.18,
 	"render_distance": 3,
 	"master_volume": 0.8,
 	"fullscreen": false,
 	"cycle_minutes": 10,
+	"show_tutorial": true,
+	"show_interaction_prompts": true,
 }
 const AMBIENT_BY_MAP := {
 	"star_continent": "forest",
@@ -47,6 +50,7 @@ var gameplay_input
 var input_context
 var simulation_pause
 var block_interaction
+var player_experience
 var main_menu
 var game_ui
 var current_state: Dictionary = {}
@@ -73,6 +77,7 @@ func _ready() -> void:
 	audio_bridge = _add_service(AudioBridgeScript.new(), "AudioBridge")
 	creature_spawner = _add_service(SpawnerScript.new(), "CreatureSpawner")
 	block_interaction = _add_service(BlockInteractionScript.new(), "BlockInteraction")
+	player_experience = _add_service(PlayerExperienceScript.new(), "PlayerExperience")
 	var creature_callback := Callable(self, "_on_creature_spawned")
 	if not creature_spawner.creature_spawned.is_connected(creature_callback):
 		creature_spawner.creature_spawned.connect(creature_callback)
@@ -81,9 +86,9 @@ func _ready() -> void:
 	current_settings["render_distance"] = clampi(
 		int(current_settings.get("render_distance", DEFAULT_SETTINGS.render_distance)), 1, 5
 	)
-	_apply_settings(current_settings)
 	main_menu = get_node_or_null("MainMenu")
 	game_ui = get_node_or_null("GameUI")
+	player_experience.setup(inventory, game_ui, block_interaction)
 	if main_menu != null:
 		main_menu.setup(save_service, audio_service)
 		main_menu.new_world_requested.connect(_begin_world)
@@ -97,7 +102,8 @@ func _ready() -> void:
 			day_night,
 			audio_service,
 			gameplay_input,
-			container_storage
+			container_storage,
+			player_experience
 		)
 		game_ui.end_gameplay()
 		game_ui.save_requested.connect(_on_ui_save_requested)
@@ -106,6 +112,7 @@ func _ready() -> void:
 		game_ui.simulation_pause_requested.connect(_on_simulation_pause_requested)
 	block_interaction.setup(game_ui, container_storage, inventory)
 	audio_bridge.setup(audio_service, null, inventory, crafting, survival)
+	_apply_settings(current_settings)
 	simulation_pause.reset()
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
 
@@ -120,6 +127,8 @@ func _begin_world(state: Dictionary) -> void:
 	simulation_pause.reset()
 	input_context.set_context(InputContextScript.CONTEXT_LOADING)
 	input_context.unbind_player()
+	player_experience.end_gameplay()
+	player_experience.detach_player()
 	if game_ui != null:
 		game_ui.end_gameplay()
 	if main_menu != null and main_menu.has_method("show_loading"):
@@ -127,6 +136,8 @@ func _begin_world(state: Dictionary) -> void:
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	current_state = state.duplicate(true)
+	player_experience.prepare_world(current_state.get("experience", {}))
+	player_experience.apply_settings(current_settings)
 	var metadata: Dictionary = current_state.get("metadata", {})
 	current_world_id = str(metadata.get("id", ""))
 	var inventory_data: Dictionary = current_state.get("inventory", {})
@@ -158,6 +169,7 @@ func activate_gameplay() -> void:
 		game_ui.begin_gameplay()
 	else:
 		input_context.set_context(InputContextScript.CONTEXT_GAMEPLAY)
+	player_experience.begin_gameplay()
 
 
 func handle_world_start_failed(reason: String) -> void:
@@ -166,6 +178,8 @@ func handle_world_start_failed(reason: String) -> void:
 	creature_spawner.clear_creatures()
 	container_storage.clear()
 	audio_service.stop_ambient()
+	player_experience.end_gameplay()
+	player_experience.detach_player()
 	if game_ui != null:
 		game_ui.end_gameplay()
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
@@ -192,8 +206,10 @@ func attach_game(
 	block_interaction.setup(game_ui, container_storage, inventory)
 	if player != null:
 		input_context.bind_player(player)
+		player_experience.attach_player(player)
 	else:
 		input_context.unbind_player()
+		player_experience.detach_player()
 	day_night.attach_lighting(sun, environment)
 	creature_spawner.setup(player, inventory, day_night, ground_resolver, false)
 	audio_bridge.setup(audio_service, world, inventory, crafting, survival)
@@ -207,6 +223,7 @@ func attach_game(
 				"game_ui": game_ui,
 				"input": gameplay_input,
 				"interaction": block_interaction,
+				"experience": player_experience,
 			}
 			player.call("setup_gameplay_services", services)
 		elif player.has_method("bind_inventory"):
@@ -255,6 +272,7 @@ func _apply_settings(settings: Dictionary) -> void:
 		float(settings.get("master_volume", DEFAULT_SETTINGS.master_volume)), 0.0, 1.0
 	)
 	audio_service.set_master_volume(volume)
+	player_experience.apply_settings(settings)
 	if DisplayServer.get_name() != "headless":
 		var fullscreen := bool(settings.get("fullscreen", DEFAULT_SETTINGS.fullscreen))
 		DisplayServer.window_set_mode(
@@ -298,6 +316,7 @@ func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -
 	payload["containers"] = container_storage.serialize()
 	payload["survival"] = survival.serialize()
 	payload["day_night"] = day_night.serialize()
+	payload["experience"] = player_experience.serialize()
 	if not world_state.is_empty():
 		payload["world"] = world_state.duplicate(true)
 	elif world_node != null:
@@ -327,6 +346,8 @@ func return_to_menu() -> void:
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	audio_service.stop_ambient()
+	player_experience.end_gameplay()
+	player_experience.detach_player()
 	if game_ui != null:
 		game_ui.end_gameplay()
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
@@ -349,8 +370,7 @@ func _player_state(player: Node3D) -> Dictionary:
 	if player.has_method("serialize_state"):
 		return player.call("serialize_state")
 	return {
-		"position":
-		[
+		"position": [
 			player.global_position.x,
 			player.global_position.y,
 			player.global_position.z,

@@ -96,6 +96,24 @@ jobs:
           godot --headless --path . --script res://tests/qa/runtime_diagnostics_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Player experience regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/player_experience_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compact UI layout regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/ui_layout_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: World-region visual acceptance
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/visual_acceptance_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Adaptive streaming regression
         shell: pwsh
         run: |

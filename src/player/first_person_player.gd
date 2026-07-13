@@ -6,10 +6,13 @@ signal block_placed(block_position: Vector3i, block_id: String)
 signal hotbar_selection_changed(index: int, block_id: String)
 signal damage_requested(amount: float, source: String)
 signal respawned(position: Vector3)
+signal interaction_focus_changed(focus: Dictionary)
+signal gameplay_action_reported(action: StringName, payload: Dictionary)
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
 const MovementControllerScript = preload("res://src/player/player_movement_controller.gd")
+const FocusResolverScript = preload("res://src/interaction/player_focus_resolver.gd")
 const FALLBACK_HOTBAR := [
 	"grass",
 	"dirt",
@@ -22,6 +25,7 @@ const FALLBACK_HOTBAR := [
 	"torch",
 ]
 const BASE_ATTACK_DAMAGE := 1.0
+const FOCUS_POLL_INTERVAL := 0.1
 
 @export var walk_speed := 5.4
 @export var sprint_speed := 8.0
@@ -41,6 +45,10 @@ var input_enabled := false
 var spawn_position := Vector3(0.5, 40.0, 0.5)
 var _gravity := 9.8
 var _movement_controller = MovementControllerScript.new()
+var _focus_resolver = FocusResolverScript.new()
+var _focus_poll_accumulator := 0.0
+var _interaction_focus: Dictionary = {}
+var _reported_once: Dictionary = {}
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -59,6 +67,8 @@ func _ready() -> void:
 
 func bind_world(p_world: Node) -> void:
 	world = p_world
+	_reported_once.clear()
+	_clear_interaction_focus()
 	if world != null and world.has_method("get_spawn_position"):
 		spawn_position = world.call("get_spawn_position")
 
@@ -116,8 +126,11 @@ func set_input_enabled(enabled: bool) -> void:
 		return
 	input_enabled = enabled
 	set_process_unhandled_input(enabled)
-	if not input_enabled:
+	if input_enabled:
+		_focus_poll_accumulator = FOCUS_POLL_INTERVAL
+	else:
 		_movement_controller.stop_horizontal(self)
+		_clear_interaction_focus()
 
 
 func reset_motion() -> void:
@@ -127,19 +140,26 @@ func reset_motion() -> void:
 func _physics_process(delta: float) -> void:
 	if not input_enabled:
 		return
+	var movement_vector := _get_movement_vector()
+	if movement_vector.length_squared() > 0.04:
+		_report_action_once(&"move")
 	var in_fluid := _is_in_fluid()
 	var movement_result: Dictionary = _movement_controller.step(
-		self, delta, _get_movement_vector(), _is_jump_just_pressed(), _is_sprint_pressed(), in_fluid
+		self, delta, movement_vector, _is_jump_just_pressed(), _is_sprint_pressed(), in_fluid
 	)
 	if bool(movement_result.get("jumped", false)):
-		_report_player_action("jump")
+		_report_player_action(&"jump")
 	if global_position.y < -12.0:
 		respawn()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not input_enabled:
 		return
+	_focus_poll_accumulator += maxf(0.0, delta)
+	if _focus_poll_accumulator >= FOCUS_POLL_INTERVAL:
+		_focus_poll_accumulator = 0.0
+		_update_interaction_focus()
 	var hotbar_index := _get_hotbar_selection_just_pressed()
 	if hotbar_index >= 0:
 		select_hotbar(hotbar_index)
@@ -147,6 +167,7 @@ func _process(_delta: float) -> void:
 		var game := get_parent()
 		if game != null and game.has_method("request_save"):
 			game.call("request_save")
+			_report_player_action(&"save")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -160,6 +181,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pivot.rotation.x = clampf(
 			camera_pivot.rotation.x, deg_to_rad(-89.0), deg_to_rad(89.0)
 		)
+		if event.relative.length_squared() > 0.01:
+			_report_action_once(&"look")
 		return
 	if (
 		not event is InputEventMouseButton
@@ -188,7 +211,9 @@ func break_target_block() -> bool:
 	var collider := interaction_ray.get_collider()
 	if collider != null and collider.has_method("take_damage"):
 		collider.call("take_damage", _get_selected_attack_damage(), self)
-		_report_player_action("attack")
+		_report_player_action(
+			&"attack", {"display_name": str(_interaction_focus.get("display_name", "生物"))}
+		)
 		return true
 	if world == null:
 		return false
@@ -212,8 +237,17 @@ func break_target_block() -> bool:
 	var drop_item := BlockRegistryScript.get_item_id(removed_block)
 	if inventory != null and not drop_item.is_empty() and inventory.has_method("add_item"):
 		inventory.call("add_item", drop_item, 1)
-	_report_player_action("mine")
+	var display_name := str(BlockRegistryScript.get_definition(removed_block).get("name", removed_block))
+	_report_player_action(
+		&"mine",
+		{
+			"block_id": removed_block,
+			"display_name": display_name,
+			"position": [block_position.x, block_position.y, block_position.z],
+		}
+	)
 	block_broken.emit(block_position, removed_block)
+	_update_interaction_focus(true)
 	return true
 
 
@@ -247,7 +281,18 @@ func _try_interact_target() -> bool:
 	var normal := interaction_ray.get_collision_normal()
 	var block_position: Vector3i = world.call("world_to_block", point - normal * 0.01)
 	var block_id := str(world.call("get_block", block_position))
-	return bool(interaction_service.call("interact", world, block_position, block_id))
+	var interacted := bool(interaction_service.call("interact", world, block_position, block_id))
+	if interacted:
+		_report_player_action(
+			&"interact",
+			{
+				"block_id": block_id,
+				"display_name": str(
+					BlockRegistryScript.get_definition(block_id).get("name", block_id)
+				),
+			}
+		)
+	return interacted
 
 
 func _place_block(block_id: String) -> bool:
@@ -286,7 +331,17 @@ func _commit_block_placement(block_id: String, target: Dictionary) -> bool:
 		if consumed.is_empty():
 			world.call("set_block", block_position, str(target["previous_block"]))
 			return false
+	var display_name := str(BlockRegistryScript.get_definition(block_id).get("name", block_id))
+	_report_player_action(
+		&"place",
+		{
+			"block_id": block_id,
+			"display_name": display_name,
+			"position": [block_position.x, block_position.y, block_position.z],
+		}
+	)
 	block_placed.emit(block_position, block_id)
+	_update_interaction_focus(true)
 	return true
 
 
@@ -294,14 +349,19 @@ func select_hotbar(index: int) -> void:
 	selected_hotbar_index = posmod(index, _get_hotbar_size())
 	if inventory != null and inventory.has_method("select_slot"):
 		inventory.call("select_slot", selected_hotbar_index)
-		return
-	_emit_hotbar_selection()
+	else:
+		_emit_hotbar_selection()
+	_report_action_once(&"select_hotbar", {"index": selected_hotbar_index})
 
 
 func get_selected_block_id() -> String:
 	if inventory != null:
 		return BlockRegistryScript.get_block_for_item(_get_selected_item_id())
 	return FALLBACK_HOTBAR[selected_hotbar_index]
+
+
+func get_interaction_focus() -> Dictionary:
+	return _interaction_focus.duplicate(true)
 
 
 func take_damage(amount: float, source: String = "world") -> void:
@@ -358,6 +418,15 @@ func _get_selected_item_definition(item_id: String) -> Dictionary:
 	return registry.call("get_item", item_id)
 
 
+func _get_selected_item_display_name(item_id: String) -> String:
+	if item_id.is_empty() or inventory == null:
+		return item_id
+	var registry = inventory.get("registry")
+	if registry != null and registry.has_method("get_display_name"):
+		return str(registry.call("get_display_name", item_id))
+	return item_id
+
+
 func _get_selected_attack_damage() -> float:
 	var item := _get_selected_item_definition(_get_selected_item_id())
 	return maxf(0.0, float(item.get("damage", BASE_ATTACK_DAMAGE)))
@@ -368,11 +437,17 @@ func _consume_selected_food() -> bool:
 	var item := _get_selected_item_definition(item_id)
 	if not item.has("food") or survival == null:
 		return false
+	var consumed := false
 	if survival.has_method("consume_selected_inventory_item"):
-		return bool(survival.call("consume_selected_inventory_item", inventory))
-	if survival.has_method("consume_inventory_item"):
-		return bool(survival.call("consume_inventory_item", inventory, item_id))
-	return false
+		consumed = bool(survival.call("consume_selected_inventory_item", inventory))
+	elif survival.has_method("consume_inventory_item"):
+		consumed = bool(survival.call("consume_inventory_item", inventory, item_id))
+	if consumed:
+		_report_player_action(
+			&"eat",
+			{"item_id": item_id, "display_name": _get_selected_item_display_name(item_id)}
+		)
+	return consumed
 
 
 func _is_in_fluid() -> bool:
@@ -432,9 +507,33 @@ func _configure_movement_controller() -> void:
 	_movement_controller.configure(config)
 
 
-func _report_player_action(action: String) -> void:
+func _report_player_action(action: StringName, payload: Dictionary = {}) -> void:
 	if survival != null and survival.has_method("report_player_action"):
-		survival.call("report_player_action", action)
+		survival.call("report_player_action", str(action))
+	gameplay_action_reported.emit(action, payload.duplicate(true))
+
+
+func _report_action_once(action: StringName, payload: Dictionary = {}) -> void:
+	var action_key := str(action)
+	if bool(_reported_once.get(action_key, false)):
+		return
+	_reported_once[action_key] = true
+	_report_player_action(action, payload)
+
+
+func _update_interaction_focus(force: bool = false) -> void:
+	var next_focus: Dictionary = _focus_resolver.resolve(interaction_ray, world)
+	if not force and next_focus == _interaction_focus:
+		return
+	_interaction_focus = next_focus.duplicate(true)
+	interaction_focus_changed.emit(_interaction_focus.duplicate(true))
+
+
+func _clear_interaction_focus() -> void:
+	if _interaction_focus.is_empty():
+		return
+	_interaction_focus.clear()
+	interaction_focus_changed.emit({})
 
 
 func _on_inventory_selection_changed(index: int, _slot: Dictionary) -> void:

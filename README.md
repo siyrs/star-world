@@ -2,7 +2,7 @@
 
 # 星的世界 · Star World
 
-《星的世界》是一款使用 Godot 4 和 GDScript 开发的 Windows 第一人称 3D 像素沙盒游戏。玩家可以选择五种世界，探索随机地形，采集、合成、建造并在昼夜循环中生存。世界修改、玩家状态、背包、容器和生存数据都会持久保存。
+《星的世界》是一款使用 Godot 4 和 GDScript 开发的 Windows 第一人称 3D 像素沙盒游戏。玩家可以选择五种世界，探索随机地形，采集、合成、建造并在昼夜循环中生存。世界修改、玩家状态、背包、容器、生存数据和新手引导进度都会持久保存。
 
 ## 已实现玩法
 
@@ -19,6 +19,10 @@
 - 10 分钟默认昼夜循环，太阳、环境光和天空颜色随时间变化。
 - 鸡、牛、猪和僵尸：程序化模型、漫游/追击 AI、伤害、死亡动画和种群回收。
 - 主菜单、多存档、设置、HUD、背包、合成、容器、真实暂停和死亡 UI。
+- 持久化新手引导：移动、环顾、采集、放置、背包和合成；按 F1 临时隐藏。
+- 准星上下文提示会说明采集、攻击、打开工位/箱子、放置和食用操作。
+- 有界即时反馈队列，成功、警告和错误不会重复刷屏。
+- 统一视觉 token 与 Theme，规范字体层级、间距、状态色、按钮和信息卡。
 - F3 运行诊断：帧时间、卡顿、区块队列、内存、节点、生物、掉落物、输入状态和自适应流式档位。
 - 区块构建会根据持续帧压力在保守、受限、均衡和吞吐档之间调整；不会改写玩家视距。
 - 带临时文件与备份恢复的可靠 JSON 保存。
@@ -31,7 +35,7 @@
 3. 按 `F6/F5` 运行，或启动已导出的 `StarWorld.exe`。
 4. 在主菜单选择“开始游戏”，选择地图、输入世界名和 Seed，然后创建世界。
 
-命令行构建和 Windows 导出方法见 [BUILD.md](BUILD.md)，总体架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，方块交互扩展合同见 [BLOCK_INTERACTIONS.md](BLOCK_INTERACTIONS.md)，运行诊断与发行验收见 [RUNTIME_DIAGNOSTICS.md](RUNTIME_DIAGNOSTICS.md)，自适应区块预算见 [ADAPTIVE_STREAMING.md](ADAPTIVE_STREAMING.md)。
+命令行构建和 Windows 导出方法见 [BUILD.md](BUILD.md)，总体架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，玩家体验合同见 [PLAYER_EXPERIENCE.md](PLAYER_EXPERIENCE.md)，方块交互扩展合同见 [BLOCK_INTERACTIONS.md](BLOCK_INTERACTIONS.md)，运行诊断与发行验收见 [RUNTIME_DIAGNOSTICS.md](RUNTIME_DIAGNOSTICS.md)，自适应区块预算见 [ADAPTIVE_STREAMING.md](ADAPTIVE_STREAMING.md)。
 
 ## 操作
 
@@ -48,11 +52,12 @@
 | 快捷栏 | `1` 至 `9` 或滚轮 |
 | 背包 | `E` |
 | 随身合成 | `C` |
+| 隐藏/显示新手引导 | `F1` |
 | 运行诊断 | `F3` |
 | 关闭界面/暂停 | `Esc` |
 | 快速保存 | `F5` |
 
-右键优先处理面前的可交互方块，然后才尝试放置或食用。F3 面板是纯展示层，不会改变鼠标捕获、暂停或玩家输入状态。
+右键优先处理面前的可交互方块，然后才尝试放置或食用。F1 只改变引导可见性；F3 面板是纯展示层。两者都不会改变鼠标捕获、暂停或玩家输入状态。
 
 ## 世界存档
 
@@ -62,7 +67,7 @@
 %APPDATA%\Godot\app_userdata\星的世界\worlds\<world-id>\world.json
 ```
 
-存档包含地图类型和 Seed、稀疏方块修改、玩家位置和朝向、背包、位置型容器、生命/饥饿和昼夜时间。写入先落到临时文件，旧主文件保留为备份；正式文件损坏时会尝试恢复有效临时文件或上一版本。
+存档包含地图类型和 Seed、稀疏方块修改、玩家位置和朝向、背包、位置型容器、生命/饥饿、昼夜时间和引导进度。写入先落到临时文件，旧主文件保留为备份；正式文件损坏时会尝试恢复有效临时文件或上一版本。
 
 ## 测试
 
@@ -75,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smok
   -Godot C:\path\to\godot.exe
 ```
 
-测试集覆盖五地图和体素 Chunk、真实 WASD、输入/暂停生命周期、物品与配方、工作台/熔炉权限、箱子转移与持久化、物理层、战斗、拾取、存档恢复、渐进区块生成、自适应预算、程序化音频释放、三轮世界生命周期 soak、种群回收、菜单、设置和运行诊断。每个 PR 以及 `master` 更新都会在 Windows + Godot 4.7 上执行源码桌面验收，并导出、启动真实 Windows Release，上传 EXE、PCK、截图、日志和 JSON 报告。
+测试集覆盖五地图和体素 Chunk、真实 WASD、输入/暂停生命周期、玩家引导、上下文提示、反馈去重、物品与配方、工作台/熔炉权限、箱子转移与持久化、物理层、战斗、拾取、存档恢复、渐进区块生成、自适应预算、程序化音频释放、三轮世界生命周期 soak、种群回收、菜单、设置和运行诊断。每个 PR 以及 `master` 更新都会在 Windows + Godot 4.7 上执行源码桌面验收，并导出、启动真实 Windows Release，上传 EXE、PCK、截图、日志和 JSON 报告。
 
 ## 当前边界
 
