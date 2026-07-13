@@ -157,6 +157,12 @@ jobs:
           godot --path . --rendering-method gl_compatibility --script res://tests/qa/desktop_acceptance_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Furnace desktop acceptance
+        shell: pwsh
+        run: |
+          godot --path . --rendering-method gl_compatibility --script res://tests/qa/furnace_desktop_acceptance.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Exported Windows release smoke
         shell: pwsh
         run: |
@@ -170,6 +176,7 @@ jobs:
           name: desktop-acceptance-${{ github.run_number }}
           path: |
             build/desktop-acceptance.png
+            build/furnace-desktop-acceptance.png
           if-no-files-found: warn
           retention-days: 14
 
