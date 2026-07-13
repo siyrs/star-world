@@ -114,10 +114,10 @@ func _build_prompt() -> void:
 	_prompt_panel.anchor_right = 0.5
 	_prompt_panel.anchor_top = 1.0
 	_prompt_panel.anchor_bottom = 1.0
-	_prompt_panel.offset_left = -310.0
-	_prompt_panel.offset_right = 310.0
-	_prompt_panel.offset_top = -194.0
-	_prompt_panel.offset_bottom = -116.0
+	_prompt_panel.offset_left = -300.0
+	_prompt_panel.offset_right = 300.0
+	_prompt_panel.offset_top = -235.0
+	_prompt_panel.offset_bottom = -155.0
 	_prompt_panel.visible = false
 	add_child(_prompt_panel)
 	var content := HBoxContainer.new()
@@ -144,12 +144,14 @@ func _build_prompt() -> void:
 
 func _build_tutorial() -> void:
 	_tutorial_panel = PanelContainer.new()
-	_tutorial_panel.anchor_top = 1.0
-	_tutorial_panel.anchor_bottom = 1.0
-	_tutorial_panel.offset_left = 18.0
-	_tutorial_panel.offset_right = 380.0
-	_tutorial_panel.offset_top = -212.0
-	_tutorial_panel.offset_bottom = -18.0
+	_tutorial_panel.anchor_left = 1.0
+	_tutorial_panel.anchor_right = 1.0
+	_tutorial_panel.anchor_top = 0.0
+	_tutorial_panel.anchor_bottom = 0.0
+	_tutorial_panel.offset_left = -380.0
+	_tutorial_panel.offset_right = -18.0
+	_tutorial_panel.offset_top = 18.0
+	_tutorial_panel.offset_bottom = 212.0
 	_tutorial_panel.visible = false
 	add_child(_tutorial_panel)
 	var content := VBoxContainer.new()
