@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "fuels": [
+    {"id":"coal","name":"煤炭","burn_seconds":48.0},
+    {"id":"oak_log","name":"原木","burn_seconds":9.0},
+    {"id":"oak_planks","name":"木板","burn_seconds":6.0},
+    {"id":"stick","name":"木棍","burn_seconds":2.0}
+  ]
+}
