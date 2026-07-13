@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ProjectRoot,
     [Parameter(Mandatory = $true)][string]$ScriptPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$RenderingMethod = 'gl_compatibility'
+    [string]$RenderingMethod = 'gl_compatibility',
+    [int]$TimeoutMilliseconds = 60000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,11 +12,13 @@ $ErrorActionPreference = 'Stop'
 $projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
 $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputPath))
 $outputDirectory = Split-Path -Parent $outputFullPath
-New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-Remove-Item -LiteralPath $outputFullPath -Force -ErrorAction SilentlyContinue
+$outputBaseName = [System.IO.Path]::GetFileNameWithoutExtension($outputFullPath)
+$stdoutPath = Join-Path $outputDirectory "$outputBaseName.stdout.log"
+$stderrPath = Join-Path $outputDirectory "$outputBaseName.stderr.log"
 
-# Use an explicit ASCII-safe absolute output path. The Godot test keeps a user://
-# fallback for local runs, while CI never needs to infer a localized app-data path.
+New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
+Remove-Item -LiteralPath $outputFullPath, $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+
 $outputArgumentPath = $outputFullPath.Replace('\', '/')
 $arguments = @(
     '--path', $projectFullPath,
@@ -25,15 +28,52 @@ $arguments = @(
     "--capture-output=$outputArgumentPath"
 )
 
-# Keep Godot's stdout/stderr attached to the Actions log. Windows PowerShell can
-# promote redirected native stderr records to terminating errors even when the
-# process succeeds, which would make the evidence wrapper less reliable than the
-# desktop test it is running.
-& $Godot @arguments
-$exitCode = $LASTEXITCODE
+$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$startInfo.FileName = $Godot
+$startInfo.WorkingDirectory = $projectFullPath
+$startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $false
+$startInfo.RedirectStandardOutput = $true
+$startInfo.RedirectStandardError = $true
+foreach ($argument in $arguments) {
+    [void]$startInfo.ArgumentList.Add($argument)
+}
 
-if ($exitCode -ne 0) {
-    throw "Godot desktop test failed: $ScriptPath (exit $exitCode)"
+$process = [System.Diagnostics.Process]::new()
+$process.StartInfo = $startInfo
+if (-not $process.Start()) {
+    throw "Unable to start Godot desktop test: $ScriptPath"
+}
+
+$stdoutTask = $process.StandardOutput.ReadToEndAsync()
+$stderrTask = $process.StandardError.ReadToEndAsync()
+$timedOut = -not $process.WaitForExit($TimeoutMilliseconds)
+if ($timedOut) {
+    $process.Kill($true)
+    $process.WaitForExit()
+} else {
+    $process.WaitForExit()
+}
+
+$stdout = $stdoutTask.GetAwaiter().GetResult()
+$stderr = $stderrTask.GetAwaiter().GetResult()
+Set-Content -LiteralPath $stdoutPath -Value $stdout -Encoding utf8
+Set-Content -LiteralPath $stderrPath -Value $stderr -Encoding utf8
+
+if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+    Write-Host '--- Godot desktop stdout ---'
+    Write-Host $stdout
+}
+if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+    Write-Host '--- Godot desktop stderr ---'
+    Write-Host $stderr
+}
+
+if ($timedOut) {
+    throw "Godot desktop test timed out after $TimeoutMilliseconds ms: $ScriptPath"
+}
+if ($process.ExitCode -ne 0) {
+    throw "Godot desktop test failed: $ScriptPath (exit $($process.ExitCode)); logs=$stdoutPath,$stderrPath"
 }
 if (-not (Test-Path -LiteralPath $outputFullPath)) {
     throw "Desktop test did not create its requested screenshot: $outputFullPath"
