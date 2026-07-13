@@ -6,6 +6,8 @@ const FurnaceScript = preload("res://src/machine/furnace_service.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://furnace-desktop-acceptance.png"
+const AUDIO_SETTLE_FRAMES := 4
+const FINAL_CLEANUP_FRAMES := 6
 
 var checks := 0
 var failures: Array[String] = []
@@ -67,7 +69,9 @@ func _run() -> void:
 	if inventory_buttons.size() >= 2:
 		await _click_control(inventory_buttons[0])
 		await _click_control(inventory_buttons[1])
-	var machine_id := hub.block_interaction.get_machine_id(game.world, block_position, "furnace")
+	var machine_id: String = str(
+		hub.block_interaction.get_machine_id(game.world, block_position, "furnace")
+	)
 	_check(
 		str(hub.furnace_service.get_slot(machine_id, FurnaceScript.SLOT_INPUT).get("item_id", ""))
 		== "raw_iron",
@@ -127,9 +131,7 @@ func _run() -> void:
 		"dismantling an empty furnace discards transient heat and removes its record",
 	)
 
-	_cleanup(game, hub)
-	await process_frame
-	await process_frame
+	await _cleanup(game, hub)
 	if failures.is_empty():
 		print("FURNACE_DESKTOP_CAPTURE=%s" % _capture_path)
 		print("QA FURNACE DESKTOP PASS | checks=%d" % checks)
@@ -200,13 +202,24 @@ func _find_button(node: Node, text: String) -> Button:
 
 
 func _cleanup(game: Node, hub: Node) -> void:
-	if hub != null and not hub.current_world_id.is_empty():
+	if hub != null and not str(hub.get("current_world_id")).is_empty():
 		hub.call("return_to_menu")
+		await process_frame
+		await process_frame
 	if not _created_world_id.is_empty() and hub != null and hub.get("save_service") != null:
 		hub.save_service.delete_world(_created_world_id)
-	if hub != null and hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
-		hub.audio_service.shutdown()
+	var audio: Node = hub.get("audio_service") if hub != null else null
+	if audio != null and audio.has_method("shutdown"):
+		audio.call("shutdown")
+	for _frame in AUDIO_SETTLE_FRAMES:
+		await process_frame
+	if audio != null and is_instance_valid(audio) and audio.has_method("dispose"):
+		audio.call("dispose")
+	for _frame in AUDIO_SETTLE_FRAMES:
+		await process_frame
 	game.queue_free()
+	for _frame in FINAL_CLEANUP_FRAMES:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:
