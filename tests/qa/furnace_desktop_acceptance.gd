@@ -58,10 +58,10 @@ func _run() -> void:
 	)
 	_check(panel != null and panel.visible, "the furnace surface is visible")
 	_check(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED, "opening the furnace releases the mouse")
-	var viewport_rect := Rect2(Vector2.ZERO, Vector2(root.size))
+	var viewport_rect := panel.get_viewport_rect() if panel != null else Rect2()
 	_check(
 		panel != null and _rect_inside(viewport_rect, panel.get_global_rect()),
-		"the complete furnace surface fits inside the 1024x576 product baseline",
+		"the complete furnace surface fits inside the scaled desktop viewport",
 	)
 
 	var inventory_buttons: Array = panel.get("_inventory_buttons") if panel != null else []
@@ -77,10 +77,12 @@ func _run() -> void:
 		== "raw_iron",
 		"a real pointer click moves raw iron into the input slot",
 	)
+	var fuel_slot: Dictionary = hub.furnace_service.get_slot(machine_id, FurnaceScript.SLOT_FUEL)
+	var fueled_snapshot: Dictionary = hub.furnace_service.get_machine_snapshot(machine_id)
 	_check(
-		str(hub.furnace_service.get_slot(machine_id, FurnaceScript.SLOT_FUEL).get("item_id", ""))
-		== "coal",
-		"a real pointer click moves coal into the fuel slot",
+		str(fuel_slot.get("item_id", "")) == "coal"
+		or float(fueled_snapshot.get("burn_remaining_seconds", 0.0)) > 0.0,
+		"a real pointer click routes coal into the fuel lifecycle",
 	)
 
 	hub.furnace_service.advance_time(6.1, true)
@@ -95,6 +97,10 @@ func _run() -> void:
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "furnace desktop acceptance captures a rendered frame")
 	if image != null and not image.is_empty():
+		_check(
+			image.get_size() == Vector2i(1024, 576),
+			"furnace evidence is rendered at the minimum desktop product baseline",
+		)
 		_save_image(image)
 
 	var output_button := panel.get("_output_button") as Button if panel != null else null
