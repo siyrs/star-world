@@ -4,6 +4,9 @@ const PlayerScene = preload("res://scenes/game/player.tscn")
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 const ToolScript = preload("res://src/tools/tool_service.gd")
 const AgricultureScript = preload("res://src/agriculture/agriculture_service.gd")
+const AgricultureAdapterScript = preload(
+	"res://src/agriculture/agriculture_interaction_adapter.gd"
+)
 const InteractionScript = preload("res://src/interaction/block_interaction_service.gd")
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
@@ -11,6 +14,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 const OUTPUT_PATH := "user://agriculture-desktop-acceptance.png"
 const SOIL_POSITION := Vector3i(0, 1, -3)
 const CROP_POSITION := Vector3i(0, 2, -3)
+const WATER_POSITION := Vector3i(3, 1, -3)
 const CLEANUP_FRAMES := 6
 
 var checks := 0
@@ -26,6 +30,7 @@ class DesktopFarmWorld:
 	func build() -> void:
 		_build_floor()
 		set_test_block(SOIL_POSITION, "grass")
+		set_test_block(WATER_POSITION, "water")
 
 	func bind_focus(_focus: Node3D) -> void:
 		return
@@ -83,16 +88,21 @@ class DesktopFarmWorld:
 			if shape_name == "crop"
 			else 1.0
 		)
-		var box_shape := BoxShape3D.new()
-		box_shape.size = Vector3(0.82, height, 0.82) if shape_name == "crop" else Vector3.ONE
-		var collision := CollisionShape3D.new()
-		collision.position.y = (height - 1.0) * 0.5
-		collision.shape = box_shape
-		body.add_child(collision)
+		var mesh_size := Vector3(0.82, height, 0.82) if shape_name == "crop" else Vector3.ONE
+		var vertical_offset := (height - 1.0) * 0.5
+		# Production crop meshes intentionally have no physics collision. This fake
+		# world follows the same contract so the test must harvest through farmland.
+		if shape_name != "crop":
+			var box_shape := BoxShape3D.new()
+			box_shape.size = mesh_size
+			var collision := CollisionShape3D.new()
+			collision.position.y = vertical_offset
+			collision.shape = box_shape
+			body.add_child(collision)
 		var mesh_instance := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
-		mesh.size = box_shape.size
-		mesh_instance.position = collision.position
+		mesh.size = mesh_size
+		mesh_instance.position.y = vertical_offset
 		mesh_instance.mesh = mesh
 		var material := StandardMaterial3D.new()
 		material.albedo_color = BlockRegistryScript.get_color(block_id)
@@ -148,9 +158,10 @@ func _run() -> void:
 	var inventory = InventoryScript.new()
 	var tools = ToolScript.new()
 	var agriculture = AgricultureScript.new()
+	var agriculture_adapter = AgricultureAdapterScript.new()
 	var interactions = InteractionScript.new()
 	var player = PlayerScene.instantiate()
-	for node in [world, inventory, tools, agriculture, interactions, player]:
+	for node in [world, inventory, tools, agriculture, agriculture_adapter, interactions, player]:
 		host.add_child(node)
 	world.build()
 	await process_frame
@@ -158,8 +169,9 @@ func _run() -> void:
 	tools.setup(inventory.registry)
 	agriculture.setup(inventory.registry, tools)
 	agriculture.attach_world(world, inventory)
+	agriculture_adapter.setup(agriculture)
 	interactions.setup(null, null, inventory, null)
-	interactions.register_extension(agriculture)
+	interactions.register_extension(agriculture_adapter)
 	inventory.clear()
 	inventory.add_item("wooden_hoe", 1)
 	inventory.add_item("wheat_seeds", 3)
@@ -187,7 +199,7 @@ func _run() -> void:
 	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
 	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves the soil target")
 	await _right_click()
-	_check(world.get_block(SOIL_POSITION) == "farmland", "a real right click tills the soil")
+	_check(world.get_block(SOIL_POSITION) == "farmland_wet", "nearby water hydrates newly tilled farmland")
 	_check(
 		int(inventory.get_slot(0).get("metadata", {}).get("durability", 60)) == 59,
 		"desktop tilling consumes visible hoe durability",
@@ -195,7 +207,7 @@ func _run() -> void:
 	inventory.select_slot(1)
 	await process_frame
 	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
-	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves tilled farmland")
+	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves hydrated farmland")
 	await _right_click()
 	_check(world.get_block(CROP_POSITION) == "wheat_stage_0", "a second real right click plants wheat seeds")
 	_check(inventory.count_item("wheat_seeds") == 2, "desktop planting consumes one seed")
@@ -207,14 +219,18 @@ func _run() -> void:
 		"mature crops expose a clear harvest prompt",
 	)
 	await _aim_at(player, Vector3(CROP_POSITION) + Vector3(0.5, 0.5, 0.5))
-	_check(_ray_hits_block(player, world, CROP_POSITION), "the real player ray resolves mature wheat")
+	_check(_ray_hits_block(player, world, SOIL_POSITION), "non-colliding crops leave the real ray on supporting soil")
+	player.call("_update_interaction_focus", true)
+	var focus: Dictionary = player.get_interaction_focus()
+	_check(str(focus.get("block_id", "")) == "wheat_stage_3", "focus resolver presents the mature crop instead of its soil proxy")
+	_check(bool(focus.get("interaction_proxy", false)), "crop focus explains that interaction is routed through support soil")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "agriculture desktop viewport produces a rendered frame")
 	if image != null and not image.is_empty():
 		_save_image(image)
 	await _right_click()
-	_check(world.get_block(CROP_POSITION) == "wheat_stage_0", "real pointer harvest automatically replants wheat")
+	_check(world.get_block(CROP_POSITION) == "wheat_stage_0", "real pointer harvest automatically replants wheat through soil")
 	_check(inventory.count_item("wheat") == 1, "real pointer harvest grants wheat")
 	_check(inventory.count_item("wheat_seeds") == 4, "real pointer harvest returns seeds")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "agriculture interactions never release the gameplay mouse")
