@@ -73,6 +73,8 @@ static func tool_type_label(tool_type: String) -> String:
 	return {
 		"pickaxe": "镐",
 		"axe": "斧",
+		"shovel": "铲",
+		"hoe": "锄",
 		"sword": "剑",
 		"hand": "空手",
 	}.get(tool_type, tool_type)
