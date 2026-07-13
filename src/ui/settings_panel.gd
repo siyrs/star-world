@@ -29,7 +29,7 @@ var _status: Label
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
-	custom_minimum_size = Vector2(680, 620)
+	custom_minimum_size = Vector2(680, 548)
 	_build_ui()
 
 
@@ -45,7 +45,7 @@ func show_apply_result(saved: bool) -> void:
 
 func _build_ui() -> void:
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	root.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	add_child(root)
 	var title := Label.new()
 	title.text = "设置"
@@ -54,6 +54,7 @@ func _build_ui() -> void:
 	var subtitle := Label.new()
 	subtitle.text = "按自己的设备和习惯调整星世界"
 	subtitle.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
+	subtitle.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(subtitle)
 	_add_section_title(root, "操作")
 	_sensitivity = _add_slider(root, "鼠标灵敏度", 0.05, 0.6, 0.01)
@@ -77,27 +78,28 @@ func _build_ui() -> void:
 	_cycle = _add_slider(root, "昼夜周期（分钟）", 2.0, 30.0, 1.0)
 	_add_section_title(root, "引导与可读性")
 	_show_tutorial = CheckButton.new()
-	_show_tutorial.text = "显示新手引导（游戏中按 F1 可临时隐藏）"
+	_show_tutorial.text = "显示新手引导（F1 可临时隐藏）"
 	root.add_child(_show_tutorial)
 	_show_interaction_prompts = CheckButton.new()
 	_show_interaction_prompts.text = "显示准星附近的操作提示"
 	root.add_child(_show_interaction_prompts)
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status.custom_minimum_size.y = 28.0
+	_status.custom_minimum_size.y = 24.0
+	_status.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(_status)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(actions)
 	var apply_button := Button.new()
 	apply_button.text = "保存并应用"
-	apply_button.custom_minimum_size.y = 48.0
+	apply_button.custom_minimum_size.y = 44.0
 	apply_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	apply_button.pressed.connect(_apply)
 	actions.add_child(apply_button)
 	var back := Button.new()
 	back.text = "返回"
-	back.custom_minimum_size = Vector2(160, 48)
+	back.custom_minimum_size = Vector2(160, 44)
 	back.pressed.connect(func() -> void: back_requested.emit())
 	actions.add_child(back)
 
