@@ -81,7 +81,7 @@ func _test_world_geometry_frame_is_accepted() -> void:
 	]
 	for y in range(62, 150, 8):
 		for x in range(30, 290, 10):
-			var color_index := ((x / 10) + (y / 8)) % terrain_colors.size()
+			var color_index := (int(x / 10) + int(y / 8)) % terrain_colors.size()
 			image.fill_rect(Rect2i(x, y, 10, 8), terrain_colors[color_index])
 	for index in 14:
 		image.fill_rect(
