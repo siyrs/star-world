@@ -223,7 +223,7 @@ func _on_selected_slot_changed(index: int, slot: Dictionary) -> void:
 		_item_label.text = "[%d] 空手" % (index + 1)
 	else:
 		var definition: Dictionary = inventory.registry.get_item(item_id)
-		var display_name := inventory.registry.get_display_name(item_id)
+		var display_name: String = str(inventory.registry.get_display_name(item_id))
 		var maximum_durability := maxi(0, int(definition.get("durability", 0)))
 		if maximum_durability > 0:
 			var metadata: Dictionary = slot.get("metadata", {})
