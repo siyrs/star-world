@@ -9,6 +9,9 @@ const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 var inventory
 var survival
 var day_night
+var _status_panel: PanelContainer
+var _hotbar_panel: PanelContainer
+var _item_panel: PanelContainer
 var _health_bar: ProgressBar
 var _hunger_bar: ProgressBar
 var _health_label: Label
@@ -69,18 +72,27 @@ func show_message(message: String, seconds: float = 2.0) -> void:
 	tween.tween_property(_message_label, "modulate:a", 0.0, 0.35)
 
 
+func get_layout_rects() -> Dictionary:
+	return {
+		"status": _status_panel.get_global_rect() if _status_panel != null else Rect2(),
+		"selected_item": _item_panel.get_global_rect() if _item_panel != null else Rect2(),
+		"hotbar": _hotbar_panel.get_global_rect() if _hotbar_panel != null else Rect2(),
+	}
+
+
 func _build_status_panel() -> void:
-	var panel := PanelContainer.new()
-	panel.position = Vector2(18, 18)
-	panel.custom_minimum_size = Vector2(286, 152)
-	panel.add_theme_stylebox_override(
+	_status_panel = PanelContainer.new()
+	_status_panel.position = Vector2(18, 18)
+	_status_panel.size = Vector2(286, 152)
+	_status_panel.custom_minimum_size = Vector2(286, 152)
+	_status_panel.add_theme_stylebox_override(
 		"panel",
 		Tokens.panel_style(Tokens.COLOR_SURFACE, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_LG, 12.0)
 	)
-	add_child(panel)
+	add_child(_status_panel)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	panel.add_child(content)
+	_status_panel.add_child(content)
 	var header := HBoxContainer.new()
 	content.add_child(header)
 	var title := Label.new()
@@ -119,49 +131,49 @@ func _build_status_panel() -> void:
 
 
 func _build_hotbar() -> void:
-	var panel := PanelContainer.new()
-	panel.anchor_left = 0.5
-	panel.anchor_right = 0.5
-	panel.anchor_top = 1.0
-	panel.anchor_bottom = 1.0
-	panel.offset_left = -322.0
-	panel.offset_right = 322.0
-	panel.offset_top = -98.0
-	panel.offset_bottom = -18.0
-	panel.add_theme_stylebox_override(
+	_hotbar_panel = PanelContainer.new()
+	_hotbar_panel.anchor_left = 0.5
+	_hotbar_panel.anchor_right = 0.5
+	_hotbar_panel.anchor_top = 1.0
+	_hotbar_panel.anchor_bottom = 1.0
+	_hotbar_panel.offset_left = -322.0
+	_hotbar_panel.offset_right = 322.0
+	_hotbar_panel.offset_top = -98.0
+	_hotbar_panel.offset_bottom = -18.0
+	_hotbar_panel.add_theme_stylebox_override(
 		"panel",
 		Tokens.panel_style(Tokens.COLOR_SURFACE, Tokens.COLOR_BORDER_STRONG, 1, Tokens.RADIUS_LG, 8.0)
 	)
-	add_child(panel)
+	add_child(_hotbar_panel)
 	_hotbar = HBoxContainer.new()
 	_hotbar.alignment = BoxContainer.ALIGNMENT_CENTER
 	_hotbar.add_theme_constant_override("separation", Tokens.SPACE_XS)
-	panel.add_child(_hotbar)
+	_hotbar_panel.add_child(_hotbar)
 	for index in 9:
 		var slot = SlotScript.new()
 		slot.configure(index)
 		slot.custom_minimum_size = Vector2(64, 58)
 		_hotbar.add_child(slot)
 		_slot_buttons.append(slot)
-	var item_panel := PanelContainer.new()
-	item_panel.anchor_left = 0.5
-	item_panel.anchor_right = 0.5
-	item_panel.anchor_top = 1.0
-	item_panel.anchor_bottom = 1.0
-	item_panel.offset_left = -180.0
-	item_panel.offset_right = 180.0
-	item_panel.offset_top = -132.0
-	item_panel.offset_bottom = -104.0
-	item_panel.add_theme_stylebox_override(
+	_item_panel = PanelContainer.new()
+	_item_panel.anchor_left = 0.5
+	_item_panel.anchor_right = 0.5
+	_item_panel.anchor_top = 1.0
+	_item_panel.anchor_bottom = 1.0
+	_item_panel.offset_left = -180.0
+	_item_panel.offset_right = 180.0
+	_item_panel.offset_top = -132.0
+	_item_panel.offset_bottom = -104.0
+	_item_panel.add_theme_stylebox_override(
 		"panel",
 		Tokens.panel_style("#0D1724D9", "#365E77", 1, Tokens.RADIUS_SM, 4.0)
 	)
-	add_child(item_panel)
+	add_child(_item_panel)
 	_item_label = Label.new()
 	_item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_item_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_item_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	item_panel.add_child(_item_label)
+	_item_panel.add_child(_item_label)
 
 
 func _build_crosshair() -> void:
