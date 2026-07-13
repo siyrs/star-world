@@ -3,6 +3,7 @@ extends SceneTree
 const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
+const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://desktop-acceptance.png"
 
@@ -17,7 +18,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	_capture_path = ProjectSettings.globalize_path(OUTPUT_PATH)
+	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
 	var game = GameScene.instantiate()
 	root.add_child(game)
 	await process_frame
