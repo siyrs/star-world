@@ -21,6 +21,10 @@ func resolve(ray: RayCast3D, world: Node) -> Dictionary:
 	var block_id := str(world.call("get_block", block_position))
 	if block_id == BlockRegistryScript.AIR:
 		return {}
+	var proxy: Dictionary = _resolve_visual_proxy(world, block_position, block_id)
+	if not proxy.is_empty():
+		block_position = proxy.get("position", block_position)
+		block_id = str(proxy.get("block_id", block_id))
 	var definition := BlockRegistryScript.get_definition(block_id)
 	return {
 		"type": "block",
@@ -32,6 +36,26 @@ func resolve(ray: RayCast3D, world: Node) -> Dictionary:
 		"collectible": BlockRegistryScript.is_collectible(block_id),
 		"solid": BlockRegistryScript.is_solid(block_id),
 		"position": [block_position.x, block_position.y, block_position.z],
+		"interaction_proxy": bool(proxy.get("proxied", false)),
+	}
+
+
+func _resolve_visual_proxy(
+	world: Node,
+	block_position: Vector3i,
+	block_id: String
+) -> Dictionary:
+	if block_id not in ["farmland", "farmland_wet"]:
+		return {}
+	var crop_position := block_position + Vector3i.UP
+	var crop_id := str(world.call("get_block", crop_position))
+	var definition: Dictionary = BlockRegistryScript.get_definition(crop_id)
+	if str(definition.get("shape", "")) != "crop":
+		return {}
+	return {
+		"proxied": true,
+		"position": crop_position,
+		"block_id": crop_id,
 	}
 
 

@@ -17,7 +17,7 @@ jobs:
   runtime-tests:
     name: Runtime and domain regressions
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 42
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -109,6 +109,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/agriculture_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Irrigation and multicrop regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/irrigation_multicrop_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Desktop input contract regression
         shell: pwsh
         run: |
@@ -173,7 +179,7 @@ jobs:
     name: Real desktop input and UI acceptance
     needs: runtime-tests
     runs-on: windows-latest
-    timeout-minutes: 32
+    timeout-minutes: 36
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -235,6 +241,16 @@ jobs:
             -ScriptPath 'res://tests/qa/agriculture_desktop_acceptance.gd' `
             -OutputPath 'build\agriculture-desktop-acceptance.png'
 
+      - name: Irrigation desktop acceptance
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/irrigation_desktop_acceptance.gd' `
+            -OutputPath 'build\irrigation-desktop-acceptance.png'
+
       - name: Upload desktop acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -246,6 +262,7 @@ jobs:
             build/tool-harvest-desktop-acceptance.*
             build/equipment-desktop-acceptance.*
             build/agriculture-desktop-acceptance.*
+            build/irrigation-desktop-acceptance.*
           if-no-files-found: warn
           retention-days: 14
 

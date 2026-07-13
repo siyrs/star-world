@@ -68,10 +68,12 @@ func _test_registry_and_shovel_policy() -> void:
 	var crops = CropRegistryScript.new()
 	var harvest_registry = HarvestRegistryScript.new()
 	var harvest_policy = HarvestPolicyScript.new()
-	_check(crops.crop_count() == 1, "crop registry loads the first production crop")
+	_check(crops.crop_count() == 3, "crop registry loads wheat, carrot and potato")
 	var wheat: Dictionary = crops.get_crop("wheat")
 	_check(str(wheat.get("seed_item", "")) == "wheat_seeds", "wheat declares its seed item")
 	_check(Array(wheat.get("stage_blocks", [])).size() == 4, "wheat exposes four readable growth stages")
+	_check(crops.get_harvest_outputs("carrot").size() == 1, "root crops use generic harvest outputs")
+	_check(str(crops.get_crop("potato").get("seed_item", "")) == "potato", "potatoes are their own planting material")
 	_check(str(tools.get_tool_profile("wooden_shovel").get("tool_type", "")) == "shovel", "shovels are first-class tools")
 	_check(str(tools.get_tool_profile("wooden_hoe").get("tool_type", "")) == "hoe", "hoes are first-class tools")
 	var dirt: Dictionary = harvest_registry.get_profile("dirt")
@@ -84,10 +86,11 @@ func _test_registry_and_shovel_policy() -> void:
 		< float(hand_result.get("duration_seconds", 0.0)),
 		"a matching shovel harvests soil faster than hand",
 	)
-	_check(BlockRegistryScript.has_block("farmland"), "farmland is a registered world block")
+	_check(BlockRegistryScript.has_block("farmland"), "dry farmland remains a registered world block")
+	_check(BlockRegistryScript.has_block("farmland_wet"), "hydrated farmland has a distinct visual block")
 	_check(
-		str(BlockRegistryScript.get_definition("wheat_stage_3").get("shape", "")) == "crop",
-		"mature wheat uses the lightweight crop mesh contract",
+		str(BlockRegistryScript.get_definition("carrot_stage_3").get("shape", "")) == "crop",
+		"mature carrots use the lightweight crop mesh contract",
 	)
 
 
@@ -111,25 +114,29 @@ func _test_till_plant_grow_harvest() -> void:
 	var soil := Vector3i(2, 20, -3)
 	var crop := soil + Vector3i.UP
 	world.set_test_block(soil, "grass")
+	world.set_test_block(soil + Vector3i(3, 0, 0), "water")
 	var till_result: Dictionary = agriculture.try_interact(world, inventory, soil, "grass")
 	_check(bool(till_result.get("success", false)), "right-click agriculture contract tills grass")
-	_check(world.get_block(soil) == "farmland", "tilling commits farmland to the world")
+	_check(world.get_block(soil) == "farmland_wet", "nearby water immediately hydrates new farmland")
 	_check(
 		int(inventory.get_slot(0).get("metadata", {}).get("durability", 60)) == 59,
 		"tilling consumes exactly one hoe durability",
 	)
 	inventory.select_slot(1)
-	var plant_result: Dictionary = agriculture.try_interact(world, inventory, soil, "farmland")
-	_check(bool(plant_result.get("success", false)), "seeds plant on valid farmland")
+	var plant_result: Dictionary = agriculture.try_interact(
+		world, inventory, soil, world.get_block(soil)
+	)
+	_check(bool(plant_result.get("success", false)), "seeds plant on hydrated farmland")
 	_check(world.get_block(crop) == "wheat_stage_0", "planting publishes the first visible crop stage")
 	_check(inventory.count_item("wheat_seeds") == 2, "planting consumes one seed")
 	_check(agriculture.get_crop_count() == 1, "agriculture owns one position-based crop state")
+	_check(bool(agriculture.get_soil_state(soil).get("hydrated", false)), "soil moisture state is queryable")
 	var early_result: Dictionary = agriculture.try_interact(
 		world, inventory, crop, world.get_block(crop)
 	)
 	_check(str(early_result.get("reason", "")) == "crop_growing", "immature crops explain why harvest is unavailable")
 	agriculture.advance_time(106.0)
-	_check(world.get_block(crop) == "wheat_stage_3", "bounded time advancement reaches mature wheat")
+	_check(world.get_block(crop) == "wheat_stage_3", "hydrated time advancement reaches mature wheat")
 	var harvest_result: Dictionary = agriculture.try_interact(
 		world, inventory, crop, world.get_block(crop)
 	)
@@ -140,17 +147,20 @@ func _test_till_plant_grow_harvest() -> void:
 	agriculture.advance_time(26.0)
 	_check(world.get_block(crop) == "wheat_stage_1", "growth resumes after automatic replanting")
 	var saved: Dictionary = agriculture.serialize()
+	_check(saved.get("soil_moisture", null) is Dictionary, "agriculture serializes soil moisture with crop state")
 	var restored_world = FakeWorld.new()
 	var restored = AgricultureScript.new()
 	host.add_child(restored_world)
 	host.add_child(restored)
 	await process_frame
-	restored_world.set_test_block(soil, "farmland")
+	restored_world.set_test_block(soil, "farmland_wet")
+	restored_world.set_test_block(soil + Vector3i(3, 0, 0), "water")
 	restored.setup(inventory.registry, tools)
-	_check(restored.deserialize(saved), "crop state deserializes")
+	_check(restored.deserialize(saved), "crop and moisture state deserialize")
 	restored.attach_world(restored_world, inventory)
 	_check(restored.get_crop_count() == 1, "restored agriculture keeps the crop record")
 	_check(restored_world.get_block(crop) == "wheat_stage_1", "restored crop stage is synchronized into the world")
+	_check(bool(restored.get_soil_state(soil).get("hydrated", false)), "restored soil recomputes nearby irrigation")
 	host.queue_free()
 	await process_frame
 	await process_frame
@@ -174,6 +184,7 @@ func _test_inventory_and_removal_safety() -> void:
 	world.set_test_block(crop, "wheat_stage_3")
 	agriculture.deserialize(
 		{
+			"version": 2,
 			"saved_at_unix": int(Time.get_unix_time_from_system()),
 			"crops": {
 				"crop@4,19,1": {
@@ -183,6 +194,7 @@ func _test_inventory_and_removal_safety() -> void:
 					"elapsed_seconds": 0.0,
 				}
 			},
+			"soil_moisture": {"version": 1, "soils": {}},
 		}
 	)
 	agriculture.attach_world(world, inventory)
@@ -195,6 +207,7 @@ func _test_inventory_and_removal_safety() -> void:
 	agriculture.on_block_removed(world, soil, "farmland")
 	_check(agriculture.get_crop_count() == 0, "breaking farmland removes its owned crop state")
 	_check(world.get_block(crop) == "air", "breaking farmland removes the unsupported crop block")
+	_check(agriculture.get_soil_state(soil).is_empty(), "breaking farmland clears moisture ownership")
 	host.queue_free()
 	await process_frame
 	await process_frame
@@ -214,11 +227,14 @@ func _test_runtime_composition_and_migration() -> void:
 	var migrated: Dictionary = hub.save_service.call(
 		"_migrate", {"save_version": 2, "metadata": {}, "inventory": {}}
 	)
-	_check(migrated.get("agriculture", null) is Dictionary, "old saves migrate an empty agriculture state")
+	var migrated_agriculture: Dictionary = migrated.get("agriculture", {})
+	_check(not migrated_agriculture.is_empty(), "old saves migrate an empty agriculture state")
+	_check(migrated_agriculture.get("soil_moisture", null) is Dictionary, "old agriculture saves gain moisture state")
 	var state: Dictionary = hub.save_service.create_world(
 		"agriculture-regression-%d" % Time.get_ticks_msec(), "star_continent", 31337
 	)
 	_check(state.get("agriculture", null) is Dictionary, "new worlds include agriculture in the atomic state")
+	_check(state.get("agriculture", {}).get("soil_moisture", null) is Dictionary, "new worlds initialize irrigation state")
 	if not state.is_empty():
 		hub.save_service.delete_world(str(state.get("metadata", {}).get("id", "")))
 	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):

@@ -4,6 +4,8 @@
     {"id":"planks_from_log","name":"原木分解","station":"hand","ingredients":{"oak_log":1},"output":{"id":"oak_planks","count":4}},
     {"id":"sticks","name":"木棍","station":"hand","ingredients":{"oak_planks":2},"output":{"id":"stick","count":4}},
     {"id":"wheat_seeds_from_grass","name":"筛选小麦种子","station":"hand","ingredients":{"grass_block":1},"output":{"id":"wheat_seeds","count":2}},
+    {"id":"carrot_from_grass","name":"寻找野生胡萝卜","station":"hand","ingredients":{"grass_block":2},"output":{"id":"carrot","count":1}},
+    {"id":"potato_from_dirt","name":"寻找野生马铃薯","station":"hand","ingredients":{"dirt":2},"output":{"id":"potato","count":1}},
     {"id":"crafting_table","name":"工作台","station":"hand","ingredients":{"oak_planks":4},"output":{"id":"crafting_table","count":1}},
     {"id":"torch_coal","name":"火把","station":"hand","ingredients":{"coal":1,"stick":1},"output":{"id":"torch","count":4}},
     {"id":"wooden_pickaxe","name":"木镐","station":"workbench","ingredients":{"oak_planks":3,"stick":2},"output":{"id":"wooden_pickaxe","count":1}},

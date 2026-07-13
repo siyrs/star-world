@@ -10,7 +10,10 @@ const BLOCK_IDS := [
 	"stone_slab", "oak_stairs", "coal_ore", "iron_ore", "gold_ore",
 	"diamond_ore", "crafting_table", "furnace", "chest", "oak_door",
 	"oak_fence", "ladder", "torch", "wool", "ice", "bedrock",
-	"farmland", "wheat_stage_0", "wheat_stage_1", "wheat_stage_2", "wheat_stage_3"
+	"farmland", "wheat_stage_0", "wheat_stage_1", "wheat_stage_2", "wheat_stage_3",
+	"farmland_wet",
+	"carrot_stage_0", "carrot_stage_1", "carrot_stage_2", "carrot_stage_3",
+	"potato_stage_0", "potato_stage_1", "potato_stage_2", "potato_stage_3"
 ]
 
 const DEFINITIONS := {
@@ -44,11 +47,20 @@ const DEFINITIONS := {
 	"wool": {"name":"羊毛", "color":"#F0EFE8", "solid":true, "transparent":false, "collectible":true, "item_id":"wool", "hardness":0.5},
 	"ice": {"name":"冰", "color":"#A8DDEB", "solid":true, "transparent":true, "collectible":true, "item_id":"snow_block", "hardness":0.5},
 	"bedrock": {"name":"基岩", "color":"#25272A", "solid":true, "transparent":false, "collectible":false, "item_id":"", "hardness":-1.0},
-	"farmland": {"name":"耕地", "color":"#5C3924", "solid":true, "transparent":false, "collectible":true, "item_id":"dirt", "hardness":0.65},
+	"farmland": {"name":"干燥耕地", "color":"#5C3924", "solid":true, "transparent":false, "collectible":true, "item_id":"dirt", "hardness":0.65},
 	"wheat_stage_0": {"name":"小麦幼苗", "color":"#5F9E49", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.28},
 	"wheat_stage_1": {"name":"生长中的小麦", "color":"#7AAA48", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.48},
 	"wheat_stage_2": {"name":"抽穗的小麦", "color":"#A9B84A", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.72},
-	"wheat_stage_3": {"name":"成熟小麦", "color":"#D8B94F", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.96}
+	"wheat_stage_3": {"name":"成熟小麦", "color":"#D8B94F", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.96},
+	"farmland_wet": {"name":"湿润耕地", "color":"#3E291C", "solid":true, "transparent":false, "collectible":true, "item_id":"dirt", "hardness":0.65},
+	"carrot_stage_0": {"name":"胡萝卜幼苗", "color":"#4F9946", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.24},
+	"carrot_stage_1": {"name":"生长中的胡萝卜", "color":"#62A94C", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.42},
+	"carrot_stage_2": {"name":"茂盛的胡萝卜", "color":"#78B653", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.62},
+	"carrot_stage_3": {"name":"成熟胡萝卜", "color":"#E98332", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.80},
+	"potato_stage_0": {"name":"马铃薯幼苗", "color":"#4E8845", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.24},
+	"potato_stage_1": {"name":"生长中的马铃薯", "color":"#63964D", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.44},
+	"potato_stage_2": {"name":"开花的马铃薯", "color":"#86A85A", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.66},
+	"potato_stage_3": {"name":"成熟马铃薯", "color":"#B89152", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.84}
 }
 
 

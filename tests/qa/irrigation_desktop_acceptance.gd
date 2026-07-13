@@ -11,10 +11,9 @@ const InteractionScript = preload("res://src/interaction/block_interaction_servi
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
-const OUTPUT_PATH := "user://agriculture-desktop-acceptance.png"
+const OUTPUT_PATH := "user://irrigation-desktop-acceptance.png"
 const SOIL_POSITION := Vector3i(0, 1, -3)
 const CROP_POSITION := Vector3i(0, 2, -3)
-const WATER_POSITION := Vector3i(3, 1, -3)
 const CLEANUP_FRAMES := 6
 
 var checks := 0
@@ -22,15 +21,14 @@ var failures: Array[String] = []
 var _capture_path := ""
 
 
-class DesktopFarmWorld:
+class DesktopIrrigationWorld:
 	extends Node3D
 	var blocks: Dictionary = {}
 	var block_nodes: Dictionary = {}
 
 	func build() -> void:
 		_build_floor()
-		set_test_block(SOIL_POSITION, "grass")
-		set_test_block(WATER_POSITION, "water")
+		set_test_block(SOIL_POSITION, "farmland")
 
 	func bind_focus(_focus: Node3D) -> void:
 		return
@@ -45,8 +43,8 @@ class DesktopFarmWorld:
 		return str(blocks.get(block_key(position), "air"))
 
 	func set_block(position: Vector3i, block_id: String) -> bool:
-		var key := block_key(position)
-		var previous := str(blocks.get(key, "air"))
+		var key: String = block_key(position)
+		var previous: String = str(blocks.get(key, "air"))
 		if previous == block_id:
 			return false
 		blocks[key] = block_id
@@ -54,7 +52,7 @@ class DesktopFarmWorld:
 		return true
 
 	func remove_block(position: Vector3i) -> String:
-		var previous := get_block(position)
+		var previous: String = get_block(position)
 		if previous == "air":
 			return "air"
 		set_block(position, "air")
@@ -68,7 +66,7 @@ class DesktopFarmWorld:
 		return "%d,%d,%d" % [position.x, position.y, position.z]
 
 	func _refresh_block_node(position: Vector3i, block_id: String) -> void:
-		var key := block_key(position)
+		var key: String = block_key(position)
 		var previous = block_nodes.get(key)
 		if previous != null and is_instance_valid(previous):
 			previous.queue_free()
@@ -76,22 +74,20 @@ class DesktopFarmWorld:
 		if block_id == "air":
 			return
 		var body := StaticBody3D.new()
-		body.name = "FarmBlock_%s" % key.replace(",", "_")
+		body.name = "IrrigationBlock_%s" % key.replace(",", "_")
 		body.collision_layer = 1
 		body.collision_mask = 0
 		body.position = Vector3(position) + Vector3(0.5, 0.5, 0.5)
 		add_child(body)
-		var definition := BlockRegistryScript.get_definition(block_id)
-		var shape_name := str(definition.get("shape", "cube"))
-		var height := (
+		var definition: Dictionary = BlockRegistryScript.get_definition(block_id)
+		var shape_name: String = str(definition.get("shape", "cube"))
+		var height: float = (
 			clampf(float(definition.get("crop_height", 1.0)), 0.2, 1.0)
 			if shape_name == "crop"
 			else 1.0
 		)
 		var mesh_size := Vector3(0.82, height, 0.82) if shape_name == "crop" else Vector3.ONE
-		var vertical_offset := (height - 1.0) * 0.5
-		# Production crop meshes intentionally have no physics collision. This fake
-		# world follows the same contract so the test must harvest through farmland.
+		var vertical_offset: float = (height - 1.0) * 0.5
 		if shape_name != "crop":
 			var box_shape := BoxShape3D.new()
 			box_shape.size = mesh_size
@@ -142,10 +138,10 @@ func _run() -> void:
 	var environment := WorldEnvironment.new()
 	var environment_resource := Environment.new()
 	environment_resource.background_mode = Environment.BG_COLOR
-	environment_resource.background_color = Color("#76A7D2")
+	environment_resource.background_color = Color("#78A9D3")
 	environment_resource.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment_resource.ambient_light_color = Color.WHITE
-	environment_resource.ambient_light_energy = 0.85
+	environment_resource.ambient_light_energy = 0.86
 	environment.environment = environment_resource
 	root.add_child(environment)
 	var sun := DirectionalLight3D.new()
@@ -154,7 +150,7 @@ func _run() -> void:
 	root.add_child(sun)
 	var host := Node3D.new()
 	root.add_child(host)
-	var world = DesktopFarmWorld.new()
+	var world = DesktopIrrigationWorld.new()
 	var inventory = InventoryScript.new()
 	var tools = ToolScript.new()
 	var agriculture = AgricultureScript.new()
@@ -173,8 +169,8 @@ func _run() -> void:
 	interactions.setup(null, null, inventory, null)
 	interactions.register_extension(agriculture_adapter)
 	inventory.clear()
-	inventory.add_item("wooden_hoe", 1)
-	inventory.add_item("wheat_seeds", 3)
+	inventory.add_item("water_bucket", 1)
+	inventory.add_item("carrot", 2)
 	inventory.select_slot(0)
 	player.bind_world(world)
 	player.setup_gameplay_services(
@@ -191,49 +187,44 @@ func _run() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	await physics_frame
 	await physics_frame
-	_check(root.get_camera_3d() == player.get_view_camera(), "the player camera owns the agriculture desktop viewport")
+	_check(root.get_camera_3d() == player.get_view_camera(), "the player camera owns the irrigation desktop viewport")
 	_check(
-		str(interactions.get_interaction_hint_for_item("grass", "wooden_hoe")).contains("开垦"),
-		"the real interaction layer explains hoe usage",
+		str(interactions.get_interaction_hint_for_item("farmland", "water_bucket")).contains("浇灌"),
+		"water bucket exposes a clear irrigation prompt",
 	)
 	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
-	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves the soil target")
+	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real ray resolves dry farmland")
 	await _right_click()
-	_check(world.get_block(SOIL_POSITION) == "farmland_wet", "nearby water hydrates newly tilled farmland")
-	_check(
-		int(inventory.get_slot(0).get("metadata", {}).get("durability", 60)) == 59,
-		"desktop tilling consumes visible hoe durability",
-	)
+	_check(world.get_block(SOIL_POSITION) == "farmland_wet", "a real right click hydrates farmland")
+	_check(str(inventory.get_slot(0).get("item_id", "")) == "bucket", "manual irrigation returns an empty bucket")
+	_check(bool(agriculture.get_soil_state(SOIL_POSITION).get("hydrated", false)), "manual irrigation updates domain state")
 	inventory.select_slot(1)
 	await process_frame
-	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
-	_check(_ray_hits_block(player, world, SOIL_POSITION), "the real player ray resolves hydrated farmland")
-	await _right_click()
-	_check(world.get_block(CROP_POSITION) == "wheat_stage_0", "a second real right click plants wheat seeds")
-	_check(inventory.count_item("wheat_seeds") == 2, "desktop planting consumes one seed")
-	agriculture.advance_time(106.0)
-	await process_frame
-	_check(world.get_block(CROP_POSITION) == "wheat_stage_3", "desktop crop reaches its mature visual stage")
 	_check(
-		str(interactions.get_interaction_hint_for_item("wheat_stage_3", "")).contains("收获"),
-		"mature crops expose a clear harvest prompt",
+		str(interactions.get_interaction_hint_for_item("farmland_wet", "carrot")).contains("胡萝卜"),
+		"hydrated farmland explains carrot planting",
 	)
 	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
-	_check(_ray_hits_block(player, world, SOIL_POSITION), "non-colliding crops leave the real ray on supporting soil")
+	await _right_click()
+	_check(world.get_block(CROP_POSITION) == "carrot_stage_0", "a real right click plants a carrot")
+	_check(inventory.count_item("carrot") == 1, "planting consumes one carrot")
+	agriculture.advance_time(106.0)
+	await process_frame
+	_check(world.get_block(CROP_POSITION) == "carrot_stage_3", "manual irrigation supports full carrot growth")
+	await _aim_at(player, Vector3(SOIL_POSITION) + Vector3(0.5, 0.5, 0.5))
+	_check(_ray_hits_block(player, world, SOIL_POSITION), "non-colliding carrots route the ray to supporting soil")
 	player.call("_update_interaction_focus", true)
 	var focus: Dictionary = player.get_interaction_focus()
-	_check(str(focus.get("block_id", "")) == "wheat_stage_3", "focus resolver presents the mature crop instead of its soil proxy")
-	_check(bool(focus.get("interaction_proxy", false)), "crop focus explains that interaction is routed through support soil")
+	_check(str(focus.get("block_id", "")) == "carrot_stage_3", "focus proxy exposes the mature carrot")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
-	_check(image != null and not image.is_empty(), "agriculture desktop viewport produces a rendered frame")
+	_check(image != null and not image.is_empty(), "irrigation desktop viewport produces a rendered frame")
 	if image != null and not image.is_empty():
 		_save_image(image)
 	await _right_click()
-	_check(world.get_block(CROP_POSITION) == "wheat_stage_0", "real pointer harvest automatically replants wheat through soil")
-	_check(inventory.count_item("wheat") == 1, "real pointer harvest grants wheat")
-	_check(inventory.count_item("wheat_seeds") == 4, "real pointer harvest returns seeds")
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "agriculture interactions never release the gameplay mouse")
+	_check(world.get_block(CROP_POSITION) == "carrot_stage_0", "real pointer harvest automatically replants carrots")
+	_check(inventory.count_item("carrot") == 3, "real pointer harvest grants the configured carrot output")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "irrigation interactions preserve gameplay mouse capture")
 	player.set_input_enabled(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	agriculture.clear()
@@ -244,15 +235,15 @@ func _run() -> void:
 		await process_frame
 	if failures.is_empty():
 		print(
-			"QA AGRICULTURE DESKTOP PASS | checks=%d | capture=%s"
+			"QA IRRIGATION DESKTOP PASS | checks=%d | capture=%s"
 			% [checks, _capture_path]
 		)
 		quit(0)
 	else:
 		for failure in failures:
-			push_error("QA AGRICULTURE DESKTOP FAILURE: %s" % failure)
+			push_error("QA IRRIGATION DESKTOP FAILURE: %s" % failure)
 		print(
-			"QA AGRICULTURE DESKTOP FAIL | checks=%d | failures=%d"
+			"QA IRRIGATION DESKTOP FAIL | checks=%d | failures=%d"
 			% [checks, failures.size()]
 		)
 		quit(1)
@@ -308,7 +299,7 @@ func _save_image(image: Image) -> void:
 	var error := image.save_png(_capture_path)
 	_check(
 		error == OK and FileAccess.file_exists(_capture_path),
-		"agriculture desktop screenshot is saved",
+		"irrigation desktop screenshot is saved",
 	)
 
 

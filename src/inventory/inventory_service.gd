@@ -138,6 +138,39 @@ func remove_from_slot(index: int, count: int = 1) -> Dictionary:
 	return result
 
 
+func replace_slot_item(
+	index: int,
+	expected_item_id: String,
+	replacement_item_id: String,
+	replacement_metadata: Dictionary = {}
+) -> bool:
+	if (
+		index < 0
+		or index >= slots.size()
+		or slots[index].is_empty()
+		or expected_item_id.is_empty()
+		or replacement_item_id.is_empty()
+		or not registry.has_item(replacement_item_id)
+	):
+		return false
+	var current: Dictionary = slots[index]
+	if (
+		str(current.get("item_id", "")) != expected_item_id
+		or int(current.get("count", 0)) != 1
+	):
+		return false
+	var replacement: Dictionary = {"item_id": replacement_item_id, "count": 1}
+	if not replacement_metadata.is_empty():
+		replacement["metadata"] = replacement_metadata.duplicate(true)
+	slots[index] = replacement
+	slot_changed.emit(index, replacement.duplicate(true))
+	item_removed.emit(expected_item_id, 1)
+	item_added.emit(replacement_item_id, 1)
+	inventory_changed.emit()
+	_emit_selected_slot()
+	return true
+
+
 func count_item(item_id: String) -> int:
 	var total := 0
 	for slot_value in slots:
