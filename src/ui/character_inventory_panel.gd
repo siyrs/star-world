@@ -321,13 +321,15 @@ func _on_selected_slot_changed(_index: int, _slot: Dictionary) -> void:
 
 
 func _on_transaction_rejected(reason: String, _context: Dictionary) -> void:
-	var message := {
-		"item_not_equippable": "该物品不能放入装备槽",
-		"inventory_full": "背包已满，无法替换或卸下装备",
-		"source_remove_failed": "装备操作失败，请重试",
-		"swap_rollback": "装备交换已回滚，物品没有丢失",
-	}.get(reason, "当前无法完成装备操作")
-	_show_status(str(message), "warning")
+	var message: String = str(
+		{
+			"item_not_equippable": "该物品不能放入装备槽",
+			"inventory_full": "背包已满，无法替换或卸下装备",
+			"source_remove_failed": "装备操作失败，请重试",
+			"swap_rollback": "装备交换已回滚，物品没有丢失",
+		}.get(reason, "当前无法完成装备操作")
+	)
+	_show_status(message, "warning")
 
 
 func _show_status(message: String, severity: String) -> void:
