@@ -5,7 +5,7 @@ signal panel_closed
 signal item_crafted(recipe_id: String)
 
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
-const STATIONS := ["hand", "workbench", "furnace"]
+const STATIONS := ["hand", "workbench"]
 
 var crafting
 var inventory
@@ -83,7 +83,6 @@ func _build_ui() -> void:
 	_station_select = OptionButton.new()
 	_station_select.add_item("随身合成")
 	_station_select.add_item("工作台")
-	_station_select.add_item("熔炉")
 	_station_select.disabled = true
 	_station_select.tooltip_text = "工位由当前打开的世界方块决定"
 	header.add_child(_station_select)
@@ -133,4 +132,4 @@ func _recipe_text(recipe: Dictionary) -> String:
 
 
 func _station_name(station: String) -> String:
-	return {"hand": "随身", "workbench": "工作台", "furnace": "熔炉"}.get(station, station)
+	return {"hand": "随身", "workbench": "工作台"}.get(station, station)
