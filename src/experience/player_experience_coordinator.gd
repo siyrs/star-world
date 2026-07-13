@@ -11,8 +11,8 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 
 const SERIAL_VERSION := 1
 
-var feedback: Node
-var onboarding: Node
+var feedback
+var onboarding
 var inventory: Node
 var game_ui: Node
 var interaction_service: Node
@@ -32,7 +32,7 @@ func _ready() -> void:
 	onboarding = OnboardingScript.new()
 	onboarding.name = "Onboarding"
 	add_child(onboarding)
-	onboarding.tutorial_completed.connect(_on_tutorial_completed)
+	onboarding.connect("tutorial_completed", Callable(self, "_on_tutorial_completed"))
 	experience_ready.emit()
 
 
@@ -66,44 +66,44 @@ func detach_player() -> void:
 	player = null
 	_current_focus.clear()
 	if feedback != null:
-		feedback.clear_prompt()
+		feedback.call("clear_prompt")
 
 
 func prepare_world(state: Dictionary) -> void:
 	_current_focus.clear()
 	_gameplay_active = false
 	if feedback != null:
-		feedback.clear()
+		feedback.call("clear")
 	if onboarding != null:
 		var onboarding_state: Dictionary = state.get("onboarding", {})
-		onboarding.deserialize(onboarding_state)
+		onboarding.call("deserialize", onboarding_state)
 
 
 func begin_gameplay() -> void:
 	_gameplay_active = true
 	_refresh_prompt()
 	if onboarding != null:
-		onboarding.state_changed.emit(onboarding.get_state())
+		onboarding.call("refresh_state")
 
 
 func end_gameplay() -> void:
 	_gameplay_active = false
 	_current_focus.clear()
 	if feedback != null:
-		feedback.clear()
+		feedback.call("clear")
 
 
 func apply_settings(settings: Dictionary) -> void:
 	prompts_enabled = bool(settings.get("show_interaction_prompts", true))
 	if onboarding != null:
-		onboarding.set_enabled(bool(settings.get("show_tutorial", true)))
+		onboarding.call("set_enabled", bool(settings.get("show_tutorial", true)))
 	_refresh_prompt()
 
 
 func serialize() -> Dictionary:
 	return {
 		"version": SERIAL_VERSION,
-		"onboarding": onboarding.serialize() if onboarding != null else {},
+		"onboarding": onboarding.call("serialize") if onboarding != null else {},
 	}
 
 
@@ -111,15 +111,15 @@ func publish_message(
 	message: String, severity: String = "info", duration: float = 2.4, dedupe_key: String = ""
 ) -> void:
 	if feedback != null:
-		feedback.publish(message, severity, duration, dedupe_key)
+		feedback.call("publish", message, severity, duration, dedupe_key)
 
 
 func get_feedback() -> Node:
-	return feedback
+	return feedback as Node
 
 
 func get_onboarding() -> Node:
-	return onboarding
+	return onboarding as Node
 
 
 func get_status() -> Dictionary:
@@ -128,8 +128,8 @@ func get_status() -> Dictionary:
 		"prompts_enabled": prompts_enabled,
 		"player_attached": is_instance_valid(player),
 		"focus": _current_focus.duplicate(true),
-		"onboarding": onboarding.get_state() if onboarding != null else {},
-		"prompt": feedback.get_prompt() if feedback != null else {},
+		"onboarding": onboarding.call("get_state") if onboarding != null else {},
+		"prompt": feedback.call("get_prompt") if feedback != null else {},
 	}
 
 
@@ -140,7 +140,7 @@ func _on_interaction_focus_changed(focus: Dictionary) -> void:
 
 func _on_gameplay_action_reported(action: StringName, payload: Dictionary) -> void:
 	if onboarding != null:
-		onboarding.report_action(action)
+		onboarding.call("report_action", action)
 	match str(action):
 		"mine":
 			_publish_block_action("已采集", payload, "success")
@@ -157,13 +157,13 @@ func _on_selected_slot_changed(_index: int, _slot: Dictionary) -> void:
 
 func _on_overlay_changed(_overlay: int, context: StringName) -> void:
 	if context == InputContextScript.CONTEXT_INVENTORY and onboarding != null:
-		onboarding.report_action(&"inventory")
+		onboarding.call("report_action", &"inventory")
 	elif context == InputContextScript.CONTEXT_CRAFTING and onboarding != null:
-		onboarding.report_action(&"crafting")
+		onboarding.call("report_action", &"crafting")
 	if context == InputContextScript.CONTEXT_GAMEPLAY:
 		_refresh_prompt()
 	elif feedback != null:
-		feedback.clear_prompt()
+		feedback.call("clear_prompt")
 
 
 func _on_tutorial_completed() -> void:
@@ -179,12 +179,12 @@ func _refresh_prompt() -> void:
 	if feedback == null:
 		return
 	if not _gameplay_active or not prompts_enabled:
-		feedback.clear_prompt()
+		feedback.call("clear_prompt")
 		return
 	var prompt: Dictionary = _prompt_resolver.resolve(
 		_current_focus, inventory, interaction_service
 	)
-	feedback.set_prompt(prompt)
+	feedback.call("set_prompt", prompt)
 
 
 func _publish_block_action(prefix: String, payload: Dictionary, severity: String) -> void:
