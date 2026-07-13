@@ -182,7 +182,7 @@ func _run() -> void:
 	await physics_frame
 	_check(root.get_camera_3d() == player.get_view_camera(), "the player camera owns the agriculture desktop viewport")
 	_check(
-		str(interactions.get_interaction_hint("grass", "wooden_hoe")).contains("开垦"),
+		str(interactions.get_interaction_hint_for_item("grass", "wooden_hoe")).contains("开垦"),
 		"the real interaction layer explains hoe usage",
 	)
 	await _right_click()
@@ -200,7 +200,7 @@ func _run() -> void:
 	await process_frame
 	_check(world.get_block(CROP_POSITION) == "wheat_stage_3", "desktop crop reaches its mature visual stage")
 	_check(
-		str(interactions.get_interaction_hint("wheat_stage_3", "")).contains("收获"),
+		str(interactions.get_interaction_hint_for_item("wheat_stage_3", "")).contains("收获"),
 		"mature crops expose a clear harvest prompt",
 	)
 	player.restore_orientation({"rotation":[0.0,0.0,0.0],"look_pitch":deg_to_rad(-16.0)})
