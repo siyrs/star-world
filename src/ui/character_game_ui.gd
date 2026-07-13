@@ -27,7 +27,7 @@ func _replace_inventory_panel() -> void:
 		previous_panel.queue_free()
 	inventory_panel = CharacterPanelScript.new()
 	inventory_panel.name = "CharacterInventoryPanel"
-	_center_control(inventory_panel, Vector2(960, 540))
+	_center_control(inventory_panel, Vector2(920, 520))
 	add_child(inventory_panel)
 	inventory_panel.visible = false
 	inventory_panel.panel_closed.connect(_close_overlay)
