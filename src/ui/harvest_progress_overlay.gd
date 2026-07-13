@@ -142,15 +142,17 @@ func _on_harvest_completed(result: Dictionary) -> void:
 
 func _on_harvest_rejected(reason: String, snapshot: Dictionary) -> void:
 	clear()
-	var message := {
-		"unbreakable": "这个方块无法破坏",
-		"protected": "请先清空方块中的内容再拆除",
-		"inventory_full": "背包没有空间，采集已取消",
-		"target_changed": "采集目标发生变化",
-		"remove_failed": "方块状态已变化，请重试",
-	}.get(reason, "当前无法采集该方块")
+	var message: String = str(
+		{
+			"unbreakable": "这个方块无法破坏",
+			"protected": "请先清空方块中的内容再拆除",
+			"inventory_full": "背包没有空间，采集已取消",
+			"target_changed": "采集目标发生变化",
+			"remove_failed": "方块状态已变化，请重试",
+		}.get(reason, "当前无法采集该方块")
+	)
 	_publish(
-		str(message),
+		message,
 		"warning",
 		2.8,
 		"harvest_rejected:%s:%s" % [reason, str(snapshot.get("block_id", ""))]
