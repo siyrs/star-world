@@ -14,47 +14,57 @@
 - 功能先形成可玩的闭环，再扩展内容数量；
 - 真实桌面与最终 Windows Release 是合入主分支的必要证据。
 
-## 当前架构方向
+## 当前领域结构
 
 ```text
 Game Runtime
-├── World Domain
-│   ├── Chunk Streaming
-│   ├── Terrain Generation
-│   └── Block State
+├─ World Domain
+│  ├─ Chunk Streaming
+│  ├─ Terrain Generation
+│  └─ Block State
 │
-├── Player Domain
-│   ├── Movement
-│   ├── Survival
-│   ├── Inventory
-│   └── Equipment（下一阶段）
+├─ Player Domain
+│  ├─ Movement
+│  ├─ Survival
+│  ├─ Inventory
+│  ├─ Equipment
+│  ├─ Attributes
+│  └─ Combat
 │
-├── Harvest Domain
-│   ├── Tool Capability
-│   ├── Block Hardness
-│   ├── Harvest Policy
-│   ├── Timed Harvest Transaction
-│   └── Durability
+├─ Harvest Domain
+│  ├─ Tool Capability
+│  ├─ Block Hardness
+│  ├─ Harvest Policy
+│  ├─ Timed Harvest Transaction
+│  └─ Durability
 │
-├── Interaction Domain
-│   ├── Block Interaction
-│   ├── Container
-│   └── Machine
+├─ Agriculture Domain
+│  ├─ Crop Registry
+│  ├─ Position State
+│  ├─ Growth Timeline
+│  ├─ Harvest Transaction
+│  └─ Offline Recovery
 │
-├── Crafting Domain
-│   ├── Recipes
-│   └── Stations
+├─ Interaction Domain
+│  ├─ Block Interaction
+│  ├─ Extension Ports
+│  ├─ Container
+│  └─ Machine
 │
-├── Persistence Domain
-│   ├── Save Transaction
-│   ├── Migration
-│   └── Recovery
+├─ Crafting Domain
+│  ├─ Recipes
+│  └─ Stations
 │
-└── Experience Layer
-    ├── UI
-    ├── Feedback
-    ├── Audio
-    └── Guidance
+├─ Persistence Domain
+│  ├─ Atomic Save Transaction
+│  ├─ Migration
+│  └─ Recovery
+│
+└─ Experience Layer
+   ├─ UI
+   ├─ Feedback
+   ├─ Audio
+   └─ Guidance
 ```
 
 ## 已完成里程碑
@@ -85,7 +95,7 @@ Game Runtime
 
 已完成第一阶段 Minecraft 风格采集闭环：
 
-- 镐、斧、剑工具类型；
+- 镐、斧、铲、锄和剑；
 - 木、石、铁、钻石工具等级；
 - 方块硬度；
 - 按住采集与进度状态机；
@@ -99,72 +109,100 @@ Game Runtime
 
 架构合同见 [TOOL_HARVEST.md](TOOL_HARVEST.md)。
 
+### 装备与战斗属性
+
+已完成第一阶段角色成长闭环：
+
+- 主手、头部、胸部、腿部和脚部槽位；
+- 数据驱动武器伤害；
+- 皮革与铁制防具；
+- 属性聚合和防御减伤；
+- 武器与防具耐久；
+- 角色/背包整合面板；
+- 原子装备替换与背包满保护；
+- 存档迁移、真实桌面和 Windows Release 验收。
+
+架构合同见 [EQUIPMENT_SYSTEM.md](EQUIPMENT_SYSTEM.md)。
+
+### 农业与食物生产链
+
+已完成第一阶段可持续食物生产闭环：
+
+- 四档铲和锄；
+- 草地/泥土开垦为耕地；
+- 小麦种子获取；
+- 四个可辨识生长阶段；
+- 位置型作物状态；
+- 有界离线生长；
+- 背包容量预演和事务回滚；
+- 成熟收获与自动补种；
+- 小麦到面包的真实配方；
+- 作物低面数无碰撞渲染；
+- 通用交互扩展端口；
+- 旧存档迁移、真实右键和最终 Release 门禁。
+
+架构合同见 [AGRICULTURE.md](AGRICULTURE.md)。
+
 ## 下一阶段重点
 
-### 1. 装备与战斗属性
+### 1. 生存生产链扩展
 
-目标：把现有武器和耐久底座扩展为可理解、可比较的角色成长系统。
+目标：让农业从单一小麦演进为有选择、有约束的长期基地玩法。
 
-建议领域结构：
+建议顺序：
 
 ```text
-EquipmentService
-├── EquipmentSlotPolicy
-├── AttributeResolver
-├── DamagePolicy
-├── DefensePolicy
-└── DurabilityAdapter
+耕地湿润度
+→ 水源简化影响
+→ 胡萝卜/马铃薯等第二类作物
+→ 肥料
+→ 动物繁殖
+→ 更丰富的食物配方
 ```
 
-第一阶段范围：
+要求：
 
-- 主手、头部、胸部、腿部、脚部槽位；
-- 武器伤害由 ItemRegistry 数据驱动；
-- 防具减伤与最小伤害规则；
-- 装备面板与角色属性摘要；
-- 装备耐久；
-- 保存、加载和死亡/重生合同；
-- 不把属性计算塞进 Creature 或 Player UI。
+- 继续由 `AgricultureService` 拥有位置状态；
+- 水源和光照通过纯策略计算；
+- 不允许每个作物创建独立 `_process`；
+- 扩展前先测量大规模农田对区块重建和保存体积的影响。
 
-### 2. 采集工具扩展
+### 2. 工具维修与维护经济
 
-在现有采集事务上增加内容，而不改变核心结构：
+现有耐久已经产生消耗，下一阶段需要给玩家可理解的维护路径：
 
-- 铲：泥土、沙子、雪；
-- 锄：耕地转换；
-- 剪刀：树叶、羊毛等特殊掉落；
-- 工具维修；
-- 可选的附魔或品质 metadata；
-- 采集命中特效和声音层次；
-- 世界方块裂纹或阶段性视觉反馈。
+- 铁砧或维修台能力；
+- 同类工具合并；
+- 维修材料与成本；
+- 不覆盖自定义 metadata；
+- 满耐久、背包空间和失败回滚；
+- 为附魔或品质预留，但不立即堆叠复杂词条。
 
-优先保持：数据规则、纯策略、事务提交、体验展示四层分离。
+维修应是独立领域或机器能力，不能直接写进 InventoryPanel。
 
-### 3. 农业与食物生产链
+### 3. 探索与资源层级
 
-目标：建立稳定、可保存的长期生存循环。
-
-方向：
-
-- 耕地状态；
-- 种子与作物；
-- 生长阶段；
-- 光照/水源的简化影响；
-- 收获与重新种植；
-- 动物繁殖；
-- 食物生产与熔炉加工衔接。
-
-建议独立 `AgricultureService` 拥有位置型作物状态，世界只保存方块与稀疏覆盖，不让 UI 或 Player 直接推进生长。
-
-### 4. 探索与资源层级
-
-工具等级已经提供资源门槛，下一步需要把门槛转化为探索动力：
+工具、装备和食物生产已经提供成长基础，下一步需要把成长转化为探索动力：
 
 - 更明确的矿物深度分布；
 - 不同地图的资源偏好；
 - 危险区域与高级材料；
+- 地图特有掉落；
 - 可理解的探索反馈；
 - 避免仅靠增加矿物数量制造重复劳动。
+
+### 4. 战斗深度与敌对生态
+
+在现有 CombatService 上逐步增加：
+
+- 攻击冷却；
+- 击退；
+- 生物攻击提示；
+- 简化暴击；
+- 更明确的死亡原因；
+- 敌对生物与地图危险度联动。
+
+先确保基础战斗节奏和反馈，再增加状态效果或 Boss。
 
 ### 5. 自动化机器基础
 
@@ -184,12 +222,12 @@ EquipmentService
 当前建议顺序：
 
 ```text
-P0  基本功能、输入、保存、发行稳定性            持续守护
-P1  装备与战斗属性                              下一里程碑
-P1  铲/锄/维修及采集视觉反馈                    与装备并行设计
-P2  农业与食物生产链                            形成长期生存循环
-P2  探索与资源层级                              增强成长动机
-P3  更多机器与自动化                            在闭环稳定后扩展
+P0  基本功能、输入、保存、发行稳定性          持续守护
+P1  工具维修与农业生产链扩展                  下一里程碑
+P1  探索与资源层级                            建立成长动机
+P2  战斗节奏与敌对生态                        提升风险回报
+P2  更多作物、动物繁殖和食物                  丰富基地循环
+P3  更多机器与自动化                          闭环稳定后扩展
 ```
 
 每个里程碑必须具备：
@@ -219,7 +257,9 @@ P3  更多机器与自动化                            在闭环稳定后扩展
 7. Windows Release 验收；
 8. 日志无脚本错误、解析错误和资源泄漏；
 9. UI 不直接修改领域 Dictionary；
-10. Player 不承担存档、面板或复杂规则。
+10. Player 不承担存档、面板或复杂规则；
+11. 高数量对象必须共享调度，而不是每对象独立 `_process`；
+12. 扩展公共合同必须保留兼容入口或提供明确迁移。
 
 ## 设计规范
 
@@ -237,17 +277,18 @@ P3  更多机器与自动化                            在闭环稳定后扩展
 
 - 避免 God Object；
 - 服务职责单一；
-- 通过事件和小型端口降低耦合；
+- 通过事件、小型端口和能力查询降低耦合；
 - 优先组合；继承仅用于薄适配层；
 - 高成本循环必须有预算和上限；
 - 动态调用边界必须显式类型收窄；
-- 领域写入必须可以验证成功或失败。
+- 领域写入必须可以验证成功或失败；
+- 方块数值 ID 只追加，避免破坏旧存档。
 
 ### 产品
 
 - 先解决用户能否理解和完成目标，再增加内容数量；
 - 不用隐藏惩罚制造“深度”；
-- 工具不足、空间不足、权限不足等失败必须提前解释；
+- 工具不足、空间不足、权限不足、作物未成熟等失败必须提前解释；
 - 新功能不能破坏移动、鼠标、按钮、画面、保存或退出资源；
 - 每次主分支更新都应保留可复现的发行证据。
 
