@@ -8,8 +8,11 @@ signal crop_harvested(position: Vector3i, crop_id: String, outputs: Array)
 signal agriculture_rejected(reason: String, context: Dictionary)
 
 const CropRegistryScript = preload("res://src/agriculture/crop_registry.gd")
+const SoilMoistureServiceScript = preload(
+	"res://src/agriculture/soil_moisture_service.gd"
+)
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
-const SERIAL_VERSION := 1
+const SERIAL_VERSION := 2
 const PROCESS_INTERVAL_SECONDS := 0.5
 const MAX_OFFLINE_SECONDS := 6.0 * 60.0 * 60.0
 const INVALID_POSITION := Vector3i(2147483647, 2147483647, 2147483647)
@@ -17,12 +20,13 @@ const INVALID_POSITION := Vector3i(2147483647, 2147483647, 2147483647)
 var item_registry
 var tool_service: Node
 var crop_registry = CropRegistryScript.new()
+var soil_moisture = SoilMoistureServiceScript.new()
 var world: Node
 var inventory: Node
 
 var _crops: Dictionary = {}
-var _process_accumulator := 0.0
-var _offline_seconds := 0.0
+var _process_accumulator: float = 0.0
+var _offline_seconds: float = 0.0
 
 
 func _ready() -> void:
@@ -37,13 +41,16 @@ func setup(p_item_registry, p_tool_service: Node) -> void:
 func attach_world(p_world: Node, p_inventory: Node) -> void:
 	world = p_world
 	inventory = p_inventory
+	soil_moisture.attach_world(world)
 	_sync_world_from_state()
+	soil_moisture.refresh_all()
 	if _offline_seconds > 0.0:
 		advance_time(_offline_seconds)
 		_offline_seconds = 0.0
 
 
 func detach_world() -> void:
+	soil_moisture.detach_world()
 	world = null
 	inventory = null
 	_process_accumulator = 0.0
@@ -52,6 +59,7 @@ func detach_world() -> void:
 func clear() -> void:
 	detach_world()
 	_crops.clear()
+	soil_moisture.clear()
 	_offline_seconds = 0.0
 
 
@@ -86,6 +94,10 @@ func deserialize(data: Dictionary) -> bool:
 					0.0, float(raw_state.get("elapsed_seconds", 0.0))
 				),
 			}
+	var soil_state_value: Variant = data.get("soil_moisture", {})
+	soil_moisture.deserialize(
+		soil_state_value if soil_state_value is Dictionary else {}
+	)
 	var saved_at: int = int(
 		data.get("saved_at_unix", Time.get_unix_time_from_system())
 	)
@@ -96,13 +108,15 @@ func deserialize(data: Dictionary) -> bool:
 
 func serialize() -> Dictionary:
 	var saved_crops: Dictionary = {}
-	for key in _crops:
+	for raw_key in _crops:
+		var key: String = str(raw_key)
 		var state: Dictionary = _crops[key]
-		saved_crops[str(key)] = state.duplicate(true)
+		saved_crops[key] = state.duplicate(true)
 	return {
 		"version": SERIAL_VERSION,
 		"saved_at_unix": int(Time.get_unix_time_from_system()),
 		"crops": saved_crops,
+		"soil_moisture": soil_moisture.serialize(),
 	}
 
 
@@ -112,6 +126,10 @@ func get_crop_count() -> int:
 
 func get_crop_state(position: Vector3i) -> Dictionary:
 	return _crops.get(_position_key(position), {}).duplicate(true)
+
+
+func get_soil_state(position: Vector3i) -> Dictionary:
+	return soil_moisture.get_state(position)
 
 
 func get_snapshot() -> Dictionary:
@@ -126,11 +144,16 @@ func try_interact(
 ) -> Dictionary:
 	if p_world == null or p_inventory == null:
 		return {"handled": false}
+	var moisture_result: Dictionary = soil_moisture.try_interact(
+		p_world, p_inventory, block_position, block_id
+	)
+	if bool(moisture_result.get("handled", false)):
+		return moisture_result
 	var selected_item_id: String = _selected_item_id(p_inventory)
 	var tool_type: String = _tool_type(selected_item_id)
 	if block_id in ["grass", "dirt"] and tool_type == "hoe":
 		return _till_soil(p_world, p_inventory, block_position, block_id)
-	if block_id == "farmland":
+	if soil_moisture.is_farmland_block(block_id):
 		var seed_crop: Dictionary = crop_registry.get_crop_by_seed(selected_item_id)
 		if not seed_crop.is_empty():
 			return _plant_crop(p_world, p_inventory, block_position, seed_crop)
@@ -142,9 +165,14 @@ func try_interact(
 
 
 func get_interaction_hint(block_id: String, selected_item_id: String = "") -> String:
+	var moisture_hint: String = soil_moisture.get_interaction_hint(
+		block_id, selected_item_id
+	)
+	if not moisture_hint.is_empty():
+		return moisture_hint
 	if block_id in ["grass", "dirt"] and _tool_type(selected_item_id) == "hoe":
 		return "右键开垦耕地"
-	if block_id == "farmland":
+	if soil_moisture.is_farmland_block(block_id):
 		var seed_crop: Dictionary = crop_registry.get_crop_by_seed(selected_item_id)
 		if not seed_crop.is_empty():
 			return "右键播种%s" % str(seed_crop.get("name", "作物"))
@@ -166,8 +194,9 @@ func on_block_removed(p_world: Node, block_position: Vector3i, block_id: String)
 	if crop_registry.is_crop_block(block_id):
 		_crops.erase(_position_key(block_position))
 		return
-	if block_id != "farmland":
+	if not soil_moisture.is_farmland_block(block_id):
 		return
+	soil_moisture.on_block_removed(block_position, block_id)
 	var crop_position: Vector3i = block_position + Vector3i.UP
 	var removed: bool = _crops.erase(_position_key(crop_position))
 	if removed and p_world != null:
@@ -178,14 +207,29 @@ func on_block_removed(p_world: Node, block_position: Vector3i, block_id: String)
 func advance_time(seconds: float) -> void:
 	if world == null or seconds <= 0.0:
 		return
+	var occupied_soil_keys: Dictionary = {}
 	var keys: Array = _crops.keys().duplicate()
 	for key_value in keys:
-		_advance_crop(str(key_value), seconds)
+		var key: String = str(key_value)
+		var state: Dictionary = _crops.get(key, {})
+		var crop_position: Vector3i = _position_from_value(state.get("position", []))
+		if crop_position == INVALID_POSITION:
+			_crops.erase(key)
+			continue
+		var soil_position: Vector3i = crop_position + Vector3i.DOWN
+		var soil_key: String = soil_moisture.position_key(soil_position)
+		occupied_soil_keys[soil_key] = true
+		var effective_seconds: float = soil_moisture.consume_growth_seconds(
+			soil_position, seconds
+		)
+		_advance_crop(key, effective_seconds)
+	soil_moisture.advance_unoccupied_soils(seconds, occupied_soil_keys)
 
 
 func _process(delta: float) -> void:
 	if world == null or delta <= 0.0:
 		return
+	soil_moisture.tick(delta)
 	_process_accumulator += delta
 	if _process_accumulator < PROCESS_INTERVAL_SECONDS:
 		return
@@ -203,13 +247,16 @@ func _till_soil(
 	var above: Vector3i = block_position + Vector3i.UP
 	if str(p_world.call("get_block", above)) != BlockRegistryScript.AIR:
 		return _reject("space_blocked", block_position, block_id, "上方空间被占用，无法开垦")
-	if not bool(p_world.call("set_block", block_position, "farmland")):
+	var dry_block: String = soil_moisture.policy.dry_block
+	if not bool(p_world.call("set_block", block_position, dry_block)):
 		return _reject("world_update_failed", block_position, block_id, "耕地状态更新失败")
 	var durability: Dictionary = {}
 	if tool_service != null and tool_service.has_method("consume_selected_durability"):
 		durability = tool_service.call(
 			"consume_selected_durability", p_inventory, 1, "till_soil"
 		)
+	var soil_state: Dictionary = soil_moisture.register_soil(block_position, true)
+	var hydrated: bool = bool(soil_state.get("hydrated", false))
 	soil_tilled.emit(block_position, block_id)
 	return {
 		"handled": true,
@@ -218,7 +265,8 @@ func _till_soil(
 		"position": block_position,
 		"previous_block": block_id,
 		"durability": durability,
-		"message": "已开垦耕地",
+		"hydrated": hydrated,
+		"message": "已开垦%s耕地" % ("湿润" if hydrated else "干燥"),
 		"severity": "success",
 	}
 
@@ -229,21 +277,25 @@ func _plant_crop(
 	farmland_position: Vector3i,
 	crop_definition: Dictionary
 ) -> Dictionary:
+	var farmland_block: String = str(p_world.call("get_block", farmland_position))
+	if not soil_moisture.is_farmland_block(farmland_block):
+		return _reject("soil_invalid", farmland_position, farmland_block, "只能在耕地上播种")
 	var crop_position: Vector3i = farmland_position + Vector3i.UP
 	if str(p_world.call("get_block", crop_position)) != BlockRegistryScript.AIR:
-		return _reject("space_blocked", farmland_position, "farmland", "耕地上方已有方块")
+		return _reject("space_blocked", farmland_position, farmland_block, "耕地上方已有方块")
 	var seed_item: String = str(crop_definition.get("seed_item", ""))
 	if _selected_item_id(p_inventory) != seed_item:
 		return {"handled": false}
 	var selected_slot: int = int(p_inventory.get("selected_slot"))
 	var removed: Dictionary = p_inventory.call("remove_from_slot", selected_slot, 1)
 	if removed.is_empty():
-		return _reject("seed_remove_failed", farmland_position, "farmland", "种子消耗失败")
+		return _reject("seed_remove_failed", farmland_position, farmland_block, "种植材料消耗失败")
 	var crop_id: String = str(crop_definition.get("id", ""))
 	var stage_block: String = crop_registry.get_stage_block(crop_id, 0)
 	if stage_block.is_empty() or not bool(p_world.call("set_block", crop_position, stage_block)):
 		p_inventory.call("add_item", seed_item, 1, removed.get("metadata", {}))
-		return _reject("world_update_failed", farmland_position, "farmland", "播种失败，种子已退回")
+		return _reject("world_update_failed", farmland_position, farmland_block, "播种失败，种植材料已退回")
+	soil_moisture.register_soil(farmland_position, true)
 	var key: String = _position_key(crop_position)
 	_crops[key] = {
 		"crop_id": crop_id,
@@ -285,22 +337,21 @@ func _harvest_crop(
 			block_id,
 			"%s仍在生长（%d%%）" % [str(crop_definition.get("name", "作物")), progress]
 		)
-	var harvest: Dictionary = crop_definition.get("harvest", {})
-	var outputs: Array = [
-		{
-			"item_id": str(crop_definition.get("produce_item", "")),
-			"count": maxi(1, int(harvest.get("produce_count", 1))),
-		},
-		{
-			"item_id": str(crop_definition.get("seed_item", "")),
-			"count": maxi(1, int(harvest.get("seed_count", 1))),
-		},
-	]
+	var outputs: Array[Dictionary] = crop_registry.get_harvest_outputs(crop_id)
+	if outputs.is_empty():
+		return _reject("harvest_outputs_missing", crop_position, block_id, "作物没有有效收获配置")
 	if not _can_store_outputs(p_inventory, outputs):
 		return _reject("inventory_full", crop_position, block_id, "背包空间不足，作物保持成熟状态")
-	var first_stage: String = crop_registry.get_stage_block(crop_id, 0)
-	if first_stage.is_empty() or not bool(p_world.call("set_block", crop_position, first_stage)):
-		return _reject("world_update_failed", crop_position, block_id, "作物重置失败")
+	var auto_replant: bool = crop_registry.should_auto_replant(crop_id)
+	var replacement_block: String = (
+		crop_registry.get_stage_block(crop_id, 0)
+		if auto_replant
+		else BlockRegistryScript.AIR
+	)
+	if replacement_block.is_empty() or not bool(
+		p_world.call("set_block", crop_position, replacement_block)
+	):
+		return _reject("world_update_failed", crop_position, block_id, "作物收获状态更新失败")
 	var granted: Array = []
 	for output_value in outputs:
 		var output: Dictionary = output_value
@@ -323,12 +374,15 @@ func _harvest_crop(
 			p_world.call("set_block", crop_position, block_id)
 			return _reject("inventory_race", crop_position, block_id, "背包状态变化，收获已回滚")
 	var key: String = _position_key(crop_position)
-	_crops[key] = {
-		"crop_id": crop_id,
-		"position": [crop_position.x, crop_position.y, crop_position.z],
-		"stage": 0,
-		"elapsed_seconds": 0.0,
-	}
+	if auto_replant:
+		_crops[key] = {
+			"crop_id": crop_id,
+			"position": [crop_position.x, crop_position.y, crop_position.z],
+			"stage": 0,
+			"elapsed_seconds": 0.0,
+		}
+	else:
+		_crops.erase(key)
 	crop_harvested.emit(crop_position, crop_id, granted.duplicate(true))
 	return {
 		"handled": true,
@@ -337,13 +391,15 @@ func _harvest_crop(
 		"position": crop_position,
 		"crop_id": crop_id,
 		"outputs": granted,
-		"message": "收获%s，并自动补种" % str(crop_definition.get("name", "作物")),
+		"message": (
+			"收获%s，并自动补种" if auto_replant else "收获%s"
+		) % str(crop_definition.get("name", "作物")),
 		"severity": "success",
 	}
 
 
-func _advance_crop(key: String, seconds: float) -> void:
-	if not _crops.has(key):
+func _advance_crop(key: String, effective_seconds: float) -> void:
+	if effective_seconds <= 0.0 or not _crops.has(key):
 		return
 	var state: Dictionary = _crops[key]
 	var position: Vector3i = _position_from_value(state.get("position", []))
@@ -355,7 +411,9 @@ func _advance_crop(key: String, seconds: float) -> void:
 	if crop_definition.is_empty():
 		_crops.erase(key)
 		return
-	if str(world.call("get_block", position + Vector3i.DOWN)) != "farmland":
+	var soil_position: Vector3i = position + Vector3i.DOWN
+	var soil_block: String = str(world.call("get_block", soil_position))
+	if not soil_moisture.is_farmland_block(soil_block):
 		_crops.erase(key)
 		return
 	var current_block: String = str(world.call("get_block", position))
@@ -371,7 +429,7 @@ func _advance_crop(key: String, seconds: float) -> void:
 	)
 	var elapsed: float = maxf(
 		0.0, float(state.get("elapsed_seconds", 0.0))
-	) + seconds
+	) + effective_seconds
 	while stage < stage_blocks.size() - 1:
 		var duration: float = crop_registry.get_stage_duration(crop_id, stage)
 		if duration <= 0.0 or elapsed < duration:
@@ -400,9 +458,12 @@ func _sync_world_from_state() -> void:
 		if position == INVALID_POSITION or crop_definition.is_empty():
 			_crops.erase(key)
 			continue
-		if str(world.call("get_block", position + Vector3i.DOWN)) != "farmland":
+		var soil_position: Vector3i = position + Vector3i.DOWN
+		var soil_block: String = str(world.call("get_block", soil_position))
+		if not soil_moisture.is_farmland_block(soil_block):
 			_crops.erase(key)
 			continue
+		soil_moisture.register_soil(soil_position, false)
 		var stage_blocks: Array = crop_definition.get("stage_blocks", [])
 		if stage_blocks.is_empty():
 			_crops.erase(key)
