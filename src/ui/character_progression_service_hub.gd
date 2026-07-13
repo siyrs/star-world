@@ -5,11 +5,15 @@ const EquipmentServiceScript = preload("res://src/equipment/equipment_service.gd
 const AttributeServiceScript = preload("res://src/attribute/attribute_service.gd")
 const CombatServiceScript = preload("res://src/combat/combat_service.gd")
 const AgricultureServiceScript = preload("res://src/agriculture/agriculture_service.gd")
+const AgricultureInteractionAdapterScript = preload(
+	"res://src/agriculture/agriculture_interaction_adapter.gd"
+)
 
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
 var agriculture_service: Node
+var agriculture_interaction: Node
 
 
 func _ready() -> void:
@@ -22,8 +26,12 @@ func _ready() -> void:
 	combat_service.call("setup", attribute_service, equipment_service)
 	agriculture_service = _add_service(AgricultureServiceScript.new(), "AgricultureService")
 	agriculture_service.call("setup", inventory.registry, tool_service)
+	agriculture_interaction = _add_service(
+		AgricultureInteractionAdapterScript.new(), "AgricultureInteraction"
+	)
+	agriculture_interaction.call("setup", agriculture_service)
 	if block_interaction != null and block_interaction.has_method("register_extension"):
-		block_interaction.call("register_extension", agriculture_service)
+		block_interaction.call("register_extension", agriculture_interaction)
 	if game_ui != null and game_ui.has_method("setup_character_progression"):
 		game_ui.call(
 			"setup_character_progression", equipment_service, attribute_service, combat_service
@@ -101,10 +109,10 @@ func get_character_snapshot() -> Dictionary:
 func _exit_tree() -> void:
 	if (
 		block_interaction != null
-		and agriculture_service != null
+		and agriculture_interaction != null
 		and block_interaction.has_method("unregister_extension")
 	):
-		block_interaction.call("unregister_extension", agriculture_service)
+		block_interaction.call("unregister_extension", agriculture_interaction)
 	_clear_progression_state()
 	super._exit_tree()
 
@@ -123,6 +131,9 @@ func _connect_agriculture_audio() -> void:
 	agriculture_service.connect("soil_tilled", Callable(self, "_on_soil_tilled"))
 	agriculture_service.connect("crop_planted", Callable(self, "_on_crop_planted"))
 	agriculture_service.connect("crop_harvested", Callable(self, "_on_crop_harvested"))
+	var moisture = agriculture_service.get("soil_moisture")
+	if moisture != null and moisture.has_signal("soil_watered"):
+		moisture.connect("soil_watered", Callable(self, "_on_soil_watered"))
 
 
 func _on_item_equipped(slot_id: String, item: Dictionary, _previous: Dictionary) -> void:
@@ -154,6 +165,11 @@ func _on_equipped_item_broken(
 func _on_soil_tilled(_position: Vector3i, _previous_block: String) -> void:
 	if audio_service != null and audio_service.has_method("play_block_place"):
 		audio_service.call("play_block_place", "dirt")
+
+
+func _on_soil_watered(_position: Vector3i, _duration_seconds: float) -> void:
+	if audio_service != null and audio_service.has_method("play_block_place"):
+		audio_service.call("play_block_place", "water")
 
 
 func _on_crop_planted(_position: Vector3i, _crop_id: String) -> void:
