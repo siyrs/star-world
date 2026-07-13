@@ -17,7 +17,7 @@ jobs:
   runtime-tests:
     name: Runtime and domain regressions
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 38
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,6 +97,12 @@ jobs:
           godot --headless --path . --script res://tests/qa/tool_harvest_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Equipment and combat regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/equipment_combat_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Desktop input contract regression
         shell: pwsh
         run: |
@@ -161,7 +167,7 @@ jobs:
     name: Real desktop input and UI acceptance
     needs: runtime-tests
     runs-on: windows-latest
-    timeout-minutes: 24
+    timeout-minutes: 28
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -203,6 +209,16 @@ jobs:
             -ScriptPath 'res://tests/qa/tool_harvest_desktop_acceptance.gd' `
             -OutputPath 'build\tool-harvest-desktop-acceptance.png'
 
+      - name: Equipment desktop acceptance
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/equipment_desktop_acceptance.gd' `
+            -OutputPath 'build\equipment-desktop-acceptance.png'
+
       - name: Upload desktop acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -212,6 +228,7 @@ jobs:
             build/desktop-acceptance.*
             build/furnace-desktop-acceptance.*
             build/tool-harvest-desktop-acceptance.*
+            build/equipment-desktop-acceptance.*
           if-no-files-found: warn
           retention-days: 14
 
