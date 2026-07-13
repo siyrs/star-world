@@ -53,7 +53,7 @@ var _completed_actions: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_emit_state()
+	refresh_state()
 
 
 func reset() -> void:
@@ -61,25 +61,29 @@ func reset() -> void:
 	completed = false
 	_current_index = 0
 	_completed_actions.clear()
-	_emit_state()
+	refresh_state()
 
 
 func restart() -> void:
 	reset()
 
 
+func refresh_state() -> void:
+	state_changed.emit(get_state())
+
+
 func set_enabled(value: bool) -> void:
 	if enabled == value:
 		return
 	enabled = value
-	_emit_state()
+	refresh_state()
 
 
 func set_dismissed(value: bool) -> void:
 	if dismissed == value:
 		return
 	dismissed = value
-	_emit_state()
+	refresh_state()
 
 
 func toggle_visibility() -> void:
@@ -100,7 +104,7 @@ func report_action(action: StringName) -> bool:
 	_advance_completed_steps()
 	if was_known and before_index == _current_index:
 		return false
-	_emit_state()
+	refresh_state()
 	return true
 
 
@@ -112,7 +116,7 @@ func skip() -> void:
 	_current_index = STEPS.size()
 	completed = true
 	dismissed = false
-	_emit_state()
+	refresh_state()
 	tutorial_completed.emit()
 
 
@@ -143,7 +147,7 @@ func deserialize(data: Dictionary) -> bool:
 		_current_index = STEPS.size()
 	else:
 		_advance_completed_steps(false)
-	_emit_state()
+	refresh_state()
 	return true
 
 
@@ -159,7 +163,9 @@ func get_state() -> Dictionary:
 		"current_index": _current_index,
 		"step_number": mini(_current_index + 1, STEPS.size()),
 		"step_count": STEPS.size(),
-		"progress": 1.0 if completed else float(_current_index) / float(maxi(1, STEPS.size())),
+		"progress": (
+			1.0 if completed else float(_current_index) / float(maxi(1, STEPS.size()))
+		),
 		"step": step,
 	}
 
@@ -186,7 +192,3 @@ func _is_known_action(action_id: String) -> bool:
 		if str(step.get("id", "")) == action_id:
 			return true
 	return false
-
-
-func _emit_state() -> void:
-	state_changed.emit(get_state())
