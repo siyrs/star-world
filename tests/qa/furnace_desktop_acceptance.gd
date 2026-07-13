@@ -147,7 +147,7 @@ func _click_control(control: Control) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = pointer_position
 	motion.global_position = pointer_position
-	root.push_input(motion)
+	root.push_input(motion, true)
 	await process_frame
 	var press := InputEventMouseButton.new()
 	press.position = pointer_position
@@ -155,7 +155,7 @@ func _click_control(control: Control) -> void:
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.button_mask = MOUSE_BUTTON_MASK_LEFT
 	press.pressed = true
-	root.push_input(press)
+	root.push_input(press, true)
 	await process_frame
 	var release := InputEventMouseButton.new()
 	release.position = pointer_position
@@ -163,7 +163,7 @@ func _click_control(control: Control) -> void:
 	release.button_index = MOUSE_BUTTON_LEFT
 	release.button_mask = 0
 	release.pressed = false
-	root.push_input(release)
+	root.push_input(release, true)
 	await process_frame
 
 
