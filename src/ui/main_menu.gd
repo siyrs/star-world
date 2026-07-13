@@ -222,7 +222,7 @@ func _build_subpanels() -> void:
 	_save_panel.load_requested.connect(_on_load_requested)
 	_save_panel.back_requested.connect(show_main)
 	_settings_panel = SettingsPanelScript.new()
-	_center_panel(_settings_panel, Vector2(650, 520))
+	_center_panel(_settings_panel, Vector2(700, 640))
 	add_child(_settings_panel)
 	_settings_panel.visible = false
 	_settings_panel.settings_applied.connect(
