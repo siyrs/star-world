@@ -167,7 +167,7 @@ jobs:
         shell: pwsh
         run: |
           $mainCapture = '.\build\desktop-acceptance.png'
-          $furnaceCapture = '.\build\release-smoke\furnace-desktop-acceptance.png'
+          $furnaceCapture = '.\build\furnace-desktop-acceptance.png'
           foreach ($capture in @($mainCapture, $furnaceCapture)) {
             if (-not (Test-Path -LiteralPath $capture)) {
               Get-ChildItem -Recurse .\build | Select-Object FullName, Length | Format-Table -AutoSize
@@ -184,7 +184,7 @@ jobs:
           name: desktop-acceptance-${{ github.run_number }}
           path: |
             build/desktop-acceptance.png
-            build/release-smoke/furnace-desktop-acceptance.png
+            build/furnace-desktop-acceptance.png
           if-no-files-found: error
           retention-days: 14
 
