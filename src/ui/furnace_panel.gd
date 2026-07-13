@@ -27,7 +27,7 @@ var _inventory_buttons: Array = []
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
-	custom_minimum_size = Vector2(900, 540)
+	custom_minimum_size = Vector2(900, 520)
 	_build_ui()
 
 
@@ -102,23 +102,23 @@ func get_layout_rects() -> Dictionary:
 
 func _build_ui() -> void:
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	add_child(root)
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	header.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	root.add_child(header)
 	_title = Label.new()
 	_title.text = "熔炉"
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_title.add_theme_font_size_override("font_size", Tokens.FONT_TITLE)
+	_title.add_theme_font_size_override("font_size", 26)
 	header.add_child(_title)
 	var close_button := Button.new()
 	close_button.text = "关闭 [Esc]"
-	close_button.custom_minimum_size = Vector2(150, 44)
+	close_button.custom_minimum_size = Vector2(140, 40)
 	close_button.pressed.connect(func() -> void: panel_closed.emit())
 	header.add_child(close_button)
 	var description := Label.new()
-	description.text = "原料与燃料会持续加工；关闭界面后熔炉仍会工作，世界暂停时停止。"
+	description.text = "关闭界面后继续加工；世界暂停时机器同步停止。"
 	description.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	description.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(description)
@@ -130,20 +130,20 @@ func _build_ui() -> void:
 			Tokens.COLOR_BORDER_STRONG,
 			1,
 			Tokens.RADIUS_MD,
-			Tokens.SPACE_MD
+			Tokens.SPACE_SM
 		)
 	)
 	root.add_child(machine_panel)
 	var machine_row := HBoxContainer.new()
 	machine_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	machine_row.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	machine_row.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	machine_panel.add_child(machine_row)
 	_input_button = _make_machine_slot("原料\n空")
 	_input_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_INPUT))
 	machine_row.add_child(_input_button)
 	var process_column := VBoxContainer.new()
-	process_column.custom_minimum_size = Vector2(250, 116)
-	process_column.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	process_column.custom_minimum_size = Vector2(240, 96)
+	process_column.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	machine_row.add_child(process_column)
 	_recipe_label = Label.new()
 	_recipe_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -158,10 +158,10 @@ func _build_ui() -> void:
 	_progress.min_value = 0.0
 	_progress.max_value = 1.0
 	_progress.show_percentage = false
-	_progress.custom_minimum_size.y = 14.0
+	_progress.custom_minimum_size.y = 10.0
 	process_column.add_child(_progress)
 	var fuel_caption := Label.new()
-	fuel_caption.text = "当前燃料余量"
+	fuel_caption.text = "燃料余量"
 	fuel_caption.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	fuel_caption.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	process_column.add_child(fuel_caption)
@@ -169,7 +169,7 @@ func _build_ui() -> void:
 	_fuel.min_value = 0.0
 	_fuel.max_value = 1.0
 	_fuel.show_percentage = false
-	_fuel.custom_minimum_size.y = 12.0
+	_fuel.custom_minimum_size.y = 10.0
 	_fuel.add_theme_stylebox_override(
 		"fill", Tokens.panel_style("#F2A94ADD", "#FFD36C", 0, Tokens.RADIUS_SM, 1.0)
 	)
@@ -179,7 +179,7 @@ func _build_ui() -> void:
 	machine_row.add_child(_fuel_button)
 	var arrow := Label.new()
 	arrow.text = "→"
-	arrow.add_theme_font_size_override("font_size", 30)
+	arrow.add_theme_font_size_override("font_size", 28)
 	arrow.modulate = Tokens.color(Tokens.COLOR_ACCENT_WARM)
 	machine_row.add_child(arrow)
 	_output_button = _make_machine_slot("产出\n空")
@@ -188,7 +188,8 @@ func _build_ui() -> void:
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size.y = 28.0
+	_status.custom_minimum_size.y = 24.0
+	_status.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(_status)
 	var separator := HSeparator.new()
 	root.add_child(separator)
@@ -197,15 +198,15 @@ func _build_ui() -> void:
 	var inventory_title := Label.new()
 	inventory_title.text = "玩家背包"
 	inventory_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inventory_title.add_theme_font_size_override("font_size", 22)
+	inventory_title.add_theme_font_size_override("font_size", 20)
 	inventory_header.add_child(inventory_title)
 	var inventory_hint := Label.new()
-	inventory_hint.text = "单击物品：自动投入   ·   单击上方槽位：取回背包"
+	inventory_hint.text = "点击投入 · 点击上方槽位取回"
 	inventory_hint.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	inventory_hint.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	inventory_header.add_child(inventory_hint)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(860, 240)
+	scroll.custom_minimum_size = Vector2(860, 180)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(scroll)
 	_inventory_grid = GridContainer.new()
@@ -226,7 +227,7 @@ func _build_ui() -> void:
 func _make_machine_slot(label: String) -> Button:
 	var button := Button.new()
 	button.text = label
-	button.custom_minimum_size = Vector2(150, 116)
+	button.custom_minimum_size = Vector2(135, 96)
 	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return button
 
