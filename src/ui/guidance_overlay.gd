@@ -9,8 +9,8 @@ const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
 
 var coordinator: Node
-var feedback: Node
-var onboarding: Node
+var feedback
+var onboarding
 
 var _toast_panel: PanelContainer
 var _toast_label: Label
@@ -51,9 +51,14 @@ func setup(p_coordinator: Node) -> void:
 		feedback.connect("prompt_changed", Callable(self, "_on_prompt_changed"))
 		_on_toast_changed(feedback.call("get_active_toast"))
 		_on_prompt_changed(feedback.call("get_prompt"))
+	else:
+		_on_toast_changed({})
+		_on_prompt_changed({})
 	if onboarding != null:
 		onboarding.connect("state_changed", Callable(self, "_on_tutorial_state_changed"))
 		_on_tutorial_state_changed(onboarding.call("get_state"))
+	else:
+		_on_tutorial_state_changed({})
 
 
 func begin_gameplay() -> void:
@@ -262,7 +267,9 @@ func _disconnect_services() -> void:
 		var tutorial_callback := Callable(self, "_on_tutorial_state_changed")
 		if onboarding.is_connected("state_changed", tutorial_callback):
 			onboarding.disconnect("state_changed", tutorial_callback)
+	feedback = null
+	onboarding = null
 
 
 func _color_to_hex(color: Color) -> String:
-	return color.to_html(true)
+	return "#%s" % color.to_html(true)
