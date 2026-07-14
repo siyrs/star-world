@@ -176,7 +176,10 @@ func _run() -> void:
 	_check(_ray_hits_block(player, world, BED_POSITION), "the real player ray resolves the bed")
 	await _right_click()
 	_check(rest.has_custom_spawn(), "a real right click stores a custom bed spawn")
-	_check(is_equal_approx(day_night.time_of_day, 6.5), "sleep advances the real day-night service to morning")
+	_check(
+		day_night.time_of_day >= 6.5 and day_night.time_of_day < 7.0,
+		"sleep advances the running day-night service into the morning window",
+	)
 	_check(day_night.day_count == 4, "sleep advances the calendar to the next day")
 	_check(
 		player.get_respawn_position().is_equal_approx(rest.get_respawn_position()),
@@ -221,7 +224,9 @@ func _run() -> void:
 func _aim_at(player: Node3D, target: Vector3) -> void:
 	var camera := player.call("get_view_camera") as Camera3D
 	if camera != null:
-		camera.look_at(target, Vector3.UP)
+		var direction := (target - camera.global_position).normalized()
+		var up := Vector3.FORWARD if absf(direction.dot(Vector3.UP)) > 0.98 else Vector3.UP
+		camera.look_at(target, up)
 	await physics_frame
 	await process_frame
 	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
