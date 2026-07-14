@@ -4,45 +4,53 @@ extends Node
 signal state_changed(state: Dictionary)
 signal tutorial_completed
 
-const SERIAL_VERSION := 1
+const SERIAL_VERSION := 2
 const STEPS := [
 	{
 		"id": "move",
 		"title": "迈出第一步",
-		"description": "使用方向键熟悉移动",
-		"hint": "W A S D",
+		"description": "使用 W、A、S、D 在世界中移动",
+		"hint": "W  A  S  D",
 	},
 	{
 		"id": "look",
 		"title": "观察这个世界",
-		"description": "移动鼠标环顾四周",
+		"description": "移动鼠标，让屏幕正中心的准星指向不同方块",
 		"hint": "移动鼠标",
 	},
 	{
 		"id": "mine",
-		"title": "采集资源",
-		"description": "瞄准一个方块并采集",
-		"hint": "鼠标左键",
+		"title": "采集一个方块",
+		"description": "用准星瞄准方块，按住鼠标左键直到采集完成",
+		"hint": "按住鼠标左键",
 	},
 	{
 		"id": "place",
-		"title": "放置方块",
-		"description": "选中方块后，把它放到世界中",
-		"hint": "鼠标右键",
+		"title": "放置一个方块",
+		"description": "选中快捷栏中的方块，瞄准目标表面并按鼠标右键",
+		"hint": "数字键选择 · 鼠标右键",
 	},
 	{
 		"id": "inventory",
 		"title": "整理背包",
-		"description": "打开背包查看和装备物品",
+		"description": "打开角色与背包界面，查看快捷栏和装备",
 		"hint": "E",
 	},
 	{
 		"id": "crafting",
 		"title": "开始合成",
-		"description": "打开随身合成，了解基础配方",
+		"description": "打开随身合成，浏览当前可以制作的配方",
 		"hint": "C",
 	},
 ]
+
+const ACTION_ALIASES := {
+	"harvest_no_drop":"mine",
+	"block_broken":"mine",
+	"block_placed":"place",
+	"open_inventory":"inventory",
+	"open_crafting":"crafting",
+}
 
 var enabled := true
 var dismissed := false
@@ -95,7 +103,7 @@ func toggle_visibility() -> void:
 func report_action(action: StringName) -> bool:
 	if completed:
 		return false
-	var action_id := str(action)
+	var action_id := _canonical_action_id(str(action))
 	if not _is_known_action(action_id):
 		return false
 	var was_known := bool(_completed_actions.get(action_id, false))
@@ -141,8 +149,9 @@ func deserialize(data: Dictionary) -> bool:
 	var raw_actions = data.get("completed_actions", {})
 	if raw_actions is Dictionary:
 		for key in raw_actions:
-			if _is_known_action(str(key)) and bool(raw_actions[key]):
-				_completed_actions[str(key)] = true
+			var action_id := _canonical_action_id(str(key))
+			if _is_known_action(action_id) and bool(raw_actions[key]):
+				_completed_actions[action_id] = true
 	if completed:
 		_current_index = STEPS.size()
 	else:
@@ -167,6 +176,7 @@ func get_state() -> Dictionary:
 			1.0 if completed else float(_current_index) / float(maxi(1, STEPS.size()))
 		),
 		"step": step,
+		"completed_actions": _completed_actions.duplicate(true),
 	}
 
 
@@ -185,6 +195,10 @@ func _advance_completed_steps(emit_completion: bool = true) -> void:
 		dismissed = false
 		if emit_completion:
 			tutorial_completed.emit()
+
+
+func _canonical_action_id(action_id: String) -> String:
+	return str(ACTION_ALIASES.get(action_id, action_id))
 
 
 func _is_known_action(action_id: String) -> bool:
