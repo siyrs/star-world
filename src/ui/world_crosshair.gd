@@ -24,9 +24,9 @@ func _ready() -> void:
 
 
 func get_aim_point() -> Vector2:
-	# Use the final canvas-space rectangle instead of local position. This stays
-	# exact when the viewport is resized or the HUD is hosted by a CanvasLayer.
-	return get_global_rect().get_center()
+	# Camera3D projects its forward ray through the Viewport center. Expose that
+	# coordinate directly; the symmetric 50% anchors keep the drawing on it.
+	return get_viewport_rect().get_center()
 
 
 func _draw() -> void:
