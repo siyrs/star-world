@@ -4,6 +4,7 @@ extends Node
 signal time_changed(time_of_day: float, day: int)
 signal phase_changed(phase: String)
 signal night_state_changed(is_night: bool)
+signal time_skipped(previous_time: float, previous_day: int, time_of_day: float, day: int)
 
 const SERIAL_VERSION := 1
 
@@ -53,6 +54,24 @@ func set_time(hours: float) -> void:
 	time_changed.emit(time_of_day, day_count)
 
 
+func skip_to_time(hours: float) -> Dictionary:
+	var previous_time := time_of_day
+	var previous_day := day_count
+	var target := fposmod(hours, 24.0)
+	if target <= time_of_day:
+		day_count += 1
+	time_of_day = target
+	_apply_lighting()
+	time_changed.emit(time_of_day, day_count)
+	time_skipped.emit(previous_time, previous_day, time_of_day, day_count)
+	return {
+		"previous_time": previous_time,
+		"previous_day": previous_day,
+		"time_of_day": time_of_day,
+		"day": day_count,
+	}
+
+
 func is_night() -> bool:
 	return time_of_day < 6.0 or time_of_day >= 19.0
 
@@ -82,17 +101,25 @@ func _apply_lighting() -> void:
 		sun.rotation_degrees = Vector3(time_of_day / 24.0 * 360.0 - 90.0, -35.0, 0.0)
 		sun.light_energy = lerpf(0.08, 1.15, strength)
 		sun.light_color = Color("#9CB7E8").lerp(Color("#FFF1CD"), strength)
-	if world_environment != null and is_instance_valid(world_environment) and world_environment.environment != null:
+	if (
+		world_environment != null
+		and is_instance_valid(world_environment)
+		and world_environment.environment != null
+	):
 		var environment := world_environment.environment
 		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		environment.ambient_light_color = Color("#17213A").lerp(Color("#AFC7D2"), strength)
 		environment.ambient_light_energy = lerpf(0.25, 0.85, strength)
 		environment.background_mode = Environment.BG_COLOR
 		var day_color := Color("#72B5E8")
-		if map_id == "desert_ruins": day_color = Color("#E2B96C")
-		elif map_id == "frozen_wastes": day_color = Color("#A9D1E7")
-		elif map_id == "sky_islands": day_color = Color("#78C8FA")
-		elif map_id == "abyss_world": day_color = Color("#191D31")
+		if map_id == "desert_ruins":
+			day_color = Color("#E2B96C")
+		elif map_id == "frozen_wastes":
+			day_color = Color("#A9D1E7")
+		elif map_id == "sky_islands":
+			day_color = Color("#78C8FA")
+		elif map_id == "abyss_world":
+			day_color = Color("#191D31")
 		environment.background_color = Color("#091020").lerp(day_color, strength)
 	var phase := get_phase()
 	if phase != _last_phase:
@@ -105,7 +132,13 @@ func _apply_lighting() -> void:
 
 
 func serialize() -> Dictionary:
-	return {"version":SERIAL_VERSION, "time_of_day":time_of_day, "day":day_count, "cycle_duration":cycle_duration_seconds, "map_id":map_id}
+	return {
+		"version": SERIAL_VERSION,
+		"time_of_day": time_of_day,
+		"day": day_count,
+		"cycle_duration": cycle_duration_seconds,
+		"map_id": map_id,
+	}
 
 
 func deserialize(data: Dictionary) -> bool:
