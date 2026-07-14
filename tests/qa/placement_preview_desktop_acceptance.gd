@@ -100,18 +100,26 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "placement keeps gameplay mouse capture")
 	_check(bool(player.get("input_enabled")), "placement keeps player movement input enabled")
 
-	var ground_block := _find_ground_below(world, player.global_position)
-	_check(ground_block != Vector3i(2147483647, 2147483647, 2147483647), "desktop acceptance resolves the real floor below the player")
-	if ground_block != Vector3i(2147483647, 2147483647, 2147483647):
-		await _aim_at(player, world.call("block_to_world", ground_block))
-		focus = player.call("get_interaction_focus")
-		preview_state = focus.get("placement_preview", {})
-		_check(bool(preview_state.get("placement_visible", false)), "looking at the floor still resolves a placement ghost")
-		_check(not bool(preview_state.get("valid", true)), "ghost turns invalid when the target cell overlaps the player")
-		_check(str(preview_state.get("reason", "")) == "player_overlap", "invalid ghost explains player overlap")
-		prompt = hub.player_experience.call("get_status").get("prompt", {})
-		_check("不能放在角色身体内" in str(prompt.get("subtitle", "")), "invalid preview is explained with text, not red alone")
-		await _capture(_invalid_capture_path)
+	# Build a close horizontal target whose near-side placement cell is the
+	# player's torso voxel. This is real ray geometry without a vertical look-at
+	# singularity, and it deterministically exercises the red overlap preview.
+	var overlap_anchor := Vector3i(player_block.x, target_y, player_block.z - 1)
+	var overlap_cell := overlap_anchor + Vector3i(0, 0, 1)
+	world.call("set_block", overlap_anchor, "stone")
+	world.call("set_block", overlap_cell, "air")
+	await physics_frame
+	await process_frame
+	await _aim_at(player, world.call("block_to_world", overlap_anchor))
+	focus = player.call("get_interaction_focus")
+	preview_state = focus.get("placement_preview", {})
+	_check(_array_to_vector3i(focus.get("hit_position", [])) == overlap_anchor, "real center ray resolves the close overlap target")
+	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == overlap_cell, "overlap preview resolves the player torso cell")
+	_check(bool(preview_state.get("placement_visible", false)), "player-overlap target still renders a placement ghost")
+	_check(not bool(preview_state.get("valid", true)), "ghost turns invalid when the target cell overlaps the player")
+	_check(str(preview_state.get("reason", "")) == "player_overlap", "invalid ghost explains player overlap")
+	prompt = hub.player_experience.call("get_status").get("prompt", {})
+	_check("不能放在角色身体内" in str(prompt.get("subtitle", "")), "invalid preview is explained with text, not red alone")
+	await _capture(_invalid_capture_path)
 
 	await _tap_key(KEY_E)
 	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real inventory overlay")
@@ -132,15 +140,6 @@ func _prepare_target_corridor(world: Node, player_block: Vector3i, target: Vecto
 		for y in range(target.y - 1, target.y + 2):
 			world.call("set_block", Vector3i(target.x, y, z), "air")
 	world.call("set_block", target + Vector3i.DOWN, "stone")
-
-
-func _find_ground_below(world: Node, world_position: Vector3) -> Vector3i:
-	var start: Vector3i = world.call("world_to_block", world_position)
-	for offset in range(0, 8):
-		var candidate := start + Vector3i(0, -offset - 1, 0)
-		if str(world.call("get_block", candidate)) != "air":
-			return candidate
-	return Vector3i(2147483647, 2147483647, 2147483647)
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
