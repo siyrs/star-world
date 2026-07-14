@@ -63,10 +63,15 @@ func _run() -> void:
 
 	var player: Node3D = game.player
 	var spawner: Node = hub.creature_spawner
+	var ranch_lane: Dictionary = _build_flat_ranch_lane(game.world, player)
+	player.global_position = ranch_lane.get("player_position", player.global_position)
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
-	var chicken_position: Vector3 = game.world.resolve_ground_position(
-		player.global_position + Vector3(0.0, 1.0, -5.0)
+	await process_frame
+	await physics_frame
+	await physics_frame
+	var chicken_position: Vector3 = ranch_lane.get(
+		"chicken_position", player.global_position + Vector3(0.0, 0.0, -5.0)
 	)
 	var chicken_value: Variant = spawner.call("spawn_creature", "chicken", chicken_position)
 	_check(chicken_value is Node3D, "real creature spawner creates a chicken")
@@ -90,10 +95,10 @@ func _run() -> void:
 		"real chicken receives the attraction capability",
 	)
 	var minimum_distance: float = distance_before
-	var observed_toward_velocity := false
+	var observed_toward_velocity: bool = false
 	for _frame in 60:
 		await physics_frame
-		var to_player := player.global_position - chicken.global_position
+		var to_player: Vector3 = player.global_position - chicken.global_position
 		to_player.y = 0.0
 		var horizontal_velocity := Vector3(chicken.velocity.x, 0.0, chicken.velocity.z)
 		if (
@@ -211,6 +216,33 @@ func _run() -> void:
 		"ranch interaction keeps gameplay mouse captured",
 	)
 	await _finish(game, hub)
+
+
+func _build_flat_ranch_lane(world: Node, player: Node3D) -> Dictionary:
+	var origin: Vector3i = world.call("world_to_block", player.global_position)
+	var floor_y: int = clampi(origin.y - 1, 2, 59)
+	for z_offset in range(-7, 2):
+		for x_offset in range(-2, 3):
+			var floor_position := Vector3i(
+				origin.x + x_offset, floor_y, origin.z + z_offset
+			)
+			world.call("set_block", floor_position, "stone")
+			for y_offset in range(1, 4):
+				world.call(
+					"set_block", floor_position + Vector3i(0, y_offset, 0), "air"
+				)
+	var player_position := Vector3(
+		float(origin.x) + 0.5, float(floor_y) + 1.05, float(origin.z) + 0.5
+	)
+	var chicken_position := Vector3(
+		float(origin.x) + 0.5,
+		float(floor_y) + 1.05,
+		float(origin.z - 5) + 0.5
+	)
+	return {
+		"player_position": player_position,
+		"chicken_position": chicken_position,
+	}
 
 
 func _finish(game: Node, hub: Node) -> void:
