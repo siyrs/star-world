@@ -86,24 +86,28 @@ func _apply_focus(focus: Dictionary) -> void:
 
 
 func _render_snapshot() -> void:
-	var target_position := _position_from(_snapshot.get("target_position", []))
-	var target_visible := bool(_snapshot.get("target_visible", false)) and target_position != null
+	var target_position: Variant = _position_from(_snapshot.get("target_position", []))
+	var target_visible: bool = (
+		bool(_snapshot.get("target_visible", false)) and target_position != null
+	)
 	_target_outline.visible = target_visible
 	if target_visible:
 		_target_outline.position = Vector3(target_position) + BLOCK_CENTER_OFFSET
 
-	var placement_position := _position_from(_snapshot.get("placement_position", []))
-	var placement_visible := (
+	var placement_position: Variant = _position_from(
+		_snapshot.get("placement_position", [])
+	)
+	var placement_visible: bool = (
 		bool(_snapshot.get("placement_visible", false)) and placement_position != null
 	)
 	_placement_outline.visible = placement_visible
 	_placement_fill.visible = placement_visible
 	if not placement_visible:
 		return
-	var world_position := Vector3(placement_position) + BLOCK_CENTER_OFFSET
+	var world_position: Vector3 = Vector3(placement_position) + BLOCK_CENTER_OFFSET
 	_placement_outline.position = world_position
 	_placement_fill.position = world_position
-	var valid := bool(_snapshot.get("valid", false))
+	var valid: bool = bool(_snapshot.get("valid", false))
 	_placement_outline_material.albedo_color = VALID_COLOR if valid else INVALID_COLOR
 	_placement_outline_material.emission = VALID_COLOR if valid else INVALID_COLOR
 	_placement_fill_material.albedo_color = VALID_FILL if valid else INVALID_FILL
@@ -111,7 +115,7 @@ func _render_snapshot() -> void:
 
 
 func _build_visuals() -> void:
-	var target_material := _line_material(TARGET_COLOR)
+	var target_material: StandardMaterial3D = _line_material(TARGET_COLOR)
 	_target_outline = _wire_box("TargetOutline", 1.018, target_material)
 	add_child(_target_outline)
 
@@ -140,8 +144,8 @@ func _build_visuals() -> void:
 func _wire_box(
 	node_name: String, extent: float, material: StandardMaterial3D
 ) -> MeshInstance3D:
-	var half := extent * 0.5
-	var corners := [
+	var half: float = extent * 0.5
+	var corners: Array[Vector3] = [
 		Vector3(-half, -half, -half),
 		Vector3(half, -half, -half),
 		Vector3(half, half, -half),
@@ -151,7 +155,7 @@ func _wire_box(
 		Vector3(half, half, half),
 		Vector3(-half, half, half),
 	]
-	var edges := [
+	var edges: Array[Array] = [
 		[0, 1], [1, 2], [2, 3], [3, 0],
 		[4, 5], [5, 6], [6, 7], [7, 4],
 		[0, 4], [1, 5], [2, 6], [3, 7],
