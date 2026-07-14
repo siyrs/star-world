@@ -43,6 +43,7 @@
     {"id":"oak_door","name":"木门","station":"workbench","ingredients":{"oak_planks":6},"output":{"id":"oak_door","count":3}},
     {"id":"oak_fence","name":"木栅栏","station":"workbench","ingredients":{"oak_planks":4,"stick":2},"output":{"id":"oak_fence","count":3}},
     {"id":"oak_bed","name":"橡木床","station":"workbench","ingredients":{"oak_planks":3,"wool":3},"output":{"id":"oak_bed","count":1}},
+    {"id":"repair_station","name":"修理台","station":"workbench","ingredients":{"oak_planks":4,"stone_bricks":2,"iron_ingot":2},"output":{"id":"repair_station","count":1}},
     {"id":"ladder","name":"梯子","station":"workbench","ingredients":{"stick":7},"output":{"id":"ladder","count":3}},
     {"id":"stone_bricks","name":"石砖","station":"workbench","ingredients":{"stone":4},"output":{"id":"stone_bricks","count":4}},
     {"id":"stone_slab","name":"石台阶","station":"workbench","ingredients":{"stone":3},"output":{"id":"stone_slab","count":6}},
