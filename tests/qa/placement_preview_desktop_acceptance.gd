@@ -100,20 +100,31 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "placement keeps gameplay mouse capture")
 	_check(bool(player.get("input_enabled")), "placement keeps player movement input enabled")
 
-	# Build a close horizontal target whose near-side placement cell is the
-	# player's torso voxel. This is real ray geometry without a vertical look-at
-	# singularity, and it deterministically exercises the red overlap preview.
-	var overlap_anchor := Vector3i(player_block.x, target_y, player_block.z - 1)
-	var overlap_cell := overlap_anchor + Vector3i(0, 0, 1)
+	# Move the player close to a voxel boundary so the adjacent cell ahead only
+	# partially overlaps the body. The target remains more than one metre from
+	# the camera, avoiding near-face ambiguity while still exercising the real
+	# red player-overlap preview through Camera3D and RayCast3D.
+	var overlap_cell := Vector3i(player_block.x, target_y, player_block.z - 1)
+	var overlap_anchor := overlap_cell + Vector3i(0, 0, -1)
+	var adjusted_position := player.global_position
+	adjusted_position.x = float(player_block.x) + 0.5
+	adjusted_position.z = float(player_block.z) + 0.15
+	player.global_position = adjusted_position
+	player.call("reset_motion")
 	world.call("set_block", overlap_anchor, "stone")
 	world.call("set_block", overlap_cell, "air")
 	await physics_frame
 	await process_frame
+	var body_bounds := AABB(
+		player.global_position + Vector3(-0.32, 0.0, -0.32),
+		Vector3(0.64, 1.82, 0.64)
+	)
+	_check(body_bounds.intersects(AABB(Vector3(overlap_cell), Vector3.ONE)), "test geometry really overlaps the player body")
 	await _aim_at(player, world.call("block_to_world", overlap_anchor))
 	focus = player.call("get_interaction_focus")
 	preview_state = focus.get("placement_preview", {})
-	_check(_array_to_vector3i(focus.get("hit_position", [])) == overlap_anchor, "real center ray resolves the close overlap target")
-	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == overlap_cell, "overlap preview resolves the player torso cell")
+	_check(_array_to_vector3i(focus.get("hit_position", [])) == overlap_anchor, "real center ray resolves the stable overlap target")
+	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == overlap_cell, "overlap preview resolves the adjacent player cell")
 	_check(bool(preview_state.get("placement_visible", false)), "player-overlap target still renders a placement ghost")
 	_check(not bool(preview_state.get("valid", true)), "ghost turns invalid when the target cell overlaps the player")
 	_check(str(preview_state.get("reason", "")) == "player_overlap", "invalid ghost explains player overlap")
