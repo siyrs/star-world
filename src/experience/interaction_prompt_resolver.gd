@@ -4,6 +4,9 @@ extends RefCounted
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const HarvestRegistryScript = preload("res://src/harvest/block_harvest_registry.gd")
 const HarvestPolicyScript = preload("res://src/harvest/block_harvest_policy.gd")
+const PlacementPreviewPolicyScript = preload(
+	"res://src/interaction/placement_preview_policy.gd"
+)
 
 var _harvest_registry = HarvestRegistryScript.new()
 var _harvest_policy = HarvestPolicyScript.new()
@@ -62,6 +65,7 @@ func _block_prompt(
 	var breakable := bool(evaluation.get("breakable", false))
 	var primary := "[按住鼠标左键] 采集" if breakable else ""
 	var secondary := ""
+	var has_interaction_hint := false
 	if interaction_service != null:
 		var interaction_hint := ""
 		if interaction_service.has_method("get_interaction_hint_for_item"):
@@ -76,15 +80,26 @@ func _block_prompt(
 			interaction_hint = str(interaction_service.call("get_interaction_hint", block_id))
 		if not interaction_hint.is_empty():
 			secondary = "[鼠标右键] %s" % interaction_hint.trim_prefix("右键")
+			has_interaction_hint = true
+	if secondary.is_empty():
+		secondary = _placement_use_hint(focus, selected)
 	if secondary.is_empty():
 		secondary = _selected_use_hint(selected)
+	var subtitle := _harvest_subtitle(evaluation, selected)
+	var tone := "info" if bool(evaluation.get("can_drop", false)) else "warning"
+	if not has_interaction_hint and not str(selected.get("block_id", "")).is_empty():
+		var placement_status := _placement_status(focus)
+		if not placement_status.is_empty():
+			subtitle = placement_status
+			var preview: Dictionary = focus.get("placement_preview", {})
+			tone = "info" if bool(preview.get("valid", false)) else "warning"
 	return {
 		"visible": breakable or not secondary.is_empty() or not profile.is_empty(),
 		"title": str(focus.get("display_name", block_id)),
-		"subtitle": _harvest_subtitle(evaluation, selected),
+		"subtitle": subtitle,
 		"primary": primary,
 		"secondary": secondary,
-		"tone": "info" if bool(evaluation.get("can_drop", false)) else "warning",
+		"tone": tone,
 	}
 
 
@@ -108,6 +123,43 @@ func _harvest_subtitle(evaluation: Dictionary, selected: Dictionary) -> String:
 		]
 	var tool_name := str(selected.get("display_name", "空手"))
 	return "%s · 约 %.1f 秒" % [tool_name, duration]
+
+
+func _placement_use_hint(focus: Dictionary, selected: Dictionary) -> String:
+	if str(selected.get("block_id", "")).is_empty():
+		return ""
+	var preview: Dictionary = focus.get("placement_preview", {})
+	if preview.is_empty() or not bool(preview.get("placement_visible", false)):
+		return "瞄准一个可用方块表面"
+	if bool(preview.get("valid", false)):
+		return "[鼠标右键] 放置 %s" % str(selected.get("display_name", "方块"))
+	return "无法放置：%s" % _placement_reason_text(preview)
+
+
+func _placement_status(focus: Dictionary) -> String:
+	var preview: Dictionary = focus.get("placement_preview", {})
+	if preview.is_empty() or not bool(preview.get("placement_visible", false)):
+		return "瞄准一个可用方块表面"
+	if not bool(preview.get("valid", false)):
+		return _placement_reason_text(preview)
+	var position: Variant = preview.get("placement_position", [])
+	if position is Array and position.size() >= 3:
+		return "绿色预览格  %d, %d, %d · 可以放置" % [
+			int(position[0]), int(position[1]), int(position[2])
+		]
+	return "绿色预览格 · 可以放置"
+
+
+func _placement_reason_text(preview: Dictionary) -> String:
+	var occupied_id := str(preview.get("occupied_block_id", ""))
+	var occupied_name := ""
+	if not occupied_id.is_empty() and occupied_id != BlockRegistryScript.AIR:
+		occupied_name = str(
+			BlockRegistryScript.get_definition(occupied_id).get("name", occupied_id)
+		)
+	return PlacementPreviewPolicyScript.reason_text(
+		str(preview.get("reason", "placement_unavailable")), occupied_name
+	)
 
 
 func _held_item_prompt(selected: Dictionary) -> Dictionary:
