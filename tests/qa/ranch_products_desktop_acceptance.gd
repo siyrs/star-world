@@ -44,10 +44,22 @@ func _run() -> void:
 	await physics_frame
 	await process_frame
 	await process_frame
-	_check(game.world != null and bool(game.world.get("is_started")), "real world starts before ranch interaction")
-	_check(hub.get("animal_attraction_service") != null, "animal attraction service is mounted")
-	_check(hub.get("animal_product_service") != null, "animal product service is mounted")
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "gameplay captures the mouse before ranch interaction")
+	_check(
+		game.world != null and bool(game.world.get("is_started")),
+		"real world starts before ranch interaction",
+	)
+	_check(
+		hub.get("animal_attraction_service") != null,
+		"animal attraction service is mounted",
+	)
+	_check(
+		hub.get("animal_product_service") != null,
+		"animal product service is mounted",
+	)
+	_check(
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
+		"gameplay captures the mouse before ranch interaction",
+	)
 
 	var player: Node3D = game.player
 	var spawner: Node = hub.creature_spawner
@@ -67,20 +79,26 @@ func _run() -> void:
 	hub.inventory.select_slot(0)
 	await process_frame
 
-	var distance_before := chicken.global_position.distance_to(player.global_position)
-	var following_count := int(hub.animal_attraction_service.call("refresh_now"))
+	var distance_before: float = chicken.global_position.distance_to(player.global_position)
+	var following_count: int = int(hub.animal_attraction_service.call("refresh_now"))
 	_check(following_count == 1, "holding wheat seeds attracts the nearby chicken")
 	var attraction_snapshot: Dictionary = chicken.call("get_attraction_snapshot")
-	_check(bool(attraction_snapshot.get("active", false)), "real chicken receives the attraction capability")
+	_check(
+		bool(attraction_snapshot.get("active", false)),
+		"real chicken receives the attraction capability",
+	)
 	for _frame in 45:
 		await physics_frame
-	var distance_after := chicken.global_position.distance_to(player.global_position)
-	_check(distance_after < distance_before - 0.25, "attracted chicken physically moves toward the player")
+	var distance_after: float = chicken.global_position.distance_to(player.global_position)
+	_check(
+		distance_after < distance_before - 0.25,
+		"attracted chicken physically moves toward the player",
+	)
 	_freeze_creature(chicken)
 
 	await _aim_at(player, chicken.global_position + Vector3(0.0, 0.55, 0.0))
 	_check(_ray_hits_entity(player, chicken), "real player ray resolves the attracted chicken")
-	var focus := {
+	var focus: Dictionary = {
 		"type":"entity",
 		"entity_id":chicken.get_instance_id(),
 		"species_id":"chicken",
@@ -91,11 +109,20 @@ func _run() -> void:
 	var feed_prompt: Dictionary = hub.husbandry_interaction.call(
 		"get_entity_prompt", focus, "wheat_seeds"
 	)
-	_check(str(feed_prompt.get("secondary", "")).contains("繁殖状态"), "chicken prompt explains seed feeding")
+	_check(
+		str(feed_prompt.get("secondary", "")).contains("繁殖状态"),
+		"chicken prompt explains seed feeding",
+	)
 	await _right_click_center()
-	_check(hub.inventory.count_item("wheat_seeds") == 0, "real right click consumes exactly one seed")
-	_check(hub.husbandry_service.get_managed_count() == 1, "fed chicken becomes a persistent ranch animal")
-	var husbandry_id := str(chicken.get_meta("husbandry_id", ""))
+	_check(
+		hub.inventory.count_item("wheat_seeds") == 0,
+		"real right click consumes exactly one seed",
+	)
+	_check(
+		hub.husbandry_service.get_managed_count() == 1,
+		"fed chicken becomes a persistent ranch animal",
+	)
+	var husbandry_id: String = str(chicken.get_meta("husbandry_id", ""))
 	_check(not husbandry_id.is_empty(), "managed chicken receives a stable husbandry id")
 
 	hub.animal_product_service.call(
@@ -113,14 +140,23 @@ func _run() -> void:
 		}
 	)
 	var production_result: Dictionary = hub.animal_product_service.call("advance", 1.0)
-	_check(int(production_result.get("produced", 0)) == 1, "managed chicken completes a real egg timer")
-	_check(int(production_result.get("spawned", 0)) == 1, "nearby completed product spawns into the world")
-	var egg_pickup := _find_pickup(spawner, "egg")
+	_check(
+		int(production_result.get("produced", 0)) == 1,
+		"managed chicken completes a real egg timer",
+	)
+	_check(
+		int(production_result.get("spawned", 0)) == 1,
+		"nearby completed product spawns into the world",
+	)
+	var egg_pickup: Node = _find_pickup(spawner, "egg")
 	_check(egg_pickup != null, "real ranch runtime creates an egg pickup")
 	var product_prompt: Dictionary = hub.husbandry_interaction.call(
 		"get_entity_prompt", focus, ""
 	)
-	_check(str(product_prompt.get("subtitle", "")).contains("下次鸡蛋"), "chicken prompt exposes the next egg timer")
+	_check(
+		str(product_prompt.get("subtitle", "")).contains("下次鸡蛋"),
+		"chicken prompt exposes the next egg timer",
+	)
 
 	await _aim_at(player, chicken.global_position + Vector3(0.0, 0.55, 0.0))
 	await process_frame
@@ -134,15 +170,30 @@ func _run() -> void:
 		egg_pickup.global_position = player.global_position + Vector3(0.0, 0.8, 0.0)
 		for _frame in 4:
 			await physics_frame
-	_check(hub.inventory.count_item("egg") == 1, "player collects the produced egg through world pickup physics")
-	_check(bool(hub.furnace_service.get("recipe_registry").has_input("egg")), "collected egg is accepted by the furnace registry")
-	_check(bool(hub.save_current()), "ranch product state participates in the world save transaction")
+	_check(
+		hub.inventory.count_item("egg") == 1,
+		"player collects the produced egg through world pickup physics",
+	)
+	var furnace_recipes: Variant = hub.furnace_service.get("recipes")
+	_check(
+		furnace_recipes != null
+		and furnace_recipes.has_method("has_input")
+		and bool(furnace_recipes.call("has_input", "egg")),
+		"collected egg is accepted by the furnace registry",
+	)
+	_check(
+		bool(hub.save_current()),
+		"ranch product state participates in the world save transaction",
+	)
 	var loaded: Dictionary = hub.save_service.load_world(_created_world_id)
 	_check(loaded.has("animal_products"), "saved world contains the animal product domain")
 	var saved_products: Dictionary = loaded.get("animal_products", {}).get("records", {})
 	_check(saved_products.has(husbandry_id), "saved product timer uses the stable husbandry id")
 	_check(bool(player.get("input_enabled")), "ranch interaction never locks player input")
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "ranch interaction keeps gameplay mouse captured")
+	_check(
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
+		"ranch interaction keeps gameplay mouse captured",
+	)
 	await _finish(game, hub)
 
 
