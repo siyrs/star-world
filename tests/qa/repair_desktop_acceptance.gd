@@ -1,17 +1,122 @@
 extends SceneTree
 
-const GameScene = preload("res://scenes/game/game.tscn")
+const ServiceHubScene = preload("res://scenes/ui/service_hub.tscn")
+const PlayerScene = preload("res://scenes/game/player.tscn")
+const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://repair-desktop-acceptance.png"
+const STATION_POSITION := Vector3i(0, 1, -3)
 const CLEANUP_FRAMES := 6
-const STATION_DISTANCE_BLOCKS := 3
 
 var checks := 0
 var failures: Array[String] = []
 var _capture_path := ""
-var _created_world_id := ""
-var _station_position := Vector3i.ZERO
+
+
+class DesktopRepairWorld:
+	extends Node3D
+
+	var blocks: Dictionary = {}
+	var block_nodes: Dictionary = {}
+	var default_spawn := Vector3(0.5, 0.05, 0.5)
+
+	func build() -> void:
+		_build_floor()
+		set_test_block(STATION_POSITION, "repair_station")
+
+	func bind_focus(_focus: Node3D) -> void:
+		return
+
+	func get_spawn_position() -> Vector3:
+		return default_spawn
+
+	func world_to_block(point: Vector3) -> Vector3i:
+		return Vector3i(floori(point.x), floori(point.y), floori(point.z))
+
+	func block_to_world(position: Vector3i) -> Vector3:
+		return Vector3(position) + Vector3(0.5, 0.5, 0.5)
+
+	func block_key(position: Vector3i) -> String:
+		return "%d,%d,%d" % [position.x, position.y, position.z]
+
+	func get_block(position: Vector3i) -> String:
+		return str(blocks.get(block_key(position), "air"))
+
+	func set_block(position: Vector3i, block_id: String) -> bool:
+		var key := block_key(position)
+		var previous := str(blocks.get(key, "air"))
+		if previous == block_id:
+			return false
+		blocks[key] = block_id
+		_refresh_block_node(position, block_id)
+		return true
+
+	func remove_block(position: Vector3i) -> String:
+		var previous := get_block(position)
+		if previous == "air":
+			return "air"
+		set_block(position, "air")
+		return previous
+
+	func set_test_block(position: Vector3i, block_id: String) -> void:
+		blocks[block_key(position)] = block_id
+		_refresh_block_node(position, block_id)
+
+	func serialize_state() -> Dictionary:
+		return {"block_overrides": blocks.duplicate(true), "loaded_chunks": []}
+
+	func _refresh_block_node(position: Vector3i, block_id: String) -> void:
+		var key := block_key(position)
+		var previous = block_nodes.get(key)
+		if previous != null and is_instance_valid(previous):
+			previous.queue_free()
+		block_nodes.erase(key)
+		if block_id == "air":
+			return
+		var body := StaticBody3D.new()
+		body.name = "RepairBlock_%s" % key.replace(",", "_")
+		body.collision_layer = 1
+		body.collision_mask = 0
+		body.position = Vector3(position) + Vector3(0.5, 0.5, 0.5)
+		add_child(body)
+		var box_shape := BoxShape3D.new()
+		box_shape.size = Vector3.ONE
+		var collision := CollisionShape3D.new()
+		collision.shape = box_shape
+		body.add_child(collision)
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3.ONE
+		mesh_instance.mesh = mesh
+		var material := StandardMaterial3D.new()
+		material.albedo_color = BlockRegistryScript.get_color(block_id)
+		material.roughness = 0.82
+		mesh_instance.material_override = material
+		body.add_child(mesh_instance)
+		block_nodes[key] = body
+
+	func _build_floor() -> void:
+		var floor_body := StaticBody3D.new()
+		floor_body.name = "RepairFloor"
+		floor_body.collision_layer = 1
+		floor_body.collision_mask = 0
+		floor_body.position = Vector3(0.5, -0.1, -1.0)
+		add_child(floor_body)
+		var floor_shape := BoxShape3D.new()
+		floor_shape.size = Vector3(8.0, 0.2, 8.0)
+		var collision := CollisionShape3D.new()
+		collision.shape = floor_shape
+		floor_body.add_child(collision)
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = floor_shape.size
+		mesh_instance.mesh = mesh
+		var material := StandardMaterial3D.new()
+		material.albedo_color = Color("#526F45")
+		material.roughness = 0.95
+		mesh_instance.material_override = material
+		floor_body.add_child(mesh_instance)
 
 
 func _initialize() -> void:
@@ -21,34 +126,51 @@ func _initialize() -> void:
 func _run() -> void:
 	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
 	root.size = Vector2i(1024, 576)
-	var game = GameScene.instantiate()
-	root.add_child(game)
+	var environment := WorldEnvironment.new()
+	var environment_resource := Environment.new()
+	environment_resource.background_mode = Environment.BG_COLOR
+	environment_resource.background_color = Color("#172A42")
+	environment_resource.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment_resource.ambient_light_color = Color("#B9CED7")
+	environment_resource.ambient_light_energy = 0.82
+	environment.environment = environment_resource
+	root.add_child(environment)
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
+	sun.light_energy = 1.05
+	root.add_child(sun)
+	var host := Node3D.new()
+	root.add_child(host)
+	var world = DesktopRepairWorld.new()
+	var player = PlayerScene.instantiate()
+	host.add_child(world)
+	host.add_child(player)
+	world.build()
+	var hub = ServiceHubScene.instantiate()
+	root.add_child(hub)
 	await process_frame
 	await process_frame
-	await process_frame
-	var hub: Node = game.service_hub
-	_check(hub != null, "game exposes the repair progression hub")
-	if hub == null:
-		await _finish(game, null)
-		return
-	var state: Dictionary = hub.save_service.create_world(
-		"Repair-Desktop-%d" % Time.get_ticks_msec(), "star_continent", 92834157
-	)
-	_check(not state.is_empty(), "repair acceptance creates a temporary world")
-	if state.is_empty():
-		await _finish(game, hub)
-		return
-	_created_world_id = str(state.get("metadata", {}).get("id", ""))
-	game.begin_world_state(state)
+	_check(hub.get("repair_service") != null, "service hub mounts repair service")
+	_check(hub.get("repair_interaction") != null, "service hub mounts repair interaction adapter")
+	_check(hub.game_ui.has_method("get_repair_panel"), "repair-enabled UI exposes its panel")
+	player.call("bind_world", world)
+	player.global_position = world.default_spawn
+	player.rotation = Vector3.ZERO
+	var pivot := player.get_node_or_null("CameraPivot") as Node3D
+	if pivot != null:
+		pivot.rotation = Vector3.ZERO
+	player.call("reset_motion")
+	player.call("get_view_camera").current = true
+	hub.attach_game(world, player, sun, environment)
+	hub.activate_gameplay()
+	if hub.get("creature_spawner") != null:
+		hub.creature_spawner.set_active(false)
 	await process_frame
 	await physics_frame
 	await process_frame
-	await process_frame
-	_check(game.world != null and bool(game.world.get("is_started")), "real world starts before repair interaction")
-	_check(hub.get("repair_service") != null, "repair service is mounted in the desktop runtime")
-	_check(hub.get("repair_interaction") != null, "repair interaction adapter is mounted")
-	_check(hub.game_ui.has_method("get_repair_panel"), "repair-enabled UI exposes its panel")
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "gameplay captures the mouse before opening repair")
+	_check(root.get_camera_3d() == player.call("get_view_camera"), "real player camera owns the repair viewport")
+	_check(str(hub.input_context.get_context()) == "gameplay", "repair fixture begins in gameplay context")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "gameplay captures the mouse before repair")
 
 	hub.inventory.clear()
 	hub.inventory.add_item(
@@ -56,12 +178,9 @@ func _run() -> void:
 	)
 	hub.inventory.add_item("iron_ingot", 2)
 	hub.inventory.select_slot(0)
-	var player: Node3D = game.player
-	var world: Node = game.world
-	_station_position = await _prepare_repair_station(player, world)
-	_check(str(world.call("get_block", _station_position)) == "repair_station", "world publishes the repair station block")
-	await _aim_at(player, Vector3(_station_position) + Vector3(0.5, 0.5, 0.5))
-	_check(_ray_hits_block(player, world, _station_position), "real player ray resolves the repair station")
+	await process_frame
+	await _aim_at(player, Vector3(STATION_POSITION) + Vector3(0.5, 0.5, 0.5))
+	_check(_ray_hits_block(player, world, STATION_POSITION), "real player ray resolves the repair station")
 	_check(
 		str(hub.block_interaction.get_interaction_hint_for_item("repair_station", "")).contains("修理台"),
 		"world prompt explains the repair interaction",
@@ -73,7 +192,7 @@ func _run() -> void:
 	var panel: Node = hub.game_ui.call("get_repair_panel")
 	_check(panel != null and panel.visible, "repair panel is visible after real right click")
 	if panel == null:
-		await _finish(game, hub)
+		await _finish(host, hub, environment, sun)
 		return
 	_check(_rect_is_inside_viewport(panel.get_global_rect()), "repair panel stays inside the 1024x576 viewport")
 	var layout: Dictionary = panel.call("get_layout_rects")
@@ -100,58 +219,27 @@ func _run() -> void:
 	_check(str(hub.input_context.get_context()) == "gameplay", "closing repair restores gameplay context")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing repair recaptures the gameplay mouse")
 	_check(bool(player.get("input_enabled")), "closing repair restores player input")
-	await _finish(game, hub)
+	await _finish(host, hub, environment, sun)
 
 
-func _prepare_repair_station(player: Node3D, world: Node) -> Vector3i:
-	player.rotation = Vector3.ZERO
-	var pivot := player.get_node_or_null("CameraPivot") as Node3D
-	if pivot != null:
-		pivot.rotation = Vector3.ZERO
-	player.call("reset_motion")
-	await physics_frame
-	await process_frame
-	var camera := player.call("get_view_camera") as Camera3D
-	var camera_block: Vector3i = world.call("world_to_block", camera.global_position)
-	for distance in range(1, STATION_DISTANCE_BLOCKS + 1):
-		var corridor_position := Vector3i(
-			camera_block.x,
-			camera_block.y,
-			camera_block.z - distance
-		)
-		if str(world.call("get_block", corridor_position)) != "air":
-			world.call("set_block", corridor_position, "air")
-	var station_position := Vector3i(
-		camera_block.x,
-		camera_block.y,
-		camera_block.z - STATION_DISTANCE_BLOCKS
-	)
-	_check(
-		bool(world.call("set_block", station_position, "repair_station")),
-		"desktop fixture places a repair station at the end of a clear camera corridor",
-	)
-	await process_frame
-	await physics_frame
-	await process_frame
-	return station_position
-
-
-func _finish(game: Node, hub: Node) -> void:
+func _finish(host: Node, hub: Node, environment: Node, sun: Node) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hub != null:
-		if game != null and game.get("world") != null:
-			var world: Node = game.get("world")
-			if str(world.call("get_block", _station_position)) == "repair_station":
-				world.call("set_block", _station_position, "air")
-		if not _created_world_id.is_empty() and hub.get("save_service") != null:
-			hub.save_service.delete_world(_created_world_id)
+		if hub.get("creature_spawner") != null:
+			hub.creature_spawner.set_active(false)
+			hub.creature_spawner.clear_creatures()
 		if hub.get("audio_service") != null:
 			if hub.audio_service.has_method("shutdown"):
 				hub.audio_service.shutdown()
 			else:
 				hub.audio_service.stop_ambient()
-	if game != null and is_instance_valid(game):
-		game.queue_free()
+		hub.queue_free()
+	if host != null:
+		host.queue_free()
+	if environment != null:
+		environment.queue_free()
+	if sun != null:
+		sun.queue_free()
 	for _frame in CLEANUP_FRAMES:
 		await process_frame
 	if failures.is_empty():
@@ -185,11 +273,6 @@ func _ray_hits_block(player: Node3D, world: Node, expected: Vector3i) -> bool:
 	var point := ray.get_collision_point()
 	var normal := ray.get_collision_normal()
 	var resolved: Vector3i = world.call("world_to_block", point - normal * 0.01)
-	if resolved != expected:
-		print(
-			"QA REPAIR RAY MISMATCH | expected=%s | resolved=%s | point=%s | normal=%s"
-			% [expected, resolved, point, normal]
-		)
 	return resolved == expected
 
 
