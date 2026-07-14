@@ -16,10 +16,12 @@ func resolve(ray: RayCast3D, world: Node) -> Dictionary:
 		return _entity_focus(collider) if collider is Node else {}
 	if str(target.get("type", "")) != "block":
 		return {}
-	var block_position: Vector3i = target.get("hit_position", Vector3i.ZERO)
-	var block_id := str(target.get("hit_block_id", BlockRegistryScript.AIR))
-	if block_id == BlockRegistryScript.AIR:
+	var raw_hit_position: Vector3i = target.get("hit_position", Vector3i.ZERO)
+	var raw_hit_block_id := str(target.get("hit_block_id", BlockRegistryScript.AIR))
+	if raw_hit_block_id == BlockRegistryScript.AIR:
 		return {}
+	var block_position := raw_hit_position
+	var block_id := raw_hit_block_id
 	var proxy: Dictionary = _resolve_visual_proxy(world, block_position, block_id)
 	if not proxy.is_empty():
 		block_position = proxy.get("position", block_position)
@@ -37,9 +39,16 @@ func resolve(ray: RayCast3D, world: Node) -> Dictionary:
 		"collectible": BlockRegistryScript.is_collectible(block_id),
 		"solid": BlockRegistryScript.is_solid(block_id),
 		"position": [block_position.x, block_position.y, block_position.z],
+		"hit_position": [
+			raw_hit_position.x, raw_hit_position.y, raw_hit_position.z
+		],
+		"hit_block_id": raw_hit_block_id,
 		"placement_position": [
 			placement_position.x, placement_position.y, placement_position.z
 		],
+		"placement_target_block_id": str(
+			target.get("placement_block_id", BlockRegistryScript.AIR)
+		),
 		"face_normal": [face_normal.x, face_normal.y, face_normal.z],
 		"interaction_proxy": bool(proxy.get("proxied", false)),
 	}
