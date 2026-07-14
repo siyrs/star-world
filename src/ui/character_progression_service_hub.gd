@@ -10,12 +10,14 @@ const AgricultureServiceScript = preload(
 const AgricultureInteractionAdapterScript = preload(
 	"res://src/agriculture/agriculture_interaction_adapter.gd"
 )
+const RestServiceScript = preload("res://src/rest/rest_service.gd")
 
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
 var agriculture_service: Node
 var agriculture_interaction: Node
+var rest_service: Node
 
 
 func _ready() -> void:
@@ -32,14 +34,18 @@ func _ready() -> void:
 		AgricultureInteractionAdapterScript.new(), "AgricultureInteraction"
 	)
 	agriculture_interaction.call("setup", agriculture_service)
+	rest_service = _add_service(RestServiceScript.new(), "RestService")
+	rest_service.call("setup", day_night)
 	if block_interaction != null and block_interaction.has_method("register_extension"):
 		block_interaction.call("register_extension", agriculture_interaction)
+		block_interaction.call("register_extension", rest_service)
 	if game_ui != null and game_ui.has_method("setup_character_progression"):
 		game_ui.call(
 			"setup_character_progression", equipment_service, attribute_service, combat_service
 		)
 	_connect_character_feedback()
 	_connect_agriculture_audio()
+	_connect_rest_feedback()
 
 
 func _begin_world(state: Dictionary) -> void:
@@ -49,6 +55,8 @@ func _begin_world(state: Dictionary) -> void:
 		attribute_service.call("deserialize", state.get("attributes", {}))
 	if agriculture_service != null:
 		agriculture_service.call("deserialize", state.get("agriculture", {}))
+	if rest_service != null:
+		rest_service.call("deserialize", state.get("rest", {}))
 	super._begin_world(state)
 
 
@@ -62,6 +70,8 @@ func attach_game(
 	super.attach_game(world, player, sun, environment, ground_resolver)
 	if agriculture_service != null:
 		agriculture_service.call("attach_world", world, inventory)
+	if rest_service != null:
+		rest_service.call("attach_world", world, player)
 	if player == null:
 		return
 	if player.has_method("bind_equipment_service"):
@@ -79,6 +89,8 @@ func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -
 		current_state["attributes"] = attribute_service.call("serialize")
 	if agriculture_service != null:
 		current_state["agriculture"] = agriculture_service.call("serialize")
+	if rest_service != null:
+		current_state["rest"] = rest_service.call("serialize")
 	return super.save_current(world_state, player_state)
 
 
@@ -105,16 +117,16 @@ func get_character_snapshot() -> Dictionary:
 		"agriculture": (
 			agriculture_service.call("get_snapshot") if agriculture_service != null else {}
 		),
+		"rest": rest_service.call("get_snapshot") if rest_service != null else {},
 	}
 
 
 func _exit_tree() -> void:
-	if (
-		block_interaction != null
-		and agriculture_interaction != null
-		and block_interaction.has_method("unregister_extension")
-	):
-		block_interaction.call("unregister_extension", agriculture_interaction)
+	if block_interaction != null and block_interaction.has_method("unregister_extension"):
+		if agriculture_interaction != null:
+			block_interaction.call("unregister_extension", agriculture_interaction)
+		if rest_service != null:
+			block_interaction.call("unregister_extension", rest_service)
 	_clear_progression_state()
 	super._exit_tree()
 
@@ -138,6 +150,13 @@ func _connect_agriculture_audio() -> void:
 	var moisture = agriculture_service.get("soil_moisture")
 	if moisture != null and moisture.has_signal("soil_watered"):
 		moisture.connect("soil_watered", Callable(self, "_on_soil_watered"))
+
+
+func _connect_rest_feedback() -> void:
+	if rest_service == null:
+		return
+	rest_service.connect("spawn_point_changed", Callable(self, "_on_spawn_point_changed"))
+	rest_service.connect("spawn_point_cleared", Callable(self, "_on_spawn_point_cleared"))
 
 
 func _on_item_equipped(slot_id: String, item: Dictionary, _previous: Dictionary) -> void:
@@ -197,6 +216,20 @@ func _on_crop_harvested(_position: Vector3i, _crop_id: String, _outputs: Array) 
 		audio_service.call("play_pickup")
 
 
+func _on_spawn_point_changed(_position: Vector3, _bed_position: Vector3i) -> void:
+	if audio_service != null and audio_service.has_method("play_block_place"):
+		audio_service.call("play_block_place", "wool")
+
+
+func _on_spawn_point_cleared(reason: String) -> void:
+	var message := (
+		"床已被移除，重生点恢复为世界出生点"
+		if reason == "bed_removed"
+		else "床的安全空间已失效，重生点恢复为世界出生点"
+	)
+	_publish_character_message(message, "warning", "rest:spawn_cleared", 3.2)
+
+
 func _publish_character_message(
 	message: String, severity: String, dedupe_key: String, duration: float = 2.2
 ) -> void:
@@ -205,6 +238,8 @@ func _publish_character_message(
 
 
 func _clear_progression_state() -> void:
+	if rest_service != null and rest_service.has_method("clear"):
+		rest_service.call("clear")
 	if agriculture_service != null and agriculture_service.has_method("clear"):
 		agriculture_service.call("clear")
 	if equipment_service != null and equipment_service.has_method("clear"):
