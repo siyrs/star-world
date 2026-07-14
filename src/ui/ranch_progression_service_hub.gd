@@ -7,6 +7,9 @@ const AttractionServiceScript = preload(
 const ProductServiceScript = preload(
 	"res://src/husbandry/animal_product_service.gd"
 )
+const ProductStateMigrationScript = preload(
+	"res://src/husbandry/animal_product_state_migration.gd"
+)
 
 var animal_attraction_service: Node
 var animal_product_service: Node
@@ -33,11 +36,14 @@ func _ready() -> void:
 
 
 func _begin_world(state: Dictionary) -> void:
+	var migrated_state: Dictionary = ProductStateMigrationScript.normalize_world_state(state)
 	if animal_product_service != null:
-		animal_product_service.call("deserialize", state.get("animal_products", {}))
+		animal_product_service.call(
+			"deserialize", migrated_state.get("animal_products", {})
+		)
 	if animal_attraction_service != null:
 		animal_attraction_service.call("deactivate")
-	super._begin_world(state)
+	super._begin_world(migrated_state)
 
 
 func attach_game(
