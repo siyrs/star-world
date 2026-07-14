@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "update_interval_seconds": 1.0,
+  "max_offline_seconds": 21600,
+  "pickup_spawn_radius": 14.0,
+  "profiles": [
+    {
+      "id": "chicken_egg",
+      "species_id": "chicken",
+      "product_item": "egg",
+      "interval_seconds": 180.0,
+      "max_pending": 6,
+      "adult_only": true
+    }
+  ]
+}
