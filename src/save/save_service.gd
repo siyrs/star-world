@@ -66,6 +66,12 @@ func create_world(
 		"world": {"block_overrides": {}, "loaded_chunks": []},
 		"survival": {"health": 20.0, "hunger": 20.0},
 		"day_night": {"time_of_day": 8.0, "day": 1},
+		"rest": {
+			"version": 1,
+			"has_custom_spawn": false,
+			"bed_position": [],
+			"respawn_position": [],
+		},
 		"experience": {"version": 1, "onboarding": {}},
 	}
 	if save_world(world_id, state):
@@ -215,6 +221,13 @@ func _migrate(payload: Dictionary) -> Dictionary:
 			"version": 1,
 			"saved_at_unix": int(Time.get_unix_time_from_system()),
 			"furnaces": {},
+		}
+	if not payload.has("rest") or payload["rest"] is not Dictionary:
+		payload["rest"] = {
+			"version": 1,
+			"has_custom_spawn": false,
+			"bed_position": [],
+			"respawn_position": [],
 		}
 	if not payload.has("experience") or payload["experience"] is not Dictionary:
 		payload["experience"] = {"version": 1, "onboarding": {}}
