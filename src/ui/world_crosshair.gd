@@ -12,15 +12,21 @@ extends Control
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	focus_mode = Control.FOCUS_NONE
-	custom_minimum_size = Vector2(24.0, 24.0)
-	set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	position = Vector2(-12.0, -12.0)
-	size = Vector2(24.0, 24.0)
+	anchor_left = 0.5
+	anchor_right = 0.5
+	anchor_top = 0.5
+	anchor_bottom = 0.5
+	offset_left = -12.0
+	offset_right = 12.0
+	offset_top = -12.0
+	offset_bottom = 12.0
 	queue_redraw()
 
 
 func get_aim_point() -> Vector2:
-	return global_position + size * 0.5
+	# Use the final canvas-space rectangle instead of local position. This stays
+	# exact when the viewport is resized or the HUD is hosted by a CanvasLayer.
+	return get_global_rect().get_center()
 
 
 func _draw() -> void:
