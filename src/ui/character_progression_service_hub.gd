@@ -4,7 +4,9 @@ extends "res://src/ui/tool_progression_service_hub.gd"
 const EquipmentServiceScript = preload("res://src/equipment/equipment_service.gd")
 const AttributeServiceScript = preload("res://src/attribute/attribute_service.gd")
 const CombatServiceScript = preload("res://src/combat/combat_service.gd")
-const AgricultureServiceScript = preload("res://src/agriculture/agriculture_service.gd")
+const AgricultureServiceScript = preload(
+	"res://src/agriculture/fertilizable_agriculture_service.gd"
+)
 const AgricultureInteractionAdapterScript = preload(
 	"res://src/agriculture/agriculture_interaction_adapter.gd"
 )
@@ -131,6 +133,8 @@ func _connect_agriculture_audio() -> void:
 	agriculture_service.connect("soil_tilled", Callable(self, "_on_soil_tilled"))
 	agriculture_service.connect("crop_planted", Callable(self, "_on_crop_planted"))
 	agriculture_service.connect("crop_harvested", Callable(self, "_on_crop_harvested"))
+	if agriculture_service.has_signal("crop_fertilized"):
+		agriculture_service.connect("crop_fertilized", Callable(self, "_on_crop_fertilized"))
 	var moisture = agriculture_service.get("soil_moisture")
 	if moisture != null and moisture.has_signal("soil_watered"):
 		moisture.connect("soil_watered", Callable(self, "_on_soil_watered"))
@@ -175,6 +179,17 @@ func _on_soil_watered(_position: Vector3i, _duration_seconds: float) -> void:
 func _on_crop_planted(_position: Vector3i, _crop_id: String) -> void:
 	if audio_service != null and audio_service.has_method("play_block_place"):
 		audio_service.call("play_block_place", "leaves")
+
+
+func _on_crop_fertilized(
+	_position: Vector3i,
+	_crop_id: String,
+	_fertilizer_item_id: String,
+	_from_stage: int,
+	_to_stage: int
+) -> void:
+	if audio_service != null and audio_service.has_method("play_craft"):
+		audio_service.call("play_craft")
 
 
 func _on_crop_harvested(_position: Vector3i, _crop_id: String, _outputs: Array) -> void:
