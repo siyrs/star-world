@@ -65,16 +65,21 @@ func _run() -> void:
 			"visible crosshair and camera ray share the exact viewport center",
 		)
 
+	_prepare_movement_runway(world, player)
+	await physics_frame
+	await process_frame
 	var movement_start := player.global_position
 	Input.action_press(InputActions.MOVE_FORWARD)
-	for _frame in 18:
+	for _frame in 42:
 		await physics_frame
 	Input.action_release(InputActions.MOVE_FORWARD)
 	player.call("reset_motion")
 	await process_frame
+	var movement_delta: Vector3 = player.global_position - movement_start
+	movement_delta.y = 0.0
 	_check(
-		player.global_position.distance_to(movement_start) > 0.15,
-		"W movement changes the real player position",
+		movement_delta.length() > 0.5,
+		"W movement changes the real player position on a real flat voxel runway",
 	)
 	_check(_current_step(experience) == "look", "real movement advances the tutorial")
 
@@ -160,6 +165,25 @@ func _run() -> void:
 	if image != null and not image.is_empty():
 		_save_image(image)
 	await _finish(game, hub)
+
+
+func _prepare_movement_runway(world: Node, player: Node3D) -> void:
+	var foot_block: Vector3i = world.call(
+		"world_to_block", player.global_position + Vector3.DOWN * 0.05
+	)
+	for x in range(foot_block.x - 1, foot_block.x + 2):
+		for z in range(foot_block.z - 9, foot_block.z + 2):
+			world.call("set_block", Vector3i(x, foot_block.y - 1, z), "stone")
+			for y in range(foot_block.y, foot_block.y + 3):
+				world.call("set_block", Vector3i(x, y, z), "air")
+	player.global_position = Vector3(
+		foot_block.x + 0.5, foot_block.y + 0.05, foot_block.z + 0.5
+	)
+	player.rotation = Vector3.ZERO
+	var pivot := player.get_node_or_null("CameraPivot") as Node3D
+	if pivot != null:
+		pivot.rotation = Vector3.ZERO
+	player.call("reset_motion")
 
 
 func _prepare_target_corridor(world: Node, player_block: Vector3i, target: Vector3i) -> void:
