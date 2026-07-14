@@ -12,11 +12,11 @@ $equipmentSlots = @($equipmentData.slots)
 $maps = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\map_profiles.json" | ConvertFrom-Json).maps
 $creatures = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\creatures.json" | ConvertFrom-Json).creatures
 
-if ($items.Count -lt 83) { throw "Expected >=83 items, got $($items.Count)" }
-if ($recipes.Count -lt 52) { throw "Expected >=52 crafting recipes, got $($recipes.Count)" }
+if ($items.Count -lt 84) { throw "Expected >=84 items, got $($items.Count)" }
+if ($recipes.Count -lt 56) { throw "Expected >=56 crafting recipes, got $($recipes.Count)" }
 if ($furnaceRecipes.Count -lt 8) { throw "Expected >=8 furnace recipes, got $($furnaceRecipes.Count)" }
 if ($fuels.Count -lt 2) { throw "Expected >=2 fuels, got $($fuels.Count)" }
-if ($harvestRules.Count -lt 38) { throw "Expected >=38 harvest rules, got $($harvestRules.Count)" }
+if ($harvestRules.Count -lt 40) { throw "Expected >=40 harvest rules, got $($harvestRules.Count)" }
 if ($crops.Count -lt 3) { throw "Expected >=3 crop definitions, got $($crops.Count)" }
 if ($equipmentSlots.Count -ne 5) { throw "Expected 5 equipment slots, got $($equipmentSlots.Count)" }
 if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
@@ -81,8 +81,8 @@ foreach ($item in $items) {
 }
 if ($armorCount -lt 8) { throw "Expected >=8 armor items, got $armorCount" }
 if ($equippableCount -lt 13) { throw "Expected >=13 equippable items, got $equippableCount" }
-foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
-  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool item: $requiredItem" }
+foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
+  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool/rest item: $requiredItem" }
 }
 
 foreach ($recipe in $recipes) {
@@ -105,7 +105,7 @@ foreach ($fuel in $fuels) {
 $knownBlocks = @(
   'air','grass','dirt','stone','cobblestone','sand','snow','wood','leaves','water','lava',
   'planks','stone_bricks','glass','stone_slab','oak_stairs','coal_ore','iron_ore','gold_ore',
-  'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','ladder','torch','wool','ice','bedrock',
+  'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','oak_bed','ladder','torch','wool','ice','bedrock',
   'farmland','wheat_stage_0','wheat_stage_1','wheat_stage_2','wheat_stage_3','farmland_wet',
   'carrot_stage_0','carrot_stage_1','carrot_stage_2','carrot_stage_3',
   'potato_stage_0','potato_stage_1','potato_stage_2','potato_stage_3'

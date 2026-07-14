@@ -42,6 +42,22 @@ func bind_combat_service(p_combat_service: Node) -> void:
 	combat_service = p_combat_service
 
 
+func set_respawn_position(position: Vector3) -> bool:
+	if not (is_finite(position.x) and is_finite(position.y) and is_finite(position.z)):
+		return false
+	spawn_position = position
+	return true
+
+
+func reset_respawn_position() -> void:
+	if world != null and world.has_method("get_spawn_position"):
+		spawn_position = world.call("get_spawn_position")
+
+
+func get_respawn_position() -> Vector3:
+	return spawn_position
+
+
 func take_damage(amount: float, source: String = "world") -> void:
 	if amount <= 0.0:
 		return

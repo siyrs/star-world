@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "bed_blocks": ["oak_bed"],
+  "sleep_window": {
+    "start_hour": 19.0,
+    "end_hour": 6.0,
+    "wake_hour": 6.5
+  },
+  "spawn_offsets": [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+    [1, 0, 1],
+    [1, 0, -1],
+    [-1, 0, 1],
+    [-1, 0, -1],
+    [0, 1, 0]
+  ],
+  "required_clearance_blocks": 2
+}
