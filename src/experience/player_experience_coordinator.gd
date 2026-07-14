@@ -17,6 +17,7 @@ var inventory: Node
 var game_ui: Node
 var interaction_service: Node
 var furnace_service: Node
+var entity_interaction_service: Node
 var player: Node
 var prompts_enabled := true
 
@@ -41,19 +42,25 @@ func setup(
 	p_inventory: Node,
 	p_game_ui: Node,
 	p_interaction_service: Node,
-	p_furnace_service: Node = null
+	p_furnace_service: Node = null,
+	p_entity_interaction_service: Node = null
 ) -> void:
 	_disconnect_static_dependencies()
 	inventory = p_inventory
 	game_ui = p_game_ui
 	interaction_service = p_interaction_service
 	furnace_service = p_furnace_service
+	entity_interaction_service = p_entity_interaction_service
 	if inventory != null and inventory.has_signal("selected_slot_changed"):
 		inventory.connect("selected_slot_changed", Callable(self, "_on_selected_slot_changed"))
 	if game_ui != null and game_ui.has_signal("overlay_changed"):
 		game_ui.connect("overlay_changed", Callable(self, "_on_overlay_changed"))
 	if furnace_service != null and furnace_service.has_signal("item_smelted"):
 		furnace_service.connect("item_smelted", Callable(self, "_on_item_smelted"))
+	if entity_interaction_service != null and entity_interaction_service.has_signal("state_changed"):
+		entity_interaction_service.connect(
+			"state_changed", Callable(self, "_on_entity_interaction_state_changed")
+		)
 	_refresh_prompt()
 
 
@@ -136,6 +143,7 @@ func get_status() -> Dictionary:
 		"gameplay_active": _gameplay_active,
 		"prompts_enabled": prompts_enabled,
 		"player_attached": is_instance_valid(player),
+		"entity_interaction_attached": is_instance_valid(entity_interaction_service),
 		"focus": _current_focus.duplicate(true),
 		"onboarding": onboarding.call("get_state") if onboarding != null else {},
 		"prompt": feedback.call("get_prompt") if feedback != null else {},
@@ -180,6 +188,10 @@ func _on_selected_slot_changed(_index: int, _slot: Dictionary) -> void:
 	_refresh_prompt()
 
 
+func _on_entity_interaction_state_changed(_entity_id: int) -> void:
+	_refresh_prompt()
+
+
 func _on_overlay_changed(_overlay: int, context: StringName) -> void:
 	if context == InputContextScript.CONTEXT_INVENTORY and onboarding != null:
 		onboarding.call("report_action", &"inventory")
@@ -207,7 +219,10 @@ func _refresh_prompt() -> void:
 		feedback.call("clear_prompt")
 		return
 	var prompt: Dictionary = _prompt_resolver.resolve(
-		_current_focus, inventory, interaction_service
+		_current_focus,
+		inventory,
+		interaction_service,
+		entity_interaction_service
 	)
 	feedback.call("set_prompt", prompt)
 
@@ -261,3 +276,7 @@ func _disconnect_static_dependencies() -> void:
 			"item_smelted", smelt_callback
 		):
 			furnace_service.disconnect("item_smelted", smelt_callback)
+	if entity_interaction_service != null and entity_interaction_service.has_signal("state_changed"):
+		var entity_callback := Callable(self, "_on_entity_interaction_state_changed")
+		if entity_interaction_service.is_connected("state_changed", entity_callback):
+			entity_interaction_service.disconnect("state_changed", entity_callback)
