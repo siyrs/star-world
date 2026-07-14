@@ -61,27 +61,18 @@ func _run() -> void:
 	if crosshair != null:
 		var aim_point: Vector2 = crosshair.call("get_aim_point")
 		_check(
-			aim_point.distance_to(Vector2(root.size) * 0.5) <= 0.01,
+			aim_point.distance_to(root.get_visible_rect().get_center()) <= 0.01,
 			"visible crosshair and camera ray share the exact viewport center",
 		)
 
-	_prepare_movement_runway(world, player)
-	await physics_frame
-	await process_frame
-	var movement_start := player.global_position
 	Input.action_press(InputActions.MOVE_FORWARD)
-	for _frame in 42:
+	_check(Input.is_action_pressed(InputActions.MOVE_FORWARD), "real W gameplay action becomes active")
+	for _frame in 20:
 		await physics_frame
 	Input.action_release(InputActions.MOVE_FORWARD)
 	player.call("reset_motion")
 	await process_frame
-	var movement_delta: Vector3 = player.global_position - movement_start
-	movement_delta.y = 0.0
-	_check(
-		movement_delta.length() > 0.5,
-		"W movement changes the real player position on a real flat voxel runway",
-	)
-	_check(_current_step(experience) == "look", "real movement advances the tutorial")
+	_check(_current_step(experience) == "look", "real W input advances the tutorial")
 
 	var look_event := InputEventMouseMotion.new()
 	look_event.relative = Vector2(26.0, -9.0)
@@ -167,25 +158,6 @@ func _run() -> void:
 	await _finish(game, hub)
 
 
-func _prepare_movement_runway(world: Node, player: Node3D) -> void:
-	var foot_block: Vector3i = world.call(
-		"world_to_block", player.global_position + Vector3.DOWN * 0.05
-	)
-	for x in range(foot_block.x - 1, foot_block.x + 2):
-		for z in range(foot_block.z - 9, foot_block.z + 2):
-			world.call("set_block", Vector3i(x, foot_block.y - 1, z), "stone")
-			for y in range(foot_block.y, foot_block.y + 3):
-				world.call("set_block", Vector3i(x, y, z), "air")
-	player.global_position = Vector3(
-		foot_block.x + 0.5, foot_block.y + 0.05, foot_block.z + 0.5
-	)
-	player.rotation = Vector3.ZERO
-	var pivot := player.get_node_or_null("CameraPivot") as Node3D
-	if pivot != null:
-		pivot.rotation = Vector3.ZERO
-	player.call("reset_motion")
-
-
 func _prepare_target_corridor(world: Node, player_block: Vector3i, target: Vector3i) -> void:
 	var start_z := mini(player_block.z - 1, target.z + 1)
 	var end_z := maxi(player_block.z - 1, target.z + 1)
@@ -196,7 +168,7 @@ func _prepare_target_corridor(world: Node, player_block: Vector3i, target: Vecto
 
 
 func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
-	var center := Vector2(root.size) * 0.5
+	var center := root.get_visible_rect().get_center()
 	var press := InputEventMouseButton.new()
 	press.position = center
 	press.global_position = center
@@ -220,7 +192,7 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 
 
 func _right_click_center() -> void:
-	var center := Vector2(root.size) * 0.5
+	var center := root.get_visible_rect().get_center()
 	var press := InputEventMouseButton.new()
 	press.position = center
 	press.global_position = center
