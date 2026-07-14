@@ -61,6 +61,11 @@ func create_world(
 			"crops": {},
 			"soil_moisture": {"version": 1, "soils": {}},
 		},
+		"husbandry": {
+			"version": 1,
+			"saved_at_unix": timestamp,
+			"animals": {},
+		},
 		"containers": {"version": 1, "containers": {}},
 		"machines": {"version": 1, "saved_at_unix": timestamp, "furnaces": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
@@ -214,6 +219,21 @@ func _migrate(payload: Dictionary) -> Dictionary:
 			agriculture["soil_moisture"] = {"version": 1, "soils": {}}
 		agriculture["version"] = maxi(2, int(agriculture.get("version", 1)))
 		payload["agriculture"] = agriculture
+	if not payload.has("husbandry") or payload["husbandry"] is not Dictionary:
+		payload["husbandry"] = {
+			"version": 1,
+			"saved_at_unix": int(Time.get_unix_time_from_system()),
+			"animals": {},
+		}
+	else:
+		var husbandry: Dictionary = payload["husbandry"]
+		if not husbandry.has("animals") or husbandry["animals"] is not Dictionary:
+			husbandry["animals"] = {}
+		husbandry["version"] = maxi(1, int(husbandry.get("version", 1)))
+		husbandry["saved_at_unix"] = int(
+			husbandry.get("saved_at_unix", Time.get_unix_time_from_system())
+		)
+		payload["husbandry"] = husbandry
 	if not payload.has("containers") or payload["containers"] is not Dictionary:
 		payload["containers"] = {"version": 1, "containers": {}}
 	if not payload.has("machines") or payload["machines"] is not Dictionary:
