@@ -1,0 +1,79 @@
+name: Placement preview quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: placement-preview-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  placement-preview-regression:
+    name: Placement preview policy and scene regression
+    runs-on: windows-latest
+    timeout-minutes: 16
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Placement preview regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/placement_preview_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  real-placement-preview:
+    name: Real placement preview desktop acceptance
+    needs: placement-preview-regression
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise valid and invalid placement previews
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/placement_preview_desktop_acceptance.gd' `
+            -OutputPath 'build\placement-preview-valid.png'
+
+      - name: Upload placement preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: placement-preview-desktop-${{ github.run_number }}
+          path: |
+            build/placement-preview-*.png
+            build/placement-preview-*.log
+          if-no-files-found: error
+          retention-days: 14
