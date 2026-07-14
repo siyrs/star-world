@@ -100,37 +100,24 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "placement keeps gameplay mouse capture")
 	_check(bool(player.get("input_enabled")), "placement keeps player movement input enabled")
 
-	# Move the player close to a voxel boundary so the adjacent cell ahead only
-	# partially overlaps the body. The target remains more than one metre from
-	# the camera, avoiding near-face ambiguity while still exercising the real
-	# red player-overlap preview through Camera3D and RayCast3D.
-	var overlap_cell := Vector3i(player_block.x, target_y, player_block.z - 1)
-	var overlap_anchor := overlap_cell + Vector3i(0, 0, -1)
-	var adjusted_position := player.global_position
-	adjusted_position.x = float(player_block.x) + 0.5
-	adjusted_position.z = float(player_block.z) + 0.15
-	player.global_position = adjusted_position
-	player.call("reset_motion")
-	world.call("set_block", overlap_anchor, "stone")
-	world.call("set_block", overlap_cell, "air")
-	await physics_frame
-	await process_frame
-	var body_bounds := AABB(
-		player.global_position + Vector3(-0.32, 0.0, -0.32),
-		Vector3(0.64, 1.82, 0.64)
-	)
-	_check(body_bounds.intersects(AABB(Vector3(overlap_cell), Vector3.ONE)), "test geometry really overlaps the player body")
-	await _aim_at(player, world.call("block_to_world", overlap_anchor))
+	# Keep the crosshair on the same stone face. The cell that was green is now
+	# occupied by the newly placed planks, so the same contract must immediately
+	# turn red, name the blocker, and reject a repeated right click.
+	await _aim_at(player, world.call("block_to_world", anchor))
 	focus = player.call("get_interaction_focus")
 	preview_state = focus.get("placement_preview", {})
-	_check(_array_to_vector3i(focus.get("hit_position", [])) == overlap_anchor, "real center ray resolves the stable overlap target")
-	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == overlap_cell, "overlap preview resolves the adjacent player cell")
-	_check(bool(preview_state.get("placement_visible", false)), "player-overlap target still renders a placement ghost")
-	_check(not bool(preview_state.get("valid", true)), "ghost turns invalid when the target cell overlaps the player")
-	_check(str(preview_state.get("reason", "")) == "player_overlap", "invalid ghost explains player overlap")
+	_check(_array_to_vector3i(focus.get("hit_position", [])) == anchor, "occupied preview keeps the same visible target")
+	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == expected_placement, "occupied preview keeps the same adjacent cell")
+	_check(bool(preview_state.get("placement_visible", false)), "occupied target still renders a placement ghost")
+	_check(not bool(preview_state.get("valid", true)), "ghost turns invalid after the cell becomes occupied")
+	_check(str(preview_state.get("reason", "")) == "occupied", "invalid ghost exposes the occupied reason")
+	_check(str(preview_state.get("occupied_block_id", "")) == "planks", "invalid ghost records the actual blocking block")
 	prompt = hub.player_experience.call("get_status").get("prompt", {})
-	_check("不能放在角色身体内" in str(prompt.get("subtitle", "")), "invalid preview is explained with text, not red alone")
+	_check("已被木板占用" in str(prompt.get("subtitle", "")), "invalid preview names the blocking block in text")
 	await _capture(_invalid_capture_path)
+	await _right_click_center()
+	_check(str(world.call("get_block", expected_placement)) == "planks", "repeated right click cannot overwrite an occupied preview cell")
+	_check(hub.inventory.count_item("oak_planks") == 2, "rejected occupied placement consumes no item")
 
 	await _tap_key(KEY_E)
 	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real inventory overlay")
