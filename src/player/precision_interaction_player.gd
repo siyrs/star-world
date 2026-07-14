@@ -1,7 +1,7 @@
 class_name PrecisionInteractionPlayer
 extends "res://src/player/husbandry_player.gd"
 
-const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const PrecisionBlockRegistry = preload("res://src/block/block_registry.gd")
 const VoxelTargetResolverScript = preload("res://src/interaction/voxel_target_resolver.gd")
 
 var _precision_target_resolver = VoxelTargetResolverScript.new()
@@ -12,8 +12,8 @@ func _resolve_harvest_target() -> Dictionary:
 	if str(target.get("type", "")) != "block":
 		return {}
 	var block_position: Vector3i = target.get("hit_position", Vector3i.ZERO)
-	var block_id := str(target.get("hit_block_id", BlockRegistryScript.AIR))
-	if block_id == BlockRegistryScript.AIR:
+	var block_id := str(target.get("hit_block_id", PrecisionBlockRegistry.AIR))
+	if block_id == PrecisionBlockRegistry.AIR:
 		return {}
 	return {"position":block_position, "block_id":block_id}
 
@@ -25,8 +25,8 @@ func _try_interact_target() -> bool:
 	if str(target.get("type", "")) != "block":
 		return false
 	var block_position: Vector3i = target.get("hit_position", Vector3i.ZERO)
-	var block_id := str(target.get("hit_block_id", BlockRegistryScript.AIR))
-	if block_id == BlockRegistryScript.AIR:
+	var block_id := str(target.get("hit_block_id", PrecisionBlockRegistry.AIR))
+	if block_id == PrecisionBlockRegistry.AIR:
 		return false
 	var interacted := bool(interaction_service.call("interact", world, block_position, block_id))
 	if interacted:
@@ -35,7 +35,7 @@ func _try_interact_target() -> bool:
 			{
 				"block_id":block_id,
 				"display_name":str(
-					BlockRegistryScript.get_definition(block_id).get("name", block_id)
+					PrecisionBlockRegistry.get_definition(block_id).get("name", block_id)
 				),
 				"position":[block_position.x, block_position.y, block_position.z],
 			}
@@ -50,10 +50,10 @@ func _resolve_placement_target() -> Dictionary:
 	if str(target.get("type", "")) != "block":
 		return {}
 	var block_position: Vector3i = target.get("placement_position", Vector3i.ZERO)
-	var previous_block := str(target.get("placement_block_id", BlockRegistryScript.AIR))
+	var previous_block := str(target.get("placement_block_id", PrecisionBlockRegistry.AIR))
 	# Ordinary building blocks must never replace an occupied voxel. The visible
 	# hit block and its adjacent face are now one atomic placement contract.
-	if previous_block != BlockRegistryScript.AIR:
+	if previous_block != PrecisionBlockRegistry.AIR:
 		return {}
 	var player_bounds := AABB(
 		global_position + Vector3(-0.32, 0.0, -0.32), Vector3(0.64, 1.82, 0.64)
