@@ -9,19 +9,35 @@ var _harvest_registry = HarvestRegistryScript.new()
 var _harvest_policy = HarvestPolicyScript.new()
 
 
-func resolve(focus: Dictionary, inventory: Node, interaction_service: Node) -> Dictionary:
+func resolve(
+	focus: Dictionary,
+	inventory: Node,
+	interaction_service: Node,
+	entity_interaction_service: Node = null
+) -> Dictionary:
 	var selected := _selected_item_context(inventory)
 	var focus_type := str(focus.get("type", ""))
 	match focus_type:
 		"entity":
-			return _entity_prompt(focus)
+			return _entity_prompt(focus, selected, entity_interaction_service)
 		"block":
 			return _block_prompt(focus, selected, interaction_service)
 		_:
 			return _held_item_prompt(selected)
 
 
-func _entity_prompt(focus: Dictionary) -> Dictionary:
+func _entity_prompt(
+	focus: Dictionary, selected: Dictionary, entity_interaction_service: Node
+) -> Dictionary:
+	if (
+		entity_interaction_service != null
+		and entity_interaction_service.has_method("get_entity_prompt")
+	):
+		var custom_result: Variant = entity_interaction_service.call(
+			"get_entity_prompt", focus, str(selected.get("item_id", ""))
+		)
+		if custom_result is Dictionary and not custom_result.is_empty():
+			return custom_result.duplicate(true)
 	var subtitle := "生物"
 	if focus.has("health") and focus.has("max_health"):
 		subtitle = "生命 %.0f / %.0f" % [
