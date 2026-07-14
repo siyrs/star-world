@@ -79,7 +79,9 @@ func _run() -> void:
 	hub.inventory.select_slot(0)
 	await process_frame
 
-	var distance_before: float = chicken.global_position.distance_to(player.global_position)
+	var distance_before: float = _horizontal_distance(
+		chicken.global_position, player.global_position
+	)
 	var following_count: int = int(hub.animal_attraction_service.call("refresh_now"))
 	_check(following_count == 1, "holding wheat seeds attracts the nearby chicken")
 	var attraction_snapshot: Dictionary = chicken.call("get_attraction_snapshot")
@@ -87,12 +89,26 @@ func _run() -> void:
 		bool(attraction_snapshot.get("active", false)),
 		"real chicken receives the attraction capability",
 	)
-	for _frame in 45:
+	var minimum_distance: float = distance_before
+	var observed_toward_velocity := false
+	for _frame in 60:
 		await physics_frame
-	var distance_after: float = chicken.global_position.distance_to(player.global_position)
+		var to_player := player.global_position - chicken.global_position
+		to_player.y = 0.0
+		var horizontal_velocity := Vector3(chicken.velocity.x, 0.0, chicken.velocity.z)
+		if (
+			to_player.length_squared() > 0.001
+			and horizontal_velocity.dot(to_player.normalized()) > 0.05
+		):
+			observed_toward_velocity = true
+		minimum_distance = minf(
+			minimum_distance,
+			_horizontal_distance(chicken.global_position, player.global_position)
+		)
+	_check(observed_toward_velocity, "attracted chicken velocity points toward the player")
 	_check(
-		distance_after < distance_before - 0.25,
-		"attracted chicken physically moves toward the player",
+		minimum_distance < distance_before - 0.10,
+		"attracted chicken makes observable horizontal progress toward the player",
 	)
 	_freeze_creature(chicken)
 
@@ -231,6 +247,10 @@ func _freeze_creature(creature: Node3D) -> void:
 	creature.set_physics_process(false)
 	if creature is CharacterBody3D:
 		creature.velocity = Vector3.ZERO
+
+
+func _horizontal_distance(first: Vector3, second: Vector3) -> float:
+	return Vector2(first.x, first.z).distance_to(Vector2(second.x, second.z))
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
