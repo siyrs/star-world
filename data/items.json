@@ -52,6 +52,8 @@
     {"id":"rotten_flesh","name":"腐肉","category":"food","max_stack":64,"food":2,"saturation":0,"color":"#7E4C34"},
     {"id":"apple","name":"苹果","category":"food","max_stack":64,"food":4,"saturation":2,"color":"#D93D38"},
     {"id":"bread","name":"面包","category":"food","max_stack":64,"food":5,"saturation":5,"color":"#D89A43"},
+    {"id":"egg","name":"鸡蛋","category":"material","max_stack":16,"color":"#F4E4B6"},
+    {"id":"cooked_egg","name":"熟鸡蛋","category":"food","max_stack":64,"food":4,"saturation":3,"color":"#F2C94C"},
     {"id":"raw_chicken","name":"生鸡肉","category":"food","max_stack":64,"food":2,"saturation":1,"color":"#D7A69D"},
     {"id":"cooked_chicken","name":"熟鸡肉","category":"food","max_stack":64,"food":6,"saturation":6,"color":"#A95C36"},
     {"id":"raw_beef","name":"生牛肉","category":"food","max_stack":64,"food":3,"saturation":1,"color":"#A84542"},
