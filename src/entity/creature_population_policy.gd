@@ -1,6 +1,8 @@
 class_name CreaturePopulationPolicy
 extends RefCounted
 
+const PERSISTENT_GROUP: StringName = &"persistent_creatures"
+
 
 static func count_group(root: Node, group_name: StringName) -> int:
 	if root == null:
@@ -21,6 +23,8 @@ static func collect_out_of_range(
 	var maximum_distance_squared := maximum_distance * maximum_distance
 	for child in root.get_children():
 		if child is not Node3D or not child.is_in_group("creatures"):
+			continue
+		if child.is_in_group(PERSISTENT_GROUP):
 			continue
 		if (
 			child.global_position.distance_squared_to(player.global_position)
