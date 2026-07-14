@@ -2,23 +2,22 @@ class_name PlayerFocusResolver
 extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const VoxelTargetResolverScript = preload("res://src/interaction/voxel_target_resolver.gd")
+
+var _voxel_target_resolver = VoxelTargetResolverScript.new()
 
 
 func resolve(ray: RayCast3D, world: Node) -> Dictionary:
-	if ray == null or not is_instance_valid(ray):
+	var target: Dictionary = _voxel_target_resolver.resolve(ray, world)
+	if target.is_empty():
 		return {}
-	ray.force_raycast_update()
-	if not ray.is_colliding():
+	if str(target.get("type", "")) == "entity":
+		var collider: Variant = target.get("collider")
+		return _entity_focus(collider) if collider is Node else {}
+	if str(target.get("type", "")) != "block":
 		return {}
-	var collider = ray.get_collider()
-	if collider is Node and (collider.is_in_group("creatures") or collider.has_method("take_damage")):
-		return _entity_focus(collider)
-	if world == null or not world.has_method("world_to_block") or not world.has_method("get_block"):
-		return {}
-	var point := ray.get_collision_point()
-	var normal := ray.get_collision_normal()
-	var block_position: Vector3i = world.call("world_to_block", point - normal * 0.01)
-	var block_id := str(world.call("get_block", block_position))
+	var block_position: Vector3i = target.get("hit_position", Vector3i.ZERO)
+	var block_id := str(target.get("hit_block_id", BlockRegistryScript.AIR))
 	if block_id == BlockRegistryScript.AIR:
 		return {}
 	var proxy: Dictionary = _resolve_visual_proxy(world, block_position, block_id)
@@ -26,6 +25,8 @@ func resolve(ray: RayCast3D, world: Node) -> Dictionary:
 		block_position = proxy.get("position", block_position)
 		block_id = str(proxy.get("block_id", block_id))
 	var definition := BlockRegistryScript.get_definition(block_id)
+	var placement_position: Vector3i = target.get("placement_position", Vector3i.ZERO)
+	var face_normal: Vector3 = target.get("collision_normal", Vector3.ZERO)
 	return {
 		"type": "block",
 		"target_key": "%s@%d,%d,%d" % [
@@ -36,6 +37,10 @@ func resolve(ray: RayCast3D, world: Node) -> Dictionary:
 		"collectible": BlockRegistryScript.is_collectible(block_id),
 		"solid": BlockRegistryScript.is_solid(block_id),
 		"position": [block_position.x, block_position.y, block_position.z],
+		"placement_position": [
+			placement_position.x, placement_position.y, placement_position.z
+		],
+		"face_normal": [face_normal.x, face_normal.y, face_normal.z],
 		"interaction_proxy": bool(proxy.get("proxied", false)),
 	}
 
