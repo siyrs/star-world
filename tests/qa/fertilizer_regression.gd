@@ -100,9 +100,10 @@ func _test_transaction_and_maturity_guard() -> void:
 	inventory.clear()
 	inventory.add_item("compost", 4, {"batch":"qa"})
 	inventory.select_slot(0)
-	var fertilized_events := 0
+	var event_counter := {"count": 0}
 	agriculture.crop_fertilized.connect(
-		func(_position, _crop_id, _item_id, _from_stage, _to_stage): fertilized_events += 1
+		func(_position, _crop_id, _item_id, _from_stage, _to_stage):
+			event_counter["count"] = int(event_counter.get("count", 0)) + 1
 	)
 	for expected_stage in [1, 2, 3]:
 		var before_count := inventory.count_item("compost")
@@ -112,7 +113,7 @@ func _test_transaction_and_maturity_guard() -> void:
 		_check(world.get_block(crop) == "wheat_stage_%d" % expected_stage, "world publishes fertilized stage %d" % expected_stage)
 		_check(inventory.count_item("compost") == before_count - 1, "successful fertilization consumes one compost")
 		_check(int(agriculture.get_crop_state(crop).get("stage", -1)) == expected_stage, "domain state matches fertilized stage %d" % expected_stage)
-	_check(fertilized_events == 3, "each successful application emits one fertilizer event")
+	_check(int(event_counter.get("count", 0)) == 3, "each successful application emits one fertilizer event")
 	var mature_count := inventory.count_item("compost")
 	var mature_result: Dictionary = agriculture.try_interact(
 		world, inventory, crop, world.get_block(crop)
@@ -183,10 +184,10 @@ func _test_composition_root() -> void:
 		agriculture != null and agriculture.has_method("get_fertilizer_profile"),
 		"composition root selects the fertilizable agriculture implementation",
 	)
-	_check(
-		agriculture != null and not agriculture.call("get_fertilizer_profile", "compost").is_empty(),
-		"runtime agriculture exposes the compost profile",
-	)
+	var compost_profile: Dictionary = {}
+	if agriculture != null and agriculture.has_method("get_fertilizer_profile"):
+		compost_profile = agriculture.call("get_fertilizer_profile", "compost")
+	_check(not compost_profile.is_empty(), "runtime agriculture exposes the compost profile")
 	_check(
 		agriculture != null and agriculture.has_signal("crop_fertilized"),
 		"runtime agriculture exposes fertilizer feedback events",
