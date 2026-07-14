@@ -43,6 +43,7 @@
     {"id":"snowball","name":"雪球","category":"material","max_stack":16,"color":"#F3FAFC"},
     {"id":"wheat_seeds","name":"小麦种子","category":"material","max_stack":64,"color":"#B9A343"},
     {"id":"wheat","name":"小麦","category":"material","max_stack":64,"color":"#D8B94F"},
+    {"id":"compost","name":"堆肥","category":"material","max_stack":64,"color":"#6E5638"},
     {"id":"carrot","name":"胡萝卜","category":"food","max_stack":64,"food":3,"saturation":2,"color":"#E98332"},
     {"id":"potato","name":"马铃薯","category":"food","max_stack":64,"food":1,"saturation":0,"color":"#B89152"},
     {"id":"baked_potato","name":"烤马铃薯","category":"food","max_stack":64,"food":5,"saturation":5,"color":"#D6A454"},
