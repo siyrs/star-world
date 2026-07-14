@@ -36,6 +36,7 @@
     {"block_id":"chest","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},
     {"block_id":"oak_door","preferred_tool":"axe","wrong_tool_speed_multiplier":0.55},
     {"block_id":"oak_fence","preferred_tool":"axe","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"oak_bed","preferred_tool":"axe","wrong_tool_speed_multiplier":0.55},
     {"block_id":"oak_stairs","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},
     {"block_id":"water","breakable":false},
     {"block_id":"lava","breakable":false},
