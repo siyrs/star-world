@@ -8,6 +8,7 @@
     {"id":"potato_from_dirt","name":"寻找野生马铃薯","station":"hand","ingredients":{"dirt":2},"output":{"id":"potato","count":1}},
     {"id":"crafting_table","name":"工作台","station":"hand","ingredients":{"oak_planks":4},"output":{"id":"crafting_table","count":1}},
     {"id":"torch_coal","name":"火把","station":"hand","ingredients":{"coal":1,"stick":1},"output":{"id":"torch","count":4}},
+    {"id":"compost","name":"制作堆肥","station":"workbench","ingredients":{"leaves":2,"rotten_flesh":1,"wheat_seeds":1},"output":{"id":"compost","count":2}},
     {"id":"wooden_pickaxe","name":"木镐","station":"workbench","ingredients":{"oak_planks":3,"stick":2},"output":{"id":"wooden_pickaxe","count":1}},
     {"id":"wooden_axe","name":"木斧","station":"workbench","ingredients":{"oak_planks":3,"stick":2},"output":{"id":"wooden_axe","count":1}},
     {"id":"wooden_shovel","name":"木铲","station":"workbench","ingredients":{"oak_planks":1,"stick":2},"output":{"id":"wooden_shovel","count":1}},
