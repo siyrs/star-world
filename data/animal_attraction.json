@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "refresh_seconds": 0.25,
+  "target_timeout_seconds": 0.75,
+  "species": {
+    "chicken": {
+      "follow_radius": 9.0,
+      "stop_distance": 1.8
+    },
+    "cow": {
+      "follow_radius": 10.0,
+      "stop_distance": 2.1
+    },
+    "pig": {
+      "follow_radius": 10.0,
+      "stop_distance": 2.0
+    }
+  }
+}
