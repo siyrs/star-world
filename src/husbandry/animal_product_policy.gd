@@ -1,7 +1,7 @@
 class_name AnimalProductPolicy
 extends RefCounted
 
-const STAGE_ADULT := "adult"
+const STAGE_ADULT: String = "adult"
 
 
 func is_eligible(profile: Dictionary, husbandry_record: Dictionary) -> bool:
@@ -15,9 +15,9 @@ func is_eligible(profile: Dictionary, husbandry_record: Dictionary) -> bool:
 
 
 func initial_state(profile: Dictionary, stable_key: String) -> Dictionary:
-	var interval := maxf(1.0, float(profile.get("interval_seconds", 60.0)))
-	var normalized_hash := abs(stable_key.hash()) % 401
-	var stagger_ratio := 0.60 + float(normalized_hash) / 1000.0
+	var interval: float = maxf(1.0, float(profile.get("interval_seconds", 60.0)))
+	var normalized_hash: int = absi(stable_key.hash()) % 401
+	var stagger_ratio: float = 0.60 + float(normalized_hash) / 1000.0
 	return {
 		"species_id": str(profile.get("species_id", "")),
 		"remaining_seconds": interval * stagger_ratio,
@@ -26,8 +26,8 @@ func initial_state(profile: Dictionary, stable_key: String) -> Dictionary:
 
 
 func normalize_state(profile: Dictionary, state: Dictionary) -> Dictionary:
-	var interval := maxf(1.0, float(profile.get("interval_seconds", 60.0)))
-	var max_pending := maxi(1, int(profile.get("max_pending", 1)))
+	var interval: float = maxf(1.0, float(profile.get("interval_seconds", 60.0)))
+	var max_pending: int = maxi(1, int(profile.get("max_pending", 1)))
 	return {
 		"species_id": str(profile.get("species_id", state.get("species_id", ""))),
 		"remaining_seconds": clampf(
@@ -38,13 +38,13 @@ func normalize_state(profile: Dictionary, state: Dictionary) -> Dictionary:
 
 
 func advance(profile: Dictionary, state: Dictionary, elapsed_seconds: float) -> Dictionary:
-	var normalized := normalize_state(profile, state)
-	var interval := maxf(1.0, float(profile.get("interval_seconds", 60.0)))
-	var max_pending := maxi(1, int(profile.get("max_pending", 1)))
-	var remaining := float(normalized.get("remaining_seconds", interval))
-	var pending := int(normalized.get("pending_count", 0))
-	var elapsed := maxf(0.0, elapsed_seconds)
-	var produced := 0
+	var normalized: Dictionary = normalize_state(profile, state)
+	var interval: float = maxf(1.0, float(profile.get("interval_seconds", 60.0)))
+	var max_pending: int = maxi(1, int(profile.get("max_pending", 1)))
+	var remaining: float = float(normalized.get("remaining_seconds", interval))
+	var pending: int = int(normalized.get("pending_count", 0))
+	var elapsed: float = maxf(0.0, elapsed_seconds)
+	var produced: int = 0
 	if elapsed > 0.0 and pending < max_pending:
 		remaining -= elapsed
 		while remaining <= 0.0 and pending < max_pending:
@@ -65,7 +65,7 @@ func advance(profile: Dictionary, state: Dictionary, elapsed_seconds: float) -> 
 
 
 func format_duration(seconds: float) -> String:
-	var rounded := maxi(0, ceili(seconds))
+	var rounded: int = maxi(0, ceili(seconds))
 	if rounded >= 60:
 		return "%d 分 %02d 秒" % [rounded / 60, rounded % 60]
 	return "%d 秒" % rounded
