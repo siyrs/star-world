@@ -18,6 +18,7 @@ signal attack_landed(target: Node, damage: float)
 var health: float = 10.0
 var drops: Dictionary = {}
 var target: Node3D
+var attraction_target: Node3D
 var inventory_service
 var _configured: bool = false
 var _dead: bool = false
@@ -26,6 +27,8 @@ var _decision_timer: float = 0.0
 var _attack_timer: float = 0.0
 var _flee_timer: float = 0.0
 var _flee_direction := Vector3.ZERO
+var _attraction_remaining_seconds: float = 0.0
+var _attraction_stop_distance: float = 2.0
 var _rng := RandomNumberGenerator.new()
 var _gravity: float = 9.8
 
@@ -50,11 +53,49 @@ func apply_profile(profile: Dictionary) -> void:
 	health = max_health
 
 
+func set_attraction_target(
+	p_target: Node3D, duration_seconds: float = 0.75, stop_distance: float = 2.0
+) -> void:
+	if _dead or p_target == null or not is_instance_valid(p_target):
+		clear_attraction_target()
+		return
+	attraction_target = p_target
+	_attraction_remaining_seconds = maxf(0.1, duration_seconds)
+	_attraction_stop_distance = maxf(0.25, stop_distance)
+
+
+func clear_attraction_target() -> void:
+	attraction_target = null
+	_attraction_remaining_seconds = 0.0
+
+
+func has_active_attraction() -> bool:
+	return (
+		_attraction_remaining_seconds > 0.0
+		and attraction_target != null
+		and is_instance_valid(attraction_target)
+	)
+
+
+func get_attraction_snapshot() -> Dictionary:
+	return {
+		"active": has_active_attraction(),
+		"remaining_seconds": _attraction_remaining_seconds,
+		"stop_distance": _attraction_stop_distance,
+		"target_id": (
+			attraction_target.get_instance_id() if has_active_attraction() else 0
+		),
+	}
+
+
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
 	_attack_timer = maxf(0.0, _attack_timer - delta)
 	_flee_timer = maxf(0.0, _flee_timer - delta)
+	_attraction_remaining_seconds = maxf(0.0, _attraction_remaining_seconds - delta)
+	if _attraction_remaining_seconds <= 0.0:
+		attraction_target = null
 	_decision_timer -= delta
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
@@ -64,13 +105,21 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, direction.x * move_speed, move_speed * 5.0 * delta)
 	velocity.z = move_toward(velocity.z, direction.z * move_speed, move_speed * 5.0 * delta)
 	if direction.length_squared() > 0.05:
-		rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.z), minf(1.0, delta * 8.0))
+		rotation.y = lerp_angle(
+			rotation.y, atan2(direction.x, direction.z), minf(1.0, delta * 8.0)
+		)
 	move_and_slide()
 
 
 func _choose_direction() -> Vector3:
 	if _flee_timer > 0.0:
 		return _flee_direction.normalized()
+	if not hostile and has_active_attraction():
+		var attraction_offset := attraction_target.global_position - global_position
+		attraction_offset.y = 0.0
+		if attraction_offset.length() <= _attraction_stop_distance:
+			return Vector3.ZERO
+		return attraction_offset.normalized()
 	if hostile:
 		_acquire_target()
 		if target != null and is_instance_valid(target):
@@ -92,11 +141,22 @@ func _choose_direction() -> Vector3:
 
 
 func _acquire_target() -> void:
-	if target != null and is_instance_valid(target) and global_position.distance_to(target.global_position) <= detection_range * 1.4:
+	if (
+		target != null
+		and is_instance_valid(target)
+		and global_position.distance_to(target.global_position) <= detection_range * 1.4
+	):
 		return
 	target = null
 	for candidate in get_tree().get_nodes_in_group("player"):
-		if candidate is Node3D and (target == null or global_position.distance_to(candidate.global_position) < global_position.distance_to(target.global_position)):
+		if (
+			candidate is Node3D
+			and (
+				target == null
+				or global_position.distance_to(candidate.global_position)
+				< global_position.distance_to(target.global_position)
+			)
+		):
 			target = candidate
 
 
@@ -130,6 +190,7 @@ func die() -> void:
 	if _dead:
 		return
 	_dead = true
+	clear_attraction_target()
 	set_physics_process(false)
 	var generated_drops := _roll_drops()
 	died.emit(species_id, generated_drops, global_position)
@@ -160,7 +221,9 @@ func _spawn_pickups(generated_drops: Dictionary) -> void:
 		var pickup = pickup_script.new()
 		pickup.setup(str(item_id), int(generated_drops[item_id]), inventory_service)
 		get_parent().add_child(pickup)
-		pickup.global_position = global_position + Vector3(_rng.randf_range(-0.35, 0.35), 0.65, _rng.randf_range(-0.35, 0.35))
+		pickup.global_position = global_position + Vector3(
+			_rng.randf_range(-0.35, 0.35), 0.65, _rng.randf_range(-0.35, 0.35)
+		)
 
 
 func _create_collision() -> void:
@@ -176,10 +239,17 @@ func _create_collision() -> void:
 
 
 func _build_model() -> void:
-	_make_box("Body", collision_size, Vector3(0.0, collision_size.y * 0.5, 0.0), Color("#888888"))
+	_make_box(
+		"Body",
+		collision_size,
+		Vector3(0.0, collision_size.y * 0.5, 0.0),
+		Color("#888888")
+	)
 
 
-func _make_box(part_name: String, size: Vector3, local_position: Vector3, color: Color) -> MeshInstance3D:
+func _make_box(
+	part_name: String, size: Vector3, local_position: Vector3, color: Color
+) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = part_name
 	var box := BoxMesh.new()
