@@ -2,6 +2,7 @@ class_name GameHUD
 extends Control
 
 const SlotScript = preload("res://src/ui/inventory_slot.gd")
+const CrosshairScript = preload("res://src/ui/world_crosshair.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
@@ -21,6 +22,7 @@ var _item_label: Label
 var _hotbar: HBoxContainer
 var _slot_buttons: Array = []
 var _message_label: Label
+var _crosshair: Control
 
 
 func _ready() -> void:
@@ -77,7 +79,12 @@ func get_layout_rects() -> Dictionary:
 		"status": _status_panel.get_global_rect() if _status_panel != null else Rect2(),
 		"selected_item": _item_panel.get_global_rect() if _item_panel != null else Rect2(),
 		"hotbar": _hotbar_panel.get_global_rect() if _hotbar_panel != null else Rect2(),
+		"crosshair": _crosshair.get_global_rect() if _crosshair != null else Rect2(),
 	}
+
+
+func get_crosshair() -> Control:
+	return _crosshair
 
 
 func _build_status_panel() -> void:
@@ -177,16 +184,9 @@ func _build_hotbar() -> void:
 
 
 func _build_crosshair() -> void:
-	var crosshair := Label.new()
-	crosshair.text = "+"
-	crosshair.add_theme_font_size_override("font_size", 24)
-	crosshair.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	crosshair.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	crosshair.position = Vector2(-12, -16)
-	crosshair.size = Vector2(24, 32)
-	crosshair.modulate = Color("#F7FBFFDD")
-	add_child(crosshair)
+	_crosshair = CrosshairScript.new()
+	_crosshair.name = "WorldCrosshair"
+	add_child(_crosshair)
 
 
 func _build_fallback_message() -> void:
