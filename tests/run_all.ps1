@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_rest.ps1"
 & "$PSScriptRoot\developer_b\validate_repair.ps1"
 & "$PSScriptRoot\developer_b\validate_husbandry.ps1"
+& "$PSScriptRoot\developer_b\validate_ranch.ps1"
 
 function Invoke-GodotTest {
     param([Parameter(Mandatory = $true)][string]$ScriptPath)
@@ -52,6 +53,7 @@ Invoke-GodotTest 'res://tests/qa/fertilizer_regression.gd'
 Invoke-GodotTest 'res://tests/qa/rest_respawn_regression.gd'
 Invoke-GodotTest 'res://tests/qa/repair_regression.gd'
 Invoke-GodotTest 'res://tests/qa/husbandry_regression.gd'
+Invoke-GodotTest 'res://tests/qa/ranch_products_regression.gd'
 Invoke-GodotTest 'res://tests/qa/desktop_input_contract_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_diagnostics_regression.gd'
 Invoke-GodotTest 'res://tests/qa/player_experience_regression.gd'
