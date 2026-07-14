@@ -5,6 +5,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://repair-desktop-acceptance.png"
 const CLEANUP_FRAMES := 6
+const STATION_DISTANCE_BLOCKS := 3
 
 var checks := 0
 var failures: Array[String] = []
@@ -57,16 +58,7 @@ func _run() -> void:
 	hub.inventory.select_slot(0)
 	var player: Node3D = game.player
 	var world: Node = game.world
-	player.rotation = Vector3.ZERO
-	player.call("reset_motion")
-	_station_position = world.call(
-		"world_to_block", player.global_position + Vector3(0.0, 1.1, -3.0)
-	)
-	world.call("set_block", _station_position, "air")
-	_check(bool(world.call("set_block", _station_position, "repair_station")), "desktop fixture places a real repair station")
-	await process_frame
-	await physics_frame
-	await process_frame
+	_station_position = await _prepare_repair_station(player, world)
 	_check(str(world.call("get_block", _station_position)) == "repair_station", "world publishes the repair station block")
 	await _aim_at(player, Vector3(_station_position) + Vector3(0.5, 0.5, 0.5))
 	_check(_ray_hits_block(player, world, _station_position), "real player ray resolves the repair station")
@@ -109,6 +101,39 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing repair recaptures the gameplay mouse")
 	_check(bool(player.get("input_enabled")), "closing repair restores player input")
 	await _finish(game, hub)
+
+
+func _prepare_repair_station(player: Node3D, world: Node) -> Vector3i:
+	player.rotation = Vector3.ZERO
+	var pivot := player.get_node_or_null("CameraPivot") as Node3D
+	if pivot != null:
+		pivot.rotation = Vector3.ZERO
+	player.call("reset_motion")
+	await physics_frame
+	await process_frame
+	var camera := player.call("get_view_camera") as Camera3D
+	var camera_block: Vector3i = world.call("world_to_block", camera.global_position)
+	for distance in range(1, STATION_DISTANCE_BLOCKS + 1):
+		var corridor_position := Vector3i(
+			camera_block.x,
+			camera_block.y,
+			camera_block.z - distance
+		)
+		if str(world.call("get_block", corridor_position)) != "air":
+			world.call("set_block", corridor_position, "air")
+	var station_position := Vector3i(
+		camera_block.x,
+		camera_block.y,
+		camera_block.z - STATION_DISTANCE_BLOCKS
+	)
+	_check(
+		bool(world.call("set_block", station_position, "repair_station")),
+		"desktop fixture places a repair station at the end of a clear camera corridor",
+	)
+	await process_frame
+	await physics_frame
+	await process_frame
+	return station_position
 
 
 func _finish(game: Node, hub: Node) -> void:
@@ -160,6 +185,11 @@ func _ray_hits_block(player: Node3D, world: Node, expected: Vector3i) -> bool:
 	var point := ray.get_collision_point()
 	var normal := ray.get_collision_normal()
 	var resolved: Vector3i = world.call("world_to_block", point - normal * 0.01)
+	if resolved != expected:
+		print(
+			"QA REPAIR RAY MISMATCH | expected=%s | resolved=%s | point=%s | normal=%s"
+			% [expected, resolved, point, normal]
+		)
 	return resolved == expected
 
 
