@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "fertilizers": [
+    {
+      "id": "compost",
+      "item_id": "compost",
+      "name": "堆肥",
+      "stage_advances": 1,
+      "allowed_crops": []
+    }
+  ]
+}
