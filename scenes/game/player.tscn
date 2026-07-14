@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" path="res://src/player/husbandry_player.gd" id="1_player"]
+[ext_resource type="Script" path="res://src/player/precision_interaction_player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/player/player_physics_profile.gd" id="2_physics_profile"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
