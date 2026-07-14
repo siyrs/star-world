@@ -11,6 +11,7 @@ const CONTEXT_INVENTORY: StringName = &"inventory"
 const CONTEXT_CRAFTING: StringName = &"crafting"
 const CONTEXT_CONTAINER: StringName = &"container"
 const CONTEXT_MACHINE: StringName = &"machine"
+const CONTEXT_REPAIR: StringName = &"repair"
 const CONTEXT_PAUSE: StringName = &"pause"
 const CONTEXT_DEATH: StringName = &"death"
 const Actions = preload("res://src/input/gameplay_input_actions.gd")
@@ -22,6 +23,7 @@ const VALID_CONTEXTS := [
 	CONTEXT_CRAFTING,
 	CONTEXT_CONTAINER,
 	CONTEXT_MACHINE,
+	CONTEXT_REPAIR,
 	CONTEXT_PAUSE,
 	CONTEXT_DEATH,
 ]

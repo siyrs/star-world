@@ -14,7 +14,7 @@ const BLOCK_IDS := [
 	"farmland_wet",
 	"carrot_stage_0", "carrot_stage_1", "carrot_stage_2", "carrot_stage_3",
 	"potato_stage_0", "potato_stage_1", "potato_stage_2", "potato_stage_3",
-	"oak_bed"
+	"oak_bed", "repair_station"
 ]
 
 const DEFINITIONS := {
@@ -62,7 +62,8 @@ const DEFINITIONS := {
 	"potato_stage_1": {"name":"生长中的马铃薯", "color":"#63964D", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.44},
 	"potato_stage_2": {"name":"开花的马铃薯", "color":"#86A85A", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.66},
 	"potato_stage_3": {"name":"成熟马铃薯", "color":"#B89152", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.84},
-	"oak_bed": {"name":"橡木床", "color":"#B94E4A", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_bed", "hardness":0.9, "shape":"bed"}
+	"oak_bed": {"name":"橡木床", "color":"#B94E4A", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_bed", "hardness":0.9, "shape":"bed"},
+	"repair_station": {"name":"修理台", "color":"#8B7667", "solid":true, "transparent":false, "collectible":true, "item_id":"repair_station", "hardness":2.4}
 }
 
 

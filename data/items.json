@@ -21,6 +21,7 @@
     {"id":"oak_door","name":"木门","category":"block","max_stack":64,"block_id":"oak_door","color":"#9B6331"},
     {"id":"oak_fence","name":"木栅栏","category":"block","max_stack":64,"block_id":"oak_fence","color":"#A87540"},
     {"id":"oak_bed","name":"橡木床","category":"block","max_stack":1,"block_id":"oak_bed","color":"#B94E4A"},
+    {"id":"repair_station","name":"修理台","category":"block","max_stack":64,"block_id":"repair_station","color":"#8B7667"},
     {"id":"ladder","name":"梯子","category":"block","max_stack":64,"block_id":"ladder","color":"#B98245"},
     {"id":"torch","name":"火把","category":"block","max_stack":64,"block_id":"torch","color":"#F3B63F"},
     {"id":"coal_ore","name":"煤矿石","category":"block","max_stack":64,"block_id":"coal_ore","color":"#3E4144"},
