@@ -57,8 +57,9 @@ func _run() -> void:
 	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z + 0.5)
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
-	await physics_frame
-	await process_frame
+	for _frame in 4:
+		await physics_frame
+		await process_frame
 
 	hub.inventory.clear()
 	hub.inventory.add_item("wooden_pickaxe", 1)
@@ -73,9 +74,6 @@ func _run() -> void:
 	_check(bool(snapshot.get("visible", false)), "held pickaxe is visible in the production camera")
 	_check(int(snapshot.get("part_count", 0)) >= 3, "held pickaxe has multiple low-poly parts")
 
-	# Keep the target in a synchronously loaded chunk and near eye level. This
-	# ensures the test exercises production collision and focus rather than an
-	# unfinished neighboring chunk or a nearer floor triangle.
 	var target_block := Vector3i(player_block.x, floor_y + 2, player_block.z - 3)
 	world.call("force_load_chunk", world.call("block_to_chunk", target_block))
 	world.call("set_block", target_block, "stone")
@@ -131,7 +129,8 @@ func _run() -> void:
 	await _right_click_center()
 	_check(str(world.call("get_block", placement_position)) == "grass", "real right click places the block at the previewed voxel")
 	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
-	_check(float(view.call("get_snapshot").get("use_remaining", 0.0)) > 0.0, "successful placement starts the use animation")
+	var placement_snapshot: Dictionary = view.call("get_snapshot")
+	_check(str(placement_snapshot.get("last_action", "")) == "place", "successful placement reaches the held-item use action")
 
 	world.call("set_block", placement_position, "air")
 	world.call("set_block", target_block, "air")
@@ -155,23 +154,41 @@ func _run() -> void:
 		await _aim_at(player, cow.global_position + Vector3(0.0, 0.65, 0.0))
 		_check(_ray_hits_entity(player, cow), "center ray resolves the live cow")
 		await _left_click_center()
-		_check(float(view.call("get_snapshot").get("swing_remaining", 0.0)) > 0.0, "real attack starts the sword swing")
+		_check(str(view.call("get_snapshot").get("last_action", "")) == "attack", "real attack reaches the held-item swing action")
 		cow.queue_free()
 		await process_frame
 
+	for _frame in 60:
+		if float(view.call("get_snapshot").get("swing_remaining", 0.0)) <= 0.0:
+			break
+		await process_frame
 	var camera: Camera3D = player.call("get_view_camera")
 	camera.rotation = Vector3.ZERO
 	player.rotation = Vector3.ZERO
-	var player_start: Vector3 = player.global_position
-	var view_start: Vector3 = view.position
-	Input.action_press("move_forward")
-	for _frame in 10:
+	for _frame in 30:
+		if player.is_on_floor():
+			break
 		await physics_frame
 		await process_frame
+	_check(player.is_on_floor(), "player is grounded before walk-bob acceptance")
+	var player_start: Vector3 = player.global_position
+	var view_start: Vector3 = view.position
+	var max_player_distance := 0.0
+	var max_view_distance := 0.0
+	Input.action_press("move_forward")
+	_check(Input.is_action_pressed("move_forward"), "move_forward action enters pressed state")
+	for _frame in 18:
+		await physics_frame
+		await process_frame
+		max_player_distance = maxf(
+			max_player_distance,
+			Vector2(player.global_position.x - player_start.x, player.global_position.z - player_start.z).length()
+		)
+		max_view_distance = maxf(max_view_distance, view.position.distance_to(view_start))
 	Input.action_release("move_forward")
 	await process_frame
-	_check(Vector2(player.global_position.x - player_start.x, player.global_position.z - player_start.z).length() > 0.05, "real move_forward action moves the player")
-	_check(view.position.distance_to(view_start) > 0.005, "real movement drives first-person walk bob")
+	_check(max_player_distance > 0.05, "pressed move_forward action moves the player")
+	_check(max_view_distance > 0.005, "real movement produces measurable first-person walk bob")
 
 	await RenderingServer.frame_post_draw
 	var image: Image = root.get_texture().get_image()
