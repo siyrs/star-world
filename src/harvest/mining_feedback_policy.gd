@@ -4,7 +4,7 @@ extends RefCounted
 const STAGE_COUNT := 10
 
 
-static func evaluate(progress_snapshot: Dictionary, input_enabled: bool = true) -> Dictionary:
+func evaluate(progress_snapshot: Dictionary, input_enabled: bool = true) -> Dictionary:
 	if not input_enabled:
 		return _hidden("input_blocked")
 	if progress_snapshot.is_empty():
@@ -26,11 +26,11 @@ static func evaluate(progress_snapshot: Dictionary, input_enabled: bool = true) 
 	}
 
 
-static func stage_for_ratio(ratio: float) -> int:
+func stage_for_ratio(ratio: float) -> int:
 	return clampi(floori(clampf(ratio, 0.0, 0.999999) * float(STAGE_COUNT)), 0, STAGE_COUNT - 1)
 
 
-static func _hidden(reason: String) -> Dictionary:
+func _hidden(reason: String) -> Dictionary:
 	return {
 		"visible": false,
 		"reason": reason,
@@ -42,7 +42,7 @@ static func _hidden(reason: String) -> Dictionary:
 	}
 
 
-static func _vector3i_from(value: Variant) -> Variant:
+func _vector3i_from(value: Variant) -> Variant:
 	if value is Vector3i:
 		return value
 	if value is Array and value.size() >= 3:
