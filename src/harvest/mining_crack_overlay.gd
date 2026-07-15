@@ -1,7 +1,6 @@
 class_name MiningCrackOverlay
 extends Node3D
 
-const PolicyScript = preload("res://src/harvest/mining_feedback_policy.gd")
 const TextureFactoryScript = preload("res://src/harvest/mining_crack_texture_factory.gd")
 const REFRESH_INTERVAL := 0.25
 const OVERLAY_SCALE := 1.006
@@ -175,9 +174,7 @@ func _evaluate(snapshot: Dictionary, input_enabled: bool) -> Dictionary:
 
 func _ensure_policy() -> RefCounted:
 	if _policy == null:
-		var created: Variant = PolicyScript.new()
-		if created is RefCounted:
-			_policy = created
+		_policy = MiningFeedbackPolicy.new()
 	return _policy
 
 
