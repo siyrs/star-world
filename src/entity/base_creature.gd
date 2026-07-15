@@ -143,10 +143,14 @@ func _physics_process(delta: float) -> void:
 	_decision_timer -= delta
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
-	else:
-		velocity.y = minf(velocity.y, -0.1)
+	elif velocity.y <= 0.0:
+		velocity.y = -0.1
 	var direction := Vector3.ZERO if _hit_stun_remaining > 0.0 else _choose_direction()
-	var active_acceleration := maxf(8.0, move_speed * 5.0) if _hit_stun_remaining > 0.0 else move_speed * 5.0
+	var active_acceleration := (
+		maxf(8.0, move_speed * 5.0)
+		if _hit_stun_remaining > 0.0
+		else maxf(4.0, move_speed * 5.0)
+	)
 	velocity.x = move_toward(velocity.x, direction.x * move_speed, active_acceleration * delta)
 	velocity.z = move_toward(velocity.z, direction.z * move_speed, active_acceleration * delta)
 	if direction.length_squared() > 0.05:
