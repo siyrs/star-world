@@ -8,7 +8,6 @@ const OVERLAY_SCALE := 1.006
 
 var player: Node
 var harvest_service: Node
-var policy = PolicyScript.new()
 var active := true
 var _state: Dictionary = {}
 var _mesh_instance: MeshInstance3D
@@ -134,7 +133,9 @@ func _on_harvest_rejected(reason: String, _snapshot: Dictionary) -> void:
 
 
 func _apply_progress(snapshot: Dictionary) -> void:
-	var evaluation: Dictionary = policy.evaluate(snapshot, active and _player_accepts_feedback())
+	var evaluation: Dictionary = PolicyScript.evaluate(
+		snapshot, active and _player_accepts_feedback()
+	)
 	_state = evaluation.duplicate(true)
 	if not bool(evaluation.get("visible", false)):
 		visible = false
@@ -147,7 +148,7 @@ func _apply_progress(snapshot: Dictionary) -> void:
 
 
 func _hide_overlay(reason: String) -> void:
-	_state = policy.evaluate({}, false)
+	_state = PolicyScript.evaluate({}, false)
 	_state["reason"] = reason
 	visible = false
 
