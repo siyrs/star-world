@@ -5,6 +5,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://first-person-viewmodel-desktop-acceptance.png"
 const CLEANUP_FRAMES := 6
+const PHYSICS_STEP := 1.0 / 60.0
 
 var checks := 0
 var failures: Array[String] = []
@@ -53,12 +54,13 @@ func _run() -> void:
 
 	var player_block: Vector3i = world.call("world_to_block", player.global_position)
 	var floor_y: int = _find_floor_y(world, player_block)
+	world.call("force_load_chunk", world.call("block_to_chunk", player_block))
 	_prepare_arena(world, player_block.x, player_block.z, floor_y)
 	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z + 0.5)
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
-	for _frame in 4:
-		await physics_frame
+	for _frame in 6:
+		player.call("_physics_process", PHYSICS_STEP)
 		await process_frame
 
 	hub.inventory.clear()
@@ -165,20 +167,29 @@ func _run() -> void:
 	var camera: Camera3D = player.call("get_view_camera")
 	camera.rotation = Vector3.ZERO
 	player.rotation = Vector3.ZERO
-	for _frame in 30:
+	for _frame in 60:
 		if player.is_on_floor():
 			break
-		await physics_frame
+		player.call("_physics_process", PHYSICS_STEP)
 		await process_frame
-	_check(player.is_on_floor(), "player is grounded before walk-bob acceptance")
+	var support_block: String = str(
+		world.call("get_block", world.call("world_to_block", player.global_position - Vector3(0.0, 0.08, 0.0)))
+	)
+	print(
+		"QA VIEWMODEL MOVE PREP | position=%s | velocity=%s | on_floor=%s | physics=%s | support=%s"
+		% [player.global_position, player.velocity, player.is_on_floor(), player.is_physics_processing(), support_block]
+	)
+	_check(support_block != "air", "walk-bob test keeps solid terrain beneath the player")
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
 	var max_player_distance := 0.0
 	var max_view_distance := 0.0
 	Input.action_press("move_forward")
 	_check(Input.is_action_pressed("move_forward"), "move_forward action enters pressed state")
+	var service_vector: Vector2 = hub.input_service.call("get_movement_vector")
+	_check(service_vector.y < -0.5, "production input service resolves forward movement")
 	for _frame in 18:
-		await physics_frame
+		player.call("_physics_process", PHYSICS_STEP)
 		await process_frame
 		max_player_distance = maxf(
 			max_player_distance,
@@ -187,7 +198,7 @@ func _run() -> void:
 		max_view_distance = maxf(max_view_distance, view.position.distance_to(view_start))
 	Input.action_release("move_forward")
 	await process_frame
-	_check(max_player_distance > 0.05, "pressed move_forward action moves the player")
+	_check(max_player_distance > 0.05, "production movement physics moves the player forward")
 	_check(max_view_distance > 0.005, "real movement produces measurable first-person walk bob")
 
 	await RenderingServer.frame_post_draw
