@@ -73,16 +73,34 @@ func _run() -> void:
 	_check(bool(snapshot.get("visible", false)), "held pickaxe is visible in the production camera")
 	_check(int(snapshot.get("part_count", 0)) >= 3, "held pickaxe has multiple low-poly parts")
 
-	# Keep the test target near eye level. A lower target can legitimately let the
-	# center ray touch the arena floor first, which would test terrain occlusion
-	# instead of the held-item mining flow.
+	# Keep the target in a synchronously loaded chunk and near eye level. This
+	# ensures the test exercises production collision and focus rather than an
+	# unfinished neighboring chunk or a nearer floor triangle.
 	var target_block := Vector3i(player_block.x, floor_y + 2, player_block.z - 3)
+	world.call("force_load_chunk", world.call("block_to_chunk", target_block))
 	world.call("set_block", target_block, "stone")
 	for y in range(floor_y + 1, floor_y + 5):
 		if y != target_block.y:
 			world.call("set_block", Vector3i(target_block.x, y, target_block.z), "air")
-	await process_frame
+	for _frame in 3:
+		await physics_frame
+		await process_frame
 	await _aim_at(player, world.call("block_to_world", target_block))
+	var target_focus_value: Variant = player.call("get_interaction_focus")
+	var target_focus: Dictionary = target_focus_value if target_focus_value is Dictionary else {}
+	var target_ray := player.get_node("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	print(
+		"QA VIEWMODEL TARGET | expected=%s | colliding=%s | point=%s | normal=%s | focus=%s"
+		% [
+			target_block,
+			target_ray.is_colliding(),
+			target_ray.get_collision_point() if target_ray.is_colliding() else Vector3.ZERO,
+			target_ray.get_collision_normal() if target_ray.is_colliding() else Vector3.ZERO,
+			target_focus,
+		]
+	)
+	await RenderingServer.frame_post_draw
+	_save_stage_image(root.get_texture().get_image(), "target")
 	_check(_focus_hits_block(player, target_block), "authoritative center focus resolves the real stone target")
 	var rest_position: Vector3 = view.position
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
@@ -115,8 +133,6 @@ func _run() -> void:
 	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
 	_check(float(view.call("get_snapshot").get("use_remaining", 0.0)) > 0.0, "successful placement starts the use animation")
 
-	# The building target has completed its purpose. Remove it before combat so
-	# the subsequent ray and W movement validate the creature and input flow only.
 	world.call("set_block", placement_position, "air")
 	world.call("set_block", target_block, "air")
 	await process_frame
@@ -148,13 +164,13 @@ func _run() -> void:
 	player.rotation = Vector3.ZERO
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
-	_key_event(KEY_W, true)
+	Input.action_press("move_forward")
 	for _frame in 10:
 		await physics_frame
 		await process_frame
-	_key_event(KEY_W, false)
+	Input.action_release("move_forward")
 	await process_frame
-	_check(Vector2(player.global_position.x - player_start.x, player.global_position.z - player_start.z).length() > 0.05, "real W input moves the player")
+	_check(Vector2(player.global_position.x - player_start.x, player.global_position.z - player_start.z).length() > 0.05, "real move_forward action moves the player")
 	_check(view.position.distance_to(view_start) > 0.005, "real movement drives first-person walk bob")
 
 	await RenderingServer.frame_post_draw
@@ -194,8 +210,9 @@ func _find_floor_y(world: Node, player_block: Vector3i) -> int:
 func _aim_at(player: Node3D, target: Vector3) -> void:
 	var camera: Camera3D = player.call("get_view_camera")
 	camera.look_at(target, Vector3.UP)
-	await physics_frame
-	await process_frame
+	for _frame in 2:
+		await physics_frame
+		await process_frame
 	var ray := player.get_node("CameraPivot/Camera3D/InteractionRay") as RayCast3D
 	ray.force_raycast_update()
 	player.call("_update_interaction_focus", true)
@@ -275,6 +292,14 @@ func _vector3i_from(value: Variant) -> Vector3i:
 	return Vector3i.ZERO
 
 
+func _save_stage_image(image: Image, suffix: String) -> void:
+	if image == null or image.is_empty():
+		return
+	var path := "%s-%s.png" % [_capture_path.get_basename(), suffix]
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	image.save_png(path)
+
+
 func _save_image(image: Image) -> void:
 	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
 	var error: Error = image.save_png(_capture_path)
@@ -282,6 +307,7 @@ func _save_image(image: Image) -> void:
 
 
 func _finish(game: Node, hub: Node) -> void:
+	Input.action_release("move_forward")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hub != null:
 		if not _world_id.is_empty() and hub.get("save_service") != null:
