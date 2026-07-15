@@ -9,6 +9,7 @@ enum BuildPhase {
 }
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const TextureAtlasScript = preload("res://src/block/block_texture_atlas.gd")
 const SIZE := 16
 const HEIGHT := 64
 const TOTAL_CELLS := SIZE * HEIGHT * SIZE
@@ -29,7 +30,6 @@ const FACE_VERTICES := [
 	[Vector3(1, 0, 0), Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 0)],
 ]
 const FACE_VERTEX_ORDER := [0, 1, 2, 0, 2, 3]
-const UVS := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
 const CROP_PLANES := [
 	[
 		Vector3(0.14, 0.02, 0.14),
@@ -283,23 +283,24 @@ func _append_face(
 	tool: SurfaceTool, local_origin: Vector3, face_index: int, block_id: String
 ) -> void:
 	var direction: Vector3 = Vector3(FACE_DIRECTIONS[face_index])
-	var color := BlockRegistryScript.get_color(block_id)
+	var shade := Color.WHITE
 	if direction.y < -0.5:
-		color = color.darkened(0.32)
+		shade = Color(0.68, 0.68, 0.68, 1.0)
 	elif absf(direction.y) < 0.5:
-		color = color.darkened(0.14)
+		shade = Color(0.86, 0.86, 0.86, 1.0)
 	var corners: Array = FACE_VERTICES[face_index]
+	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(direction)
-		tool.set_color(color)
-		tool.set_uv(UVS[corner_index])
+		tool.set_color(shade)
+		tool.set_uv(uvs[corner_index])
 		tool.add_vertex(local_origin + Vector3(corners[corner_index]))
 
 
 func _append_crop(tool: SurfaceTool, local_origin: Vector3, block_id: String) -> void:
 	var definition := BlockRegistryScript.get_definition(block_id)
 	var height := clampf(float(definition.get("crop_height", 1.0)), 0.08, 1.0)
-	var color := BlockRegistryScript.get_color(block_id)
+	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, 4)
 	for plane_index in CROP_PLANES.size():
 		var corners: Array = CROP_PLANES[plane_index]
 		var normal: Vector3 = CROP_NORMALS[plane_index]
@@ -307,15 +308,24 @@ func _append_crop(tool: SurfaceTool, local_origin: Vector3, block_id: String) ->
 			var corner: Vector3 = corners[corner_index]
 			corner.y = minf(corner.y, height)
 			tool.set_normal(normal)
-			tool.set_color(color)
-			tool.set_uv(UVS[corner_index])
+			tool.set_color(Color.WHITE)
+			tool.set_uv(uvs[corner_index])
 			tool.add_vertex(local_origin + corner)
+
+
+static func reset_visual_cache_for_tests() -> void:
+	_shared_voxel_material = null
+	TextureAtlasScript.reset_cache_for_tests()
 
 
 static func _get_shared_voxel_material() -> StandardMaterial3D:
 	if _shared_voxel_material == null:
 		_shared_voxel_material = StandardMaterial3D.new()
 		_shared_voxel_material.vertex_color_use_as_albedo = true
+		_shared_voxel_material.albedo_texture = TextureAtlasScript.get_texture()
+		_shared_voxel_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_shared_voxel_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		_shared_voxel_material.alpha_scissor_threshold = 0.45
 		_shared_voxel_material.roughness = 0.92
 		_shared_voxel_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	return _shared_voxel_material

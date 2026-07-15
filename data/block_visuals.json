@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "tile_size": 16,
+  "atlas_columns": 8,
+  "tile_order": [
+    "air",
+    "dirt",
+    "grass_top",
+    "grass_side",
+    "stone",
+    "cobblestone",
+    "sand",
+    "snow",
+    "log_side",
+    "log_top",
+    "leaves",
+    "water",
+    "lava",
+    "planks",
+    "stone_bricks",
+    "glass",
+    "coal_ore",
+    "iron_ore",
+    "gold_ore",
+    "diamond_ore",
+    "crafting_top",
+    "crafting_side",
+    "furnace_top",
+    "furnace_side",
+    "chest_top",
+    "chest_bottom",
+    "chest_side",
+    "door",
+    "fence",
+    "ladder",
+    "torch",
+    "wool",
+    "ice",
+    "bedrock",
+    "farmland_top",
+    "farmland_wet_top",
+    "farmland_side",
+    "wheat_0",
+    "wheat_1",
+    "wheat_2",
+    "wheat_3",
+    "carrot_0",
+    "carrot_1",
+    "carrot_2",
+    "carrot_3",
+    "potato_0",
+    "potato_1",
+    "potato_2",
+    "potato_3",
+    "bed_top",
+    "bed_side",
+    "repair_top",
+    "repair_side"
+  ],
+  "tiles": {
+    "air": {
+      "pattern": "transparent",
+      "palette": ["#00000000"]
+    },
+    "dirt": {
+      "pattern": "noise",
+      "palette": ["#6A452F", "#79533A", "#865E43", "#5B3928"],
+      "density": 0.34
+    },
+    "grass_top": {
+      "pattern": "noise",
+      "palette": ["#4C8D3D", "#5DA64A", "#70B653", "#3F7C36"],
+      "density": 0.42
+    },
+    "grass_side": {
+      "pattern": "grass_side",
+      "palette": ["#704A32", "#7E563B", "#5DA64A", "#3F7C36"]
+    },
+    "stone": {
+      "pattern": "noise",
+      "palette": ["#6B7075", "#777C82", "#868B90", "#5C6267"],
+      "density": 0.36
+    },
+    "cobblestone": {
+      "pattern": "cobble",
+      "palette": ["#53585D", "#6A6F74", "#777C82", "#8A8F93"]
+    },
+    "sand": {
+      "pattern": "noise",
+      "palette": ["#CDBD7D", "#DCCB86", "#E5D695", "#BFAE70"],
+      "density": 0.3
+    },
+    "snow": {
+      "pattern": "noise",
+      "palette": ["#DDEBED", "#EAF4F7", "#F7FCFD", "#C6DDE2"],
+      "density": 0.22
+    },
+    "log_side": {
+      "pattern": "bark",
+      "palette": ["#5B3B22", "#74502D", "#8C6338", "#412A19"]
+    },
+    "log_top": {
+      "pattern": "rings",
+      "palette": ["#A77A46", "#C09158", "#7C5631", "#E0B373"]
+    },
+    "leaves": {
+      "pattern": "leaves",
+      "palette": ["#285C2C", "#397A38", "#4D9143", "#1E4824"],
+      "cutout": true
+    },
+    "water": {
+      "pattern": "water",
+      "palette": ["#2369B6", "#3487D8", "#4EA2E5", "#1B568F"]
+    },
+    "lava": {
+      "pattern": "lava",
+      "palette": ["#B93619", "#F06423", "#FF982E", "#FFD34A"]
+    },
+    "planks": {
+      "pattern": "boards",
+      "palette": ["#8F6038", "#B5834E", "#C99A62", "#6F472B"]
+    },
+    "stone_bricks": {
+      "pattern": "bricks",
+      "palette": ["#606468", "#777C82", "#8B9094", "#4D5155"]
+    },
+    "glass": {
+      "pattern": "glass",
+      "palette": ["#9FD6E2", "#C8EDF1", "#E8FBFD", "#00000000"],
+      "cutout": true
+    },
+    "coal_ore": {
+      "pattern": "ore",
+      "palette": ["#666B70", "#777C82", "#858A8F", "#26292C"],
+      "accent": "#24272A"
+    },
+    "iron_ore": {
+      "pattern": "ore",
+      "palette": ["#666B70", "#777C82", "#858A8F", "#B78367"],
+      "accent": "#C89475"
+    },
+    "gold_ore": {
+      "pattern": "ore",
+      "palette": ["#666B70", "#777C82", "#858A8F", "#D3AE2F"],
+      "accent": "#F0D253"
+    },
+    "diamond_ore": {
+      "pattern": "ore",
+      "palette": ["#666B70", "#777C82", "#858A8F", "#36BFB9"],
+      "accent": "#5BE0DB"
+    },
+    "crafting_top": {
+      "pattern": "crafting_top",
+      "palette": ["#754624", "#9A6333", "#C28A4E", "#E2B26B"]
+    },
+    "crafting_side": {
+      "pattern": "crafting_side",
+      "palette": ["#6C421F", "#9A6333", "#B8793D", "#D3A061"]
+    },
+    "furnace_top": {
+      "pattern": "bricks",
+      "palette": ["#494D51", "#5A5F63", "#6A6F73", "#35383B"]
+    },
+    "furnace_side": {
+      "pattern": "furnace",
+      "palette": ["#3D4145", "#55595D", "#6B7074", "#17191B"]
+    },
+    "chest_top": {
+      "pattern": "boards",
+      "palette": ["#87531F", "#A66B2C", "#C5883F", "#6B3E16"]
+    },
+    "chest_bottom": {
+      "pattern": "boards",
+      "palette": ["#684018", "#8A5522", "#A66B2C", "#4C2D10"]
+    },
+    "chest_side": {
+      "pattern": "chest",
+      "palette": ["#714217", "#A66B2C", "#C9893D", "#E7C36A"]
+    },
+    "door": {
+      "pattern": "door",
+      "palette": ["#6E401E", "#9B6331", "#BD8248", "#D6A361"],
+      "cutout": true
+    },
+    "fence": {
+      "pattern": "fence",
+      "palette": ["#704522", "#A87540", "#C39258", "#00000000"],
+      "cutout": true
+    },
+    "ladder": {
+      "pattern": "ladder",
+      "palette": ["#77481E", "#B98245", "#D4A364", "#00000000"],
+      "cutout": true
+    },
+    "torch": {
+      "pattern": "torch",
+      "palette": ["#5D3719", "#A96A2B", "#F3B63F", "#FFF08A"],
+      "cutout": true
+    },
+    "wool": {
+      "pattern": "weave",
+      "palette": ["#D7D6CF", "#F0EFE8", "#FCFCF8", "#BDBCB6"]
+    },
+    "ice": {
+      "pattern": "ice",
+      "palette": ["#87C8DA", "#A8DDEB", "#D6F2F7", "#6EB4CA"]
+    },
+    "bedrock": {
+      "pattern": "noise",
+      "palette": ["#181A1C", "#25272A", "#35383A", "#0D0E0F"],
+      "density": 0.52
+    },
+    "farmland_top": {
+      "pattern": "furrows",
+      "palette": ["#4A2E1E", "#5C3924", "#6A442D", "#342016"]
+    },
+    "farmland_wet_top": {
+      "pattern": "furrows",
+      "palette": ["#2B1B13", "#3E291C", "#503526", "#1D120D"],
+      "wet": true
+    },
+    "farmland_side": {
+      "pattern": "grass_side",
+      "palette": ["#5A3825", "#6D4932", "#563621", "#49301F"],
+      "no_grass": true
+    },
+    "wheat_0": {
+      "pattern": "crop",
+      "palette": ["#3B762F", "#5F9E49", "#86BD58", "#00000000"],
+      "stage": 0,
+      "cutout": true
+    },
+    "wheat_1": {
+      "pattern": "crop",
+      "palette": ["#4D8336", "#7AAA48", "#9FC05A", "#00000000"],
+      "stage": 1,
+      "cutout": true
+    },
+    "wheat_2": {
+      "pattern": "crop",
+      "palette": ["#758B35", "#A9B84A", "#CED064", "#00000000"],
+      "stage": 2,
+      "cutout": true
+    },
+    "wheat_3": {
+      "pattern": "crop",
+      "palette": ["#A07C2F", "#D8B94F", "#F0D276", "#00000000"],
+      "stage": 3,
+      "cutout": true
+    },
+    "carrot_0": {
+      "pattern": "crop",
+      "palette": ["#2E6F31", "#4F9946", "#77B859", "#00000000"],
+      "stage": 0,
+      "cutout": true
+    },
+    "carrot_1": {
+      "pattern": "crop",
+      "palette": ["#377A34", "#62A94C", "#86C063", "#00000000"],
+      "stage": 1,
+      "cutout": true
+    },
+    "carrot_2": {
+      "pattern": "crop",
+      "palette": ["#4B8338", "#78B653", "#9BCB6C", "#00000000"],
+      "stage": 2,
+      "cutout": true
+    },
+    "carrot_3": {
+      "pattern": "crop",
+      "palette": ["#4C863A", "#78B653", "#E98332", "#00000000"],
+      "stage": 3,
+      "produce": "#E98332",
+      "cutout": true
+    },
+    "potato_0": {
+      "pattern": "crop",
+      "palette": ["#315E2D", "#4E8845", "#6FA45A", "#00000000"],
+      "stage": 0,
+      "cutout": true
+    },
+    "potato_1": {
+      "pattern": "crop",
+      "palette": ["#426B35", "#63964D", "#83AC61", "#00000000"],
+      "stage": 1,
+      "cutout": true
+    },
+    "potato_2": {
+      "pattern": "crop",
+      "palette": ["#57743C", "#86A85A", "#D6D6B8", "#00000000"],
+      "stage": 2,
+      "flower": "#E7E2D2",
+      "cutout": true
+    },
+    "potato_3": {
+      "pattern": "crop",
+      "palette": ["#66733C", "#8FA858", "#B89152", "#00000000"],
+      "stage": 3,
+      "produce": "#B89152",
+      "cutout": true
+    },
+    "bed_top": {
+      "pattern": "bed_top",
+      "palette": ["#8E3333", "#B94E4A", "#E3DCCB", "#6A4329"]
+    },
+    "bed_side": {
+      "pattern": "bed_side",
+      "palette": ["#6A3E24", "#9A5C33", "#B94E4A", "#E3DCCB"]
+    },
+    "repair_top": {
+      "pattern": "repair_top",
+      "palette": ["#5D5F61", "#8B7667", "#B8A695", "#D3C3B1"]
+    },
+    "repair_side": {
+      "pattern": "repair_side",
+      "palette": ["#494B4D", "#716356", "#8B7667", "#C4B5A4"]
+    }
+  },
+  "blocks": {
+    "air": {"all": "air"},
+    "grass": {"top": "grass_top", "side": "grass_side", "bottom": "dirt"},
+    "dirt": {"all": "dirt"},
+    "stone": {"all": "stone"},
+    "cobblestone": {"all": "cobblestone"},
+    "sand": {"all": "sand"},
+    "snow": {"all": "snow"},
+    "wood": {"top": "log_top", "side": "log_side", "bottom": "log_top"},
+    "leaves": {"all": "leaves"},
+    "water": {"all": "water"},
+    "lava": {"all": "lava"},
+    "planks": {"all": "planks"},
+    "stone_bricks": {"all": "stone_bricks"},
+    "glass": {"all": "glass"},
+    "stone_slab": {"all": "stone_bricks"},
+    "oak_stairs": {"all": "planks"},
+    "coal_ore": {"all": "coal_ore"},
+    "iron_ore": {"all": "iron_ore"},
+    "gold_ore": {"all": "gold_ore"},
+    "diamond_ore": {"all": "diamond_ore"},
+    "crafting_table": {"top": "crafting_top", "side": "crafting_side", "bottom": "planks"},
+    "furnace": {"top": "furnace_top", "side": "furnace_side", "bottom": "stone"},
+    "chest": {"top": "chest_top", "side": "chest_side", "bottom": "chest_bottom"},
+    "oak_door": {"all": "door"},
+    "oak_fence": {"all": "fence"},
+    "ladder": {"all": "ladder"},
+    "torch": {"all": "torch"},
+    "wool": {"all": "wool"},
+    "ice": {"all": "ice"},
+    "bedrock": {"all": "bedrock"},
+    "farmland": {"top": "farmland_top", "side": "farmland_side", "bottom": "dirt"},
+    "wheat_stage_0": {"all": "wheat_0"},
+    "wheat_stage_1": {"all": "wheat_1"},
+    "wheat_stage_2": {"all": "wheat_2"},
+    "wheat_stage_3": {"all": "wheat_3"},
+    "farmland_wet": {"top": "farmland_wet_top", "side": "farmland_side", "bottom": "dirt"},
+    "carrot_stage_0": {"all": "carrot_0"},
+    "carrot_stage_1": {"all": "carrot_1"},
+    "carrot_stage_2": {"all": "carrot_2"},
+    "carrot_stage_3": {"all": "carrot_3"},
+    "potato_stage_0": {"all": "potato_0"},
+    "potato_stage_1": {"all": "potato_1"},
+    "potato_stage_2": {"all": "potato_2"},
+    "potato_stage_3": {"all": "potato_3"},
+    "oak_bed": {"top": "bed_top", "side": "bed_side", "bottom": "planks"},
+    "repair_station": {"top": "repair_top", "side": "repair_side", "bottom": "stone_bricks"}
+  }
+}
