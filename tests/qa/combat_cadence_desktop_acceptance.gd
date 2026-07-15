@@ -80,6 +80,7 @@ func _run() -> void:
 	target.set("_decision_timer", 999.0)
 	target.set("_wander_direction", Vector3.ZERO)
 	await process_frame
+	_check(target.is_physics_processing(), "spawned combat target participates in physics")
 	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
 	_check(_ray_hits(player, target), "center ray resolves the live cow")
 	var target_start := target.global_position
@@ -100,6 +101,14 @@ func _run() -> void:
 	)
 	_check(str(response.get("reason", "")) == "cooldown", "second click in the real input batch is rejected by cooldown")
 	_check(str(response.get("status", "")) == "rejected", "cooldown rejection is exposed as a stable combat result")
+	var impact_snapshot: Dictionary = target.call("get_combat_snapshot")
+	var initial_impulse := _array_to_vector3(impact_snapshot.get("combat_impulse", []))
+	_check(Vector2(initial_impulse.x, initial_impulse.z).length() > 2.5, "accepted hit reaches the target's independent combat impulse channel")
+	_check(target.is_physics_processing(), "accepted hit keeps the target physics awake")
+	print(
+		"QA COMBAT KNOCKBACK START | position=%s | velocity=%s | impulse=%s | processing=%s"
+		% [target_start, target.velocity, initial_impulse, target.is_physics_processing()]
+	)
 	var feedback: Dictionary = overlay.call("get_snapshot")
 	_check(bool(feedback.get("hit_visible", false)), "combat response is visible after the rapid click batch")
 	_check(bool(feedback.get("cooldown_visible", false)), "attack recovery indicator is visible")
@@ -109,12 +118,35 @@ func _run() -> void:
 	if image != null and not image.is_empty():
 		_save_image(image)
 
-	for _frame in 10:
+	for frame_index in 12:
 		await physics_frame
-	_check(
-		Vector2(target.global_position.x - target_start.x, target.global_position.z - target_start.z).length() > 0.12,
-		"accepted hit produces visible horizontal knockback",
+		await process_frame
+		if frame_index in [0, 3, 7, 11]:
+			var frame_snapshot: Dictionary = target.call("get_combat_snapshot")
+			print(
+				"QA COMBAT KNOCKBACK FRAME %d | position=%s | velocity=%s | impulse=%s"
+				% [
+					frame_index + 1,
+					target.global_position,
+					target.velocity,
+					_array_to_vector3(frame_snapshot.get("combat_impulse", [])),
+				]
+			)
+	var target_end := target.global_position
+	var knockback_distance := Vector2(
+		target_end.x - target_start.x, target_end.z - target_start.z
+	).length()
+	var collision_normals: Array[String] = []
+	if target is CharacterBody3D:
+		for collision_index in target.get_slide_collision_count():
+			var collision := target.get_slide_collision(collision_index)
+			if collision != null:
+				collision_normals.append(str(collision.get_normal()))
+	print(
+		"QA COMBAT KNOCKBACK END | start=%s | end=%s | distance=%.4f | velocity=%s | collisions=%s"
+		% [target_start, target_end, knockback_distance, target.velocity, collision_normals]
 	)
+	_check(knockback_distance > 0.12, "accepted hit produces visible horizontal knockback")
 
 	await _tap_key(KEY_E)
 	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real character inventory")
@@ -128,9 +160,9 @@ func _run() -> void:
 	# target so the final post-cooldown strike tests cadence rather than flee AI.
 	target.set("move_speed", 0.0)
 	target.set("_flee_timer", 0.0)
+	if target.has_method("clear_combat_motion"):
+		target.call("clear_combat_motion")
 	target.global_position = target_start
-	if target is CharacterBody3D:
-		target.velocity = Vector3.ZERO
 	await physics_frame
 	await process_frame
 	for _frame in MAX_READY_FRAMES:
@@ -257,6 +289,14 @@ func _tap_key(keycode: Key) -> void:
 	root.push_input(release)
 	await process_frame
 	await process_frame
+
+
+func _array_to_vector3(value: Variant) -> Vector3:
+	if value is Vector3:
+		return value
+	if value is Array and value.size() >= 3:
+		return Vector3(float(value[0]), float(value[1]), float(value[2]))
+	return Vector3.ZERO
 
 
 func _save_image(image: Image) -> void:
