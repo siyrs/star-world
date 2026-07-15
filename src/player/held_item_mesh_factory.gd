@@ -48,7 +48,7 @@ func build_model(item_id: String, definition: Dictionary, block_id: String = "")
 
 
 func _classify(definition: Dictionary, block_id: String) -> String:
-	if not block_id.is_empty() or str(definition.get("category", "")) == "block":
+	if block_id not in ["", "air"] or str(definition.get("category", "")) == "block":
 		return "block"
 	if not str(definition.get("tool_type", "")).is_empty():
 		return "tool"
@@ -64,7 +64,7 @@ func _classify(definition: Dictionary, block_id: String) -> String:
 
 
 func _build_block(root: Node3D, block_id: String) -> void:
-	var resolved := block_id if BlockRegistryScript.has_block(block_id) else "stone"
+	var resolved := block_id if BlockRegistryScript.has_block(block_id) and block_id != "air" else "stone"
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = "Block"
 	mesh_instance.mesh = _build_block_mesh(resolved)
