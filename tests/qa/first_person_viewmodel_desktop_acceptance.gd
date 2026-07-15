@@ -45,14 +45,14 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "real player owns gameplay input")
 	_check(world != null and bool(world.get("is_started")), "real voxel world starts")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "gameplay starts with captured mouse")
-	var view: Node = player.get_node_or_null("CameraPivot/Camera3D/HeldItemView")
+	var view: Node3D = player.get_node_or_null("CameraPivot/Camera3D/HeldItemView") as Node3D
 	_check(view != null, "production camera mounts the held item view")
 	if view == null:
 		await _finish(game, hub)
 		return
 
 	var player_block: Vector3i = world.call("world_to_block", player.global_position)
-	var floor_y := _find_floor_y(world, player_block)
+	var floor_y: int = _find_floor_y(world, player_block)
 	_prepare_arena(world, player_block.x, player_block.z, floor_y)
 	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z + 0.5)
 	player.rotation = Vector3.ZERO
@@ -80,7 +80,7 @@ func _run() -> void:
 	await process_frame
 	await _aim_at(player, world.call("block_to_world", target_block))
 	_check(_ray_hits_block(player, target_block, world), "center ray resolves the real stone target")
-	var rest_position := view.position
+	var rest_position: Vector3 = view.position
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
 	for _frame in 8:
 		await physics_frame
@@ -102,11 +102,11 @@ func _run() -> void:
 	player.call("_update_interaction_focus", true)
 	var preview: Dictionary = player.call("get_placement_preview_state")
 	_check(bool(preview.get("valid", false)), "production placement policy exposes a valid target")
-	var placement_position := _vector3i_from(preview.get("placement_position", []))
-	var grass_before := hub.inventory.count_item("grass_block")
+	var placement_position: Vector3i = _vector3i_from(preview.get("placement_position", []))
+	var grass_before: int = int(hub.inventory.count_item("grass_block"))
 	await _right_click_center()
 	_check(str(world.call("get_block", placement_position)) == "grass", "real right click places the block at the previewed voxel")
-	_check(hub.inventory.count_item("grass_block") == grass_before - 1, "real placement consumes exactly one held block")
+	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
 	_check(float(view.call("get_snapshot").get("use_remaining", 0.0)) > 0.0, "successful placement starts the use animation")
 
 	await _tap_key(KEY_3)
@@ -126,8 +126,8 @@ func _run() -> void:
 		await _left_click_center()
 		_check(float(view.call("get_snapshot").get("swing_remaining", 0.0)) > 0.0, "real attack starts the sword swing")
 
-	var player_start := player.global_position
-	var view_start := view.position
+	var player_start: Vector3 = player.global_position
+	var view_start: Vector3 = view.position
 	_key_event(KEY_W, true)
 	for _frame in 10:
 		await physics_frame
@@ -138,7 +138,7 @@ func _run() -> void:
 	_check(view.position.distance_to(view_start) > 0.005, "real movement drives first-person walk bob")
 
 	await RenderingServer.frame_post_draw
-	var image := root.get_texture().get_image()
+	var image: Image = root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "production viewport renders held item evidence")
 	if image != null and not image.is_empty():
 		_save_image(image)
@@ -165,7 +165,7 @@ func _prepare_arena(world: Node, center_x: int, center_z: int, floor_y: int) -> 
 
 func _find_floor_y(world: Node, player_block: Vector3i) -> int:
 	for offset in range(0, 12):
-		var candidate := player_block.y - offset - 1
+		var candidate: int = player_block.y - offset - 1
 		if str(world.call("get_block", Vector3i(player_block.x, candidate, player_block.z))) != "air":
 			return candidate
 	return maxi(1, player_block.y - 1)
@@ -187,8 +187,8 @@ func _ray_hits_block(player: Node3D, expected: Vector3i, world: Node) -> bool:
 	ray.force_raycast_update()
 	if not ray.is_colliding():
 		return false
-	var point := ray.get_collision_point()
-	var normal := ray.get_collision_normal()
+	var point: Vector3 = ray.get_collision_point()
+	var normal: Vector3 = ray.get_collision_normal()
 	return Vector3i(world.call("world_to_block", point - normal * 0.01)) == expected
 
 
@@ -250,7 +250,7 @@ func _vector3i_from(value: Variant) -> Vector3i:
 
 func _save_image(image: Image) -> void:
 	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
-	var error := image.save_png(_capture_path)
+	var error: Error = image.save_png(_capture_path)
 	_check(error == OK and FileAccess.file_exists(_capture_path), "first-person viewmodel screenshot is saved")
 
 
