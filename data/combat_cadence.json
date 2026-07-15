@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "default_profile": {
+    "id": "unarmed",
+    "cooldown_seconds": 0.72,
+    "knockback_horizontal": 2.4,
+    "knockback_vertical": 0.42,
+    "hit_stun_seconds": 0.16
+  },
+  "profiles": [
+    {
+      "item_id": "wooden_sword",
+      "cooldown_seconds": 0.64,
+      "knockback_horizontal": 3.0,
+      "knockback_vertical": 0.48,
+      "hit_stun_seconds": 0.18
+    },
+    {
+      "item_id": "stone_sword",
+      "cooldown_seconds": 0.62,
+      "knockback_horizontal": 3.2,
+      "knockback_vertical": 0.50,
+      "hit_stun_seconds": 0.18
+    },
+    {
+      "item_id": "iron_sword",
+      "cooldown_seconds": 0.60,
+      "knockback_horizontal": 3.5,
+      "knockback_vertical": 0.52,
+      "hit_stun_seconds": 0.20
+    },
+    {
+      "item_id": "gold_sword",
+      "cooldown_seconds": 0.48,
+      "knockback_horizontal": 3.1,
+      "knockback_vertical": 0.48,
+      "hit_stun_seconds": 0.17
+    },
+    {
+      "item_id": "diamond_sword",
+      "cooldown_seconds": 0.56,
+      "knockback_horizontal": 3.9,
+      "knockback_vertical": 0.58,
+      "hit_stun_seconds": 0.22
+    }
+  ]
+}

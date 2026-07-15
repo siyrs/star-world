@@ -74,6 +74,27 @@ func take_damage(amount: float, source: String = "world") -> void:
 	combat_result_reported.emit(result.duplicate(true))
 
 
+func _try_attack_entity(collider: Node) -> bool:
+	if combat_service != null and combat_service.has_method("try_attack_target"):
+		var raw_result: Variant = combat_service.call("try_attack_target", collider, self)
+		if raw_result is Dictionary:
+			var result: Dictionary = raw_result
+			combat_result_reported.emit(result.duplicate(true))
+			if bool(result.get("handled", false)):
+				if bool(result.get("accepted", false)):
+					_report_player_action(
+						&"attack",
+						{
+							"display_name": str(result.get("target_name", "生物")),
+							"damage": float(result.get("final_damage", 0.0)),
+							"defeated": bool(result.get("defeated", false)),
+							"weapon_item_id": str(result.get("weapon_item_id", "")),
+						}
+					)
+				return true
+	return super._try_attack_entity(collider)
+
+
 func _get_selected_attack_damage() -> float:
 	var fallback := super._get_selected_attack_damage()
 	if (

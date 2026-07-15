@@ -58,10 +58,7 @@ func break_target_block() -> bool:
 		return false
 	var collider = interaction_ray.get_collider()
 	if collider != null and collider.has_method("take_damage"):
-		var attacked := super.break_target_block()
-		if attacked:
-			_consume_selected_durability("attack")
-		return attacked
+		return _try_attack_entity(collider)
 	if harvest_service == null:
 		return super.break_target_block()
 	var target := _resolve_harvest_target()
@@ -86,10 +83,16 @@ func _start_primary_action() -> void:
 	var collider = interaction_ray.get_collider()
 	if collider != null and collider.has_method("take_damage"):
 		_primary_action_held = false
-		if super.break_target_block():
-			_consume_selected_durability("attack")
+		_try_attack_entity(collider)
 		return
 	_advance_harvest(0.0)
+
+
+func _try_attack_entity(_collider: Node) -> bool:
+	var attacked := super.break_target_block()
+	if attacked:
+		_consume_selected_durability("attack")
+	return attacked
 
 
 func _advance_harvest(delta: float) -> void:
