@@ -7,9 +7,9 @@ const ACTION_NONE := &"none"
 
 
 func classify(item_definition: Dictionary, block_id: String = "") -> String:
-	if item_definition.is_empty() and block_id.is_empty():
+	if item_definition.is_empty() and block_id in ["", "air"]:
 		return "empty"
-	if not block_id.is_empty() or str(item_definition.get("category", "")) == "block":
+	if block_id not in ["", "air"] or str(item_definition.get("category", "")) == "block":
 		return "block"
 	if not str(item_definition.get("tool_type", "")).is_empty():
 		return "tool"
