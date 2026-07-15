@@ -107,7 +107,7 @@ func _run() -> void:
 	_check(target.is_physics_processing(), "accepted hit keeps the target physics awake")
 	print(
 		"QA COMBAT KNOCKBACK START | position=%s | velocity=%s | impulse=%s | processing=%s"
-		% [target_start, target.velocity, initial_impulse, target.is_physics_processing()]
+		% [target_start, target.get("velocity"), initial_impulse, target.is_physics_processing()]
 	)
 	var feedback: Dictionary = overlay.call("get_snapshot")
 	_check(bool(feedback.get("hit_visible", false)), "combat response is visible after the rapid click batch")
@@ -128,7 +128,7 @@ func _run() -> void:
 				% [
 					frame_index + 1,
 					target.global_position,
-					target.velocity,
+					target.get("velocity"),
 					_array_to_vector3(frame_snapshot.get("combat_impulse", [])),
 				]
 			)
@@ -137,14 +137,15 @@ func _run() -> void:
 		target_end.x - target_start.x, target_end.z - target_start.z
 	).length()
 	var collision_normals: Array[String] = []
-	if target is CharacterBody3D:
-		for collision_index in target.get_slide_collision_count():
-			var collision := target.get_slide_collision(collision_index)
+	var target_body := target as CharacterBody3D
+	if target_body != null:
+		for collision_index in target_body.get_slide_collision_count():
+			var collision: KinematicCollision3D = target_body.get_slide_collision(collision_index)
 			if collision != null:
 				collision_normals.append(str(collision.get_normal()))
 	print(
 		"QA COMBAT KNOCKBACK END | start=%s | end=%s | distance=%.4f | velocity=%s | collisions=%s"
-		% [target_start, target_end, knockback_distance, target.velocity, collision_normals]
+		% [target_start, target_end, knockback_distance, target.get("velocity"), collision_normals]
 	)
 	_check(knockback_distance > 0.12, "accepted hit produces visible horizontal knockback")
 
