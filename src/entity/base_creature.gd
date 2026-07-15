@@ -4,6 +4,7 @@ extends CharacterBody3D
 signal damaged(amount: float, remaining_health: float)
 signal died(species_id: String, drops: Dictionary, world_position: Vector3)
 signal attack_landed(target: Node, damage: float)
+signal combat_hit_applied(result: Dictionary)
 
 @export var species_id: String = "creature"
 @export var display_name: String = "Creature"
@@ -29,6 +30,7 @@ var _flee_timer: float = 0.0
 var _flee_direction := Vector3.ZERO
 var _attraction_remaining_seconds: float = 0.0
 var _attraction_stop_distance: float = 2.0
+var _hit_stun_remaining: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _gravity: float = 9.8
 
@@ -82,9 +84,50 @@ func get_attraction_snapshot() -> Dictionary:
 		"active": has_active_attraction(),
 		"remaining_seconds": _attraction_remaining_seconds,
 		"stop_distance": _attraction_stop_distance,
-		"target_id": (
-			attraction_target.get_instance_id() if has_active_attraction() else 0
-		),
+		"target_id": attraction_target.get_instance_id() if has_active_attraction() else 0,
+	}
+
+
+func is_combat_target_available() -> bool:
+	return not _dead and health > 0.0 and not is_queued_for_deletion()
+
+
+func apply_combat_hit(hit: Dictionary, attacker: Node3D = null) -> Dictionary:
+	if not is_combat_target_available():
+		return {"applied": false, "reason": "target_unavailable"}
+	var damage := maxf(0.0, float(hit.get("final_damage", hit.get("damage", 0.0))))
+	if damage <= 0.0:
+		return {"applied": false, "reason": "no_damage"}
+	var before := health
+	var knockback := _vector3_from(hit.get("knockback", Vector3.ZERO))
+	velocity.x = knockback.x
+	velocity.z = knockback.z
+	velocity.y = maxf(velocity.y, knockback.y)
+	_hit_stun_remaining = maxf(
+		_hit_stun_remaining, maxf(0.0, float(hit.get("hit_stun_seconds", 0.0)))
+	)
+	take_damage(damage, attacker)
+	var result := {
+		"applied": true,
+		"health_before": before,
+		"health_after": health,
+		"remaining_health": health,
+		"defeated": _dead,
+		"target_position": [global_position.x, global_position.y, global_position.z],
+		"knockback": [knockback.x, knockback.y, knockback.z],
+		"hit_stun_seconds": _hit_stun_remaining,
+	}
+	combat_hit_applied.emit(result.duplicate(true))
+	return result
+
+
+func get_combat_snapshot() -> Dictionary:
+	return {
+		"available": is_combat_target_available(),
+		"health": health,
+		"max_health": max_health,
+		"hit_stun_remaining": _hit_stun_remaining,
+		"velocity": [velocity.x, velocity.y, velocity.z],
 	}
 
 
@@ -94,16 +137,18 @@ func _physics_process(delta: float) -> void:
 	_attack_timer = maxf(0.0, _attack_timer - delta)
 	_flee_timer = maxf(0.0, _flee_timer - delta)
 	_attraction_remaining_seconds = maxf(0.0, _attraction_remaining_seconds - delta)
+	_hit_stun_remaining = maxf(0.0, _hit_stun_remaining - delta)
 	if _attraction_remaining_seconds <= 0.0:
 		attraction_target = null
 	_decision_timer -= delta
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
 	else:
-		velocity.y = -0.1
-	var direction := _choose_direction()
-	velocity.x = move_toward(velocity.x, direction.x * move_speed, move_speed * 5.0 * delta)
-	velocity.z = move_toward(velocity.z, direction.z * move_speed, move_speed * 5.0 * delta)
+		velocity.y = minf(velocity.y, -0.1)
+	var direction := Vector3.ZERO if _hit_stun_remaining > 0.0 else _choose_direction()
+	var active_acceleration := maxf(8.0, move_speed * 5.0) if _hit_stun_remaining > 0.0 else move_speed * 5.0
+	velocity.x = move_toward(velocity.x, direction.x * move_speed, active_acceleration * delta)
+	velocity.z = move_toward(velocity.z, direction.z * move_speed, active_acceleration * delta)
 	if direction.length_squared() > 0.05:
 		rotation.y = lerp_angle(
 			rotation.y, atan2(direction.x, direction.z), minf(1.0, delta * 8.0)
@@ -190,6 +235,7 @@ func die() -> void:
 	if _dead:
 		return
 	_dead = true
+	_hit_stun_remaining = 0.0
 	clear_attraction_target()
 	set_physics_process(false)
 	var generated_drops := _roll_drops()
@@ -262,3 +308,11 @@ func _make_box(
 	mesh_instance.material_override = material
 	add_child(mesh_instance)
 	return mesh_instance
+
+
+func _vector3_from(value: Variant) -> Vector3:
+	if value is Vector3:
+		return value
+	if value is Array and value.size() >= 3:
+		return Vector3(float(value[0]), float(value[1]), float(value[2]))
+	return Vector3.ZERO
