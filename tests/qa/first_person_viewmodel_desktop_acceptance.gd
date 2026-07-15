@@ -79,7 +79,7 @@ func _run() -> void:
 		world.call("set_block", Vector3i(target_block.x, y, target_block.z), "air")
 	await process_frame
 	await _aim_at(player, world.call("block_to_world", target_block))
-	_check(_ray_hits_block(player, target_block, world), "center ray resolves the real stone target")
+	_check(_focus_hits_block(player, target_block), "authoritative center focus resolves the real stone target")
 	var rest_position: Vector3 = view.position
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
 	for _frame in 8:
@@ -93,10 +93,12 @@ func _run() -> void:
 	await process_frame
 	_check(not bool(view.call("get_snapshot").get("mining_active", true)), "releasing real left mouse stops mining animation")
 
-	await _tap_key(KEY_2)
+	_scroll_hotbar_down()
+	await process_frame
+	await process_frame
 	view.call("refresh_for_test")
 	snapshot = view.call("get_snapshot")
-	_check(str(snapshot.get("item_id", "")) == "grass_block", "real number-key selection switches to grass block")
+	_check(str(snapshot.get("item_id", "")) == "grass_block", "real mouse wheel switches to grass block")
 	_check(str(snapshot.get("model_kind", "")) == "block", "grass block uses a textured cube viewmodel")
 	_check(str(snapshot.get("block_id", "")) == "grass", "held block resolves the production block id")
 	player.call("_update_interaction_focus", true)
@@ -109,10 +111,12 @@ func _run() -> void:
 	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
 	_check(float(view.call("get_snapshot").get("use_remaining", 0.0)) > 0.0, "successful placement starts the use animation")
 
-	await _tap_key(KEY_3)
+	_scroll_hotbar_down()
+	await process_frame
+	await process_frame
 	view.call("refresh_for_test")
 	snapshot = view.call("get_snapshot")
-	_check(str(snapshot.get("item_id", "")) == "iron_sword", "real hotbar selection displays the iron sword")
+	_check(str(snapshot.get("item_id", "")) == "iron_sword", "second real wheel step displays the iron sword")
 	_check(str(snapshot.get("model_kind", "")) == "tool", "iron sword uses the tool model family")
 	var cow_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 2.4)
 	var cow_variant: Variant = hub.creature_spawner.call("spawn_creature", "cow", cow_position)
@@ -182,14 +186,12 @@ func _aim_at(player: Node3D, target: Vector3) -> void:
 	await process_frame
 
 
-func _ray_hits_block(player: Node3D, expected: Vector3i, world: Node) -> bool:
-	var ray := player.get_node("CameraPivot/Camera3D/InteractionRay") as RayCast3D
-	ray.force_raycast_update()
-	if not ray.is_colliding():
+func _focus_hits_block(player: Node, expected: Vector3i) -> bool:
+	var focus_value: Variant = player.call("get_interaction_focus")
+	if focus_value is not Dictionary:
 		return false
-	var point: Vector3 = ray.get_collision_point()
-	var normal: Vector3 = ray.get_collision_normal()
-	return Vector3i(world.call("world_to_block", point - normal * 0.01)) == expected
+	var focus: Dictionary = focus_value
+	return str(focus.get("type", "")) == "block" and _vector3i_from(focus.get("hit_position", [])) == expected
 
 
 func _ray_hits_entity(player: Node3D, expected: Node) -> bool:
@@ -205,6 +207,15 @@ func _mouse_button(button: MouseButton, pressed: bool) -> void:
 	event.button_index = button
 	event.button_mask = (1 << (int(button) - 1)) if pressed else 0
 	event.pressed = pressed
+	root.push_input(event)
+
+
+func _scroll_hotbar_down() -> void:
+	var event := InputEventMouseButton.new()
+	event.position = Vector2(root.size) * 0.5
+	event.global_position = event.position
+	event.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	event.pressed = true
 	root.push_input(event)
 
 
