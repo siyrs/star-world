@@ -146,6 +146,8 @@ func _test_creature_hit_capability() -> void:
 	root.add_child(creature)
 	await process_frame
 	creature.global_position = Vector3(0.0, 2.0, -2.0)
+	creature.set_physics_process(false)
+	_check(not creature.is_physics_processing(), "simulation budget can pause a creature before combat")
 	var before := creature.health
 	var result: Dictionary = creature.apply_combat_hit(
 		{
@@ -157,6 +159,7 @@ func _test_creature_hit_capability() -> void:
 	)
 	var snapshot: Dictionary = creature.get_combat_snapshot()
 	_check(bool(result.get("applied", false)) and is_equal_approx(creature.health, before - 2.0), "creature combat capability applies damage")
+	_check(creature.is_physics_processing(), "a combat hit wakes a paused creature for physical response")
 	_check(float(snapshot.get("hit_stun_remaining", 0.0)) > 0.0, "creature stores transient hit stun")
 	var impulse: Array = snapshot.get("combat_impulse", [])
 	_check(impulse.size() == 3 and float(impulse[2]) < -2.5, "creature stores knockback in an independent combat impulse channel")
