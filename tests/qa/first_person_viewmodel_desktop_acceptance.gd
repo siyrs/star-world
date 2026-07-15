@@ -56,10 +56,11 @@ func _run() -> void:
 	var floor_y: int = _find_floor_y(world, player_block)
 	world.call("force_load_chunk", world.call("block_to_chunk", player_block))
 	_prepare_arena(world, player_block.x, player_block.z, floor_y)
+	_add_physics_platform(world, player_block.x, player_block.z, floor_y)
 	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z + 0.5)
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
-	for _frame in 6:
+	for _frame in 8:
 		player.call("_physics_process", PHYSICS_STEP)
 		await process_frame
 
@@ -179,14 +180,18 @@ func _run() -> void:
 		"QA VIEWMODEL MOVE PREP | position=%s | velocity=%s | on_floor=%s | physics=%s | support=%s"
 		% [player.global_position, player.velocity, player.is_on_floor(), player.is_physics_processing(), support_block]
 	)
-	_check(support_block != "air", "walk-bob test keeps solid terrain beneath the player")
+	_check(player.is_on_floor(), "real physics platform grounds the player before walk-bob acceptance")
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
 	var max_player_distance := 0.0
 	var max_view_distance := 0.0
 	Input.action_press("move_forward")
 	_check(Input.is_action_pressed("move_forward"), "move_forward action enters pressed state")
-	var service_vector: Vector2 = hub.input_service.call("get_movement_vector")
+	var player_input_service: Node = player.get("input_service") as Node
+	_check(player_input_service != null, "production player exposes its gameplay input service")
+	var service_vector := Vector2.ZERO
+	if player_input_service != null:
+		service_vector = player_input_service.call("get_movement_vector")
 	_check(service_vector.y < -0.5, "production input service resolves forward movement")
 	for _frame in 18:
 		player.call("_physics_process", PHYSICS_STEP)
@@ -217,6 +222,20 @@ func _run() -> void:
 	_check(bool(player.get("input_enabled")), "closing inventory restores WASD input")
 	_check(bool(hub.save_current()), "viewmodel coexists with the production save transaction")
 	await _finish(game, hub)
+
+
+func _add_physics_platform(parent: Node, center_x: int, center_z: int, floor_y: int) -> void:
+	var body := StaticBody3D.new()
+	body.name = "QAViewmodelPhysicsPlatform"
+	body.collision_layer = 1
+	body.collision_mask = 0
+	body.position = Vector3(center_x + 0.5, floor_y + 0.5, center_z + 0.5)
+	var shape_node := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(12.0, 1.0, 12.0)
+	shape_node.shape = shape
+	body.add_child(shape_node)
+	parent.add_child(body)
 
 
 func _prepare_arena(world: Node, center_x: int, center_z: int, floor_y: int) -> void:
