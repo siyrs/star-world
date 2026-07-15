@@ -84,32 +84,30 @@ func _run() -> void:
 	_check(_ray_hits(player, target), "center ray resolves the live cow")
 	var target_start := target.global_position
 	var health_before := float(target.get("health"))
-	await _left_click_center()
-	var first_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
-	_check(str(first_result.get("status", "")) == "hit", "real left click commits one CombatService hit")
-	_check(is_equal_approx(float(target.get("health")), health_before - 6.0), "iron sword deals six real damage")
+
+	# Viewport.push_input dispatches real InputEventMouseButton objects through the
+	# production input chain. Both clicks are sent in one input batch so a slow
+	# software renderer cannot turn a rapid double click into two attacks simply
+	# by spending the cooldown duration between rendered frames.
+	_rapid_double_click_center()
+	await process_frame
+	var response: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+	_check(is_equal_approx(float(target.get("health")), health_before - 6.0), "rapid real double click applies exactly one iron-sword hit")
 	_check(
 		int(hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251))
 		== durability_before - 1,
-		"first accepted hit consumes exactly one weapon durability",
+		"rapid double click consumes exactly one weapon durability",
 	)
-	var health_after_first := float(target.get("health"))
-	var durability_after_first := int(
-		hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251)
-	)
-	# The rejection is asserted immediately after the first input cycle. Measuring
-	# knockback or capturing a frame first can consume the entire cooldown on a
-	# slow software renderer and would no longer represent a repeated click.
-	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
-	await _left_click_center()
-	var rejected: Dictionary = overlay.call("get_snapshot").get("last_result", {})
-	_check(str(rejected.get("reason", "")) == "cooldown", "immediate second real click is rejected by cooldown")
-	_check(is_equal_approx(float(target.get("health")), health_after_first), "cooldown click cannot deal duplicate damage")
-	_check(
-		int(hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251))
-		== durability_after_first,
-		"cooldown click cannot consume durability",
-	)
+	_check(str(response.get("reason", "")) == "cooldown", "second click in the real input batch is rejected by cooldown")
+	_check(str(response.get("status", "")) == "rejected", "cooldown rejection is exposed as a stable combat result")
+	var feedback: Dictionary = overlay.call("get_snapshot")
+	_check(bool(feedback.get("hit_visible", false)), "combat response is visible after the rapid click batch")
+	_check(bool(feedback.get("cooldown_visible", false)), "attack recovery indicator is visible")
+	await RenderingServer.frame_post_draw
+	var image := root.get_texture().get_image()
+	_check(image != null and not image.is_empty(), "combat desktop viewport produces a rendered frame")
+	if image != null and not image.is_empty():
+		_save_image(image)
 
 	for _frame in 10:
 		await physics_frame
@@ -117,14 +115,6 @@ func _run() -> void:
 		Vector2(target.global_position.x - target_start.x, target.global_position.z - target_start.z).length() > 0.12,
 		"accepted hit produces visible horizontal knockback",
 	)
-	var feedback: Dictionary = overlay.call("get_snapshot")
-	_check(bool(feedback.get("hit_visible", false)), "combat response remains visible after the strike")
-	_check(bool(feedback.get("cooldown_visible", false)), "attack recovery indicator is visible")
-	await RenderingServer.frame_post_draw
-	var image := root.get_texture().get_image()
-	_check(image != null and not image.is_empty(), "combat desktop viewport produces a rendered frame")
-	if image != null and not image.is_empty():
-		_save_image(image)
 
 	await _tap_key(KEY_E)
 	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real character inventory")
@@ -199,6 +189,25 @@ func _ray_hits(player: Node3D, expected: Node) -> bool:
 		return false
 	ray.force_raycast_update()
 	return ray.is_colliding() and ray.get_collider() == expected
+
+
+func _rapid_double_click_center() -> void:
+	var center := Vector2(root.size) * 0.5
+	for _click in 2:
+		var press := InputEventMouseButton.new()
+		press.position = center
+		press.global_position = center
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.button_mask = MOUSE_BUTTON_MASK_LEFT
+		press.pressed = true
+		root.push_input(press)
+		var release := InputEventMouseButton.new()
+		release.position = center
+		release.global_position = center
+		release.button_index = MOUSE_BUTTON_LEFT
+		release.button_mask = 0
+		release.pressed = false
+		root.push_input(release)
 
 
 func _left_click_center() -> void:
