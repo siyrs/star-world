@@ -155,11 +155,23 @@ func _run() -> void:
 	await _finish(game, hub)
 
 
-func _prepare_arena(world: Node, x: int, z: int, floor_y: int) -> void:
-	for offset_z in range(-6, 2):
-		world.call("set_block", Vector3i(x, floor_y, z + offset_z), "stone")
-		for y in range(floor_y + 1, floor_y + 4):
-			world.call("set_block", Vector3i(x, y, z + offset_z), "air")
+func _prepare_arena(world: Node, center_x: int, center_z: int, floor_y: int) -> void:
+	# Cows are 1.2 blocks wide and 1.65 blocks long. A one-cell corridor can wedge
+	# a real CharacterBody3D against random terrain even when the forward cells are
+	# clear, so the acceptance arena provides genuine multi-cell body clearance.
+	for x_offset in range(-3, 4):
+		for z_offset in range(-8, 3):
+			world.call(
+				"set_block",
+				Vector3i(center_x + x_offset, floor_y, center_z + z_offset),
+				"stone"
+			)
+			for y in range(floor_y + 1, floor_y + 5):
+				world.call(
+					"set_block",
+					Vector3i(center_x + x_offset, y, center_z + z_offset),
+					"air"
+				)
 
 
 func _find_floor_y(world: Node, player_block: Vector3i) -> int:
