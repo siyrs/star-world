@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://src/player/precision_interaction_player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/player/player_physics_profile.gd" id="2_physics_profile"]
 [ext_resource type="Script" path="res://src/interaction/world_interaction_preview.gd" id="3_preview"]
 [ext_resource type="Script" path="res://src/player/first_person_item_view.gd" id="4_held_item_view"]
+[ext_resource type="Script" path="res://src/harvest/mining_crack_overlay.gd" id="5_mining_crack_overlay"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
 radius = 0.34
@@ -39,6 +40,9 @@ script = ExtResource("4_held_item_view")
 
 [node name="InteractionPreview" type="Node3D" parent="."]
 script = ExtResource("3_preview")
+
+[node name="MiningCrackOverlay" type="Node3D" parent="."]
+script = ExtResource("5_mining_crack_overlay")
 
 [node name="PhysicsProfile" type="Node" parent="."]
 script = ExtResource("2_physics_profile")
