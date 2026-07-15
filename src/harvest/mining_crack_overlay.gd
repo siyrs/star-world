@@ -9,6 +9,7 @@ const OVERLAY_SCALE := 1.006
 var player: Node
 var harvest_service: Node
 var active := true
+var _policy: RefCounted
 var _state: Dictionary = {}
 var _mesh_instance: MeshInstance3D
 var _materials: Dictionary = {}
@@ -18,6 +19,7 @@ var _refresh_remaining := 0.0
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	top_level = true
+	_ensure_policy()
 	_build_mesh()
 	_resolve_player()
 	_refresh_bindings()
@@ -25,6 +27,7 @@ func _ready() -> void:
 
 
 func setup(p_player: Node, p_harvest_service: Node = null) -> void:
+	_ensure_policy()
 	_bind_player(p_player)
 	_bind_harvest_service(p_harvest_service)
 	if harvest_service != null and harvest_service.has_method("get_active_snapshot"):
@@ -41,12 +44,14 @@ func get_snapshot() -> Dictionary:
 	var result := _state.duplicate(true)
 	result["active"] = active
 	result["visible"] = visible
+	result["policy_ready"] = _ensure_policy() != null
 	result["global_position"] = [global_position.x, global_position.y, global_position.z]
 	result["has_collision"] = _tree_has_collision(self)
 	return result
 
 
 func refresh_for_test() -> void:
+	_ensure_policy()
 	_refresh_bindings()
 	if harvest_service != null and harvest_service.has_method("get_active_snapshot"):
 		_apply_progress(harvest_service.call("get_active_snapshot"))
@@ -133,9 +138,7 @@ func _on_harvest_rejected(reason: String, _snapshot: Dictionary) -> void:
 
 
 func _apply_progress(snapshot: Dictionary) -> void:
-	var evaluation: Dictionary = PolicyScript.evaluate(
-		snapshot, active and _player_accepts_feedback()
-	)
+	var evaluation := _evaluate(snapshot, active and _player_accepts_feedback())
 	_state = evaluation.duplicate(true)
 	if not bool(evaluation.get("visible", false)):
 		visible = false
@@ -148,9 +151,34 @@ func _apply_progress(snapshot: Dictionary) -> void:
 
 
 func _hide_overlay(reason: String) -> void:
-	_state = PolicyScript.evaluate({}, false)
+	_state = _evaluate({}, false)
 	_state["reason"] = reason
 	visible = false
+
+
+func _evaluate(snapshot: Dictionary, input_enabled: bool) -> Dictionary:
+	var current_policy := _ensure_policy()
+	if current_policy != null and current_policy.has_method("evaluate"):
+		var raw: Variant = current_policy.call("evaluate", snapshot, input_enabled)
+		if raw is Dictionary:
+			return raw
+	return {
+		"visible": false,
+		"reason": "policy_unavailable",
+		"ratio": 0.0,
+		"stage": -1,
+		"block_id": "",
+		"block_position": Vector3i.ZERO,
+		"target_key": "",
+	}
+
+
+func _ensure_policy() -> RefCounted:
+	if _policy == null:
+		var created: Variant = PolicyScript.new()
+		if created is RefCounted:
+			_policy = created
+	return _policy
 
 
 func _material_for_stage(stage: int) -> StandardMaterial3D:
