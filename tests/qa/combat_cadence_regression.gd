@@ -158,8 +158,15 @@ func _test_creature_hit_capability() -> void:
 	var snapshot: Dictionary = creature.get_combat_snapshot()
 	_check(bool(result.get("applied", false)) and is_equal_approx(creature.health, before - 2.0), "creature combat capability applies damage")
 	_check(float(snapshot.get("hit_stun_remaining", 0.0)) > 0.0, "creature stores transient hit stun")
-	var velocity: Array = snapshot.get("velocity", [])
-	_check(velocity.size() == 3 and float(velocity[2]) < -2.5, "creature stores the requested horizontal knockback")
+	var impulse: Array = snapshot.get("combat_impulse", [])
+	_check(impulse.size() == 3 and float(impulse[2]) < -2.5, "creature stores knockback in an independent combat impulse channel")
+	var start := creature.global_position
+	creature.call("_physics_process", 0.1)
+	_check(creature.global_position.z < start.z - 0.05, "independent combat impulse moves the real CharacterBody3D")
+	creature.clear_combat_motion()
+	snapshot = creature.get_combat_snapshot()
+	impulse = snapshot.get("combat_impulse", [])
+	_check(impulse.size() == 3 and Vector3(float(impulse[0]), float(impulse[1]), float(impulse[2])).is_zero_approx(), "combat motion can be cleared for world transitions and deterministic recovery")
 	creature.queue_free()
 	await process_frame
 
