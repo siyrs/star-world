@@ -73,16 +73,20 @@ func _run() -> void:
 	_check(bool(snapshot.get("visible", false)), "held pickaxe is visible in the production camera")
 	_check(int(snapshot.get("part_count", 0)) >= 3, "held pickaxe has multiple low-poly parts")
 
-	var target_block := Vector3i(player_block.x, floor_y + 1, player_block.z - 3)
+	# Keep the test target near eye level. A lower target can legitimately let the
+	# center ray touch the arena floor first, which would test terrain occlusion
+	# instead of the held-item mining flow.
+	var target_block := Vector3i(player_block.x, floor_y + 2, player_block.z - 3)
 	world.call("set_block", target_block, "stone")
-	for y in range(floor_y + 2, floor_y + 5):
-		world.call("set_block", Vector3i(target_block.x, y, target_block.z), "air")
+	for y in range(floor_y + 1, floor_y + 5):
+		if y != target_block.y:
+			world.call("set_block", Vector3i(target_block.x, y, target_block.z), "air")
 	await process_frame
 	await _aim_at(player, world.call("block_to_world", target_block))
 	_check(_focus_hits_block(player, target_block), "authoritative center focus resolves the real stone target")
 	var rest_position: Vector3 = view.position
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
-	for _frame in 8:
+	for _frame in 2:
 		await physics_frame
 		await process_frame
 	snapshot = view.call("get_snapshot")
@@ -111,6 +115,13 @@ func _run() -> void:
 	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
 	_check(float(view.call("get_snapshot").get("use_remaining", 0.0)) > 0.0, "successful placement starts the use animation")
 
+	# The building target has completed its purpose. Remove it before combat so
+	# the subsequent ray and W movement validate the creature and input flow only.
+	world.call("set_block", placement_position, "air")
+	world.call("set_block", target_block, "air")
+	await process_frame
+	await physics_frame
+
 	_scroll_hotbar_down()
 	await process_frame
 	await process_frame
@@ -118,7 +129,7 @@ func _run() -> void:
 	snapshot = view.call("get_snapshot")
 	_check(str(snapshot.get("item_id", "")) == "iron_sword", "second real wheel step displays the iron sword")
 	_check(str(snapshot.get("model_kind", "")) == "tool", "iron sword uses the tool model family")
-	var cow_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 2.4)
+	var cow_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 2.8)
 	var cow_variant: Variant = hub.creature_spawner.call("spawn_creature", "cow", cow_position)
 	_check(cow_variant is Node3D, "real creature spawner creates an attack target")
 	if cow_variant is Node3D:
@@ -129,7 +140,12 @@ func _run() -> void:
 		_check(_ray_hits_entity(player, cow), "center ray resolves the live cow")
 		await _left_click_center()
 		_check(float(view.call("get_snapshot").get("swing_remaining", 0.0)) > 0.0, "real attack starts the sword swing")
+		cow.queue_free()
+		await process_frame
 
+	var camera: Camera3D = player.call("get_view_camera")
+	camera.rotation = Vector3.ZERO
+	player.rotation = Vector3.ZERO
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
 	_key_event(KEY_W, true)
