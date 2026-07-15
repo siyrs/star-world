@@ -103,6 +103,9 @@ func apply_combat_hit(hit: Dictionary, attacker: Node3D = null) -> Dictionary:
 	var damage := maxf(0.0, float(hit.get("final_damage", hit.get("damage", 0.0))))
 	if damage <= 0.0:
 		return {"applied": false, "reason": "no_damage"}
+	# A creature close enough to be hit must immediately participate in physics,
+	# even if a distance-budget service previously paused its far-away simulation.
+	set_physics_process(true)
 	var before := health
 	var knockback := _vector3_from(hit.get("knockback", Vector3.ZERO))
 	_combat_impulse.x = knockback.x
