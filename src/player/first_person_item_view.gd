@@ -23,6 +23,7 @@ var _swing_remaining := 0.0
 var _use_remaining := 0.0
 var _switch_remaining := 0.0
 var _service_refresh_remaining := 0.0
+var _last_action: StringName = &""
 var _base_position := Vector3.ZERO
 var _base_rotation_degrees := Vector3.ZERO
 var _base_scale := 1.0
@@ -49,6 +50,7 @@ func set_active(value: bool) -> void:
 
 
 func trigger_action(action: StringName) -> void:
+	_last_action = action
 	match policy.action_kind(action):
 		PolicyScript.ACTION_SWING:
 			_swing_remaining = maxf(0.05, float(config.get("swing_seconds", 0.28)))
@@ -65,6 +67,7 @@ func get_snapshot() -> Dictionary:
 		"model_kind": current_model_kind,
 		"part_count": int(_model.get_meta("part_count", 0)) if _model != null else 0,
 		"mining_active": mining_active,
+		"last_action": str(_last_action),
 		"swing_remaining": _swing_remaining,
 		"use_remaining": _use_remaining,
 		"switch_remaining": _switch_remaining,
