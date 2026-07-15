@@ -55,19 +55,18 @@ func _run() -> void:
 
 
 func _test_policy() -> void:
-	var policy = PolicyScript.new()
-	_check(policy.stage_for_ratio(0.0) == 0, "zero progress starts at crack stage zero")
-	_check(policy.stage_for_ratio(0.099) == 0, "first tenth remains stage zero")
-	_check(policy.stage_for_ratio(0.10) == 1, "second tenth advances to stage one")
-	_check(policy.stage_for_ratio(0.55) == 5, "middle progress maps to a middle crack stage")
-	_check(policy.stage_for_ratio(1.0) == 9, "completed ratio clamps to the final crack stage")
-	var hidden: Dictionary = policy.evaluate({}, true)
+	_check(PolicyScript.stage_for_ratio(0.0) == 0, "zero progress starts at crack stage zero")
+	_check(PolicyScript.stage_for_ratio(0.099) == 0, "first tenth remains stage zero")
+	_check(PolicyScript.stage_for_ratio(0.10) == 1, "second tenth advances to stage one")
+	_check(PolicyScript.stage_for_ratio(0.55) == 5, "middle progress maps to a middle crack stage")
+	_check(PolicyScript.stage_for_ratio(1.0) == 9, "completed ratio clamps to the final crack stage")
+	var hidden: Dictionary = PolicyScript.evaluate({}, true)
 	_check(not bool(hidden.get("visible", true)) and str(hidden.get("reason", "")) == "no_progress", "empty progress hides feedback")
-	var blocked: Dictionary = policy.evaluate({"status":"progress", "position":[1,2,3], "ratio":0.5}, false)
+	var blocked: Dictionary = PolicyScript.evaluate({"status":"progress", "position":[1,2,3], "ratio":0.5}, false)
 	_check(not bool(blocked.get("visible", true)) and str(blocked.get("reason", "")) == "input_blocked", "blocked gameplay hides feedback")
-	var invalid: Dictionary = policy.evaluate({"status":"progress", "position":[], "ratio":0.5}, true)
+	var invalid: Dictionary = PolicyScript.evaluate({"status":"progress", "position":[], "ratio":0.5}, true)
 	_check(not bool(invalid.get("visible", true)) and str(invalid.get("reason", "")) == "invalid_position", "invalid target coordinates are rejected")
-	var active: Dictionary = policy.evaluate(
+	var active: Dictionary = PolicyScript.evaluate(
 		{"status":"progress", "position":[-4,21,8], "ratio":0.64, "block_id":"stone", "target_key":"stone@-4,21,8"},
 		true
 	)
