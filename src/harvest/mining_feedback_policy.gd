@@ -11,10 +11,11 @@ func evaluate(progress_snapshot: Dictionary, input_enabled: bool = true) -> Dict
 		return _hidden("no_progress")
 	if str(progress_snapshot.get("status", "progress")) != "progress":
 		return _hidden("not_progressing")
-	var position := _vector3i_from(progress_snapshot.get("position", []))
-	if position == null:
+	var raw_position: Variant = _vector3i_from(progress_snapshot.get("position", []))
+	if raw_position == null:
 		return _hidden("invalid_position")
-	var ratio := clampf(float(progress_snapshot.get("ratio", 0.0)), 0.0, 1.0)
+	var position: Vector3i = raw_position
+	var ratio: float = clampf(float(progress_snapshot.get("ratio", 0.0)), 0.0, 1.0)
 	return {
 		"visible": true,
 		"reason": "progress",
