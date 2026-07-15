@@ -93,26 +93,14 @@ func _run() -> void:
 		== durability_before - 1,
 		"first accepted hit consumes exactly one weapon durability",
 	)
-	for _frame in 10:
-		await physics_frame
-	_check(
-		Vector2(target.global_position.x - target_start.x, target.global_position.z - target_start.z).length() > 0.12,
-		"accepted hit produces visible horizontal knockback",
-	)
-	var feedback: Dictionary = overlay.call("get_snapshot")
-	_check(bool(feedback.get("hit_visible", false)), "hit confirmation remains visible after the strike")
-	_check(bool(feedback.get("cooldown_visible", false)), "attack recovery indicator is visible")
-	await RenderingServer.frame_post_draw
-	var image := root.get_texture().get_image()
-	_check(image != null and not image.is_empty(), "combat desktop viewport produces a rendered frame")
-	if image != null and not image.is_empty():
-		_save_image(image)
-
-	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
 	var health_after_first := float(target.get("health"))
 	var durability_after_first := int(
 		hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251)
 	)
+	# The rejection is asserted immediately after the first input cycle. Measuring
+	# knockback or capturing a frame first can consume the entire cooldown on a
+	# slow software renderer and would no longer represent a repeated click.
+	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
 	await _left_click_center()
 	var rejected: Dictionary = overlay.call("get_snapshot").get("last_result", {})
 	_check(str(rejected.get("reason", "")) == "cooldown", "immediate second real click is rejected by cooldown")
@@ -123,6 +111,21 @@ func _run() -> void:
 		"cooldown click cannot consume durability",
 	)
 
+	for _frame in 10:
+		await physics_frame
+	_check(
+		Vector2(target.global_position.x - target_start.x, target.global_position.z - target_start.z).length() > 0.12,
+		"accepted hit produces visible horizontal knockback",
+	)
+	var feedback: Dictionary = overlay.call("get_snapshot")
+	_check(bool(feedback.get("hit_visible", false)), "combat response remains visible after the strike")
+	_check(bool(feedback.get("cooldown_visible", false)), "attack recovery indicator is visible")
+	await RenderingServer.frame_post_draw
+	var image := root.get_texture().get_image()
+	_check(image != null and not image.is_empty(), "combat desktop viewport produces a rendered frame")
+	if image != null and not image.is_empty():
+		_save_image(image)
+
 	await _tap_key(KEY_E)
 	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real character inventory")
 	_check(not bool(overlay.call("get_snapshot").get("cooldown_visible", true)), "blocking UI hides combat feedback")
@@ -131,16 +134,22 @@ func _run() -> void:
 	_check(bool(player.get("input_enabled")), "closing inventory restores player input")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing inventory recaptures the mouse")
 
+	# Knockback has already been proven by real movement. Re-center and freeze the
+	# target so the final post-cooldown strike tests cadence rather than flee AI.
 	target.set("move_speed", 0.0)
 	target.set("_flee_timer", 0.0)
+	target.global_position = target_start
 	if target is CharacterBody3D:
 		target.velocity = Vector3.ZERO
+	await physics_frame
+	await process_frame
 	for _frame in MAX_READY_FRAMES:
 		if bool(hub.combat_service.get_cooldown_snapshot().get("ready", false)):
 			break
 		await process_frame
 	_check(bool(hub.combat_service.get_cooldown_snapshot().get("ready", false)), "real cooldown returns to ready")
 	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
+	_check(_ray_hits(player, target), "center ray reacquires the target after cooldown")
 	await _left_click_center()
 	var final_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
 	_check(str(final_result.get("status", "")) == "hit", "attack succeeds again after recovery")
