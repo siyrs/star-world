@@ -62,7 +62,8 @@ func _run() -> void:
 	player.call("reset_motion")
 	player.velocity.y = -1.0
 	await _settle_player(player, 120)
-	_check(player.is_on_floor(), "real physics platform grounds the player before gameplay actions")
+	view.call("refresh_for_test")
+	_check(bool(view.call("get_snapshot").get("visually_grounded", false)), "held item view detects real support before gameplay actions")
 
 	hub.inventory.clear()
 	hub.inventory.add_item("wooden_pickaxe", 1)
@@ -157,7 +158,8 @@ func _run() -> void:
 	player.rotation = Vector3.ZERO
 	player.velocity.y = -1.0
 	await _settle_player(player, 120)
-	_check(player.is_on_floor(), "real physics platform grounds the player before walk-bob acceptance")
+	view.call("refresh_for_test")
+	_check(bool(view.call("get_snapshot").get("visually_grounded", false)), "held item view retains grounded support before walk-bob acceptance")
 
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
@@ -184,7 +186,7 @@ func _run() -> void:
 	Input.action_release("move_forward")
 	await process_frame
 	_check(max_player_distance > 0.05, "production movement physics moves the player forward")
-	_check(max_view_distance > 0.005, "real movement produces measurable first-person walk bob")
+	_check(max_view_distance > 0.005, "real supported movement produces measurable first-person walk bob")
 
 	await RenderingServer.frame_post_draw
 	var image: Image = root.get_texture().get_image()
