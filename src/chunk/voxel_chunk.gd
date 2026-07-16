@@ -22,6 +22,14 @@ const FACE_DIRECTIONS := [
 	Vector3i(0, 0, 1),
 	Vector3i(0, 0, -1),
 ]
+const FULL_FACE_VERTICES := [
+	[Vector3(1,0,0),Vector3(1,1,0),Vector3(1,1,1),Vector3(1,0,1)],
+	[Vector3(0,0,1),Vector3(0,1,1),Vector3(0,1,0),Vector3(0,0,0)],
+	[Vector3(0,1,1),Vector3(1,1,1),Vector3(1,1,0),Vector3(0,1,0)],
+	[Vector3(0,0,0),Vector3(1,0,0),Vector3(1,0,1),Vector3(0,0,1)],
+	[Vector3(0,0,1),Vector3(1,0,1),Vector3(1,1,1),Vector3(0,1,1)],
+	[Vector3(1,0,0),Vector3(0,0,0),Vector3(0,1,0),Vector3(1,1,0)],
+]
 const FACE_VERTEX_ORDER := [0, 1, 2, 0, 2, 3]
 const CROP_PLANES := [
 	[
@@ -219,28 +227,59 @@ func _mesh_cells(count: int) -> void:
 			if shape == "crop":
 				_append_crop(_visual_tool, local_origin, block_id)
 				_visual_faces += CROP_PLANES.size()
+			elif ShapeGeometryScript.uses_partial_geometry(block_id):
+				_append_partial_block(global_block, local_position, local_origin, block_id, shape)
 			else:
-				var boxes: Array[AABB] = ShapeGeometryScript.get_local_boxes(block_id)
-				for box_index in boxes.size():
-					var box: AABB = boxes[box_index]
-					for face_index in FACE_DIRECTIONS.size():
-						if not ShapeGeometryScript.face_enabled(block_id, box_index, face_index):
-							continue
-						if ShapeGeometryScript.face_is_cell_boundary(box, face_index):
-							var neighbor_id := _get_neighbor_block(
-								global_block, local_position, FACE_DIRECTIONS[face_index]
-							)
-							if not _should_draw_shape_face(block_id, neighbor_id):
-								continue
-						_append_box_face(_visual_tool, local_origin, box, face_index, block_id, true)
-						_visual_faces += 1
-						if BlockRegistryScript.is_solid(block_id) and shape != "stairs":
-							_append_box_face(_collision_tool, local_origin, box, face_index, block_id, false)
-							_collision_faces += 1
-				if BlockRegistryScript.is_solid(block_id) and shape == "stairs":
-					_append_stair_ramp_collision(_collision_tool, local_origin)
-					_collision_faces += 6
+				_append_full_cube(global_block, local_position, local_origin, block_id)
 		_build_cursor += 1
+
+
+func _append_full_cube(
+	global_block: Vector3i,
+	local_position: Vector3i,
+	local_origin: Vector3,
+	block_id: String
+) -> void:
+	for face_index in FACE_DIRECTIONS.size():
+		var neighbor_id := _get_neighbor_block(
+			global_block, local_position, FACE_DIRECTIONS[face_index]
+		)
+		if not _should_draw_shape_face(block_id, neighbor_id):
+			continue
+		_append_cube_face(_visual_tool, local_origin, face_index, block_id, true)
+		_visual_faces += 1
+		if BlockRegistryScript.is_solid(block_id):
+			_append_cube_face(_collision_tool, local_origin, face_index, block_id, false)
+			_collision_faces += 1
+
+
+func _append_partial_block(
+	global_block: Vector3i,
+	local_position: Vector3i,
+	local_origin: Vector3,
+	block_id: String,
+	shape: String
+) -> void:
+	var boxes: Array[AABB] = ShapeGeometryScript.get_local_boxes(block_id)
+	for box_index in boxes.size():
+		var box: AABB = boxes[box_index]
+		for face_index in FACE_DIRECTIONS.size():
+			if not ShapeGeometryScript.face_enabled(block_id, box_index, face_index):
+				continue
+			if ShapeGeometryScript.face_is_cell_boundary(box, face_index):
+				var neighbor_id := _get_neighbor_block(
+					global_block, local_position, FACE_DIRECTIONS[face_index]
+				)
+				if not _should_draw_shape_face(block_id, neighbor_id):
+					continue
+			_append_box_face(_visual_tool, local_origin, box, face_index, block_id, true)
+			_visual_faces += 1
+			if BlockRegistryScript.is_solid(block_id) and shape != "stairs":
+				_append_box_face(_collision_tool, local_origin, box, face_index, block_id, false)
+				_collision_faces += 1
+	if BlockRegistryScript.is_solid(block_id) and shape == "stairs":
+		_append_stair_ramp_collision(_collision_tool, local_origin)
+		_collision_faces += 6
 
 
 func _commit_mesh_build() -> void:
@@ -281,8 +320,26 @@ func _should_draw_shape_face(block_id: String, neighbor_id: String) -> bool:
 	if BlockRegistryScript.is_transparent(neighbor_id):
 		return true
 	# Only a full opaque cube is guaranteed to cover an arbitrary partial face.
-	# Keeping faces against slabs/stairs avoids holes where their silhouettes differ.
 	return not ShapeGeometryScript.is_full_cube(neighbor_id)
+
+
+func _append_cube_face(
+	tool: SurfaceTool,
+	local_origin: Vector3,
+	face_index: int,
+	block_id: String,
+	with_visual_data: bool
+) -> void:
+	var direction := Vector3(FACE_DIRECTIONS[face_index])
+	var corners: Array = FULL_FACE_VERTICES[face_index]
+	var shade := _face_shade(direction)
+	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
+	for corner_index in FACE_VERTEX_ORDER:
+		tool.set_normal(direction)
+		if with_visual_data:
+			tool.set_color(shade)
+			tool.set_uv(uvs[corner_index])
+		tool.add_vertex(local_origin + Vector3(corners[corner_index]))
 
 
 func _append_box_face(
@@ -295,11 +352,7 @@ func _append_box_face(
 ) -> void:
 	var direction := Vector3(FACE_DIRECTIONS[face_index])
 	var corners: Array[Vector3] = ShapeGeometryScript.face_vertices(box, face_index)
-	var shade := Color.WHITE
-	if direction.y < -0.5:
-		shade = Color(0.68, 0.68, 0.68, 1.0)
-	elif absf(direction.y) < 0.5:
-		shade = Color(0.86, 0.86, 0.86, 1.0)
+	var shade := _face_shade(direction)
 	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(direction)
@@ -309,14 +362,22 @@ func _append_box_face(
 		tool.add_vertex(local_origin + corners[corner_index])
 
 
+func _face_shade(direction: Vector3) -> Color:
+	if direction.y < -0.5:
+		return Color(0.68, 0.68, 0.68, 1.0)
+	if absf(direction.y) < 0.5:
+		return Color(0.86, 0.86, 0.86, 1.0)
+	return Color.WHITE
+
+
 func _append_stair_ramp_collision(tool: SurfaceTool, local_origin: Vector3) -> void:
 	var faces: Array[Dictionary] = [
-		{"normal":Vector3.RIGHT, "corners":[Vector3(1,0,0),Vector3(1,0.5,0),Vector3(1,1,1),Vector3(1,0,1)]},
-		{"normal":Vector3.LEFT, "corners":[Vector3(0,0,1),Vector3(0,1,1),Vector3(0,0.5,0),Vector3(0,0,0)]},
-		{"normal":Vector3(0,1,-0.5).normalized(), "corners":[Vector3(0,0.5,0),Vector3(1,0.5,0),Vector3(1,1,1),Vector3(0,1,1)]},
-		{"normal":Vector3.DOWN, "corners":[Vector3(0,0,0),Vector3(1,0,0),Vector3(1,0,1),Vector3(0,0,1)]},
-		{"normal":Vector3(0,0,1), "corners":[Vector3(0,0,1),Vector3(1,0,1),Vector3(1,1,1),Vector3(0,1,1)]},
-		{"normal":Vector3(0,0,-1), "corners":[Vector3(1,0,0),Vector3(0,0,0),Vector3(0,0.5,0),Vector3(1,0.5,0)]},
+		{"normal":Vector3.RIGHT,"corners":[Vector3(1,0,0),Vector3(1,0.5,0),Vector3(1,1,1),Vector3(1,0,1)]},
+		{"normal":Vector3.LEFT,"corners":[Vector3(0,0,1),Vector3(0,1,1),Vector3(0,0.5,0),Vector3(0,0,0)]},
+		{"normal":Vector3(0,1,-0.5).normalized(),"corners":[Vector3(0,0.5,0),Vector3(1,0.5,0),Vector3(1,1,1),Vector3(0,1,1)]},
+		{"normal":Vector3.DOWN,"corners":[Vector3(0,0,0),Vector3(1,0,0),Vector3(1,0,1),Vector3(0,0,1)]},
+		{"normal":Vector3(0,0,1),"corners":[Vector3(0,0,1),Vector3(1,0,1),Vector3(1,1,1),Vector3(0,1,1)]},
+		{"normal":Vector3(0,0,-1),"corners":[Vector3(1,0,0),Vector3(0,0,0),Vector3(0,0.5,0),Vector3(1,0.5,0)]},
 	]
 	for face: Dictionary in faces:
 		var normal: Vector3 = face["normal"]
