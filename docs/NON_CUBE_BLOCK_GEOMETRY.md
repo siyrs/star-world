@@ -105,3 +105,5 @@ placement_boxes
 5. 生产角色沿楼梯方向走上斜坡；
 6. 阻断 UI 隐藏预览，关闭后恢复鼠标和输入；
 7. 世界保存事务正常。
+
+关联的第一人称桌面验收会让生产 Player 先通过真实向下速度和 physics frame 落到 `StaticBody3D` 平台，再测量持续前进产生的实际位移与 walk-bob，避免把未刷新的 `is_on_floor()` 状态误判为表现层回归。
