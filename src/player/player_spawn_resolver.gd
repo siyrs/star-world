@@ -5,10 +5,18 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const BODY_RADIUS := 0.34
 const BODY_HEIGHT := 1.8
 const SEARCH_RADIUS := 8
+const VOXEL_SEAM_CLEARANCE := BODY_RADIUS + 0.02
+const SAFE_CELL_OFFSET := 0.44
 
 
 func resolve(world: Node, preferred: Vector3, fallback: Vector3) -> Vector3:
 	var safe_fallback := fallback if _is_reasonable_position(fallback) else Vector3(0.5, 50.0, 0.5)
+	var original_preferred := preferred
+	preferred = _stabilize_voxel_seam(preferred)
+	if not preferred.is_equal_approx(original_preferred):
+		var seam_recovery := _find_stable_ground_near(world, preferred)
+		if _is_reasonable_position(seam_recovery):
+			return seam_recovery
 	if (
 		_is_reasonable_position(preferred)
 		and is_position_clear(world, preferred)
@@ -72,9 +80,65 @@ func _resolve_ground(world: Node, candidate: Vector3) -> Vector3:
 	return candidate
 
 
+func _find_stable_ground_near(world: Node, origin: Vector3) -> Vector3:
+	var grounded_origin := _resolve_ground(world, origin)
+	if _is_stable_recovery_position(world, grounded_origin):
+		return grounded_origin
+	for radius in range(1, SEARCH_RADIUS + 1):
+		for offset_x in range(-radius, radius + 1):
+			for offset_z in range(-radius, radius + 1):
+				if absi(offset_x) != radius and absi(offset_z) != radius:
+					continue
+				var candidate := origin + Vector3(offset_x, 0.0, offset_z)
+				candidate = _resolve_ground(world, candidate)
+				if _is_stable_recovery_position(world, candidate):
+					return candidate
+	return Vector3(INF, INF, INF)
+
+
+func _is_stable_recovery_position(world: Node, candidate: Vector3) -> bool:
+	return (
+		is_position_clear(world, candidate)
+		and is_position_supported(world, candidate)
+		and _has_lateral_body_clearance(world, candidate)
+	)
+
+
+func _has_lateral_body_clearance(world: Node, feet_position: Vector3) -> bool:
+	if world == null or not world.has_method("get_block"):
+		return true
+	var center_x := floori(feet_position.x)
+	var center_z := floori(feet_position.z)
+	var minimum_y := floori(feet_position.y + 0.05)
+	var maximum_y := floori(feet_position.y + BODY_HEIGHT - 0.05)
+	for x in range(center_x - 1, center_x + 2):
+		for y in range(minimum_y, maximum_y + 1):
+			for z in range(center_z - 1, center_z + 2):
+				var block_id := str(world.call("get_block", Vector3i(x, y, z)))
+				if BlockRegistryScript.is_solid(block_id):
+					return false
+	return true
+
+
 func _is_reasonable_position(value: Vector3) -> bool:
 	return _is_finite_vector(value) and value.y >= 0.0 and value.y <= 256.0
 
 
 func _is_finite_vector(value: Vector3) -> bool:
 	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+func _stabilize_voxel_seam(value: Vector3) -> Vector3:
+	if not _is_finite_vector(value):
+		return value
+	var stabilized := value
+	if _distance_to_voxel_seam(value.x) < VOXEL_SEAM_CLEARANCE:
+		stabilized.x = floorf(value.x) + SAFE_CELL_OFFSET
+	if _distance_to_voxel_seam(value.z) < VOXEL_SEAM_CLEARANCE:
+		stabilized.z = floorf(value.z) + SAFE_CELL_OFFSET
+	return stabilized
+
+
+func _distance_to_voxel_seam(value: float) -> float:
+	var fraction := fposmod(value, 1.0)
+	return minf(fraction, 1.0 - fraction)

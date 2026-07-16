@@ -76,7 +76,7 @@ func _build_ui() -> void:
 	_panel.offset_left = -620.0
 	_panel.offset_right = -18.0
 	_panel.offset_top = 18.0
-	_panel.offset_bottom = 410.0
+	_panel.offset_bottom = 500.0
 	root.add_child(_panel)
 	_label = Label.new()
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -122,6 +122,15 @@ func _format_snapshot(snapshot: Dictionary) -> String:
 		position_text = "%.1f, %.1f, %.1f" % [
 			float(player_position[0]), float(player_position[1]), float(player_position[2])
 		]
+	var velocity_text := "未连接"
+	var player_velocity: Array = snapshot.get("player_velocity", [])
+	if player_velocity.size() >= 3:
+		velocity_text = "%.2f, %.2f, %.2f" % [
+			float(player_velocity[0]), float(player_velocity[1]), float(player_velocity[2])
+		]
+	var input_status: Dictionary = snapshot.get("gameplay_input", {})
+	var movement: Vector2 = input_status.get("movement", Vector2.ZERO)
+	var last_nonzero: Vector2 = input_status.get("last_nonzero_movement", Vector2.ZERO)
 	var lines: Array[String] = [
 		"F3 运行诊断  |  状态：%s" % status_text,
 		"FPS %.0f  |  帧 %.1f ms（峰值 %.1f）| 卡顿 %d" % [
@@ -157,7 +166,32 @@ func _format_snapshot(snapshot: Dictionary) -> String:
 			_mouse_mode_name(int(snapshot.get("mouse_mode", Input.MOUSE_MODE_VISIBLE))),
 			"是" if bool(snapshot.get("paused", false)) else "否",
 		],
+		"角色输入 %s  |  物理更新 %s" % [
+			"启用" if bool(snapshot.get("player_input_enabled", false)) else "禁用",
+			"运行" if bool(snapshot.get("player_physics_processing", false)) else "停止",
+		],
+		"输入服务 %s  |  当前向量 %.1f, %.1f  |  最近有效 %.1f, %.1f" % [
+			"激活" if bool(input_status.get("active", false)) else "未激活",
+			movement.x,
+			movement.y,
+			last_nonzero.x,
+			last_nonzero.y,
+		],
+		"最近按键：%s  |  W动作 %s  |  W物理键 %s" % [
+			str(input_status.get("last_key_event", "无")),
+			"按下" if bool(input_status.get("forward_action_pressed", false)) else "松开",
+			"按下" if bool(input_status.get("w_key_pressed", false)) else "松开",
+		],
 		"玩家位置：%s" % position_text,
+		"玩家速度：%s  |  着地 %s" % [
+			velocity_text,
+			"是" if bool(snapshot.get("player_on_floor", false)) else "否",
+		],
+		"碰撞：%s" % (
+			"无"
+			if snapshot.get("player_collisions", []).is_empty()
+			else "；".join(snapshot.get("player_collisions", []))
+		),
 	]
 	var issues: Array = health.get("issues", [])
 	if issues.is_empty():

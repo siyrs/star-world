@@ -8,6 +8,7 @@ signal combat_hit_applied(result: Dictionary)
 
 const KNOCKBACK_DRAG := 7.5
 const MOTION_EPSILON := 0.0001
+const HOSTILE_ATTACK_INTERVAL := 5.0
 
 @export var species_id: String = "creature"
 @export var display_name: String = "Creature"
@@ -237,7 +238,7 @@ func _acquire_target() -> void:
 func _attempt_attack() -> void:
 	if _attack_timer > 0.0 or target == null:
 		return
-	_attack_timer = 1.1
+	_attack_timer = HOSTILE_ATTACK_INTERVAL
 	if target.has_method("take_damage"):
 		target.call("take_damage", attack_damage, "zombie")
 	elif target.has_method("get_survival_service"):

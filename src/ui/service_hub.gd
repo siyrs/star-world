@@ -67,6 +67,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	gameplay_input = _add_service(GameplayInputScript.new(), "GameplayInput")
 	input_context = _add_service(InputContextScript.new(), "InputContext")
+	input_context.gameplay_input_changed.connect(gameplay_input.set_active)
 	simulation_pause = _add_service(SimulationPauseScript.new(), "SimulationPause")
 	inventory = _add_service(InventoryScript.new(), "Inventory")
 	container_storage = _add_service(ContainerStorageScript.new(), "ContainerStorage")

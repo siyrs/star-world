@@ -7,6 +7,10 @@ var sprint_speed := 8.0
 var jump_velocity := 6.2
 var ground_acceleration := 18.0
 var air_acceleration := 5.0
+var swim_speed := 3.4
+var swim_horizontal_factor := 0.62
+var swim_acceleration := 12.0
+var swim_sink_speed := 0.35
 
 
 func configure(config: Dictionary) -> void:
@@ -16,6 +20,12 @@ func configure(config: Dictionary) -> void:
 	jump_velocity = maxf(0.0, float(config.get("jump_velocity", jump_velocity)))
 	ground_acceleration = maxf(0.0, float(config.get("ground_acceleration", ground_acceleration)))
 	air_acceleration = maxf(0.0, float(config.get("air_acceleration", air_acceleration)))
+	swim_speed = maxf(0.0, float(config.get("swim_speed", swim_speed)))
+	swim_horizontal_factor = clampf(
+		float(config.get("swim_horizontal_factor", swim_horizontal_factor)), 0.1, 1.0
+	)
+	swim_acceleration = maxf(0.0, float(config.get("swim_acceleration", swim_acceleration)))
+	swim_sink_speed = maxf(0.0, float(config.get("swim_sink_speed", swim_sink_speed)))
 
 
 func step(
@@ -24,21 +34,34 @@ func step(
 	input_vector: Vector2,
 	jump_requested: bool,
 	sprinting: bool,
-	in_fluid: bool
+	in_fluid: bool,
+	grounded_override: bool = false
 ) -> Dictionary:
 	var jumped := false
 	var next_velocity := body.velocity
-	if not body.is_on_floor():
-		next_velocity.y -= gravity * delta * (0.28 if in_fluid else 1.0)
-	if jump_requested and (body.is_on_floor() or in_fluid):
-		next_velocity.y = jump_velocity * (0.7 if in_fluid else 1.0)
+	var grounded := body.is_on_floor() or grounded_override
+	if in_fluid:
+		next_velocity.y = move_toward(
+			next_velocity.y, -swim_sink_speed, gravity * 0.8 * delta
+		)
+	elif not grounded:
+		next_velocity.y -= gravity * delta
+	if in_fluid and jump_requested:
+		next_velocity.y = swim_speed
+		jumped = true
+	elif jump_requested and grounded:
+		next_velocity.y = jump_velocity
 		jumped = true
 
 	var direction := world_direction(body.global_transform.basis, input_vector)
 	var target_speed := sprint_speed if sprinting else walk_speed
 	if in_fluid:
-		target_speed *= 0.55
-	var active_acceleration := ground_acceleration if body.is_on_floor() else air_acceleration
+		target_speed *= swim_horizontal_factor
+	var active_acceleration := (
+		swim_acceleration
+		if in_fluid
+		else (ground_acceleration if grounded else air_acceleration)
+	)
 	next_velocity.x = move_toward(
 		next_velocity.x, direction.x * target_speed, active_acceleration * delta
 	)

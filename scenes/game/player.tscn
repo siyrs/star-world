@@ -6,20 +6,20 @@
 [ext_resource type="Script" path="res://src/player/first_person_item_view.gd" id="4_held_item_view"]
 [ext_resource type="Script" path="res://src/harvest/mining_crack_overlay.gd" id="5_mining_crack_overlay"]
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
+[sub_resource type="CylinderShape3D" id="CylinderShape_player"]
 radius = 0.34
 height = 1.8
 
 [node name="Player" type="CharacterBody3D" groups=["player"]]
 collision_layer = 2
 collision_mask = 5
-floor_snap_length = 0.25
+floor_snap_length = 0.0
 floor_max_angle = 0.85
 script = ExtResource("1_player")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.9, 0)
-shape = SubResource("CapsuleShape_player")
+shape = SubResource("CylinderShape_player")
 
 [node name="CameraPivot" type="Node3D" parent="."]
 position = Vector3(0, 1.62, 0)
@@ -33,6 +33,7 @@ near = 0.05
 target_position = Vector3(0, 0, -6)
 collision_mask = 5
 collide_with_areas = false
+hit_from_inside = true
 enabled = true
 
 [node name="HeldItemView" type="Node3D" parent="CameraPivot/Camera3D"]

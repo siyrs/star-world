@@ -163,6 +163,15 @@ func _placement_reason_text(preview: Dictionary) -> String:
 
 
 func _held_item_prompt(selected: Dictionary) -> Dictionary:
+	if not str(selected.get("block_id", "")).is_empty():
+		return {
+			"visible": true,
+			"title": str(selected.get("display_name", "选中方块")),
+			"subtitle": "先把准星移到方块表面",
+			"primary": "",
+			"secondary": "出现绿色预览格后按鼠标右键放置",
+			"tone": "warning",
+		}
 	var use_hint := _selected_use_hint(selected)
 	if use_hint.is_empty():
 		return {}

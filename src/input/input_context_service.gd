@@ -36,7 +36,22 @@ var _application_focused := true
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_process(true)
 	_apply_context(true)
+
+
+func _process(_delta: float) -> void:
+	var expected_enabled := is_gameplay_input_enabled()
+	if is_instance_valid(_player):
+		var actual_enabled: bool = _player.get("input_enabled") == true
+		if actual_enabled != expected_enabled:
+			_apply_player_state(expected_enabled)
+	if DisplayServer.get_name() != "headless":
+		var expected_mouse_mode := (
+			Input.MOUSE_MODE_CAPTURED if expected_enabled else Input.MOUSE_MODE_VISIBLE
+		)
+		if Input.mouse_mode != expected_mouse_mode:
+			_apply_mouse_mode()
 
 
 func _notification(what: int) -> void:
@@ -148,4 +163,6 @@ func _release_gui_focus() -> void:
 
 func _release_action_state() -> void:
 	for raw_action in Actions.DEFAULT_KEY_BINDINGS:
-		Input.action_release(StringName(raw_action))
+		var action := StringName(raw_action)
+		if InputMap.has_action(action):
+			Input.action_release(action)

@@ -14,6 +14,7 @@ const DEFAULT_STUTTER_THRESHOLD_MS := 50.0
 var _world: Node
 var _player: Node3D
 var _input_context: Node
+var _gameplay_input: Node
 var _creature_spawner: Node
 var _streaming_controller: Node
 var _health_policy = HealthPolicyScript.new()
@@ -35,11 +36,13 @@ func _ready() -> void:
 func setup(
 	p_input_context: Node = null,
 	p_creature_spawner: Node = null,
-	p_streaming_controller: Node = null
+	p_streaming_controller: Node = null,
+	p_gameplay_input: Node = null
 ) -> void:
 	_input_context = p_input_context
 	_creature_spawner = p_creature_spawner
 	_streaming_controller = p_streaming_controller
+	_gameplay_input = p_gameplay_input
 
 
 func attach_runtime(world: Node, player: Node3D) -> void:
@@ -77,12 +80,45 @@ func sample_now() -> Dictionary:
 	)
 	var streaming := _get_streaming_stats()
 	var player_position: Array = []
+	var player_input_enabled := false
+	var player_physics_processing := false
+	var player_velocity: Array = []
+	var player_on_floor := false
+	var player_collisions: Array[String] = []
 	if is_instance_valid(_player):
 		player_position = [
 			_player.global_position.x,
 			_player.global_position.y,
 			_player.global_position.z,
 		]
+		player_input_enabled = _property_truthy(_player, "input_enabled")
+		player_physics_processing = _player.is_physics_processing()
+		if _has_property(_player, "velocity"):
+			var velocity: Vector3 = _player.get("velocity")
+			player_velocity = [velocity.x, velocity.y, velocity.z]
+		if _player.has_method("is_on_floor"):
+			player_on_floor = true if _player.call("is_on_floor") else false
+		if _player.has_method("get_slide_collision_count"):
+			for collision_index in int(_player.call("get_slide_collision_count")):
+				var collision: KinematicCollision3D = _player.call(
+					"get_slide_collision", collision_index
+				)
+				if collision == null:
+					continue
+				var collider: Object = collision.get_collider()
+				var collider_name := "未知"
+				if collider is Node:
+					collider_name = collider.name
+				elif collider != null:
+					collider_name = collider.get_class()
+				player_collisions.append(
+					"%s n=(%.1f,%.1f,%.1f)" % [
+						collider_name,
+						collision.get_normal().x,
+						collision.get_normal().y,
+						collision.get_normal().z,
+					]
+				)
 	var snapshot := {
 		"timestamp_msec": Time.get_ticks_msec(),
 		"fps": float(Engine.get_frames_per_second()),
@@ -103,6 +139,12 @@ func sample_now() -> Dictionary:
 		"mouse_mode": int(Input.mouse_mode),
 		"paused": get_tree().paused if get_tree() != null else false,
 		"player_position": player_position,
+		"player_input_enabled": player_input_enabled,
+		"player_physics_processing": player_physics_processing,
+		"player_velocity": player_velocity,
+		"player_on_floor": player_on_floor,
+		"player_collisions": player_collisions,
+		"gameplay_input": _get_gameplay_input_status(),
 		"world_attached": is_instance_valid(_world),
 		"player_attached": is_instance_valid(_player),
 	}
@@ -187,6 +229,29 @@ func _get_input_context() -> String:
 	if not is_instance_valid(_input_context) or not _input_context.has_method("get_context"):
 		return "unknown"
 	return str(_input_context.call("get_context"))
+
+
+func _get_gameplay_input_status() -> Dictionary:
+	if (
+		not is_instance_valid(_gameplay_input)
+		or not _gameplay_input.has_method("get_binding_status")
+	):
+		return {}
+	var status: Variant = _gameplay_input.call("get_binding_status")
+	return status.duplicate(true) if status is Dictionary else {}
+
+
+func _property_truthy(target: Object, property_name: StringName) -> bool:
+	if not _has_property(target, property_name):
+		return false
+	return true if target.get(property_name) else false
+
+
+func _has_property(target: Object, property_name: StringName) -> bool:
+	for property: Dictionary in target.get_property_list():
+		if StringName(property.get("name", "")) == property_name:
+			return true
+	return false
 
 
 func _emit_health_if_changed(health: Dictionary) -> void:

@@ -1,6 +1,7 @@
 extends SceneTree
 
 const InputContextScript = preload("res://src/input/input_context_service.gd")
+const GameplayInputScript = preload("res://src/input/gameplay_input_service.gd")
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const SurvivalScript = preload("res://src/survival/survival_service.gd")
@@ -27,6 +28,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _test_input_context_ownership()
+	await _test_raw_keyboard_fallback()
 	await _test_inventory_selection_and_equip()
 	await _test_selected_food_consumption()
 	await _test_game_ui_state_machine()
@@ -38,6 +40,35 @@ func _run() -> void:
 			push_error("QA INPUT INTERACTION FAILURE: %s" % failure)
 		print("QA INPUT INTERACTION FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 		quit(1)
+
+
+func _test_raw_keyboard_fallback() -> void:
+	var service = GameplayInputScript.new()
+	root.add_child(service)
+	await process_frame
+	service.set_active(true)
+	var press := InputEventKey.new()
+	press.keycode = KEY_W
+	press.physical_keycode = KEY_W
+	press.pressed = true
+	root.push_input(press)
+	await process_frame
+	_check(
+		service.get_movement_vector().y < -0.5,
+		"raw W input drives movement even when action state needs a fallback",
+	)
+	var release := InputEventKey.new()
+	release.keycode = KEY_W
+	release.physical_keycode = KEY_W
+	release.pressed = false
+	root.push_input(release)
+	await process_frame
+	_check(
+		service.get_movement_vector().is_zero_approx(),
+		"raw W release clears fallback movement without leaving a stuck key",
+	)
+	service.queue_free()
+	await process_frame
 
 
 func _test_input_context_ownership() -> void:

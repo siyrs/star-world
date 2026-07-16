@@ -13,6 +13,7 @@ const DiagnosticsCoordinatorScript = preload(
 	"res://src/diagnostics/runtime_diagnostics_coordinator.gd"
 )
 const ReleaseSmokeRunnerScript = preload("res://src/diagnostics/release_smoke_runner.gd")
+const PLAYER_COLLISION_LOAD_MARGIN := 0.45
 
 var world: Node3D
 var player: CharacterBody3D
@@ -84,7 +85,17 @@ func start_world(
 	var preferred_spawn := fallback_spawn
 	if player_state.has("position"):
 		preferred_spawn = _array_to_vector3(player_state.get("position", []), fallback_spawn)
-	player.global_position = _spawn_resolver.resolve(world, preferred_spawn, fallback_spawn)
+	var resolved_spawn: Vector3 = _spawn_resolver.resolve(
+		world, preferred_spawn, fallback_spawn
+	)
+	var initially_resolved_spawn := resolved_spawn
+	_load_player_collision_chunks(resolved_spawn)
+	resolved_spawn = _spawn_resolver.resolve(world, resolved_spawn, fallback_spawn)
+	print(
+		"PLAYER SPAWN RESOLVE | preferred=%s first=%s final=%s fallback=%s"
+		% [preferred_spawn, initially_resolved_spawn, resolved_spawn, fallback_spawn]
+	)
+	player.global_position = resolved_spawn
 	if player.has_method("reset_motion"):
 		player.call("reset_motion")
 	if player.has_method("restore_orientation"):
@@ -230,3 +241,26 @@ func _array_to_vector3(value: Variant, fallback: Vector3) -> Vector3:
 		if is_finite(result.x) and is_finite(result.y) and is_finite(result.z):
 			return result
 	return fallback
+
+
+func _load_player_collision_chunks(position: Vector3) -> void:
+	if (
+		world == null
+		or not world.has_method("world_to_block")
+		or not world.has_method("block_to_chunk")
+		or not world.has_method("force_load_chunk")
+	):
+		return
+	var minimum_block: Vector3i = world.call(
+		"world_to_block",
+		position + Vector3(-PLAYER_COLLISION_LOAD_MARGIN, 0.0, -PLAYER_COLLISION_LOAD_MARGIN)
+	)
+	var maximum_block: Vector3i = world.call(
+		"world_to_block",
+		position + Vector3(PLAYER_COLLISION_LOAD_MARGIN, 0.0, PLAYER_COLLISION_LOAD_MARGIN)
+	)
+	var minimum_chunk: Vector2i = world.call("block_to_chunk", minimum_block)
+	var maximum_chunk: Vector2i = world.call("block_to_chunk", maximum_block)
+	for chunk_x in range(minimum_chunk.x, maximum_chunk.x + 1):
+		for chunk_z in range(minimum_chunk.y, maximum_chunk.y + 1):
+			world.call("force_load_chunk", Vector2i(chunk_x, chunk_z))

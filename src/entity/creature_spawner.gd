@@ -10,8 +10,8 @@ const PopulationPolicyScript = preload("res://src/entity/creature_population_pol
 @export var spawn_interval: float = 8.0
 @export var maintenance_interval: float = 2.0
 @export var max_animals: int = 12
-@export var max_zombies: int = 6
-@export var min_spawn_radius: float = 12.0
+@export var max_zombies: int = 2
+@export var min_spawn_radius: float = 28.0
 @export var max_spawn_radius: float = 28.0
 @export var despawn_radius: float = 56.0
 

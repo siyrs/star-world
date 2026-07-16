@@ -163,6 +163,10 @@ func _on_gameplay_action_reported(action: StringName, payload: Dictionary) -> vo
 			_publish_block_action("已采集", payload, "success")
 		"place":
 			_publish_block_action("已放置", payload, "success")
+		"place_failed":
+			var reason := str(payload.get("reason", "placement_unavailable"))
+			var message := str(payload.get("message", "当前无法放置，请重新瞄准后再试"))
+			publish_message(message, "warning", 3.2, "place_failed:%s" % reason)
 		"eat":
 			var item_name := str(payload.get("display_name", "食物"))
 			publish_message("已食用 %s" % item_name, "success", 1.8, "eat:%s" % item_name)

@@ -104,26 +104,38 @@ func _run() -> void:
 
 	var anchor := mining_target
 	world.call("set_block", anchor, "stone")
-	var expected_placement := anchor + Vector3i(0, 0, 1)
-	var incorrect_above := anchor + Vector3i.UP
+	var camera_cell: Vector3i = world.call("world_to_block", camera.global_position)
+	var inside_target := camera_cell + Vector3i(0, 0, -1)
+	var expected_placement := camera_cell + Vector3i(0, 0, -2)
+	var incorrect_above := inside_target + Vector3i.UP
+	world.call("set_block", camera_cell, "leaves")
+	world.call("set_block", inside_target, "leaves")
 	world.call("set_block", expected_placement, "air")
 	world.call("set_block", incorrect_above, "air")
 	hub.inventory.select_slot(0)
-	await _aim_at(player, world.call("block_to_world", anchor))
+	camera.look_at(camera.global_position + Vector3(0.0, 0.0, -3.0), Vector3.UP)
+	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	if ray != null:
+		ray.force_raycast_update()
+	player.call("_update_interaction_focus", true)
+	await process_frame
 	var focus: Dictionary = player.call("get_interaction_focus")
-	_check(_focus_position(player) == anchor, "placement focus identifies the aimed stone voxel")
+	_check(
+		_array_to_vector3i(focus.get("hit_position", [])) == inside_target,
+		"placement focus survives when the camera starts inside a tree canopy",
+	)
 	_check(
 		_array_to_vector3i(focus.get("placement_position", [])) == expected_placement,
-		"focus preview resolves the exact adjacent side voxel",
+		"inside-canopy focus resolves the first free exit voxel",
 	)
 	await _right_click_center()
 	_check(
 		str(world.call("get_block", expected_placement)) == "planks",
-		"right click places the block on the face under the center crosshair",
+		"right click places a block even when the camera started inside foliage",
 	)
 	_check(
 		str(world.call("get_block", incorrect_above)) == "air",
-		"side-face placement never drifts one voxel upward",
+		"close-up placement never drifts one voxel upward",
 	)
 	_check(_current_step(experience) == "inventory", "real block placement advances the tutorial")
 

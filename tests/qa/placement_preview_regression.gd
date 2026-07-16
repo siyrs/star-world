@@ -83,6 +83,15 @@ func _test_prompt_feedback() -> void:
 	}
 	focus["placement_preview"] = policy.evaluate(focus, "planks")
 	var resolver = PromptResolverScript.new()
+	var no_focus_prompt: Dictionary = resolver.resolve({}, inventory, null)
+	_check(
+		"绿色预览格" in str(no_focus_prompt.get("secondary", "")),
+		"no-focus building prompt makes right click conditional on a visible preview",
+	)
+	_check(
+		str(no_focus_prompt.get("tone", "")) == "warning",
+		"no-focus building prompt is presented as guidance instead of a valid action",
+	)
 	var prompt: Dictionary = resolver.resolve(focus, inventory, null)
 	_check("放置" in str(prompt.get("secondary", "")), "valid preview keeps the right-click placement action")
 	_check("绿色预览格" in str(prompt.get("subtitle", "")), "valid preview is explained with text, not color alone")
@@ -100,6 +109,22 @@ func _test_player_preview_scene() -> void:
 	var player = PlayerScene.instantiate()
 	root.add_child(player)
 	await process_frame
+	var placement_failure: Dictionary = {}
+	player.connect(
+		"gameplay_action_reported",
+		func(action: StringName, payload: Dictionary) -> void:
+			if action == &"place_failed":
+				placement_failure.merge(payload, true)
+	)
+	_check(
+		not bool(player.call("_place_block", "planks")),
+		"invalid placement attempts are rejected",
+	)
+	_check(
+		not placement_failure.is_empty()
+		and "绿色预览格" in str(placement_failure.get("message", "")),
+		"invalid right click reports an actionable placement failure",
+	)
 	var preview: Node = player.call("get_interaction_preview")
 	_check(preview != null, "production player scene mounts the world interaction preview")
 	if preview == null:

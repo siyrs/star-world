@@ -12,8 +12,8 @@ const SERIAL_VERSION := 1
 
 @export var max_health: float = 20.0
 @export var max_hunger: float = 20.0
-@export var passive_hunger_interval: float = 12.0
-@export var starvation_damage_interval: float = 4.0
+@export var passive_hunger_interval: float = 90.0
+@export var starvation_damage_interval: float = 8.0
 @export var natural_regeneration_interval: float = 4.0
 
 var health: float = 20.0
@@ -173,6 +173,7 @@ func respawn() -> void:
 	saturation = 2.0
 	_passive_timer = 0.0
 	_starvation_timer = 0.0
+	_regeneration_timer = 0.0
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, max_hunger)
 	player_respawned.emit()
@@ -195,6 +196,9 @@ func deserialize(data: Dictionary) -> bool:
 	saturation = clampf(float(data.get("saturation", 5.0)), 0.0, max_hunger)
 	alive = bool(data.get("alive", health > 0.0)) and health > 0.0
 	hunger_multiplier = maxf(0.1, float(data.get("hunger_multiplier", 1.0)))
+	_passive_timer = 0.0
+	_starvation_timer = 0.0
+	_regeneration_timer = 0.0
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, max_hunger)
 	return true

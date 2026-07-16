@@ -363,7 +363,7 @@ func _test_survival_entities_and_audio() -> void:
 	survival.passive_hunger_interval = 0.1
 	survival._process(0.2)
 	_expect(survival.hunger == 0.0, "AC-005 passive hunger changes survival state")
-	var health_before := survival.health
+	var health_before: float = survival.health
 	survival.starvation_damage_interval = 0.1
 	survival._process(0.2)
 	_expect(survival.health < health_before, "AC-005 starvation damages player")
@@ -408,7 +408,7 @@ func _test_survival_entities_and_audio() -> void:
 	_expect(chase_direction.z > 0.5, "AC-005 zombie AI chases its target")
 	target_player.global_position = Vector3(0.0, 0.0, 1.0)
 	zombie._choose_direction()
-	_expect(target_player.health == 17.0, "AC-005 zombie AI attacks and damages player target")
+	_expect(target_player.health == 19.0, "AC-005 zombie AI attacks with survivable damage")
 	zombie.queue_free()
 	target_player.queue_free()
 	await process_frame

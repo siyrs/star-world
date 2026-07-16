@@ -146,8 +146,9 @@ func _test_prompt_policy() -> void:
 	)
 	var placement_prompt: Dictionary = resolver.resolve({}, inventory, interaction)
 	_check(
-		"放置" in str(placement_prompt.get("secondary", "")),
-		"held building blocks explain placement when no target is focused",
+		"绿色预览格" in str(placement_prompt.get("secondary", ""))
+		and str(placement_prompt.get("tone", "")) == "warning",
+		"held building blocks require a visible placement preview when no target is focused",
 	)
 	inventory.select_slot(1)
 	var food_prompt: Dictionary = resolver.resolve({}, inventory, interaction)
@@ -241,6 +242,21 @@ func _test_integrated_player_experience() -> void:
 	)
 	settings["show_interaction_prompts"] = true
 	hub.main_menu.settings_changed.emit(settings)
+	player.emit_signal(
+		"gameplay_action_reported",
+		&"place_failed",
+		{
+			"reason": "player_overlap",
+			"message": "你离得太近了；后退一步，看到绿色预览格后再按右键",
+		}
+	)
+	await process_frame
+	_check(
+		"后退一步" in str(
+			experience.call("get_feedback").call("get_active_toast").get("text", "")
+		),
+		"failed placement gives immediate recovery guidance instead of silently ignoring right click",
+	)
 	player.emit_signal("gameplay_action_reported", &"mine", {"block_id": "stone", "display_name": "石头"})
 	player.emit_signal("gameplay_action_reported", &"place", {"block_id": "planks", "display_name": "木板"})
 	game_ui.call("open_inventory")

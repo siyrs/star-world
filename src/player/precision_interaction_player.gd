@@ -9,6 +9,10 @@ const PlacementPreviewPolicyScript = preload(
 
 var _precision_target_resolver = VoxelTargetResolverScript.new()
 var _placement_preview_policy = PlacementPreviewPolicyScript.new()
+var _last_placement_evaluation: Dictionary = {
+	"valid": false,
+	"reason": "no_focus",
+}
 
 @onready var interaction_preview: Node = get_node_or_null("InteractionPreview")
 
@@ -90,11 +94,40 @@ func _try_interact_target() -> bool:
 	return interacted
 
 
+func _place_block(block_id: String) -> bool:
+	if world == null:
+		_report_placement_failure("placement_unavailable", block_id)
+		return false
+	if inventory != null and _get_selected_item_id().is_empty():
+		_report_placement_failure("no_block_selected", block_id)
+		return false
+	var target := _resolve_placement_target()
+	if target.is_empty():
+		_report_placement_failure(
+			str(_last_placement_evaluation.get("reason", "no_focus")),
+			block_id
+		)
+		return false
+	var placed := _commit_block_placement(block_id, target)
+	if not placed:
+		_report_placement_failure("placement_unavailable", block_id)
+	return placed
+
+
 func _resolve_placement_target() -> Dictionary:
 	if world == null:
+		_last_placement_evaluation = {
+			"valid": false,
+			"reason": "placement_unavailable",
+		}
 		return {}
 	var target: Dictionary = _precision_target_resolver.resolve(interaction_ray, world)
 	if str(target.get("type", "")) != "block":
+		_last_placement_evaluation = _placement_preview_policy.evaluate(
+			{},
+			get_selected_block_id(),
+			_player_bounds()
+		)
 		return {}
 	var hit_position: Vector3i = target.get("hit_position", Vector3i.ZERO)
 	var placement_position: Vector3i = target.get("placement_position", Vector3i.ZERO)
@@ -112,6 +145,7 @@ func _resolve_placement_target() -> Dictionary:
 		get_selected_block_id(),
 		_player_bounds()
 	)
+	_last_placement_evaluation = evaluation.duplicate(true)
 	if not bool(evaluation.get("valid", false)):
 		return {}
 	var face_normal: Vector3 = target.get("collision_normal", Vector3.ZERO)
@@ -121,6 +155,36 @@ func _resolve_placement_target() -> Dictionary:
 		"hit_position":hit_position,
 		"face_normal":face_normal,
 	}
+
+
+func _report_placement_failure(reason: String, block_id: String) -> void:
+	var occupied_id := str(_last_placement_evaluation.get("occupied_block_id", ""))
+	var occupied_name := ""
+	if not occupied_id.is_empty() and occupied_id != PrecisionBlockRegistry.AIR:
+		occupied_name = str(
+			PrecisionBlockRegistry.get_definition(occupied_id).get("name", occupied_id)
+		)
+	var detail := PlacementPreviewPolicyScript.reason_text(reason, occupied_name)
+	var message := ""
+	match reason:
+		"no_focus":
+			message = "准星没有对准方块表面；先退开一点，看到绿色预览格后再按右键"
+		"player_overlap":
+			message = "你离得太近了；后退一步，看到绿色预览格后再按右键"
+		"occupied":
+			message = "%s；请换一个绿色预览格位置" % detail
+		"no_block_selected":
+			message = "先用数字键选中快捷栏里的方块"
+		_:
+			message = "%s；重新瞄准，看到绿色预览格后再按右键" % detail
+	_report_player_action(
+		&"place_failed",
+		{
+			"block_id": block_id,
+			"reason": reason,
+			"message": message,
+		}
+	)
 
 
 func _player_bounds() -> AABB:

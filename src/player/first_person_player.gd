@@ -26,6 +26,9 @@ const FALLBACK_HOTBAR := [
 ]
 const BASE_ATTACK_DAMAGE := 1.0
 const FOCUS_POLL_INTERVAL := 0.1
+const VOXEL_GROUND_CLEARANCE := 0.02
+const VOXEL_GROUND_TOLERANCE_ABOVE := 0.18
+const VOXEL_GROUND_RECOVERY_DEPTH := 0.4
 
 @export var walk_speed := 5.4
 @export var sprint_speed := 8.0
@@ -61,6 +64,7 @@ func _ready() -> void:
 	_configure_movement_controller()
 	interaction_ray.target_position = Vector3(0.0, 0.0, -interaction_distance)
 	interaction_ray.enabled = true
+	interaction_ray.hit_from_inside = true
 	set_process_unhandled_input(input_enabled)
 	_emit_hotbar_selection()
 
@@ -140,17 +144,58 @@ func reset_motion() -> void:
 func _physics_process(delta: float) -> void:
 	if not input_enabled:
 		return
+	var in_fluid := _is_in_fluid()
+	var voxel_ground: Variant = null if in_fluid else _get_nearby_voxel_ground()
+	var voxel_grounded := not in_fluid and voxel_ground is Vector3 and velocity.y <= 0.0
+	if voxel_grounded:
+		global_position.y = voxel_ground.y + VOXEL_GROUND_CLEARANCE
+		velocity.y = 0.0
 	var movement_vector := _get_movement_vector()
 	if movement_vector.length_squared() > 0.04:
 		_report_action_once(&"move")
-	var in_fluid := _is_in_fluid()
+	var jump_just_pressed := _is_jump_just_pressed()
+	var jump_requested := _is_jump_pressed() if in_fluid else jump_just_pressed
 	var movement_result: Dictionary = _movement_controller.step(
-		self, delta, movement_vector, _is_jump_just_pressed(), _is_sprint_pressed(), in_fluid
+		self,
+		delta,
+		movement_vector,
+		jump_requested,
+		_is_sprint_pressed(),
+		in_fluid,
+		voxel_grounded
 	)
-	if bool(movement_result.get("jumped", false)):
+	if bool(movement_result.get("jumped", false)) and (not in_fluid or jump_just_pressed):
 		_report_player_action(&"jump")
+	elif not in_fluid:
+		_apply_voxel_ground_recovery()
 	if global_position.y < -12.0:
 		respawn()
+
+
+func _get_nearby_voxel_ground() -> Variant:
+	if world == null or not world.has_method("resolve_ground_position"):
+		return null
+	var resolved: Variant = world.call("resolve_ground_position", global_position)
+	if resolved is not Vector3:
+		return null
+	var ground: Vector3 = resolved
+	var vertical_delta := global_position.y - ground.y
+	if (
+		vertical_delta < -VOXEL_GROUND_RECOVERY_DEPTH
+		or vertical_delta > VOXEL_GROUND_TOLERANCE_ABOVE
+	):
+		return null
+	return ground
+
+
+func _apply_voxel_ground_recovery() -> void:
+	if velocity.y > 0.0:
+		return
+	var voxel_ground: Variant = _get_nearby_voxel_ground()
+	if voxel_ground is not Vector3:
+		return
+	global_position.y = voxel_ground.y + VOXEL_GROUND_CLEARANCE
+	velocity.y = 0.0
 
 
 func _process(delta: float) -> void:
@@ -453,8 +498,13 @@ func _consume_selected_food() -> bool:
 func _is_in_fluid() -> bool:
 	if world == null:
 		return false
-	var block_position: Vector3i = world.call("world_to_block", global_position + Vector3.UP * 0.8)
-	return str(world.call("get_block", block_position)) in ["water", "lava"]
+	for sample_height in [0.15, 0.8, 1.55]:
+		var block_position: Vector3i = world.call(
+			"world_to_block", global_position + Vector3.UP * sample_height
+		)
+		if str(world.call("get_block", block_position)) in ["water", "lava"]:
+			return true
+	return false
 
 
 func _get_movement_vector() -> Vector2:
@@ -472,6 +522,12 @@ func _is_jump_just_pressed() -> bool:
 	if input_service != null and input_service.has_method("is_jump_just_pressed"):
 		return bool(input_service.call("is_jump_just_pressed"))
 	return Input.is_action_just_pressed(InputActionsScript.JUMP)
+
+
+func _is_jump_pressed() -> bool:
+	if input_service != null and input_service.has_method("is_jump_pressed"):
+		return bool(input_service.call("is_jump_pressed"))
+	return Input.is_action_pressed(InputActionsScript.JUMP)
 
 
 func _is_sprint_pressed() -> bool:
@@ -503,6 +559,10 @@ func _configure_movement_controller() -> void:
 		"jump_velocity": jump_velocity,
 		"ground_acceleration": acceleration,
 		"air_acceleration": air_acceleration,
+		"swim_speed": 3.4,
+		"swim_horizontal_factor": 0.62,
+		"swim_acceleration": 12.0,
+		"swim_sink_speed": 0.35,
 	}
 	_movement_controller.configure(config)
 

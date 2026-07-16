@@ -100,6 +100,36 @@ func _test_voxel_target_contract() -> void:
 		and negative.get("placement_position", Vector3i.ZERO) == Vector3i(-2, 8, -2),
 		"negative world coordinates keep the same hit and placement contract",
 	)
+	world.set_test_block(Vector3i(0, 10, 0), "leaves")
+	world.set_test_block(Vector3i(0, 10, -1), "leaves")
+	var inside_canopy: Dictionary = resolver.resolve_grid_from_sample(
+		Vector3(0.5, 10.5, 0.5),
+		Vector3(0.0, 0.0, -1.0),
+		6.0,
+		Callable(world, "world_to_block"),
+		Callable(world, "get_block")
+	)
+	_check(
+		inside_canopy.get("hit_position", Vector3i.ZERO) == Vector3i(0, 10, -1),
+		"voxel fallback keeps targeting when the camera starts inside a tree canopy",
+	)
+	_check(
+		inside_canopy.get("placement_position", Vector3i.ZERO) == Vector3i(0, 10, -2),
+		"inside-canopy targeting resolves the first free exit cell for placement",
+	)
+	world.set_test_block(Vector3i(3, 10, -3), "stone")
+	var physics_miss_fallback: Dictionary = resolver.resolve_grid_from_sample(
+		Vector3(3.5, 10.5, 0.5),
+		Vector3(0.0, 0.0, -1.0),
+		6.0,
+		Callable(world, "world_to_block"),
+		Callable(world, "get_block")
+	)
+	_check(
+		physics_miss_fallback.get("hit_position", Vector3i.ZERO) == Vector3i(3, 10, -3)
+		and physics_miss_fallback.get("placement_position", Vector3i.ZERO) == Vector3i(3, 10, -2),
+		"voxel fallback finds a visible solid block when the physics ray misses",
+	)
 
 
 func _test_tutorial_aliases_and_copy() -> void:
@@ -124,6 +154,15 @@ func _test_tutorial_aliases_and_copy() -> void:
 	_check(
 		str(onboarding.get_state().get("step", {}).get("id", "")) == "place",
 		"a successfully broken block completes mining even without a qualified drop",
+	)
+	var place_step: Dictionary = onboarding.get_state().get("step", {})
+	_check(
+		str(place_step.get("description", "")).contains("绿色预览格"),
+		"placement tutorial requires visible confirmation before right click",
+	)
+	_check(
+		str(place_step.get("description", "")).contains("退离墙面"),
+		"placement tutorial explains how to recover when standing too close",
 	)
 	onboarding.report_action(&"block_placed")
 	onboarding.report_action(&"open_inventory")
@@ -155,6 +194,8 @@ func _test_crosshair_and_production_player() -> void:
 		str(player.get_script().resource_path).ends_with("precision_interaction_player.gd"),
 		"production player selects the shared precision interaction contract",
 	)
+	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	_check(ray != null and ray.hit_from_inside, "production targeting supports close-up inside hits")
 	player.queue_free()
 	host.queue_free()
 	await process_frame

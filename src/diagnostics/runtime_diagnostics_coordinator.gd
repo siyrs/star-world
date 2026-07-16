@@ -36,7 +36,9 @@ func _ready() -> void:
 		creature_spawner = _service_hub.get("creature_spawner")
 		gameplay_input = _service_hub.get("gameplay_input")
 	streaming_controller.call("setup", telemetry)
-	telemetry.call("setup", input_context, creature_spawner, streaming_controller)
+	telemetry.call(
+		"setup", input_context, creature_spawner, streaming_controller, gameplay_input
+	)
 	overlay.call("setup", telemetry, gameplay_input)
 
 

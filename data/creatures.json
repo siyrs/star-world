@@ -4,6 +4,6 @@
     "chicken":{"name":"鸡","max_health":4,"speed":2.2,"damage":0,"drops":{"raw_chicken":[1,2],"feather":[0,2]}},
     "cow":{"name":"牛","max_health":10,"speed":1.7,"damage":0,"drops":{"raw_beef":[1,3],"leather":[0,2]}},
     "pig":{"name":"猪","max_health":8,"speed":1.9,"damage":0,"drops":{"raw_pork":[1,3]}},
-    "zombie":{"name":"僵尸","max_health":20,"speed":2.1,"damage":3,"drops":{"rotten_flesh":[0,2]}}
+    "zombie":{"name":"僵尸","max_health":20,"speed":2.1,"damage":1,"drops":{"rotten_flesh":[0,2]}}
   }
 }

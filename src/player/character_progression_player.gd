@@ -3,17 +3,45 @@ extends "res://src/player/harvest_enabled_player.gd"
 
 signal combat_result_reported(result: Dictionary)
 
+const WORLD_ENTRY_DAMAGE_GRACE_SECONDS := 90.0
+const RESPAWN_DAMAGE_GRACE_SECONDS := 30.0
+const REPEATED_HOSTILE_DAMAGE_COOLDOWN := 4.5
+
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
 var _base_walk_speed := 0.0
 var _base_sprint_speed := 0.0
+var _hostile_damage_grace_remaining := 0.0
+var _hostile_damage_cooldown_remaining := 0.0
 
 
 func _ready() -> void:
 	_base_walk_speed = walk_speed
 	_base_sprint_speed = sprint_speed
 	super._ready()
+
+
+func _process(delta: float) -> void:
+	super._process(delta)
+	_hostile_damage_grace_remaining = maxf(
+		0.0, _hostile_damage_grace_remaining - maxf(0.0, delta)
+	)
+	_hostile_damage_cooldown_remaining = maxf(
+		0.0, _hostile_damage_cooldown_remaining - maxf(0.0, delta)
+	)
+
+
+func bind_world(p_world: Node) -> void:
+	super.bind_world(p_world)
+	_hostile_damage_grace_remaining = WORLD_ENTRY_DAMAGE_GRACE_SECONDS
+	_hostile_damage_cooldown_remaining = 0.0
+
+
+func respawn() -> void:
+	super.respawn()
+	_hostile_damage_grace_remaining = RESPAWN_DAMAGE_GRACE_SECONDS
+	_hostile_damage_cooldown_remaining = 0.0
 
 
 func setup_gameplay_services(services: Dictionary) -> void:
@@ -61,8 +89,19 @@ func get_respawn_position() -> Vector3:
 func take_damage(amount: float, source: String = "world") -> void:
 	if amount <= 0.0:
 		return
+	var hostile_damage := source == "zombie"
+	if (
+		hostile_damage
+		and (
+			_hostile_damage_grace_remaining > 0.0
+			or _hostile_damage_cooldown_remaining > 0.0
+		)
+	):
+		return
 	if combat_service == null or not combat_service.has_method("resolve_incoming_damage"):
 		super.take_damage(amount, source)
+		if hostile_damage:
+			_hostile_damage_cooldown_remaining = REPEATED_HOSTILE_DAMAGE_COOLDOWN
 		return
 	var result: Dictionary = combat_service.call("resolve_incoming_damage", amount, source, true)
 	var final_damage := maxf(0.0, float(result.get("final_damage", amount)))
@@ -71,6 +110,8 @@ func take_damage(amount: float, source: String = "world") -> void:
 	damage_requested.emit(final_damage, source)
 	if survival != null and survival.has_method("take_damage"):
 		survival.call("take_damage", final_damage, source)
+	if hostile_damage:
+		_hostile_damage_cooldown_remaining = REPEATED_HOSTILE_DAMAGE_COOLDOWN
 	combat_result_reported.emit(result.duplicate(true))
 
 
