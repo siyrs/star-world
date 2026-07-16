@@ -6,6 +6,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 const OUTPUT_PATH := "user://non-cube-block-geometry-desktop.png"
 const CLEANUP_FRAMES := 6
 const TEST_FLOOR_Y := 48
+const PHYSICS_STEP := 1.0 / 60.0
 
 var checks := 0
 var failures: Array[String] = []
@@ -109,6 +110,7 @@ func _run() -> void:
 	_check(not slab_hit.is_empty(), "production physics ray hits the placed slab")
 	if not slab_hit.is_empty():
 		var slab_y := float((slab_hit.get("position", Vector3.ZERO) as Vector3).y)
+		print("QA NON CUBE SLAB COLLISION | expected=%.3f | actual=%.3f | collider=%s" % [float(slab_position.y)+0.5, slab_y, slab_hit.get("collider")])
 		_check(absf(slab_y - (float(slab_position.y) + 0.5)) < 0.08, "slab collision surface is half a block high")
 	var stair_front_hit := _raycast_down(game, Vector3(stair_position) + Vector3(0.5, 2.0, 0.18))
 	var stair_back_hit := _raycast_down(game, Vector3(stair_position) + Vector3(0.5, 2.0, 0.82))
@@ -133,14 +135,21 @@ func _run() -> void:
 	)
 	player.rotation = Vector3(0.0, PI, 0.0)
 	player.get_view_camera().rotation = Vector3.ZERO
+	player.call("set_input_enabled", true)
 	player.call("reset_motion")
 	for _frame in 4:
+		player.call("_physics_process", PHYSICS_STEP)
 		await physics_frame
 		await process_frame
+	var input_service: Node = player.get("input_service")
+	Input.action_press("move_forward", 1.0)
+	var movement_vector: Vector2 = input_service.call("get_movement_vector") if input_service != null else Vector2.ZERO
+	_check(Input.is_action_pressed("move_forward"), "move_forward enters the production action state")
+	_check(movement_vector.y < -0.5, "production input service resolves forward movement")
 	var start_position := player.global_position
 	var maximum_y := player.global_position.y
-	Input.action_press("move_forward")
 	for _frame in 26:
+		player.call("_physics_process", PHYSICS_STEP)
 		await physics_frame
 		await process_frame
 		maximum_y = maxf(maximum_y, player.global_position.y)
@@ -148,7 +157,7 @@ func _run() -> void:
 	await process_frame
 	_check(player.global_position.z > start_position.z + 0.45, "production forward movement traverses the stair direction")
 	_check(maximum_y > start_position.y + 0.20, "production character rises along the stair ramp")
-	print("QA NON CUBE TRAVERSE | start=%s | end=%s | max_y=%.3f" % [start_position, player.global_position, maximum_y])
+	print("QA NON CUBE TRAVERSE | input=%s | start=%s | end=%s | max_y=%.3f" % [movement_vector, start_position, player.global_position, maximum_y])
 
 	player.global_position = Vector3(player_floor) + Vector3(0.5, 1.05, 0.5)
 	player.rotation = Vector3.ZERO
@@ -178,10 +187,7 @@ func _prepare_column(world: Node, floor_position: Vector3i) -> void:
 
 
 func _focus_hits(focus: Dictionary, expected: Vector3i) -> bool:
-	return (
-		str(focus.get("type", "")) == "block"
-		and _vector3i_from(focus.get("hit_position", [])) == expected
-	)
+	return str(focus.get("type", "")) == "block" and _vector3i_from(focus.get("hit_position", [])) == expected
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
