@@ -2,6 +2,7 @@ class_name PrecisionInteractionPlayer
 extends "res://src/player/husbandry_player.gd"
 
 const PrecisionBlockRegistry = preload("res://src/block/block_registry.gd")
+const OrientationPolicyScript = preload("res://src/block/block_orientation_policy.gd")
 const VoxelTargetResolverScript = preload("res://src/interaction/voxel_target_resolver.gd")
 const PlacementPreviewPolicyScript = preload(
 	"res://src/interaction/placement_preview_policy.gd"
@@ -39,12 +40,16 @@ func get_interaction_preview() -> Node:
 	return interaction_preview
 
 
+func get_resolved_placement_block_id() -> String:
+	return _resolve_directional_block_id(get_selected_block_id())
+
+
 func _update_interaction_focus(force: bool = false) -> void:
 	var next_focus: Dictionary = _focus_resolver.resolve(interaction_ray, world)
 	if str(next_focus.get("type", "")) == "block":
 		next_focus["placement_preview"] = _placement_preview_policy.evaluate(
 			next_focus,
-			get_selected_block_id(),
+			get_resolved_placement_block_id(),
 			_player_bounds()
 		)
 	if not force and next_focus == _interaction_focus:
@@ -95,26 +100,28 @@ func _try_interact_target() -> bool:
 
 
 func _place_block(block_id: String) -> bool:
+	var resolved_block_id := _resolve_directional_block_id(block_id)
 	if world == null:
-		_report_placement_failure("placement_unavailable", block_id)
+		_report_placement_failure("placement_unavailable", resolved_block_id)
 		return false
 	if inventory != null and _get_selected_item_id().is_empty():
-		_report_placement_failure("no_block_selected", block_id)
+		_report_placement_failure("no_block_selected", resolved_block_id)
 		return false
 	var target := _resolve_placement_target()
 	if target.is_empty():
 		_report_placement_failure(
 			str(_last_placement_evaluation.get("reason", "no_focus")),
-			block_id
+			resolved_block_id
 		)
 		return false
-	var placed := _commit_block_placement(block_id, target)
+	var placed := _commit_block_placement(resolved_block_id, target)
 	if not placed:
-		_report_placement_failure("placement_unavailable", block_id)
+		_report_placement_failure("placement_unavailable", resolved_block_id)
 	return placed
 
 
 func _resolve_placement_target() -> Dictionary:
+	var selected_block_id := get_resolved_placement_block_id()
 	if world == null:
 		_last_placement_evaluation = {
 			"valid": false,
@@ -125,7 +132,7 @@ func _resolve_placement_target() -> Dictionary:
 	if str(target.get("type", "")) != "block":
 		_last_placement_evaluation = _placement_preview_policy.evaluate(
 			{},
-			get_selected_block_id(),
+			selected_block_id,
 			_player_bounds()
 		)
 		return {}
@@ -142,7 +149,7 @@ func _resolve_placement_target() -> Dictionary:
 	}
 	var evaluation: Dictionary = _placement_preview_policy.evaluate(
 		preview_focus,
-		get_selected_block_id(),
+		selected_block_id,
 		_player_bounds()
 	)
 	_last_placement_evaluation = evaluation.duplicate(true)
@@ -185,6 +192,12 @@ func _report_placement_failure(reason: String, block_id: String) -> void:
 			"message": message,
 		}
 	)
+
+
+func _resolve_directional_block_id(block_id: String) -> String:
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	return OrientationPolicyScript.resolve_for_forward(block_id, forward)
 
 
 func _player_bounds() -> AABB:
