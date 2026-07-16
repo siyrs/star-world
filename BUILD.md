@@ -10,7 +10,7 @@
 ## 编辑器运行
 
 1. 启动 Godot Project Manager。
-2. 选择 **Import**，指向本目录的 `project.godot`。
+2. 选择 **Import**，指向本目录下的 `project.godot`。
 3. 等待首次资源扫描完成。
 4. 按 `F6/F5` 运行主场景。
 
@@ -30,25 +30,109 @@ powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\g
   -Godot 'C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe'
 ```
 
-成功标准：命令退出码为 `0`，输出包含 `PASS: data registry + Godot runtime checks`，且没有 `SCRIPT ERROR`、`Parse Error` 或泄漏警告。测试套件覆盖真实角色移动、窗口与 UI 输入生命周期、物理层隔离、掉落物拾取、真实暂停、可靠存档恢复、渐进区块构建、远距离生物回收、快捷栏装备和选中物品使用。
+成功标准：
 
-只运行移动与输入生命周期专项测试：
+- 命令退出码为 `0`；
+- 输出包含 `PASS: data registry + Godot runtime checks`；
+- 没有 `SCRIPT ERROR` 或 `Parse Error`；
+- 没有 ObjectDB 或资源泄漏警告。
+
+完整套件覆盖移动、输入生命周期、物理层、方块交互、普通合成、熔炉机器、容器/机器持久化、暂停、存档恢复、玩家体验、紧凑布局、世界视觉、渐进区块、自适应预算、程序化音频释放、三轮世界生命周期 soak、种群回收、快捷栏和设置。
+
+## 专项测试
+
+移动与输入生命周期：
 
 ```powershell
 godot --headless --path . --script res://tests/qa/movement_lifecycle_regression.gd
 ```
 
-只运行物理交互与掉落物专项测试：
+物理交互与掉落物：
 
 ```powershell
 godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
 ```
 
-只运行稳定性与性能基线专项测试：
+工作台、熔炉与箱子路由：
+
+```powershell
+godot --headless --path . --script res://tests/qa/block_interaction_regression.gd
+```
+
+熔炉燃料、时间、离线恢复和存档：
+
+```powershell
+godot --headless --path . --script res://tests/qa/furnace_machine_regression.gd
+```
+
+玩家引导与上下文提示：
+
+```powershell
+godot --headless --path . --script res://tests/qa/player_experience_regression.gd
+```
+
+最低分辨率 UI：
+
+```powershell
+godot --headless --path . --script res://tests/qa/ui_layout_regression.gd
+```
+
+运行诊断与 F3：
+
+```powershell
+godot --headless --path . --script res://tests/qa/runtime_diagnostics_regression.gd
+```
+
+自适应区块预算：
+
+```powershell
+godot --headless --path . --script res://tests/qa/adaptive_streaming_regression.gd
+```
+
+程序化音频生命周期：
+
+```powershell
+godot --headless --path . --script res://tests/qa/audio_lifecycle_regression.gd
+```
+
+稳定性基线：
 
 ```powershell
 godot --headless --path . --script res://tests/qa/runtime_stability_regression.gd
 ```
+
+重复世界生命周期 soak：
+
+```powershell
+godot --headless --path . --script res://tests/qa/runtime_soak_regression.gd
+```
+
+## 真实桌面验收
+
+普通菜单、鼠标、暂停和画面：
+
+```powershell
+godot --path . --rendering-method gl_compatibility `
+  --script res://tests/qa/desktop_acceptance_regression.gd
+```
+
+熔炉真实鼠标按钮与 `1024×576` 布局：
+
+```powershell
+godot --path . --rendering-method gl_compatibility `
+  --script res://tests/qa/furnace_desktop_acceptance.gd
+```
+
+第二项会用真实指针依次点击：
+
+```text
+背包原料
+→ 背包燃料
+→ 产出槽
+→ 关闭按钮
+```
+
+并验证机器输入上下文、鼠标释放/重新捕获、物品守恒和截图写入。
 
 ## Windows 发行构建
 
@@ -59,31 +143,104 @@ New-Item -ItemType Directory -Force .\build | Out-Null
 godot --headless --path . --export-release "Windows Desktop" .\build\StarWorld.exe
 ```
 
-交付时应保留同目录下的 `.pck` 文件（如果导出配置选择了分离 PCK）。构建后检查：
+交付时应保留同目录下的 `.pck` 文件：
 
 ```powershell
 Get-Item .\build\StarWorld.exe
+Get-Item .\build\StarWorld.pck
 & .\build\StarWorld.exe
+```
+
+## 实际发行包 Smoke
+
+最终门禁不直接运行源码，而是导出并启动真实 EXE：
+
+```powershell
+powershell -ExecutionPolicy Bypass `
+  -File .\tests\release\run_windows_export_smoke.ps1 `
+  -Godot C:\path\to\godot.exe `
+  -OutputDirectory .\build\release-smoke
+```
+
+该命令会：
+
+1. 导出 `StarWorld.exe` 和 `StarWorld.pck`；
+2. 启动实际导出程序；
+3. 创建真实世界并验证网格、碰撞、相机、输入和服务组合；
+4. 跨越多个区块运行至少 180 帧；
+5. 验证区块队列、已加载区块、自适应预算和健康状态有界；
+6. 保存真实截图与 JSON 报告；
+7. 扫描导出和运行日志；
+8. 拒绝脚本错误、解析错误和 ObjectDB/资源泄漏。
+
+输出目录包含：
+
+```text
+StarWorld.exe
+StarWorld.console.exe（存在时）
+StarWorld.pck
+release-smoke.json
+release-smoke.png
+export.stdout.log
+export.stderr.log
+release-smoke.stdout.log
+release-smoke.stderr.log
+release-smoke.driver.log
 ```
 
 ## 快速场景检查
 
-服务和 UI 可独立运行，用于排除世界渲染干扰：
+服务与 UI 可独立运行，用于排除世界渲染干扰：
 
 ```powershell
 godot --path . res://scenes/ui/service_hub.tscn
 ```
 
-该场景实例化主菜单、Game UI 以及 GameplayInput、InputContext、SimulationPause、Inventory、Crafting、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。
+该场景实例化主菜单、Game UI 以及 GameplayInput、InputContext、SimulationPause、Inventory、ContainerStorage、FurnaceService、Crafting、BlockInteraction、PlayerExperience、Save、Survival、DayNight、Audio 和 CreatureSpawner 服务。运行诊断与自适应流式由正式 `Game` 组合根挂载。
+
+## 方块交互验收
+
+进入世界后至少检查：
+
+1. `C` 只能打开随身合成，不能手动切换到工作台或熔炉。
+2. 右键工作台打开随身与工作台配方。
+3. 右键熔炉打开独立机器界面，不打开普通配方列表。
+4. 将粗铁和煤炭投入熔炉，观察燃料余量与烧制进度。
+5. 关闭熔炉后等待，再次打开时进度继续。
+6. 产出槽满时不继续消耗原料和燃料。
+7. 非空熔炉不能拆除；清空三个槽位后可以拆除。
+8. 保存、返回菜单并重新进入后，熔炉内容和进度仍存在。
+9. 右键箱子打开 27 格容器，转移后总数量不变。
+10. 关闭机器或容器后，鼠标重新捕获且 WASD 恢复。
+
+## 性能验收
+
+进入世界后按 `F3`，至少检查：
+
+1. 面板显示 FPS、平均/峰值帧时间和区块队列。
+2. 面板显示当前流式档位、预算和最后调整原因。
+3. 持续压力下预算可以下降。
+4. 帧时间恢复后预算逐步回到均衡档。
+5. F3 面板不阻止视角、左右键、WASD 或 UI 按钮。
+6. 返回菜单后控制器显示未连接，且新世界重新捕获自己的基础预算。
 
 ## 常见问题
 
-- **WASD 无响应**：先运行 `movement_lifecycle_regression.gd`。默认映射会自动修复 W/A/S/D 的物理键位与逻辑键码，并提供方向键后备。
-- **从背包或暂停返回后不能移动**：确认专项测试中的 “closing the overlay restores WASD movement” 通过；输入启用只应由 `InputContextService` 管理。
-- **暂停后世界仍在运行**：运行 `runtime_stability_regression.gd`，确认暂停层通过 `SimulationPauseService` 写入并恢复 `SceneTree.paused`。
-- **存档损坏或无法读取**：不要删除同目录下的 `.bak`；加载会自动尝试有效临时文件和上一版本备份。
-- **掉落物未按预期拾取**：运行 `physics_interaction_regression.gd`，确认玩家、实体、掉落物使用 2/3/4 层，掉落物掩码只包含 Player。
-- **黑屏或显卡启动失败**：确认 `project.godot` 使用 `gl_compatibility`，更新显卡驱动。
-- **中文路径导出失败**：将临时构建输出改为英文绝对路径，但不要改动 `res://` 内资源路径。
+- **WASD 无响应**：运行 `movement_lifecycle_regression.gd`。默认映射会修复 W/A/S/D 的物理键位和逻辑键码，并提供方向键后备。
+- **从背包、熔炉、容器或暂停返回后不能移动**：输入启用只能由 `InputContextService` 管理；先运行移动、方块交互和熔炉桌面专项。
+- **工作台配方无法使用**：必须右键世界中的工作台；`C` 只提供随身合成。
+- **物品无法放入熔炉**：确认物品存在于 `furnace_recipes.json` 或 `fuels.json`，再运行 `furnace_machine_regression.gd`。
+- **熔炉没有继续工作**：普通机器界面不会暂停世界；暂停菜单和死亡状态会通过 `SimulationPauseService` 停止机器。
+- **熔炉无法拆除**：先取走原料、燃料和产出。剩余热量不会阻止空熔炉拆除。
+- **熔炉重载后丢失**：确认存档包含顶层 `machines` 字段，并运行熔炉专项测试。
+- **箱子无法拆除**：先把箱子中的物品全部转回背包。
+- **箱子内容重载后消失**：运行 `block_interaction_regression.gd`，并确认保存文件包含顶层 `containers` 字段。
+- **暂停后世界仍在运行**：运行 `runtime_stability_regression.gd`，确认暂停由 `SimulationPauseService` 写入并恢复 `SceneTree.paused`。
+- **存档损坏或无法读取**：不要删除同目录下的 `.bak`；加载会尝试有效临时文件和上一版本备份。
+- **掉落物未按预期拾取**：运行 `physics_interaction_regression.gd`，确认玩家、实体和掉落物分别使用 2/3/4 层。
+- **首次进入卡顿**：查看 F3 的区块队列和流式档位。控制器会先降构建预算；低配设备仍可在设置中把视距降到 1–2。
+- **流式档位频繁变化**：运行 `adaptive_streaming_regression.gd`，确认热身、确认、冷却和每分钟限速合同通过。
+- **退出时报告泄漏**：运行 `audio_lifecycle_regression.gd` 和实际发行包 smoke，检查日志中的具体 `Leaked instance`。
+- **黑屏或显卡启动失败**：确认项目使用 `gl_compatibility`，并更新显卡驱动。
+- **中文路径导出失败**：将临时输出目录改为英文绝对路径，但不要修改 `res://` 资源路径。
 - **存档无法创建**：检查 `%APPDATA%\Godot\app_userdata\星的世界` 的写权限。
-- **首次进入卡顿**：默认视距为 3，周边区块会按预算渐进构建；低配设备可在设置中降为 1–2。

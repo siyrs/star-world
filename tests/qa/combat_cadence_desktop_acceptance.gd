@@ -1,0 +1,339 @@
+extends SceneTree
+
+const GameScene = preload("res://scenes/game/game.tscn")
+const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
+
+const OUTPUT_PATH := "user://combat-cadence-desktop-acceptance.png"
+const CLEANUP_FRAMES := 6
+const MAX_READY_FRAMES := 120
+
+var checks := 0
+var failures: Array[String] = []
+var _capture_path := ""
+var _created_world_id := ""
+
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
+	root.size = Vector2i(1024, 576)
+	var game = GameScene.instantiate()
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	await process_frame
+	var hub: Node = game.service_hub
+	_check(hub != null, "game exposes the production service hub")
+	if hub == null:
+		await _finish(game, null)
+		return
+	var state: Dictionary = hub.save_service.create_world(
+		"Combat-Cadence-Desktop-%d" % Time.get_ticks_msec(), "star_continent", 81726354
+	)
+	_check(not state.is_empty(), "desktop combat journey creates a temporary world")
+	if state.is_empty():
+		await _finish(game, hub)
+		return
+	_created_world_id = str(state.get("metadata", {}).get("id", ""))
+	game.begin_world_state(state)
+	await process_frame
+	await physics_frame
+	await process_frame
+	await process_frame
+	_check(game.world != null and bool(game.world.get("is_started")), "real voxel world starts")
+	_check(game.player != null and bool(game.player.get("input_enabled")), "real player owns gameplay input")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "combat starts with captured mouse")
+	_check(hub.get("combat_service") != null, "CombatService is mounted in the production hub")
+	var overlay: Node = hub.game_ui.call("get_combat_feedback_overlay")
+	_check(overlay != null, "production UI mounts the combat feedback overlay")
+
+	var player: Node3D = game.player
+	var world: Node = game.world
+	var player_block: Vector3i = world.call("world_to_block", player.global_position)
+	var floor_y := _find_floor_y(world, player_block)
+	_prepare_arena(world, player_block.x, player_block.z, floor_y)
+	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z + 0.5)
+	player.rotation = Vector3.ZERO
+	player.call("reset_motion")
+	await physics_frame
+	await process_frame
+
+	hub.inventory.clear()
+	hub.inventory.add_item("iron_sword", 1, {"custom_name":"桌面验收铁剑"})
+	_check(hub.equipment_service.equip_from_inventory(hub.inventory, 0), "real inventory equips an iron sword")
+	_check(str(hub.equipment_service.get_slot("main_hand").get("item_id", "")) == "iron_sword", "main-hand equipment owns the sword")
+	var durability_before := int(
+		hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251)
+	)
+
+	var target_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 3.0)
+	var target_variant: Variant = hub.creature_spawner.call("spawn_creature", "cow", target_position)
+	_check(target_variant is Node3D, "real creature spawner creates a combat target")
+	if target_variant is not Node3D:
+		await _finish(game, hub)
+		return
+	var target: Node3D = target_variant
+	target.set("move_speed", 0.8)
+	target.set("_decision_timer", 999.0)
+	target.set("_wander_direction", Vector3.ZERO)
+	await process_frame
+	_check(target.is_physics_processing(), "spawned combat target participates in physics")
+	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
+	_check(_ray_hits(player, target), "center ray resolves the live cow")
+	var target_start := target.global_position
+	var health_before := float(target.get("health"))
+
+	# Viewport.push_input dispatches real InputEventMouseButton objects through the
+	# production input chain. Both clicks are sent in one input batch so a slow
+	# software renderer cannot turn a rapid double click into two attacks simply
+	# by spending the cooldown duration between rendered frames.
+	_rapid_double_click_center()
+	await process_frame
+	var response: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+	_check(is_equal_approx(float(target.get("health")), health_before - 6.0), "rapid real double click applies exactly one iron-sword hit")
+	_check(
+		int(hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251))
+		== durability_before - 1,
+		"rapid double click consumes exactly one weapon durability",
+	)
+	_check(str(response.get("reason", "")) == "cooldown", "second click in the real input batch is rejected by cooldown")
+	_check(str(response.get("status", "")) == "rejected", "cooldown rejection is exposed as a stable combat result")
+	var impact_snapshot: Dictionary = target.call("get_combat_snapshot")
+	var initial_impulse := _array_to_vector3(impact_snapshot.get("combat_impulse", []))
+	_check(Vector2(initial_impulse.x, initial_impulse.z).length() > 2.5, "accepted hit reaches the target's independent combat impulse channel")
+	_check(target.is_physics_processing(), "accepted hit keeps the target physics awake")
+	print(
+		"QA COMBAT KNOCKBACK START | position=%s | velocity=%s | impulse=%s | processing=%s"
+		% [target_start, target.get("velocity"), initial_impulse, target.is_physics_processing()]
+	)
+	var feedback: Dictionary = overlay.call("get_snapshot")
+	_check(bool(feedback.get("hit_visible", false)), "combat response is visible after the rapid click batch")
+	_check(bool(feedback.get("cooldown_visible", false)), "attack recovery indicator is visible")
+	await RenderingServer.frame_post_draw
+	var image := root.get_texture().get_image()
+	_check(image != null and not image.is_empty(), "combat desktop viewport produces a rendered frame")
+	if image != null and not image.is_empty():
+		_save_image(image)
+
+	for frame_index in 12:
+		await physics_frame
+		await process_frame
+		if frame_index in [0, 3, 7, 11]:
+			var frame_snapshot: Dictionary = target.call("get_combat_snapshot")
+			print(
+				"QA COMBAT KNOCKBACK FRAME %d | position=%s | velocity=%s | impulse=%s"
+				% [
+					frame_index + 1,
+					target.global_position,
+					target.get("velocity"),
+					_array_to_vector3(frame_snapshot.get("combat_impulse", [])),
+				]
+			)
+	var target_end := target.global_position
+	var knockback_distance := Vector2(
+		target_end.x - target_start.x, target_end.z - target_start.z
+	).length()
+	var collision_normals: Array[String] = []
+	var target_body := target as CharacterBody3D
+	if target_body != null:
+		for collision_index in target_body.get_slide_collision_count():
+			var collision: KinematicCollision3D = target_body.get_slide_collision(collision_index)
+			if collision != null:
+				collision_normals.append(str(collision.get_normal()))
+	print(
+		"QA COMBAT KNOCKBACK END | start=%s | end=%s | distance=%.4f | velocity=%s | collisions=%s"
+		% [target_start, target_end, knockback_distance, target.get("velocity"), collision_normals]
+	)
+	_check(knockback_distance > 0.12, "accepted hit produces visible horizontal knockback")
+
+	await _tap_key(KEY_E)
+	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real character inventory")
+	_check(not bool(overlay.call("get_snapshot").get("cooldown_visible", true)), "blocking UI hides combat feedback")
+	await _tap_key(KEY_E)
+	_check(hub.game_ui.get_active_overlay() == 0, "E closes the inventory")
+	_check(bool(player.get("input_enabled")), "closing inventory restores player input")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing inventory recaptures the mouse")
+
+	# Knockback has already been proven by real movement. Re-center and freeze the
+	# target so the final post-cooldown strike tests cadence rather than flee AI.
+	target.set("move_speed", 0.0)
+	target.set("_flee_timer", 0.0)
+	if target.has_method("clear_combat_motion"):
+		target.call("clear_combat_motion")
+	target.global_position = target_start
+	await physics_frame
+	await process_frame
+	for _frame in MAX_READY_FRAMES:
+		if bool(hub.combat_service.get_cooldown_snapshot().get("ready", false)):
+			break
+		await process_frame
+	_check(bool(hub.combat_service.get_cooldown_snapshot().get("ready", false)), "real cooldown returns to ready")
+	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
+	_check(_ray_hits(player, target), "center ray reacquires the target after cooldown")
+	await _left_click_center()
+	var final_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+	_check(str(final_result.get("status", "")) == "hit", "attack succeeds again after recovery")
+	_check(bool(final_result.get("defeated", false)), "second accepted iron-sword hit defeats the cow")
+	_check(
+		int(hub.equipment_service.get_slot("main_hand").get("metadata", {}).get("durability", 251))
+		== durability_before - 2,
+		"two accepted hits consume exactly two durability",
+	)
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "combat never releases the gameplay mouse")
+	_check(bool(player.get("input_enabled")), "combat never locks WASD input")
+	_check(bool(hub.save_current()), "transient combat cadence coexists with the world save transaction")
+	await _finish(game, hub)
+
+
+func _prepare_arena(world: Node, center_x: int, center_z: int, floor_y: int) -> void:
+	# Cows are 1.2 blocks wide and 1.65 blocks long. A one-cell corridor can wedge
+	# a real CharacterBody3D against random terrain even when the forward cells are
+	# clear, so the acceptance arena provides genuine multi-cell body clearance.
+	for x_offset in range(-3, 4):
+		for z_offset in range(-8, 3):
+			world.call(
+				"set_block",
+				Vector3i(center_x + x_offset, floor_y, center_z + z_offset),
+				"stone"
+			)
+			for y in range(floor_y + 1, floor_y + 5):
+				world.call(
+					"set_block",
+					Vector3i(center_x + x_offset, y, center_z + z_offset),
+					"air"
+				)
+
+
+func _find_floor_y(world: Node, player_block: Vector3i) -> int:
+	for offset in range(0, 10):
+		var candidate_y := player_block.y - offset - 1
+		if str(world.call("get_block", Vector3i(player_block.x, candidate_y, player_block.z))) != "air":
+			return candidate_y
+	return maxi(1, player_block.y - 1)
+
+
+func _aim_at(player: Node3D, target: Vector3) -> void:
+	var camera: Camera3D = player.call("get_view_camera")
+	if camera != null:
+		camera.look_at(target, Vector3.UP)
+	await physics_frame
+	await process_frame
+	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	if ray != null:
+		ray.force_raycast_update()
+	player.call("_update_interaction_focus", true)
+	await process_frame
+
+
+func _ray_hits(player: Node3D, expected: Node) -> bool:
+	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	if ray == null:
+		return false
+	ray.force_raycast_update()
+	return ray.is_colliding() and ray.get_collider() == expected
+
+
+func _rapid_double_click_center() -> void:
+	var center := Vector2(root.size) * 0.5
+	for _click in 2:
+		var press := InputEventMouseButton.new()
+		press.position = center
+		press.global_position = center
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.button_mask = MOUSE_BUTTON_MASK_LEFT
+		press.pressed = true
+		root.push_input(press)
+		var release := InputEventMouseButton.new()
+		release.position = center
+		release.global_position = center
+		release.button_index = MOUSE_BUTTON_LEFT
+		release.button_mask = 0
+		release.pressed = false
+		root.push_input(release)
+
+
+func _left_click_center() -> void:
+	var center := Vector2(root.size) * 0.5
+	var press := InputEventMouseButton.new()
+	press.position = center
+	press.global_position = center
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.button_mask = MOUSE_BUTTON_MASK_LEFT
+	press.pressed = true
+	root.push_input(press)
+	await process_frame
+	var release := InputEventMouseButton.new()
+	release.position = center
+	release.global_position = center
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.button_mask = 0
+	release.pressed = false
+	root.push_input(release)
+	await process_frame
+	await process_frame
+
+
+func _tap_key(keycode: Key) -> void:
+	var press := InputEventKey.new()
+	press.keycode = keycode
+	press.physical_keycode = keycode
+	press.pressed = true
+	root.push_input(press)
+	await process_frame
+	var release := InputEventKey.new()
+	release.keycode = keycode
+	release.physical_keycode = keycode
+	release.pressed = false
+	root.push_input(release)
+	await process_frame
+	await process_frame
+
+
+func _array_to_vector3(value: Variant) -> Vector3:
+	if value is Vector3:
+		return value
+	if value is Array and value.size() >= 3:
+		return Vector3(float(value[0]), float(value[1]), float(value[2]))
+	return Vector3.ZERO
+
+
+func _save_image(image: Image) -> void:
+	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
+	var error := image.save_png(_capture_path)
+	_check(
+		error == OK and FileAccess.file_exists(_capture_path),
+		"combat cadence desktop screenshot is saved",
+	)
+
+
+func _finish(game: Node, hub: Node) -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if hub != null:
+		if not _created_world_id.is_empty() and hub.get("save_service") != null:
+			hub.save_service.delete_world(_created_world_id)
+		if hub.get("audio_service") != null:
+			if hub.audio_service.has_method("shutdown"):
+				hub.audio_service.shutdown()
+			else:
+				hub.audio_service.stop_ambient()
+	if game != null and is_instance_valid(game):
+		game.queue_free()
+	for _frame in CLEANUP_FRAMES:
+		await process_frame
+	if failures.is_empty():
+		print("QA COMBAT CADENCE DESKTOP PASS | checks=%d | capture=%s" % [checks, _capture_path])
+		quit(0)
+	else:
+		for failure: String in failures:
+			push_error("QA COMBAT CADENCE DESKTOP FAILURE: %s" % failure)
+		print("QA COMBAT CADENCE DESKTOP FAIL | checks=%d | failures=%d" % [checks, failures.size()])
+		quit(1)
+
+
+func _check(condition: bool, description: String) -> void:
+	checks += 1
+	if not condition:
+		failures.append(description)

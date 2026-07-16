@@ -8,6 +8,7 @@ var _creature_player: AudioStreamPlayer
 var _ambient_player: AudioStreamPlayer
 var _cache: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
+var _disposed := false
 
 
 func _ready() -> void:
@@ -18,6 +19,44 @@ func _ready() -> void:
 	_build_cache()
 
 
+func _exit_tree() -> void:
+	if not _disposed:
+		shutdown()
+
+
+func shutdown() -> void:
+	for player in [_effects_player, _creature_player, _ambient_player]:
+		if player != null and is_instance_valid(player):
+			player.stop()
+			player.stream = null
+	_cache.clear()
+
+
+func dispose() -> void:
+	if _disposed:
+		return
+	shutdown()
+	_dispose_player(_effects_player)
+	_dispose_player(_creature_player)
+	_dispose_player(_ambient_player)
+	_effects_player = null
+	_creature_player = null
+	_ambient_player = null
+	_disposed = true
+
+
+func is_disposed() -> bool:
+	return _disposed
+
+
+func _dispose_player(player: AudioStreamPlayer) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	if player.get_parent() == self:
+		remove_child(player)
+	player.free()
+
+
 func _create_player(player_name: String) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
 	player.name = player_name
@@ -26,6 +65,8 @@ func _create_player(player_name: String) -> AudioStreamPlayer:
 
 
 func _build_cache() -> void:
+	if _disposed:
+		return
 	_cache["break_soft"] = _make_wave(135.0, 0.12, 0.34, "noise")
 	_cache["break_hard"] = _make_wave(82.0, 0.16, 0.42, "noise")
 	_cache["place"] = _make_wave(220.0, 0.09, 0.28, "square")
@@ -40,6 +81,8 @@ func _build_cache() -> void:
 
 
 func play_block_break(block_id: String = "stone") -> void:
+	if _disposed:
+		return
 	var soft_blocks := ["grass", "dirt", "sand", "snow", "leaves", "wood", "planks"]
 	_play_effect("break_soft" if block_id in soft_blocks else "break_hard")
 
@@ -65,7 +108,12 @@ func play_craft() -> void:
 
 
 func play_creature(species_id: String) -> void:
-	if _creature_player == null or not _cache.has(species_id):
+	if (
+		_disposed
+		or _creature_player == null
+		or not is_instance_valid(_creature_player)
+		or not _cache.has(species_id)
+	):
 		return
 	_creature_player.stream = _cache[species_id]
 	_creature_player.pitch_scale = _rng.randf_range(0.92, 1.08)
@@ -74,15 +122,23 @@ func play_creature(species_id: String) -> void:
 
 
 func start_ambient(profile: String = "forest") -> void:
-	if _ambient_player == null:
+	if _disposed or _ambient_player == null or not is_instance_valid(_ambient_player):
 		return
 	var frequency := 84.0
 	var waveform := "sine"
 	match profile:
-		"desert": frequency = 64.0; waveform = "noise"
-		"wind": frequency = 110.0; waveform = "noise"
-		"sky": frequency = 160.0; waveform = "sine"
-		"cave": frequency = 47.0; waveform = "saw"
+		"desert":
+			frequency = 64.0
+			waveform = "noise"
+		"wind":
+			frequency = 110.0
+			waveform = "noise"
+		"sky":
+			frequency = 160.0
+			waveform = "sine"
+		"cave":
+			frequency = 47.0
+			waveform = "saw"
 	var key := "ambient_%s" % profile
 	if not _cache.has(key):
 		var stream := _make_wave(frequency, 2.5, 0.055, waveform, 1.015)
@@ -96,8 +152,9 @@ func start_ambient(profile: String = "forest") -> void:
 
 
 func stop_ambient() -> void:
-	if _ambient_player != null:
+	if _ambient_player != null and is_instance_valid(_ambient_player):
 		_ambient_player.stop()
+		_ambient_player.stream = null
 
 
 func set_master_volume(linear_value: float) -> void:
@@ -107,7 +164,12 @@ func set_master_volume(linear_value: float) -> void:
 
 
 func _play_effect(key: String) -> void:
-	if _effects_player == null or not _cache.has(key):
+	if (
+		_disposed
+		or _effects_player == null
+		or not is_instance_valid(_effects_player)
+		or not _cache.has(key)
+	):
 		return
 	_effects_player.stream = _cache[key]
 	_effects_player.pitch_scale = _rng.randf_range(0.94, 1.06)
@@ -115,7 +177,13 @@ func _play_effect(key: String) -> void:
 	sound_played.emit(key)
 
 
-func _make_wave(frequency: float, duration: float, volume: float, waveform: String, end_pitch_ratio: float = 1.0) -> AudioStreamWAV:
+func _make_wave(
+	frequency: float,
+	duration: float,
+	volume: float,
+	waveform: String,
+	end_pitch_ratio: float = 1.0
+) -> AudioStreamWAV:
 	var mix_rate := 22050
 	var sample_count := maxi(1, int(duration * mix_rate))
 	var bytes := PackedByteArray()
@@ -126,12 +194,19 @@ func _make_wave(frequency: float, duration: float, volume: float, waveform: Stri
 		var phase := TAU * current_frequency * float(sample_index) / float(mix_rate)
 		var sample_value := 0.0
 		match waveform:
-			"square": sample_value = 1.0 if sin(phase) >= 0.0 else -1.0
-			"saw": sample_value = fmod(phase / PI, 2.0) - 1.0
-			"noise": sample_value = _rng.randf_range(-1.0, 1.0) * 0.75 + sin(phase) * 0.25
-			_: sample_value = sin(phase)
+			"square":
+				sample_value = 1.0 if sin(phase) >= 0.0 else -1.0
+			"saw":
+				sample_value = fmod(phase / PI, 2.0) - 1.0
+			"noise":
+				sample_value = _rng.randf_range(-1.0, 1.0) * 0.75 + sin(phase) * 0.25
+			_:
+				sample_value = sin(phase)
 		var envelope := minf(1.0, progress * 18.0) * pow(1.0 - progress, 1.45)
-		bytes.encode_s16(sample_index * 2, int(clampf(sample_value * volume * envelope, -1.0, 1.0) * 32767.0))
+		bytes.encode_s16(
+			sample_index * 2,
+			int(clampf(sample_value * volume * envelope, -1.0, 1.0) * 32767.0)
+		)
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.mix_rate = mix_rate

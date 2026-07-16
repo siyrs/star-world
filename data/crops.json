@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "crops": [
+    {
+      "id": "wheat",
+      "name": "小麦",
+      "seed_item": "wheat_seeds",
+      "produce_item": "wheat",
+      "stage_blocks": [
+        "wheat_stage_0",
+        "wheat_stage_1",
+        "wheat_stage_2",
+        "wheat_stage_3"
+      ],
+      "stage_seconds": [25.0, 35.0, 45.0],
+      "harvest": {
+        "auto_replant": true,
+        "outputs": [
+          {"item_id": "wheat", "count": 1},
+          {"item_id": "wheat_seeds", "count": 2}
+        ]
+      }
+    },
+    {
+      "id": "carrot",
+      "name": "胡萝卜",
+      "seed_item": "carrot",
+      "produce_item": "carrot",
+      "stage_blocks": [
+        "carrot_stage_0",
+        "carrot_stage_1",
+        "carrot_stage_2",
+        "carrot_stage_3"
+      ],
+      "stage_seconds": [30.0, 35.0, 40.0],
+      "harvest": {
+        "auto_replant": true,
+        "outputs": [
+          {"item_id": "carrot", "count": 2}
+        ]
+      }
+    },
+    {
+      "id": "potato",
+      "name": "马铃薯",
+      "seed_item": "potato",
+      "produce_item": "potato",
+      "stage_blocks": [
+        "potato_stage_0",
+        "potato_stage_1",
+        "potato_stage_2",
+        "potato_stage_3"
+      ],
+      "stage_seconds": [35.0, 40.0, 50.0],
+      "harvest": {
+        "auto_replant": true,
+        "outputs": [
+          {"item_id": "potato", "count": 2}
+        ]
+      }
+    }
+  ]
+}

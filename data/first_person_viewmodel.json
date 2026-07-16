@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "base_position": [0.62, -0.52, -1.05],
+  "base_rotation_degrees": [-18.0, -24.0, 8.0],
+  "base_scale": 0.72,
+  "block_scale": 0.72,
+  "tool_scale": 0.82,
+  "item_scale": 0.68,
+  "switch_seconds": 0.18,
+  "swing_seconds": 0.28,
+  "use_seconds": 0.24,
+  "hit_confirm_seconds": 0.12,
+  "walk_bob_frequency": 8.5,
+  "walk_bob_amplitude": 0.035,
+  "walk_reference_speed": 5.4,
+  "mining_frequency": 5.5,
+  "mining_amplitude": 0.075,
+  "swing_rotation_degrees": [58.0, -18.0, -8.0],
+  "use_rotation_degrees": [-22.0, 12.0, 6.0],
+  "switch_drop_distance": 0.42
+}

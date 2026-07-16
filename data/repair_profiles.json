@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "station_block": "repair_station",
+  "profiles": [
+    {
+      "id": "wood",
+      "material_item": "oak_planks",
+      "material_count": 1,
+      "restore_ratio": 0.25,
+      "items": [
+        "wooden_pickaxe",
+        "wooden_axe",
+        "wooden_shovel",
+        "wooden_hoe",
+        "wooden_sword"
+      ]
+    },
+    {
+      "id": "stone",
+      "material_item": "cobblestone",
+      "material_count": 1,
+      "restore_ratio": 0.25,
+      "items": [
+        "stone_pickaxe",
+        "stone_axe",
+        "stone_shovel",
+        "stone_hoe",
+        "stone_sword"
+      ]
+    },
+    {
+      "id": "iron",
+      "material_item": "iron_ingot",
+      "material_count": 1,
+      "restore_ratio": 0.25,
+      "items": [
+        "iron_pickaxe",
+        "iron_axe",
+        "iron_shovel",
+        "iron_hoe",
+        "iron_sword",
+        "iron_helmet",
+        "iron_chestplate",
+        "iron_leggings",
+        "iron_boots"
+      ]
+    },
+    {
+      "id": "gold",
+      "material_item": "gold_ingot",
+      "material_count": 1,
+      "restore_ratio": 0.34,
+      "items": ["gold_sword"]
+    },
+    {
+      "id": "diamond",
+      "material_item": "diamond",
+      "material_count": 1,
+      "restore_ratio": 0.20,
+      "items": [
+        "diamond_pickaxe",
+        "diamond_axe",
+        "diamond_shovel",
+        "diamond_hoe",
+        "diamond_sword"
+      ]
+    },
+    {
+      "id": "leather",
+      "material_item": "leather",
+      "material_count": 1,
+      "restore_ratio": 0.25,
+      "items": [
+        "leather_cap",
+        "leather_tunic",
+        "leather_pants",
+        "leather_boots"
+      ]
+    }
+  ]
+}

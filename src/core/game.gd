@@ -8,14 +8,21 @@ signal save_requested(state: Dictionary)
 const WORLD_SCRIPT_PATH := "res://src/world/voxel_world.gd"
 const PLAYER_SCENE_PATH := "res://scenes/game/player.tscn"
 const SpawnResolverScript = preload("res://src/player/player_spawn_resolver.gd")
+const RuntimeGuardScript = preload("res://src/core/world_runtime_guard.gd")
+const DiagnosticsCoordinatorScript = preload(
+	"res://src/diagnostics/runtime_diagnostics_coordinator.gd"
+)
+const ReleaseSmokeRunnerScript = preload("res://src/diagnostics/release_smoke_runner.gd")
 
 var world: Node3D
 var player: CharacterBody3D
+var runtime_diagnostics: Node
 var current_profile_id := "star_continent"
 var current_seed := 734521
 var current_world_id := "quick-world"
 var current_saved_state: Dictionary = {}
 var _spawn_resolver = SpawnResolverScript.new()
+var _runtime_guard = RuntimeGuardScript.new()
 
 @onready var world_root: Node3D = $WorldRoot
 @onready var sun: DirectionalLight3D = $Sun
@@ -42,6 +49,8 @@ func _ready() -> void:
 		world_start_failed.connect(
 			func(reason: String) -> void: service_hub.call("handle_world_start_failed", reason)
 		)
+	_setup_runtime_diagnostics()
+	_setup_release_smoke()
 
 
 func begin_world_state(state: Dictionary) -> void:
@@ -56,7 +65,7 @@ func start_world(
 ) -> bool:
 	_ensure_core_nodes()
 	if world == null or player == null:
-		world_start_failed.emit("core_nodes_unavailable")
+		_abort_world_start("core_nodes_unavailable")
 		return false
 	current_profile_id = profile_id if not profile_id.is_empty() else "star_continent"
 	current_seed = seed
@@ -65,6 +74,10 @@ func start_world(
 	world.call(
 		"start_world", current_profile_id, current_seed, current_world_id, current_saved_state
 	)
+	var world_status := _runtime_guard.validate_world(world)
+	if not bool(world_status.get("ok", false)):
+		_abort_world_start(str(world_status.get("reason", "world_not_ready")))
+		return false
 	player.call("bind_world", world)
 	var fallback_spawn: Vector3 = world.call("get_spawn_position")
 	var player_state: Dictionary = current_saved_state.get("player", {})
@@ -80,6 +93,12 @@ func start_world(
 	world_root.visible = true
 	world.call("set_focus", player)
 	_attach_gameplay_services()
+	var camera_status := _runtime_guard.activate_and_validate_camera(player)
+	if not bool(camera_status.get("ok", false)):
+		_abort_world_start(str(camera_status.get("reason", "camera_not_ready")))
+		return false
+	if runtime_diagnostics != null:
+		runtime_diagnostics.call("attach_runtime", world, player)
 	world_started.emit(current_profile_id, current_seed, current_world_id)
 	return true
 
@@ -151,6 +170,40 @@ func _attach_gameplay_services() -> void:
 		)
 
 
+func _setup_runtime_diagnostics() -> void:
+	if runtime_diagnostics != null:
+		return
+	runtime_diagnostics = DiagnosticsCoordinatorScript.new()
+	runtime_diagnostics.name = "RuntimeDiagnostics"
+	runtime_diagnostics.call("configure", service_hub)
+	add_child(runtime_diagnostics)
+
+
+func _setup_release_smoke() -> void:
+	var configuration: Dictionary = ReleaseSmokeRunnerScript.configuration_from_arguments(
+		OS.get_cmdline_user_args()
+	)
+	if configuration.is_empty():
+		return
+	var runner = ReleaseSmokeRunnerScript.new()
+	runner.name = "ReleaseSmokeRunner"
+	runner.call("configure", self, configuration)
+	add_child(runner)
+
+
+func _abort_world_start(reason: String) -> void:
+	if runtime_diagnostics != null:
+		runtime_diagnostics.call("detach_runtime")
+	if player != null:
+		if player.has_method("reset_motion"):
+			player.call("reset_motion")
+		player.visible = false
+	if world != null and world.has_method("clear_world"):
+		world.call("clear_world")
+	world_root.visible = false
+	world_start_failed.emit(reason)
+
+
 func _on_world_state_requested(state: Dictionary) -> void:
 	var metadata: Dictionary = state.get("metadata", {})
 	var requested_profile := str(metadata.get("map_id", "star_continent"))
@@ -160,6 +213,8 @@ func _on_world_state_requested(state: Dictionary) -> void:
 
 
 func _on_return_to_menu_requested() -> void:
+	if runtime_diagnostics != null:
+		runtime_diagnostics.call("detach_runtime")
 	if player != null:
 		if player.has_method("reset_motion"):
 			player.call("reset_motion")

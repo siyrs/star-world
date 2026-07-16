@@ -6,18 +6,24 @@ signal return_to_menu_requested
 signal respawn_requested
 signal input_context_requested(context: StringName)
 signal simulation_pause_requested(paused: bool)
+signal overlay_changed(overlay: int, context: StringName)
 
 enum Overlay {
 	NONE,
 	INVENTORY,
 	CRAFTING,
+	FURNACE,
+	CONTAINER,
 	PAUSE,
 	DEATH,
 }
 
 const HudScript = preload("res://src/ui/hud.gd")
+const GuidanceOverlayScript = preload("res://src/ui/guidance_overlay.gd")
 const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
+const FurnacePanelScript = preload("res://src/ui/furnace_panel.gd")
+const ContainerPanelScript = preload("res://src/ui/container_panel.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
@@ -28,9 +34,15 @@ var survival
 var day_night
 var audio_service
 var gameplay_input
+var container_storage
+var furnace_service
+var experience_coordinator
 var hud
+var guidance_overlay
 var inventory_panel
 var crafting_panel
+var furnace_panel
+var container_panel
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
 var _death_title: Label
@@ -45,6 +57,8 @@ func _ready() -> void:
 	layer = 10
 	hud = HudScript.new()
 	add_child(hud)
+	guidance_overlay = GuidanceOverlayScript.new()
+	add_child(guidance_overlay)
 	inventory_panel = InventoryPanelScript.new()
 	_center_control(inventory_panel, Vector2(710, 520))
 	add_child(inventory_panel)
@@ -55,12 +69,30 @@ func _ready() -> void:
 	add_child(crafting_panel)
 	crafting_panel.visible = false
 	crafting_panel.panel_closed.connect(_close_overlay)
+	furnace_panel = FurnacePanelScript.new()
+	_center_control(furnace_panel, Vector2(900, 540))
+	add_child(furnace_panel)
+	furnace_panel.visible = false
+	furnace_panel.panel_closed.connect(_close_overlay)
+	container_panel = ContainerPanelScript.new()
+	_center_control(container_panel, Vector2(780, 680))
+	add_child(container_panel)
+	container_panel.visible = false
+	container_panel.panel_closed.connect(_close_overlay)
 	_build_pause_panel()
 	_build_death_panel()
 
 
 func setup(
-	p_inventory, p_crafting, p_survival, p_day_night, p_audio = null, p_gameplay_input = null
+	p_inventory,
+	p_crafting,
+	p_survival,
+	p_day_night,
+	p_audio = null,
+	p_gameplay_input = null,
+	p_container_storage = null,
+	p_furnace_service = null,
+	p_experience_coordinator = null
 ) -> void:
 	inventory = p_inventory
 	crafting = p_crafting
@@ -68,9 +100,15 @@ func setup(
 	day_night = p_day_night
 	audio_service = p_audio
 	gameplay_input = p_gameplay_input
+	container_storage = p_container_storage
+	furnace_service = p_furnace_service
+	experience_coordinator = p_experience_coordinator
 	hud.setup(inventory, survival, day_night)
+	guidance_overlay.setup(experience_coordinator)
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
+	furnace_panel.setup(inventory, furnace_service)
+	container_panel.setup(inventory, container_storage)
 	if survival != null and survival.has_signal("player_died"):
 		var callback := Callable(self, "_on_player_died")
 		if not survival.is_connected("player_died", callback):
@@ -80,6 +118,7 @@ func setup(
 func begin_gameplay() -> void:
 	_gameplay_active = true
 	visible = true
+	guidance_overlay.begin_gameplay()
 	if survival != null and not bool(survival.get("alive")):
 		_death_title.text = "你倒下了"
 		_set_overlay(Overlay.DEATH, true)
@@ -89,10 +128,18 @@ func begin_gameplay() -> void:
 
 func end_gameplay() -> void:
 	_gameplay_active = false
+	if crafting != null:
+		crafting.set_station("hand")
 	_overlay = Overlay.NONE
+	if container_panel != null:
+		container_panel.close_container()
+	if furnace_panel != null:
+		furnace_panel.close_machine()
 	_hide_all_overlays()
 	if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 		inventory_panel.call("cancel_swap_selection")
+	if guidance_overlay != null:
+		guidance_overlay.end_gameplay()
 	visible = false
 	simulation_pause_requested.emit(false)
 
@@ -106,7 +153,8 @@ func open_inventory() -> void:
 func open_crafting(station: String = "hand") -> void:
 	if not _can_change_overlay():
 		return
-	crafting_panel.open_station(station)
+	var resolved_station := station if station in ["hand", "workbench"] else "hand"
+	crafting_panel.open_station(resolved_station)
 	_set_overlay(Overlay.CRAFTING)
 
 
@@ -121,8 +169,24 @@ func open_workbench() -> void:
 	open_crafting("workbench")
 
 
-func open_furnace() -> void:
-	open_crafting("furnace")
+func open_furnace(machine_id: String, title: String = "熔炉") -> bool:
+	if not _can_change_overlay() or furnace_panel == null:
+		return false
+	if not furnace_panel.open_machine(machine_id, title):
+		show_message("无法打开该熔炉", 2.5, "error", "furnace_open_failed")
+		return false
+	_set_overlay(Overlay.FURNACE)
+	return true
+
+
+func open_container(container_id: String, title: String = "箱子") -> bool:
+	if not _can_change_overlay() or container_panel == null:
+		return false
+	if not container_panel.open_container(container_id, title):
+		show_message("无法打开该容器", 2.5, "error", "container_open_failed")
+		return false
+	_set_overlay(Overlay.CONTAINER)
+	return true
 
 
 func toggle_pause() -> void:
@@ -139,16 +203,32 @@ func get_active_overlay() -> int:
 	return _overlay
 
 
+func get_guidance_overlay() -> Node:
+	return guidance_overlay
+
+
+func get_furnace_panel() -> Node:
+	return furnace_panel
+
+
 func is_gameplay_input_blocked() -> bool:
 	return not _gameplay_active or _overlay != Overlay.NONE
+
+
+func show_message(
+	message: String, seconds: float = 2.0, severity: String = "info", dedupe_key: String = ""
+) -> void:
+	if experience_coordinator != null and experience_coordinator.has_method("publish_message"):
+		experience_coordinator.call("publish_message", message, severity, seconds, dedupe_key)
+	elif hud != null:
+		hud.show_message(message, seconds)
 
 
 func show_save_result(saved: bool) -> void:
 	var message := "世界已保存" if saved else "保存失败，请检查磁盘空间或写入权限"
 	if _pause_status != null:
 		_pause_status.text = message
-	if hud != null:
-		hud.show_message(message, 3.0)
+	show_message(message, 3.0, "success" if saved else "error", "save_result")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -202,6 +282,15 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	if _overlay == Overlay.INVENTORY and next_overlay != Overlay.INVENTORY:
 		if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 			inventory_panel.call("cancel_swap_selection")
+	if _overlay == Overlay.CRAFTING and next_overlay != Overlay.CRAFTING:
+		if crafting != null:
+			crafting.set_station("hand")
+	if _overlay == Overlay.FURNACE and next_overlay != Overlay.FURNACE:
+		if furnace_panel != null:
+			furnace_panel.close_machine()
+	if _overlay == Overlay.CONTAINER and next_overlay != Overlay.CONTAINER:
+		if container_panel != null:
+			container_panel.close_container()
 	_overlay = next_overlay
 	_hide_all_overlays()
 	match _overlay:
@@ -209,13 +298,21 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 			inventory_panel.visible = true
 		Overlay.CRAFTING:
 			crafting_panel.visible = true
+		Overlay.FURNACE:
+			furnace_panel.visible = true
+		Overlay.CONTAINER:
+			container_panel.visible = true
 		Overlay.PAUSE:
 			_pause_panel.visible = true
 			_pause_status.text = ""
 		Overlay.DEATH:
 			_death_panel.visible = true
-	input_context_requested.emit(_context_for_overlay())
+	var context := _context_for_overlay()
+	if guidance_overlay != null:
+		guidance_overlay.set_overlay_blocked(_overlay != Overlay.NONE)
+	input_context_requested.emit(context)
 	simulation_pause_requested.emit(_overlay in [Overlay.PAUSE, Overlay.DEATH])
+	overlay_changed.emit(_overlay, context)
 
 
 func _hide_all_overlays() -> void:
@@ -223,6 +320,10 @@ func _hide_all_overlays() -> void:
 		inventory_panel.visible = false
 	if crafting_panel != null:
 		crafting_panel.visible = false
+	if furnace_panel != null:
+		furnace_panel.visible = false
+	if container_panel != null:
+		container_panel.visible = false
 	if _pause_panel != null:
 		_pause_panel.visible = false
 	if _death_panel != null:
@@ -235,6 +336,10 @@ func _context_for_overlay() -> StringName:
 			return InputContextScript.CONTEXT_INVENTORY
 		Overlay.CRAFTING:
 			return InputContextScript.CONTEXT_CRAFTING
+		Overlay.FURNACE:
+			return InputContextScript.CONTEXT_MACHINE
+		Overlay.CONTAINER:
+			return InputContextScript.CONTEXT_CONTAINER
 		Overlay.PAUSE:
 			return InputContextScript.CONTEXT_PAUSE
 		Overlay.DEATH:
@@ -246,30 +351,39 @@ func _context_for_overlay() -> StringName:
 func _build_pause_panel() -> void:
 	_pause_panel = PanelContainer.new()
 	_pause_panel.theme = ThemeFactory.create_theme()
-	_center_control(_pause_panel, Vector2(420, 390))
+	_center_control(_pause_panel, Vector2(440, 430))
 	add_child(_pause_panel)
 	_pause_panel.visible = false
 	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 12)
 	_pause_panel.add_child(content)
 	var title := Label.new()
 	title.text = "游戏已暂停"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_font_size_override("font_size", 30)
 	content.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "世界模拟已停止，可以安心调整状态"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.modulate = Color("#91AABD")
+	content.add_child(subtitle)
 	_pause_status = Label.new()
 	_pause_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_pause_status)
 	var resume := Button.new()
 	resume.text = "继续游戏"
+	resume.custom_minimum_size.y = 54.0
 	resume.pressed.connect(_close_overlay)
 	content.add_child(resume)
 	var save := Button.new()
 	save.text = "保存世界"
+	save.custom_minimum_size.y = 48.0
 	save.pressed.connect(_save_from_pause)
 	content.add_child(save)
 	var exit := Button.new()
 	exit.text = "保存并返回主菜单"
+	exit.custom_minimum_size.y = 48.0
 	exit.pressed.connect(_save_and_return_to_menu)
 	content.add_child(exit)
 
@@ -277,29 +391,37 @@ func _build_pause_panel() -> void:
 func _build_death_panel() -> void:
 	_death_panel = PanelContainer.new()
 	_death_panel.theme = ThemeFactory.create_theme()
-	_center_control(_death_panel, Vector2(500, 270))
+	_center_control(_death_panel, Vector2(520, 300))
 	add_child(_death_panel)
 	_death_panel.visible = false
 	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 14)
 	_death_panel.add_child(content)
 	_death_title = Label.new()
 	_death_title.text = "你倒下了"
 	_death_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_death_title.add_theme_font_size_override("font_size", 34)
 	content.add_child(_death_title)
+	var hint := Label.new()
+	hint.text = "重生会恢复生命，并返回安全出生点"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.modulate = Color("#91AABD")
+	content.add_child(hint)
 	var respawn := Button.new()
 	respawn.text = "重生"
+	respawn.custom_minimum_size.y = 54.0
 	respawn.pressed.connect(_respawn)
 	content.add_child(respawn)
 	var menu := Button.new()
 	menu.text = "返回主菜单"
+	menu.custom_minimum_size.y = 48.0
 	menu.pressed.connect(func() -> void: return_to_menu_requested.emit())
 	content.add_child(menu)
 
 
 func _save_from_pause() -> void:
 	_pause_status.text = "正在保存…"
-	hud.show_message("正在保存…", 1.0)
+	show_message("正在保存…", 1.0, "info", "save_progress")
 	save_requested.emit()
 
 

@@ -17,11 +17,13 @@ func configure(index: int) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	if not event is InputEventMouseButton or not event.pressed:
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event == null or not mouse_event.pressed:
 		return
-	var activates_slot := event.button_index == MOUSE_BUTTON_RIGHT
+	var activates_slot: bool = mouse_event.button_index == MOUSE_BUTTON_RIGHT
 	activates_slot = (
-		activates_slot or (event.button_index == MOUSE_BUTTON_LEFT and event.double_click)
+		activates_slot
+		or (mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.double_click)
 	)
 	if activates_slot:
 		slot_activated.emit(slot_index)
@@ -32,7 +34,7 @@ func display_slot(
 	slot: Dictionary, registry, selected: bool = false, swap_source: bool = false
 ) -> void:
 	if slot.is_empty():
-		text = "\u00b7"
+		text = "·"
 		tooltip_text = "空"
 		self_modulate = _display_color(Color.WHITE, selected, swap_source)
 		return
@@ -40,8 +42,20 @@ func display_slot(
 	var item: Dictionary = registry.get_item(item_id) if registry != null else {}
 	var item_name := str(item.get("name", item_id))
 	var count := int(slot.get("count", 0))
-	text = "%s\n×%d" % [_short_name(item_name), count]
-	tooltip_text = "%s (%s)\n数量: %d" % [item_name, item_id, count]
+	var maximum_durability := maxi(0, int(item.get("durability", 0)))
+	if maximum_durability > 0:
+		var metadata: Dictionary = slot.get("metadata", {})
+		var remaining := clampi(
+			int(metadata.get("durability", maximum_durability)), 0, maximum_durability
+		)
+		var percentage := roundi(float(remaining) / float(maximum_durability) * 100.0)
+		text = "%s\n%d%%" % [_short_name(item_name), percentage]
+		tooltip_text = "%s (%s)\n耐久: %d / %d" % [
+			item_name, item_id, remaining, maximum_durability
+		]
+	else:
+		text = "%s\n×%d" % [_short_name(item_name), count]
+		tooltip_text = "%s (%s)\n数量: %d" % [item_name, item_id, count]
 	var item_color := Color.from_string(str(item.get("color", "#FFFFFF")), Color.WHITE)
 	self_modulate = _display_color(item_color, selected, swap_source)
 

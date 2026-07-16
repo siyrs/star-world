@@ -49,16 +49,35 @@ func create_world(
 	var state := {
 		"save_version": SAVE_VERSION,
 		"metadata": metadata,
-		"player":
-		{
-			"position": [0.0, 48.0, 0.0],
-			"rotation": [0.0, 0.0, 0.0],
-			"look_pitch": 0.0,
-		},
+		# Empty means the generator owns first spawn selection. The old fixed Y=48
+		# placeholder could leave the camera high above terrain on a sky-only view.
+		"player": {"position": [], "rotation": [0.0, 0.0, 0.0], "look_pitch": 0.0},
 		"inventory": {},
+		"equipment": {"version": 2, "slots": {}},
+		"attributes": {"version": 1, "base": {}, "sources": {}},
+		"agriculture": {
+			"version": 2,
+			"saved_at_unix": timestamp,
+			"crops": {},
+			"soil_moisture": {"version": 1, "soils": {}},
+		},
+		"husbandry": {
+			"version": 1,
+			"saved_at_unix": timestamp,
+			"animals": {},
+		},
+		"containers": {"version": 1, "containers": {}},
+		"machines": {"version": 1, "saved_at_unix": timestamp, "furnaces": {}},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
 		"survival": {"health": 20.0, "hunger": 20.0},
 		"day_night": {"time_of_day": 8.0, "day": 1},
+		"rest": {
+			"version": 1,
+			"has_custom_spawn": false,
+			"bed_position": [],
+			"respawn_position": [],
+		},
+		"experience": {"version": 1, "onboarding": {}},
 	}
 	if save_world(world_id, state):
 		return state
@@ -183,6 +202,55 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		if not payload.has("survival"):
 			payload["survival"] = {"health": 20.0, "hunger": 20.0}
 		payload["save_version"] = 2
+	if not payload.has("equipment") or payload["equipment"] is not Dictionary:
+		payload["equipment"] = {"version": 2, "slots": {}}
+	if not payload.has("attributes") or payload["attributes"] is not Dictionary:
+		payload["attributes"] = {"version": 1, "base": {}, "sources": {}}
+	if not payload.has("agriculture") or payload["agriculture"] is not Dictionary:
+		payload["agriculture"] = {
+			"version": 2,
+			"saved_at_unix": int(Time.get_unix_time_from_system()),
+			"crops": {},
+			"soil_moisture": {"version": 1, "soils": {}},
+		}
+	else:
+		var agriculture: Dictionary = payload["agriculture"]
+		if not agriculture.has("soil_moisture") or agriculture["soil_moisture"] is not Dictionary:
+			agriculture["soil_moisture"] = {"version": 1, "soils": {}}
+		agriculture["version"] = maxi(2, int(agriculture.get("version", 1)))
+		payload["agriculture"] = agriculture
+	if not payload.has("husbandry") or payload["husbandry"] is not Dictionary:
+		payload["husbandry"] = {
+			"version": 1,
+			"saved_at_unix": int(Time.get_unix_time_from_system()),
+			"animals": {},
+		}
+	else:
+		var husbandry: Dictionary = payload["husbandry"]
+		if not husbandry.has("animals") or husbandry["animals"] is not Dictionary:
+			husbandry["animals"] = {}
+		husbandry["version"] = maxi(1, int(husbandry.get("version", 1)))
+		husbandry["saved_at_unix"] = int(
+			husbandry.get("saved_at_unix", Time.get_unix_time_from_system())
+		)
+		payload["husbandry"] = husbandry
+	if not payload.has("containers") or payload["containers"] is not Dictionary:
+		payload["containers"] = {"version": 1, "containers": {}}
+	if not payload.has("machines") or payload["machines"] is not Dictionary:
+		payload["machines"] = {
+			"version": 1,
+			"saved_at_unix": int(Time.get_unix_time_from_system()),
+			"furnaces": {},
+		}
+	if not payload.has("rest") or payload["rest"] is not Dictionary:
+		payload["rest"] = {
+			"version": 1,
+			"has_custom_spawn": false,
+			"bed_position": [],
+			"respawn_position": [],
+		}
+	if not payload.has("experience") or payload["experience"] is not Dictionary:
+		payload["experience"] = {"version": 1, "onboarding": {}}
 	return payload
 
 

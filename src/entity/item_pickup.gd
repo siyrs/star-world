@@ -19,6 +19,7 @@ func setup(p_item_id: String, p_count: int, p_inventory = null) -> void:
 
 
 func _ready() -> void:
+	add_to_group("pickups")
 	PhysicsPolicy.configure_pickup(self)
 	var collision := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
@@ -67,8 +68,11 @@ func _finish_collection(leftover: int) -> void:
 	item_count = leftover
 	if item_count <= 0:
 		_collection_locked = true
-		monitoring = false
-		queue_free()
+		# Area3D cannot change monitoring during body_entered signal dispatch.
+		# Defer both physics shutdown and disposal to keep collection error-free.
+		set_deferred("monitoring", false)
+		set_deferred("monitorable", false)
+		call_deferred("queue_free")
 
 
 func _item_color() -> Color:

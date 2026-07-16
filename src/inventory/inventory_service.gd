@@ -74,6 +74,27 @@ func add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> int
 	return remaining
 
 
+func get_add_capacity(item_id: String, metadata: Dictionary = {}) -> int:
+	if not registry.has_item(item_id):
+		return 0
+	var capacity := 0
+	var max_stack := registry.get_max_stack(item_id)
+	for slot_value in slots:
+		var slot: Dictionary = slot_value
+		if slot.is_empty():
+			capacity += max_stack
+		elif (
+			str(slot.get("item_id", "")) == item_id
+			and slot.get("metadata", {}) == metadata
+		):
+			capacity += maxi(0, max_stack - int(slot.get("count", 0)))
+	return capacity
+
+
+func can_add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> bool:
+	return count <= 0 or get_add_capacity(item_id, metadata) >= count
+
+
 func remove_item(item_id: String, count: int = 1) -> int:
 	var remaining := maxi(0, count)
 	for index in slots.size():
@@ -117,9 +138,43 @@ func remove_from_slot(index: int, count: int = 1) -> Dictionary:
 	return result
 
 
+func replace_slot_item(
+	index: int,
+	expected_item_id: String,
+	replacement_item_id: String,
+	replacement_metadata: Dictionary = {}
+) -> bool:
+	if (
+		index < 0
+		or index >= slots.size()
+		or slots[index].is_empty()
+		or expected_item_id.is_empty()
+		or replacement_item_id.is_empty()
+		or not registry.has_item(replacement_item_id)
+	):
+		return false
+	var current: Dictionary = slots[index]
+	if (
+		str(current.get("item_id", "")) != expected_item_id
+		or int(current.get("count", 0)) != 1
+	):
+		return false
+	var replacement: Dictionary = {"item_id": replacement_item_id, "count": 1}
+	if not replacement_metadata.is_empty():
+		replacement["metadata"] = replacement_metadata.duplicate(true)
+	slots[index] = replacement
+	slot_changed.emit(index, replacement.duplicate(true))
+	item_removed.emit(expected_item_id, 1)
+	item_added.emit(replacement_item_id, 1)
+	inventory_changed.emit()
+	_emit_selected_slot()
+	return true
+
+
 func count_item(item_id: String) -> int:
 	var total := 0
-	for slot in slots:
+	for slot_value in slots:
+		var slot: Dictionary = slot_value
 		if str(slot.get("item_id", "")) == item_id:
 			total += int(slot.get("count", 0))
 	return total
@@ -147,6 +202,21 @@ func get_slot(index: int) -> Dictionary:
 	if index < 0 or index >= slots.size():
 		return {}
 	return slots[index].duplicate(true)
+
+
+func update_slot_metadata(index: int, metadata: Dictionary) -> bool:
+	if index < 0 or index >= slots.size() or slots[index].is_empty():
+		return false
+	var slot: Dictionary = slots[index]
+	if metadata.is_empty():
+		slot.erase("metadata")
+	else:
+		slot["metadata"] = metadata.duplicate(true)
+	slots[index] = slot
+	slot_changed.emit(index, slot.duplicate(true))
+	inventory_changed.emit()
+	_emit_selected_slot()
+	return true
 
 
 func get_selected_item() -> Dictionary:
@@ -201,7 +271,8 @@ func grant_starter_kit() -> void:
 
 func serialize() -> Dictionary:
 	var saved_slots: Array = []
-	for slot in slots:
+	for slot_value in slots:
+		var slot: Dictionary = slot_value
 		saved_slots.append(slot.duplicate(true))
 	return {
 		"version": SERIAL_VERSION,
@@ -213,7 +284,7 @@ func serialize() -> Dictionary:
 
 
 func deserialize(data: Dictionary) -> bool:
-	if not data.has("slots") or not data["slots"] is Array:
+	if not data.has("slots") or data["slots"] is not Array:
 		return false
 	slot_count = maxi(9, int(data.get("slot_count", 36)))
 	hotbar_size = clampi(int(data.get("hotbar_size", 9)), 1, slot_count)
