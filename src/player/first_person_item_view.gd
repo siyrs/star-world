@@ -5,6 +5,9 @@ const CONFIG_PATH := "res://data/first_person_viewmodel.json"
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const PolicyScript = preload("res://src/player/held_item_visual_policy.gd")
 const MeshFactoryScript = preload("res://src/player/held_item_mesh_factory.gd")
+const GROUND_SUPPORT_UP := 0.08
+const GROUND_SUPPORT_DOWN := 0.24
+const GROUND_SUPPORT_MAX_UPWARD_SPEED := 0.15
 
 var player: Node
 var inventory: Node
@@ -27,6 +30,7 @@ var _last_action: StringName = &""
 var _base_position := Vector3.ZERO
 var _base_rotation_degrees := Vector3.ZERO
 var _base_scale := 1.0
+var _visually_grounded := false
 
 
 func _ready() -> void:
@@ -67,6 +71,7 @@ func get_snapshot() -> Dictionary:
 		"model_kind": current_model_kind,
 		"part_count": int(_model.get_meta("part_count", 0)) if _model != null else 0,
 		"mining_active": mining_active,
+		"visually_grounded": _visually_grounded,
 		"last_action": str(_last_action),
 		"swing_remaining": _swing_remaining,
 		"use_remaining": _use_remaining,
@@ -221,10 +226,10 @@ func _rebuild_model(definition: Dictionary) -> void:
 
 func _update_transform(_delta: float) -> void:
 	var movement_speed := 0.0
-	var on_floor := false
+	_visually_grounded = false
 	if player is CharacterBody3D:
 		movement_speed = Vector2(player.velocity.x, player.velocity.z).length()
-		on_floor = player.is_on_floor()
+		_visually_grounded = _has_visual_ground_support(player)
 	var swing_duration := maxf(0.05, float(config.get("swing_seconds", 0.28)))
 	var use_duration := maxf(0.05, float(config.get("use_seconds", 0.24)))
 	var switch_duration := maxf(0.01, float(config.get("switch_seconds", 0.18)))
@@ -235,7 +240,7 @@ func _update_transform(_delta: float) -> void:
 		config,
 		_elapsed,
 		movement_speed,
-		on_floor,
+		_visually_grounded,
 		swing_ratio,
 		use_ratio,
 		switch_ratio,
@@ -251,6 +256,23 @@ func _update_transform(_delta: float) -> void:
 			kind_scale = float(config.get("tool_scale", _base_scale))
 	var final_scale := maxf(0.05, kind_scale * float(sample.get("scale_multiplier", 1.0)))
 	scale = Vector3.ONE * final_scale
+
+
+func _has_visual_ground_support(body: CharacterBody3D) -> bool:
+	if body.is_on_floor():
+		return true
+	if body.velocity.y > GROUND_SUPPORT_MAX_UPWARD_SPEED or not body.is_inside_tree():
+		return false
+	var world_3d := body.get_world_3d()
+	if world_3d == null:
+		return false
+	var from := body.global_position + Vector3.UP * GROUND_SUPPORT_UP
+	var to := body.global_position + Vector3.DOWN * GROUND_SUPPORT_DOWN
+	var query := PhysicsRayQueryParameters3D.create(from, to, body.collision_mask)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.exclude = [body.get_rid()]
+	return not world_3d.direct_space_state.intersect_ray(query).is_empty()
 
 
 func _refresh_visibility() -> void:
