@@ -49,6 +49,8 @@ BlockRegistry.shape
 
 楼梯碰撞使用封闭三角棱柱斜坡，视觉仍使用两个阶梯盒。表现和移动职责分离，但占用范围与高度保持一致。
 
+区块碰撞合并为 `ConcavePolygonShape3D` 后必须显式开启 `backface_collision`。这样从上方进行的物理射线和角色地面接触不会因三角面绕序而穿过台阶或楼梯，同时普通完整方块仍沿用原有零分配快速路径。
+
 ## 放置事务
 
 `PlacementPreviewPolicy` 使用实际形状盒判断玩家重叠：
