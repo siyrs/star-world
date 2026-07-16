@@ -59,12 +59,16 @@ static func boxes_as_snapshot(block_id: String) -> Array[Dictionary]:
 
 
 static func is_full_cube(block_id: String) -> bool:
-	var boxes: Array[AABB] = get_local_boxes(block_id)
-	return (
-		boxes.size() == 1
-		and boxes[0].position.is_equal_approx(Vector3.ZERO)
-		and boxes[0].size.is_equal_approx(Vector3.ONE)
-	)
+	if block_id in ["farmland", "farmland_wet"]:
+		return false
+	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", "cube"))
+	return shape not in ["slab", "stairs", "bed", "crop"]
+
+
+static func uses_partial_geometry(block_id: String) -> bool:
+	return not is_full_cube(block_id) and str(
+		BlockRegistryScript.get_definition(block_id).get("shape", "cube")
+	) != "crop"
 
 
 static func face_enabled(block_id: String, box_index: int, face_index: int) -> bool:
