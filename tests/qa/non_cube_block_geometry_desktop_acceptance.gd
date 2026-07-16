@@ -87,11 +87,17 @@ func _run() -> void:
 	_scroll_hotbar_down()
 	await process_frame
 	await process_frame
+	# This legacy acceptance owns the canonical +Z stair path. The dedicated
+	# directional suite covers east, north and west variants separately.
+	player.rotation = Vector3(0.0, PI, 0.0)
+	player.get_view_camera().rotation = Vector3.ZERO
 	await _aim_at(player, Vector3(stair_floor) + Vector3(0.5, 0.96, 0.5))
 	var stair_focus: Dictionary = player.call("get_interaction_focus")
 	var stair_preview: Dictionary = player.call("get_placement_preview_state")
+	var stair_block_id := str(stair_preview.get("selected_block_id", ""))
 	print("QA NON CUBE STAIR FOCUS | focus=%s | preview=%s" % [stair_focus, stair_preview])
 	_check(_focus_hits(stair_focus, stair_floor), "authoritative focus resolves the stair support block")
+	_check(stair_block_id == "oak_stairs", "south-facing legacy journey resolves the canonical stair id")
 	_check(bool(stair_preview.get("valid", false)), "production policy offers a valid stair placement")
 	_check((stair_preview.get("placement_boxes", []) as Array).size() == 2, "stair preview contains lower and raised boxes")
 	var preview_node: Node = player.call("get_interaction_preview")
@@ -100,7 +106,7 @@ func _run() -> void:
 	var stair_position := _vector3i_from(stair_preview.get("placement_position", []))
 	var stair_before := int(hub.inventory.count_item("oak_stairs"))
 	await _right_click_center()
-	_check(str(world.call("get_block", stair_position)) == "oak_stairs", "real right click places oak stairs")
+	_check(str(world.call("get_block", stair_position)) == stair_block_id, "real right click commits the previewed stair variant")
 	_check(int(hub.inventory.count_item("oak_stairs")) == stair_before - 1, "stair placement consumes exactly one item")
 
 	for _frame in 5:
