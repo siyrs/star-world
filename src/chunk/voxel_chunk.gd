@@ -246,8 +246,6 @@ func _append_partial_block(global_block: Vector3i, local_position: Vector3i, loc
 		_append_stair_ramp_collision(_collision_tool, local_origin)
 		_collision_faces += 5
 	else:
-		# Collision must remain closed and independent from visual neighbor culling.
-		# Otherwise a visible slab can become non-collidable when one side touches a cube.
 		for box_index in boxes.size():
 			var box: AABB = boxes[box_index]
 			for face_index in FACE_DIRECTIONS.size():
@@ -266,7 +264,10 @@ func _commit_mesh_build() -> void:
 		_mesh_instance.mesh = null
 	if _collision_faces > 0:
 		var collision_mesh := _collision_tool.commit()
-		_collision_shape.shape = collision_mesh.create_trimesh_shape()
+		var collision_shape := collision_mesh.create_trimesh_shape()
+		if collision_shape is ConcavePolygonShape3D:
+			collision_shape.backface_collision_enabled = true
+		_collision_shape.shape = collision_shape
 	else:
 		_collision_shape.shape = null
 	_visual_tool = null
@@ -339,7 +340,6 @@ func _append_stair_ramp_collision(tool: SurfaceTool, local_origin: Vector3) -> v
 	var h := Vector3(1,1,1)
 	_append_collision_quad(tool, local_origin, [c,d,f,e], Vector3.DOWN)
 	_append_collision_quad(tool, local_origin, [e,f,h,g], Vector3(0,0,1))
-	# Winding produces the actual upward floor normal (0, 1, -0.5).
 	_append_collision_quad(tool, local_origin, [a,g,h,b], Vector3(0,1,-0.5).normalized())
 	_append_collision_triangle(tool, local_origin, [c,g,e], Vector3.LEFT)
 	_append_collision_triangle(tool, local_origin, [d,f,h], Vector3.RIGHT)
