@@ -14,7 +14,9 @@ const BLOCK_IDS := [
 	"farmland_wet",
 	"carrot_stage_0", "carrot_stage_1", "carrot_stage_2", "carrot_stage_3",
 	"potato_stage_0", "potato_stage_1", "potato_stage_2", "potato_stage_3",
-	"oak_bed", "repair_station"
+	"oak_bed", "repair_station",
+	# Directional variants are appended so existing numeric block IDs stay stable.
+	"oak_stairs_east", "oak_stairs_north", "oak_stairs_west"
 ]
 
 const DEFINITIONS := {
@@ -33,7 +35,7 @@ const DEFINITIONS := {
 	"stone_bricks": {"name":"石砖", "color":"#85888A", "solid":true, "transparent":false, "collectible":true, "item_id":"stone_bricks", "hardness":2.0},
 	"glass": {"name":"玻璃", "color":"#BFE4EA", "solid":true, "transparent":true, "collectible":true, "item_id":"glass", "hardness":0.3},
 	"stone_slab": {"name":"石台阶", "color":"#85888A", "solid":true, "transparent":false, "collectible":true, "item_id":"stone_slab", "hardness":2.0, "shape":"slab"},
-	"oak_stairs": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs"},
+	"oak_stairs": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":0},
 	"coal_ore": {"name":"煤矿石", "color":"#3E4144", "solid":true, "transparent":false, "collectible":true, "item_id":"coal", "hardness":2.4},
 	"iron_ore": {"name":"铁矿石", "color":"#BA967C", "solid":true, "transparent":false, "collectible":true, "item_id":"raw_iron", "hardness":2.7},
 	"gold_ore": {"name":"金矿石", "color":"#E4C343", "solid":true, "transparent":false, "collectible":true, "item_id":"raw_gold", "hardness":3.0},
@@ -63,7 +65,10 @@ const DEFINITIONS := {
 	"potato_stage_2": {"name":"开花的马铃薯", "color":"#86A85A", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.66},
 	"potato_stage_3": {"name":"成熟马铃薯", "color":"#B89152", "solid":false, "transparent":true, "collectible":true, "item_id":"", "hardness":0.08, "shape":"crop", "crop_height":0.84},
 	"oak_bed": {"name":"橡木床", "color":"#B94E4A", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_bed", "hardness":0.9, "shape":"bed"},
-	"repair_station": {"name":"修理台", "color":"#8B7667", "solid":true, "transparent":false, "collectible":true, "item_id":"repair_station", "hardness":2.4}
+	"repair_station": {"name":"修理台", "color":"#8B7667", "solid":true, "transparent":false, "collectible":true, "item_id":"repair_station", "hardness":2.4},
+	"oak_stairs_east": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":1, "visual_parent":"oak_stairs"},
+	"oak_stairs_north": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":2, "visual_parent":"oak_stairs"},
+	"oak_stairs_west": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":3, "visual_parent":"oak_stairs"}
 }
 
 

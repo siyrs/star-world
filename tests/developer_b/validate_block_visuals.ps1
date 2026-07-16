@@ -19,6 +19,15 @@ $knownBlocks = @([regex]::Matches($blockListMatch.Groups[1].Value, '"([^"]+)"') 
 })
 if ($knownBlocks.Count -lt 40) { throw "Expected >=40 registered blocks, got $($knownBlocks.Count)" }
 
+$visualAliases = @{}
+$aliasMatches = [regex]::Matches(
+  $registryText,
+  '"([^"]+)"\s*:\s*\{[^\r\n]*"visual_parent"\s*:\s*"([^"]+)"'
+)
+foreach ($match in $aliasMatches) {
+  $visualAliases[$match.Groups[1].Value] = $match.Groups[2].Value
+}
+
 $tileOrder = @($data.tile_order)
 if ($tileOrder.Count -lt 45) { throw "Expected >=45 reusable pixel tiles, got $($tileOrder.Count)" }
 $tileIds = @{}
@@ -48,15 +57,20 @@ foreach ($rawTileId in $tileOrder) {
 
 $blockProfiles = @($data.blocks.PSObject.Properties.Name)
 foreach ($blockId in $knownBlocks) {
-  if ($blockId -notin $blockProfiles) { throw "Missing visual profile for block: $blockId" }
-  $profile = $data.blocks.$blockId
+  $profileId = $blockId
+  if ($visualAliases.ContainsKey($blockId)) {
+    $profileId = [string]$visualAliases[$blockId]
+    if ($profileId -notin $knownBlocks) { throw "Visual parent for $blockId is unknown: $profileId" }
+  }
+  if ($profileId -notin $blockProfiles) { throw "Missing visual profile for block: $blockId (resolved $profileId)" }
+  $profile = $data.blocks.$profileId
   $references = @()
   foreach ($key in @('all','top','side','bottom')) {
     if ($null -ne $profile.$key -and -not [string]::IsNullOrWhiteSpace([string]$profile.$key)) {
       $references += [string]$profile.$key
     }
   }
-  if ($references.Count -eq 0) { throw "Block visual profile is empty: $blockId" }
+  if ($references.Count -eq 0) { throw "Block visual profile is empty: $profileId" }
   foreach ($tileId in $references) {
     if (-not $tileIds.ContainsKey($tileId)) { throw "Block $blockId references unknown tile $tileId" }
   }
@@ -79,4 +93,4 @@ $oreTiles = @(
 )
 if (@($oreTiles | Select-Object -Unique).Count -ne 4) { throw 'Each ore must have a distinct pixel tile' }
 
-Write-Host "PASS block_visuals blocks=$($knownBlocks.Count) tiles=$($tileOrder.Count) tile_size=$($data.tile_size)"
+Write-Host "PASS block_visuals blocks=$($knownBlocks.Count) aliases=$($visualAliases.Count) tiles=$($tileOrder.Count) tile_size=$($data.tile_size)"

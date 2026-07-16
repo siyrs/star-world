@@ -79,7 +79,8 @@ func get_tile_style(tile_id: String) -> Dictionary:
 
 func get_block_profile(block_id: String) -> Dictionary:
 	ensure_loaded()
-	var value: Variant = _blocks.get(block_id, _blocks.get(BlockRegistryScript.AIR, {}))
+	var profile_id := _visual_profile_id(block_id)
+	var value: Variant = _blocks.get(profile_id, _blocks.get(BlockRegistryScript.AIR, {}))
 	return value.duplicate(true) if value is Dictionary else {}
 
 
@@ -170,10 +171,11 @@ func _validate_loaded_data() -> Array[String]:
 		if palette is not Array or palette.is_empty():
 			errors.append("tile %s has no palette" % tile_id)
 	for block_id: String in BlockRegistryScript.BLOCK_IDS:
-		if not _blocks.has(block_id):
-			errors.append("block %s has no visual profile" % block_id)
+		var profile_id := _visual_profile_id(block_id)
+		if not _blocks.has(profile_id):
+			errors.append("block %s has no visual profile or visual_parent" % block_id)
 			continue
-		var profile: Dictionary = _blocks.get(block_id, {})
+		var profile: Dictionary = _blocks.get(profile_id, {})
 		if profile.is_empty():
 			errors.append("block %s has an empty visual profile" % block_id)
 			continue
@@ -182,6 +184,13 @@ func _validate_loaded_data() -> Array[String]:
 			if not _tiles.has(tile_id):
 				errors.append("block %s references missing tile %s" % [block_id, tile_id])
 	return errors
+
+
+func _visual_profile_id(block_id: String) -> String:
+	if _blocks.has(block_id):
+		return block_id
+	var parent := str(BlockRegistryScript.get_definition(block_id).get("visual_parent", ""))
+	return parent if not parent.is_empty() else block_id
 
 
 func _clear() -> void:
