@@ -65,7 +65,8 @@ func _run() -> void:
 	for _frame in 5:
 		await physics_frame
 		await process_frame
-	_check(player.is_on_floor(), "player is grounded before mining acceptance")
+	held_view.call("refresh_for_test")
+	_check(bool(held_view.call("get_snapshot").get("visually_grounded", false)), "held item support probe confirms the player is supported before mining")
 
 	hub.inventory.clear()
 	hub.inventory.add_item("wooden_pickaxe", 1)
