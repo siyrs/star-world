@@ -266,7 +266,7 @@ func _commit_mesh_build() -> void:
 		var collision_mesh := _collision_tool.commit()
 		var collision_shape := collision_mesh.create_trimesh_shape()
 		if collision_shape is ConcavePolygonShape3D:
-			collision_shape.backface_collision_enabled = true
+			collision_shape.backface_collision = true
 		_collision_shape.shape = collision_shape
 	else:
 		_collision_shape.shape = null
