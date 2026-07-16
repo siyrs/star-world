@@ -243,7 +243,7 @@ func _append_partial_block(global_block: Vector3i, local_position: Vector3i, loc
 	if not BlockRegistryScript.is_solid(block_id):
 		return
 	if shape == "stairs":
-		_append_stair_ramp_collision(_collision_tool, local_origin)
+		_append_stair_ramp_collision(_collision_tool, local_origin, block_id)
 		_collision_faces += 5
 	else:
 		for box_index in boxes.size():
@@ -329,20 +329,14 @@ func _face_shade(direction: Vector3) -> Color:
 	return Color.WHITE
 
 
-func _append_stair_ramp_collision(tool: SurfaceTool, local_origin: Vector3) -> void:
-	var a := Vector3(0,0.5,0)
-	var b := Vector3(1,0.5,0)
-	var c := Vector3(0,0,0)
-	var d := Vector3(1,0,0)
-	var e := Vector3(0,0,1)
-	var f := Vector3(1,0,1)
-	var g := Vector3(0,1,1)
-	var h := Vector3(1,1,1)
-	_append_collision_quad(tool, local_origin, [c,d,f,e], Vector3.DOWN)
-	_append_collision_quad(tool, local_origin, [e,f,h,g], Vector3(0,0,1))
-	_append_collision_quad(tool, local_origin, [a,g,h,b], Vector3(0,1,-0.5).normalized())
-	_append_collision_triangle(tool, local_origin, [c,g,e], Vector3.LEFT)
-	_append_collision_triangle(tool, local_origin, [d,f,h], Vector3.RIGHT)
+func _append_stair_ramp_collision(tool: SurfaceTool, local_origin: Vector3, block_id: String) -> void:
+	for face: Dictionary in ShapeGeometryScript.get_stair_ramp_collision_faces(block_id):
+		var corners: Array = face.get("corners", [])
+		var normal: Vector3 = face.get("normal", Vector3.UP)
+		if corners.size() == 4:
+			_append_collision_quad(tool, local_origin, corners, normal)
+		elif corners.size() == 3:
+			_append_collision_triangle(tool, local_origin, corners, normal)
 
 
 func _append_collision_quad(tool: SurfaceTool, local_origin: Vector3, corners: Array, normal: Vector3) -> void:
