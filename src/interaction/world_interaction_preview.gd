@@ -88,7 +88,7 @@ func _apply_focus(focus: Dictionary) -> void:
 func _render_snapshot() -> void:
 	var target_position: Variant = _position_from(_snapshot.get("target_position", []))
 	var target_visible := bool(_snapshot.get("target_visible", false)) and target_position != null
-	var target_boxes := _boxes_from(_snapshot.get("target_boxes", []))
+	var target_boxes: Array[AABB] = _boxes_from(_snapshot.get("target_boxes", []))
 	_render_outline_group(
 		_target_outlines,
 		"TargetOutline",
@@ -110,7 +110,7 @@ func _render_snapshot() -> void:
 	_placement_outline_material.emission = VALID_COLOR if valid else INVALID_COLOR
 	_placement_fill_material.albedo_color = VALID_FILL if valid else INVALID_FILL
 	_placement_fill_material.emission = VALID_FILL if valid else INVALID_FILL
-	var placement_boxes := _boxes_from(_snapshot.get("placement_boxes", []))
+	var placement_boxes: Array[AABB] = _boxes_from(_snapshot.get("placement_boxes", []))
 	var cell_origin := Vector3(placement_position) if placement_position != null else Vector3.ZERO
 	_render_outline_group(
 		_placement_outlines,
@@ -151,7 +151,7 @@ func _render_outline_group(
 	inflation: float,
 	material: StandardMaterial3D
 ) -> void:
-	var normalized := boxes if not boxes.is_empty() else [AABB(Vector3.ZERO, Vector3.ONE)]
+	var normalized: Array[AABB] = _normalized_boxes(boxes)
 	_ensure_outline_count(nodes, normalized.size(), prefix, material)
 	for index in nodes.size():
 		var node := nodes[index]
@@ -165,7 +165,7 @@ func _render_outline_group(
 
 
 func _render_fill_group(cell_origin: Vector3, boxes: Array[AABB], visible: bool) -> void:
-	var normalized := boxes if not boxes.is_empty() else [AABB(Vector3.ZERO, Vector3.ONE)]
+	var normalized: Array[AABB] = _normalized_boxes(boxes)
 	_ensure_fill_count(normalized.size())
 	for index in _placement_fills.size():
 		var node := _placement_fills[index]
@@ -176,6 +176,14 @@ func _render_fill_group(cell_origin: Vector3, boxes: Array[AABB], visible: bool)
 		var box: AABB = normalized[index]
 		node.position = cell_origin + box.position + box.size * 0.5
 		node.scale = box.size * 0.94
+
+
+func _normalized_boxes(boxes: Array[AABB]) -> Array[AABB]:
+	if not boxes.is_empty():
+		return boxes
+	var fallback: Array[AABB] = []
+	fallback.append(AABB(Vector3.ZERO, Vector3.ONE))
+	return fallback
 
 
 func _ensure_outline_count(
