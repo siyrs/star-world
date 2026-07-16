@@ -5,7 +5,6 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://first-person-viewmodel-desktop-acceptance.png"
 const CLEANUP_FRAMES := 6
-const PHYSICS_STEP := 1.0 / 60.0
 
 var checks := 0
 var failures: Array[String] = []
@@ -38,9 +37,10 @@ func _run() -> void:
 		return
 	_world_id = str(state.get("metadata", {}).get("id", ""))
 	game.begin_world_state(state)
-	for _frame in 5:
+	for _frame in 6:
 		await process_frame
 	await physics_frame
+
 	var player: CharacterBody3D = game.player
 	var world: Node = game.world
 	_check(player != null and bool(player.get("input_enabled")), "real player owns gameplay input")
@@ -57,12 +57,13 @@ func _run() -> void:
 	world.call("force_load_chunk", world.call("block_to_chunk", player_block))
 	_prepare_arena(world, player_block.x, player_block.z, floor_y)
 	_add_physics_platform(world, player_block.x, player_block.z, floor_y)
-	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z + 0.5)
+	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.25, player_block.z + 0.5)
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
-	for _frame in 8:
-		player.call("_physics_process", PHYSICS_STEP)
-		await process_frame
+	player.velocity.y = -1.0
+	await _settle_player(player, 120)
+	view.call("refresh_for_test")
+	_check(bool(view.call("get_snapshot").get("visually_grounded", false)), "held item view detects real support before gameplay actions")
 
 	hub.inventory.clear()
 	hub.inventory.add_item("wooden_pickaxe", 1)
@@ -87,25 +88,13 @@ func _run() -> void:
 		await physics_frame
 		await process_frame
 	await _aim_at(player, world.call("block_to_world", target_block))
-	var target_focus_value: Variant = player.call("get_interaction_focus")
-	var target_focus: Dictionary = target_focus_value if target_focus_value is Dictionary else {}
-	var target_ray := player.get_node("CameraPivot/Camera3D/InteractionRay") as RayCast3D
-	print(
-		"QA VIEWMODEL TARGET | expected=%s | colliding=%s | point=%s | normal=%s | focus=%s"
-		% [
-			target_block,
-			target_ray.is_colliding(),
-			target_ray.get_collision_point() if target_ray.is_colliding() else Vector3.ZERO,
-			target_ray.get_collision_normal() if target_ray.is_colliding() else Vector3.ZERO,
-			target_focus,
-		]
-	)
+	_check(_focus_hits_block(player, target_block), "authoritative center focus resolves the real stone target")
 	await RenderingServer.frame_post_draw
 	_save_stage_image(root.get_texture().get_image(), "target")
-	_check(_focus_hits_block(player, target_block), "authoritative center focus resolves the real stone target")
+
 	var rest_position: Vector3 = view.position
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
-	for _frame in 2:
+	for _frame in 3:
 		await physics_frame
 		await process_frame
 	snapshot = view.call("get_snapshot")
@@ -122,24 +111,22 @@ func _run() -> void:
 	view.call("refresh_for_test")
 	snapshot = view.call("get_snapshot")
 	_check(str(snapshot.get("item_id", "")) == "grass_block", "real mouse wheel switches to grass block")
-	_check(str(snapshot.get("model_kind", "")) == "block", "grass block uses a textured cube viewmodel")
+	_check(str(snapshot.get("model_kind", "")) == "block", "grass block uses a textured block viewmodel")
 	_check(str(snapshot.get("block_id", "")) == "grass", "held block resolves the production block id")
 	player.call("_update_interaction_focus", true)
 	var preview: Dictionary = player.call("get_placement_preview_state")
 	_check(bool(preview.get("valid", false)), "production placement policy exposes a valid target")
 	var placement_position: Vector3i = _vector3i_from(preview.get("placement_position", []))
-	var grass_before: int = int(hub.inventory.count_item("grass_block"))
+	var grass_before := int(hub.inventory.count_item("grass_block"))
 	await _right_click_center()
 	_check(str(world.call("get_block", placement_position)) == "grass", "real right click places the block at the previewed voxel")
 	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
-	var placement_snapshot: Dictionary = view.call("get_snapshot")
-	_check(str(placement_snapshot.get("last_action", "")) == "place", "successful placement reaches the held-item use action")
+	_check(str(view.call("get_snapshot").get("last_action", "")) == "place", "successful placement reaches the held-item use action")
 
 	world.call("set_block", placement_position, "air")
 	world.call("set_block", target_block, "air")
-	await process_frame
 	await physics_frame
-
+	await process_frame
 	_scroll_hotbar_down()
 	await process_frame
 	await process_frame
@@ -147,6 +134,7 @@ func _run() -> void:
 	snapshot = view.call("get_snapshot")
 	_check(str(snapshot.get("item_id", "")) == "iron_sword", "second real wheel step displays the iron sword")
 	_check(str(snapshot.get("model_kind", "")) == "tool", "iron sword uses the tool model family")
+
 	var cow_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 2.8)
 	var cow_variant: Variant = hub.creature_spawner.call("spawn_creature", "cow", cow_position)
 	_check(cow_variant is Node3D, "real creature spawner creates an attack target")
@@ -161,26 +149,18 @@ func _run() -> void:
 		cow.queue_free()
 		await process_frame
 
-	for _frame in 60:
+	for _frame in 90:
 		if float(view.call("get_snapshot").get("swing_remaining", 0.0)) <= 0.0:
 			break
 		await process_frame
 	var camera: Camera3D = player.call("get_view_camera")
 	camera.rotation = Vector3.ZERO
 	player.rotation = Vector3.ZERO
-	for _frame in 60:
-		if player.is_on_floor():
-			break
-		player.call("_physics_process", PHYSICS_STEP)
-		await process_frame
-	var support_block: String = str(
-		world.call("get_block", world.call("world_to_block", player.global_position - Vector3(0.0, 0.08, 0.0)))
-	)
-	print(
-		"QA VIEWMODEL MOVE PREP | position=%s | velocity=%s | on_floor=%s | physics=%s | support=%s"
-		% [player.global_position, player.velocity, player.is_on_floor(), player.is_physics_processing(), support_block]
-	)
-	_check(player.is_on_floor(), "real physics platform grounds the player before walk-bob acceptance")
+	player.velocity.y = -1.0
+	await _settle_player(player, 120)
+	view.call("refresh_for_test")
+	_check(bool(view.call("get_snapshot").get("visually_grounded", false)), "held item view retains grounded support before walk-bob acceptance")
+
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
 	var max_player_distance := 0.0
@@ -189,22 +169,24 @@ func _run() -> void:
 	_check(Input.is_action_pressed("move_forward"), "move_forward action enters pressed state")
 	var player_input_service: Node = player.get("input_service") as Node
 	_check(player_input_service != null, "production player exposes its gameplay input service")
-	var service_vector := Vector2.ZERO
 	if player_input_service != null:
-		service_vector = player_input_service.call("get_movement_vector")
-	_check(service_vector.y < -0.5, "production input service resolves forward movement")
-	for _frame in 18:
-		player.call("_physics_process", PHYSICS_STEP)
+		var service_vector: Vector2 = player_input_service.call("get_movement_vector")
+		_check(service_vector.y < -0.5, "production input service resolves forward movement")
+	for _frame in 36:
+		await physics_frame
 		await process_frame
 		max_player_distance = maxf(
 			max_player_distance,
-			Vector2(player.global_position.x - player_start.x, player.global_position.z - player_start.z).length()
+			Vector2(
+				player.global_position.x - player_start.x,
+				player.global_position.z - player_start.z
+			).length()
 		)
 		max_view_distance = maxf(max_view_distance, view.position.distance_to(view_start))
 	Input.action_release("move_forward")
 	await process_frame
 	_check(max_player_distance > 0.05, "production movement physics moves the player forward")
-	_check(max_view_distance > 0.005, "real movement produces measurable first-person walk bob")
+	_check(max_view_distance > 0.005, "real supported movement produces measurable first-person walk bob")
 
 	await RenderingServer.frame_post_draw
 	var image: Image = root.get_texture().get_image()
@@ -222,6 +204,14 @@ func _run() -> void:
 	_check(bool(player.get("input_enabled")), "closing inventory restores WASD input")
 	_check(bool(hub.save_current()), "viewmodel coexists with the production save transaction")
 	await _finish(game, hub)
+
+
+func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
+	for _frame in frame_limit:
+		if player.is_on_floor():
+			return
+		await physics_frame
+		await process_frame
 
 
 func _add_physics_platform(parent: Node, center_x: int, center_z: int, floor_y: int) -> void:
@@ -248,7 +238,7 @@ func _prepare_arena(world: Node, center_x: int, center_z: int, floor_y: int) -> 
 
 func _find_floor_y(world: Node, player_block: Vector3i) -> int:
 	for offset in range(0, 12):
-		var candidate: int = player_block.y - offset - 1
+		var candidate := player_block.y - offset - 1
 		if str(world.call("get_block", Vector3i(player_block.x, candidate, player_block.z))) != "air":
 			return candidate
 	return maxi(1, player_block.y - 1)

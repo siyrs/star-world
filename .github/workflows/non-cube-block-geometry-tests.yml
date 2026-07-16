@@ -1,0 +1,80 @@
+name: Non-cube block geometry quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: non-cube-geometry-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  geometry-regression:
+    name: Shape contract, chunk mesh and preview regression
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Non-cube geometry regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/non_cube_block_geometry_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  real-geometry-desktop:
+    name: Real slab, stair and collision desktop acceptance
+    needs: geometry-regression
+    runs-on: windows-latest
+    timeout-minutes: 24
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise placement, collision and stair traversal
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/non_cube_block_geometry_desktop_acceptance.gd' `
+            -OutputPath 'build\non-cube-block-geometry-desktop.png' `
+            -TimeoutMilliseconds 110000
+
+      - name: Upload non-cube geometry evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: non-cube-block-geometry-desktop-${{ github.run_number }}
+          path: |
+            build/non-cube-block-geometry-*.png
+            build/non-cube-block-geometry-*.log
+          if-no-files-found: error
+          retention-days: 14

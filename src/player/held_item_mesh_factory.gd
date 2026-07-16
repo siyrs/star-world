@@ -3,6 +3,7 @@ extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const TextureAtlasScript = preload("res://src/block/block_texture_atlas.gd")
+const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 
 const FACE_DIRECTIONS := [
 	Vector3(1, 0, 0),
@@ -11,14 +12,6 @@ const FACE_DIRECTIONS := [
 	Vector3(0, -1, 0),
 	Vector3(0, 0, 1),
 	Vector3(0, 0, -1),
-]
-const FACE_VERTICES := [
-	[Vector3(0.5, -0.5, -0.5), Vector3(0.5, 0.5, -0.5), Vector3(0.5, 0.5, 0.5), Vector3(0.5, -0.5, 0.5)],
-	[Vector3(-0.5, -0.5, 0.5), Vector3(-0.5, 0.5, 0.5), Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, -0.5, -0.5)],
-	[Vector3(-0.5, 0.5, 0.5), Vector3(0.5, 0.5, 0.5), Vector3(0.5, 0.5, -0.5), Vector3(-0.5, 0.5, -0.5)],
-	[Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5)],
-	[Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, 0.5), Vector3(0.5, 0.5, 0.5), Vector3(-0.5, 0.5, 0.5)],
-	[Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5)],
 ]
 const FACE_ORDER := [0, 1, 2, 0, 2, 3]
 
@@ -142,20 +135,25 @@ func _add_box(parent: Node3D, part_name: String, size: Vector3, position: Vector
 func _build_block_mesh(block_id: String) -> ArrayMesh:
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for face_index in FACE_DIRECTIONS.size():
-		var normal: Vector3 = FACE_DIRECTIONS[face_index]
-		var shade := Color.WHITE
-		if normal.y < -0.5:
-			shade = Color(0.72, 0.72, 0.72, 1.0)
-		elif absf(normal.y) < 0.5:
-			shade = Color(0.88, 0.88, 0.88, 1.0)
-		var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
-		var corners: Array = FACE_VERTICES[face_index]
-		for corner_index in FACE_ORDER:
-			tool.set_normal(normal)
-			tool.set_color(shade)
-			tool.set_uv(uvs[corner_index])
-			tool.add_vertex(corners[corner_index])
+	var boxes: Array[AABB] = ShapeGeometryScript.get_local_boxes(block_id)
+	for box_index in boxes.size():
+		var box: AABB = boxes[box_index]
+		for face_index in FACE_DIRECTIONS.size():
+			if not ShapeGeometryScript.face_enabled(block_id, box_index, face_index):
+				continue
+			var normal: Vector3 = FACE_DIRECTIONS[face_index]
+			var shade := Color.WHITE
+			if normal.y < -0.5:
+				shade = Color(0.72, 0.72, 0.72, 1.0)
+			elif absf(normal.y) < 0.5:
+				shade = Color(0.88, 0.88, 0.88, 1.0)
+			var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
+			var corners: Array[Vector3] = ShapeGeometryScript.face_vertices(box, face_index)
+			for corner_index in FACE_ORDER:
+				tool.set_normal(normal)
+				tool.set_color(shade)
+				tool.set_uv(uvs[corner_index])
+				tool.add_vertex(corners[corner_index] - Vector3.ONE * 0.5)
 	return tool.commit()
 
 

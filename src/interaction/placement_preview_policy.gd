@@ -2,6 +2,7 @@ class_name PlacementPreviewPolicy
 extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 const INVALID_COORD := Vector3i(2147483647, 2147483647, 2147483647)
 
 
@@ -13,8 +14,11 @@ func evaluate(
 	var result := {
 		"target_visible": false,
 		"target_position": [],
+		"target_block_id": "",
+		"target_boxes": [],
 		"placement_visible": false,
 		"placement_position": [],
+		"placement_boxes": [],
 		"selected_block_id": selected_block_id,
 		"valid": false,
 		"reason": "no_focus",
@@ -27,8 +31,13 @@ func evaluate(
 	)
 	if target_position == INVALID_COORD:
 		return result
+	var target_block_id := str(
+		focus.get("hit_block_id", focus.get("block_id", BlockRegistryScript.AIR))
+	)
 	result["target_visible"] = true
 	result["target_position"] = _position_array(target_position)
+	result["target_block_id"] = target_block_id
+	result["target_boxes"] = ShapeGeometryScript.boxes_as_snapshot(target_block_id)
 	if selected_block_id.is_empty() or selected_block_id == BlockRegistryScript.AIR:
 		result["reason"] = "no_block_selected"
 		return result
@@ -38,6 +47,7 @@ func evaluate(
 		return result
 	result["placement_visible"] = true
 	result["placement_position"] = _position_array(placement_position)
+	result["placement_boxes"] = ShapeGeometryScript.boxes_as_snapshot(selected_block_id)
 	var occupied_block_id := str(
 		focus.get("placement_target_block_id", BlockRegistryScript.AIR)
 	)
@@ -45,10 +55,13 @@ func evaluate(
 	if occupied_block_id != BlockRegistryScript.AIR:
 		result["reason"] = "occupied"
 		return result
-	var placement_bounds := AABB(Vector3(placement_position), Vector3.ONE)
-	if player_bounds.size.length_squared() > 0.0 and player_bounds.intersects(placement_bounds):
-		result["reason"] = "player_overlap"
-		return result
+	if player_bounds.size.length_squared() > 0.0:
+		for placement_bounds: AABB in ShapeGeometryScript.world_boxes(
+			selected_block_id, placement_position
+		):
+			if player_bounds.intersects(placement_bounds):
+				result["reason"] = "player_overlap"
+				return result
 	result["valid"] = true
 	result["reason"] = "ok"
 	return result
