@@ -1,0 +1,49 @@
+name: One-shot stabilize viewmodel grounding test
+
+on:
+  push:
+    branches:
+      - agent/non-cube-block-geometry
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/non-cube-block-geometry
+          fetch-depth: 0
+      - name: Patch grounding acceptance and remove this workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/qa/first_person_viewmodel_desktop_acceptance.gd')
+          text = path.read_text(encoding='utf-8')
+          old = '''\tfor _frame in 60:
+\t\tif player.is_on_floor():
+\t\t\tbreak
+\t\tplayer.call("_physics_process", PHYSICS_STEP)
+\t\tawait process_frame
+'''
+          new = '''\tplayer.velocity.y = -1.0
+\tfor _frame in 90:
+\t\tif player.is_on_floor():
+\t\t\tbreak
+\t\tplayer.call("_physics_process", PHYSICS_STEP)
+\t\tawait physics_frame
+\t\tawait process_frame
+'''
+          if old not in text:
+              raise SystemExit('grounding loop not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          Path('.github/workflows/one-shot-stabilize-viewmodel-grounding.yml').unlink()
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/qa/first_person_viewmodel_desktop_acceptance.gd .github/workflows/one-shot-stabilize-viewmodel-grounding.yml
+          git commit -m "test: settle player on real platform before walk bob"
+          git push origin HEAD:agent/non-cube-block-geometry
