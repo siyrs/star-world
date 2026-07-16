@@ -5,6 +5,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://non-cube-block-geometry-desktop.png"
 const CLEANUP_FRAMES := 6
+const TEST_FLOOR_Y := 48
 
 var checks := 0
 var failures: Array[String] = []
@@ -47,17 +48,17 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "gameplay starts with captured mouse")
 
 	var player_block: Vector3i = world.call("world_to_block", player.global_position)
-	var floor_y := _find_floor_y(world, player_block)
-	var player_floor := Vector3i(player_block.x, floor_y, player_block.z + 1)
-	var slab_floor := Vector3i(player_block.x - 1, floor_y, player_block.z - 3)
-	var stair_floor := Vector3i(player_block.x + 1, floor_y, player_block.z - 3)
+	var player_floor := Vector3i(player_block.x, TEST_FLOOR_Y, player_block.z + 1)
+	var slab_floor := Vector3i(player_block.x - 1, TEST_FLOOR_Y, player_block.z - 3)
+	var stair_floor := Vector3i(player_block.x + 1, TEST_FLOOR_Y, player_block.z - 3)
 	_prepare_column(world, player_floor)
 	_prepare_column(world, slab_floor)
 	_prepare_column(world, stair_floor)
-	print("QA NON CUBE PHASE | prepared minimal production columns")
+	print("QA NON CUBE PHASE | isolated platform y=%d" % TEST_FLOOR_Y)
 
 	player.global_position = Vector3(player_floor) + Vector3(0.5, 1.05, 0.5)
 	player.rotation = Vector3.ZERO
+	player.get_view_camera().rotation = Vector3.ZERO
 	player.call("reset_motion")
 	for _frame in 5:
 		await physics_frame
@@ -69,9 +70,11 @@ func _run() -> void:
 	hub.inventory.select_slot(0)
 	await process_frame
 
-	await _aim_at(player, Vector3(slab_floor) + Vector3(0.5, 0.98, 0.5))
-	player.call("_update_interaction_focus", true)
+	await _aim_at(player, Vector3(slab_floor) + Vector3(0.5, 0.96, 0.5))
+	var slab_focus: Dictionary = player.call("get_interaction_focus")
 	var slab_preview: Dictionary = player.call("get_placement_preview_state")
+	print("QA NON CUBE SLAB FOCUS | focus=%s | preview=%s" % [slab_focus, slab_preview])
+	_check(_focus_hits(slab_focus, slab_floor), "authoritative focus resolves the slab support block")
 	_check(bool(slab_preview.get("valid", false)), "production policy offers a valid slab placement")
 	_check((slab_preview.get("placement_boxes", []) as Array).size() == 1, "slab preview contains one geometry box")
 	var slab_position := _vector3i_from(slab_preview.get("placement_position", []))
@@ -79,14 +82,15 @@ func _run() -> void:
 	await _right_click_center()
 	_check(str(world.call("get_block", slab_position)) == "stone_slab", "real right click places a stone slab")
 	_check(int(hub.inventory.count_item("stone_slab")) == slab_before - 1, "slab placement consumes exactly one item")
-	print("QA NON CUBE PHASE | slab placed at %s" % slab_position)
 
 	_scroll_hotbar_down()
 	await process_frame
 	await process_frame
-	await _aim_at(player, Vector3(stair_floor) + Vector3(0.5, 0.98, 0.5))
-	player.call("_update_interaction_focus", true)
+	await _aim_at(player, Vector3(stair_floor) + Vector3(0.5, 0.96, 0.5))
+	var stair_focus: Dictionary = player.call("get_interaction_focus")
 	var stair_preview: Dictionary = player.call("get_placement_preview_state")
+	print("QA NON CUBE STAIR FOCUS | focus=%s | preview=%s" % [stair_focus, stair_preview])
+	_check(_focus_hits(stair_focus, stair_floor), "authoritative focus resolves the stair support block")
 	_check(bool(stair_preview.get("valid", false)), "production policy offers a valid stair placement")
 	_check((stair_preview.get("placement_boxes", []) as Array).size() == 2, "stair preview contains lower and raised boxes")
 	var preview_node: Node = player.call("get_interaction_preview")
@@ -97,7 +101,6 @@ func _run() -> void:
 	await _right_click_center()
 	_check(str(world.call("get_block", stair_position)) == "oak_stairs", "real right click places oak stairs")
 	_check(int(hub.inventory.count_item("oak_stairs")) == stair_before - 1, "stair placement consumes exactly one item")
-	print("QA NON CUBE PHASE | stair placed at %s" % stair_position)
 
 	for _frame in 5:
 		await physics_frame
@@ -116,9 +119,6 @@ func _run() -> void:
 		_check(back_y > front_y + 0.20, "stair collision rises from front to rear")
 		print("QA NON CUBE COLLISION | front_y=%.3f | back_y=%.3f" % [front_y, back_y])
 
-	# Add only two rear platform blocks, then start the real CharacterBody3D on
-	# the lower portion of the production ramp. This isolates ramp traversal from
-	# unrelated step-up behavior while still exercising production input/physics.
 	for z_offset in range(1, 3):
 		var platform_position := stair_position + Vector3i(0, 0, z_offset)
 		_prepare_column(world, platform_position)
@@ -177,12 +177,11 @@ func _prepare_column(world: Node, floor_position: Vector3i) -> void:
 		world.call("set_block", floor_position + Vector3i.UP * y_offset, "air")
 
 
-func _find_floor_y(world: Node, player_block: Vector3i) -> int:
-	for offset in range(0, 12):
-		var candidate := player_block.y - offset - 1
-		if str(world.call("get_block", Vector3i(player_block.x, candidate, player_block.z))) != "air":
-			return candidate
-	return maxi(1, player_block.y - 1)
+func _focus_hits(focus: Dictionary, expected: Vector3i) -> bool:
+	return (
+		str(focus.get("type", "")) == "block"
+		and _vector3i_from(focus.get("hit_position", [])) == expected
+	)
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
