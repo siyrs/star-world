@@ -9,7 +9,7 @@ const CLEANUP_FRAMES := 6
 var checks := 0
 var failures: Array[String] = []
 var _capture_path := ""
-var _invalid_capture_path := ""
+var _extended_capture_path := ""
 var _created_world_id := ""
 
 
@@ -19,7 +19,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
-	_invalid_capture_path = "%s-invalid.png" % _capture_path.get_basename()
+	_extended_capture_path = "%s-extended.png" % _capture_path.get_basename()
 	root.size = Vector2i(1024, 576)
 	var game = GameScene.instantiate()
 	root.add_child(game)
@@ -100,24 +100,25 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "placement keeps gameplay mouse capture")
 	_check(bool(player.get("input_enabled")), "placement keeps player movement input enabled")
 
-	# Keep the crosshair on the same stone face. The cell that was green is now
-	# occupied by the newly placed planks, so the same contract must immediately
-	# turn red, name the blocker, and reject a repeated right click.
+	# With two-sided production collision, the newly placed plank correctly blocks
+	# the old stone face. Re-aiming at the same world point must therefore target
+	# the nearer plank and move the green ghost one cell toward the player.
+	var extended_placement := expected_placement + Vector3i(0, 0, 1)
 	await _aim_at(player, world.call("block_to_world", anchor))
 	focus = player.call("get_interaction_focus")
 	preview_state = focus.get("placement_preview", {})
-	_check(_array_to_vector3i(focus.get("hit_position", [])) == anchor, "occupied preview keeps the same visible target")
-	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == expected_placement, "occupied preview keeps the same adjacent cell")
-	_check(bool(preview_state.get("placement_visible", false)), "occupied target still renders a placement ghost")
-	_check(not bool(preview_state.get("valid", true)), "ghost turns invalid after the cell becomes occupied")
-	_check(str(preview_state.get("reason", "")) == "occupied", "invalid ghost exposes the occupied reason")
-	_check(str(preview_state.get("occupied_block_id", "")) == "planks", "invalid ghost records the actual blocking block")
+	_check(_array_to_vector3i(focus.get("hit_position", [])) == expected_placement, "newly placed block becomes the authoritative visible target")
+	_check(str(focus.get("block_id", "")) == "planks", "authoritative focus identifies the nearer plank")
+	_check(_array_to_vector3i(preview_state.get("placement_position", [])) == extended_placement, "green ghost advances to the next adjacent cell")
+	_check(bool(preview_state.get("placement_visible", false)), "new target still renders a placement ghost")
+	_check(bool(preview_state.get("valid", false)), "next empty cell remains valid for continuous building")
+	_check(str(preview_state.get("reason", "")) == "ok", "continuous placement exposes the stable ok reason")
 	prompt = hub.player_experience.call("get_status").get("prompt", {})
-	_check("已被木板占用" in str(prompt.get("subtitle", "")), "invalid preview names the blocking block in text")
-	await _capture(_invalid_capture_path)
+	_check("放置" in str(prompt.get("secondary", "")), "continuous building keeps the right-click action")
+	await _capture(_extended_capture_path)
 	await _right_click_center()
-	_check(str(world.call("get_block", expected_placement)) == "planks", "repeated right click cannot overwrite an occupied preview cell")
-	_check(hub.inventory.count_item("oak_planks") == 2, "rejected occupied placement consumes no item")
+	_check(str(world.call("get_block", extended_placement)) == "planks", "second real right click extends the block line")
+	_check(hub.inventory.count_item("oak_planks") == 1, "second valid placement consumes exactly one item")
 
 	await _tap_key(KEY_E)
 	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real inventory overlay")
@@ -223,8 +224,8 @@ func _finish(game: Node, hub: Node) -> void:
 		await process_frame
 	if failures.is_empty():
 		print(
-			"QA PLACEMENT PREVIEW DESKTOP PASS | checks=%d | valid=%s | invalid=%s"
-			% [checks, _capture_path, _invalid_capture_path]
+			"QA PLACEMENT PREVIEW DESKTOP PASS | checks=%d | valid=%s | extended=%s"
+			% [checks, _capture_path, _extended_capture_path]
 		)
 		quit(0)
 	else:
