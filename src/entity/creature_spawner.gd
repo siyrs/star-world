@@ -3,9 +3,12 @@ extends Node3D
 
 signal creature_spawned(creature: Node3D)
 signal creature_despawned(creature: Node3D)
+signal ecology_changed(snapshot: Dictionary)
 
 const CreatureFactoryScript = preload("res://src/entity/creature_factory.gd")
 const PopulationPolicyScript = preload("res://src/entity/creature_population_policy.gd")
+const EcologyRegistryScript = preload("res://src/entity/creature_ecology_registry.gd")
+const EcologyPolicyScript = preload("res://src/entity/creature_ecology_policy.gd")
 
 @export var spawn_interval: float = 8.0
 @export var maintenance_interval: float = 2.0
@@ -22,13 +25,17 @@ var ground_resolver: Callable
 var map_id: String = "star_continent"
 var active: bool = false
 var _factory = CreatureFactoryScript.new()
+var _ecology_registry = EcologyRegistryScript.new()
+var _ecology_profile: Dictionary = {}
 var _spawn_timer: float = 2.0
 var _maintenance_timer: float = 0.0
 var _rng := RandomNumberGenerator.new()
+var _last_snapshot: Dictionary = {}
 
 
 func _ready() -> void:
 	_rng.randomize()
+	set_map_profile(map_id)
 	set_process(active)
 
 
@@ -44,6 +51,18 @@ func setup(
 	day_night_service = p_day_night
 	ground_resolver = p_ground_resolver
 	set_active(activate_immediately)
+	_publish_ecology_if_changed(true)
+
+
+func set_map_profile(p_map_id: String) -> void:
+	var profile := _ecology_registry.get_profile(p_map_id)
+	map_id = str(profile.get("id", "star_continent"))
+	_ecology_profile = profile.duplicate(true)
+	spawn_interval = clampf(float(profile.get("spawn_interval_seconds", spawn_interval)), 1.0, 30.0)
+	max_animals = maxi(0, int(profile.get("passive_cap", max_animals)))
+	max_zombies = EcologyPolicyScript.hostile_cap(profile, _current_phase())
+	_spawn_timer = minf(_spawn_timer, spawn_interval)
+	_publish_ecology_if_changed(true)
 
 
 func set_active(value: bool) -> void:
@@ -52,11 +71,13 @@ func set_active(value: bool) -> void:
 	if active:
 		_spawn_timer = 2.0
 		_maintenance_timer = 0.0
+	_publish_ecology_if_changed(true)
 
 
 func clear_creatures() -> void:
 	for child in get_children():
 		_dispose_child(child, false)
+	_publish_ecology_if_changed(true)
 
 
 func maintain_population() -> int:
@@ -66,6 +87,8 @@ func maintain_population() -> int:
 	for creature in PopulationPolicyScript.collect_out_of_range(self, player, despawn_radius):
 		_dispose_child(creature, true)
 		removed += 1
+	if removed > 0:
+		_publish_ecology_if_changed(true)
 	return removed
 
 
@@ -78,16 +101,25 @@ func _process(delta: float) -> void:
 		maintain_population()
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
+		_publish_ecology_if_changed(false)
 		return
 	_spawn_timer = maxf(0.25, spawn_interval)
-	var animals := _count_group(&"animals")
-	var zombies := _count_group(&"zombie")
-	var night: bool = day_night_service != null and bool(day_night_service.is_night())
-	if night and zombies < max_zombies:
-		spawn_creature("zombie")
-	elif animals < max_animals:
-		var choices := ["chicken", "cow", "pig"]
-		spawn_creature(choices[_rng.randi_range(0, choices.size() - 1)])
+	var passive_count := _count_group(&"animals")
+	var hostile_count := _count_group(&"zombie")
+	var phase := _current_phase()
+	max_animals = maxi(0, int(_ecology_profile.get("passive_cap", max_animals)))
+	max_zombies = EcologyPolicyScript.hostile_cap(_ecology_profile, phase)
+	var species_id := EcologyPolicyScript.choose_species(
+		_ecology_profile,
+		phase,
+		passive_count,
+		hostile_count,
+		_rng.randf(),
+		_rng.randf()
+	)
+	if not species_id.is_empty():
+		spawn_creature(species_id)
+	_publish_ecology_if_changed(true)
 
 
 func spawn_creature(species_id: String, fixed_position: Variant = null):
@@ -104,7 +136,32 @@ func spawn_creature(species_id: String, fixed_position: Variant = null):
 	add_child(creature)
 	creature.global_position = spawn_position
 	creature_spawned.emit(creature)
+	_publish_ecology_if_changed(true)
 	return creature
+
+
+func get_nearby_hostile_count(position: Vector3, radius: float) -> int:
+	var radius_squared := maxf(0.0, radius) * maxf(0.0, radius)
+	var count := 0
+	for child in get_children():
+		if child is not Node3D or not child.is_in_group("zombie"):
+			continue
+		if child.global_position.distance_squared_to(position) <= radius_squared:
+			count += 1
+	return count
+
+
+func get_ecology_snapshot() -> Dictionary:
+	return EcologyPolicyScript.snapshot(
+		_ecology_profile,
+		_current_phase(),
+		_count_group(&"animals"),
+		_count_group(&"zombie")
+	)
+
+
+func get_ecology_profile() -> Dictionary:
+	return _ecology_profile.duplicate(true)
 
 
 func _choose_position() -> Vector3:
@@ -120,8 +177,24 @@ func _choose_position() -> Vector3:
 	return candidate
 
 
+func _current_phase() -> String:
+	if day_night_service != null and day_night_service.has_method("get_phase"):
+		return str(day_night_service.call("get_phase"))
+	if day_night_service != null and day_night_service.has_method("is_night"):
+		return "night" if bool(day_night_service.call("is_night")) else "day"
+	return "day"
+
+
 func _count_group(group_name: StringName) -> int:
 	return PopulationPolicyScript.count_group(self, group_name)
+
+
+func _publish_ecology_if_changed(force: bool) -> void:
+	var snapshot := get_ecology_snapshot()
+	if not force and snapshot == _last_snapshot:
+		return
+	_last_snapshot = snapshot.duplicate(true)
+	ecology_changed.emit(_last_snapshot.duplicate(true))
 
 
 func _dispose_child(child: Node, emit_event: bool) -> void:
