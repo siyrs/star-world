@@ -10,6 +10,7 @@ const SPRINT: StringName = &"sprint"
 const QUICK_SAVE: StringName = &"quick_save"
 const TOGGLE_INVENTORY: StringName = &"toggle_inventory"
 const TOGGLE_CRAFTING: StringName = &"toggle_crafting"
+const TOGGLE_EXPLORATION_JOURNAL: StringName = &"toggle_exploration_journal"
 const TOGGLE_DIAGNOSTICS: StringName = &"toggle_diagnostics"
 const TOGGLE_GUIDANCE: StringName = &"toggle_guidance"
 
@@ -35,6 +36,7 @@ const DEFAULT_KEY_BINDINGS := {
 	QUICK_SAVE: [KEY_F5],
 	TOGGLE_INVENTORY: [KEY_E],
 	TOGGLE_CRAFTING: [KEY_C],
+	TOGGLE_EXPLORATION_JOURNAL: [KEY_J],
 	TOGGLE_DIAGNOSTICS: [KEY_F3],
 	TOGGLE_GUIDANCE: [KEY_F1],
 	&"hotbar_1": [KEY_1],
