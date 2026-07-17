@@ -25,12 +25,14 @@ static func get_local_boxes(block_id: String) -> Array[AABB]:
 			]
 		"bed":
 			boxes = [AABB(Vector3.ZERO, Vector3(1.0, 0.5625, 1.0))]
+		"pane":
+			boxes = [AABB(Vector3(0.0, 0.0, 0.4375), Vector3(1.0, 1.0, 0.125))]
 		_:
 			if block_id in ["farmland", "farmland_wet"]:
 				boxes = [AABB(Vector3.ZERO, Vector3(1.0, 0.9375, 1.0))]
 			else:
 				boxes = [AABB(Vector3.ZERO, Vector3.ONE)]
-	if shape == "stairs":
+	if shape in ["stairs", "pane"]:
 		return _rotate_boxes(boxes, OrientationPolicyScript.rotation_quarters(block_id))
 	return boxes
 
@@ -68,7 +70,7 @@ static func is_full_cube(block_id: String) -> bool:
 	if block_id in ["farmland", "farmland_wet"]:
 		return false
 	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", "cube"))
-	return shape not in ["slab", "stairs", "bed", "crop"]
+	return shape not in ["slab", "stairs", "bed", "crop", "pane"]
 
 
 static func uses_partial_geometry(block_id: String) -> bool:

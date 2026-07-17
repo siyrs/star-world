@@ -88,6 +88,7 @@
     {"id":"iron_helmet","name":"铁头盔","category":"armor","max_stack":1,"durability":165,"rarity":"uncommon","equipment":{"slot":"helmet","attributes":{"defense":2}},"color":"#D4D8D9"},
     {"id":"iron_chestplate","name":"铁胸甲","category":"armor","max_stack":1,"durability":240,"rarity":"uncommon","equipment":{"slot":"chestplate","attributes":{"defense":6}},"color":"#C9CED0"},
     {"id":"iron_leggings","name":"铁护腿","category":"armor","max_stack":1,"durability":225,"rarity":"uncommon","equipment":{"slot":"leggings","attributes":{"defense":5}},"color":"#BEC4C7"},
-    {"id":"iron_boots","name":"铁靴","category":"armor","max_stack":1,"durability":195,"rarity":"uncommon","equipment":{"slot":"boots","attributes":{"defense":2}},"color":"#B5BCC0"}
+    {"id":"iron_boots","name":"铁靴","category":"armor","max_stack":1,"durability":195,"rarity":"uncommon","equipment":{"slot":"boots","attributes":{"defense":2}},"color":"#B5BCC0"},
+    {"id":"prospecting_kit","name":"简易探矿仪","category":"utility","max_stack":1,"prospecting":true,"color":"#D7B56D"}
   ]
 }

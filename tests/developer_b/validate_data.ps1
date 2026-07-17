@@ -12,11 +12,11 @@ $equipmentSlots = @($equipmentData.slots)
 $maps = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\map_profiles.json" | ConvertFrom-Json).maps
 $creatures = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\creatures.json" | ConvertFrom-Json).creatures
 
-if ($items.Count -lt 85) { throw "Expected >=85 items, got $($items.Count)" }
-if ($recipes.Count -lt 57) { throw "Expected >=57 crafting recipes, got $($recipes.Count)" }
+if ($items.Count -lt 86) { throw "Expected >=86 items, got $($items.Count)" }
+if ($recipes.Count -lt 58) { throw "Expected >=58 crafting recipes, got $($recipes.Count)" }
 if ($furnaceRecipes.Count -lt 8) { throw "Expected >=8 furnace recipes, got $($furnaceRecipes.Count)" }
 if ($fuels.Count -lt 2) { throw "Expected >=2 fuels, got $($fuels.Count)" }
-if ($harvestRules.Count -lt 41) { throw "Expected >=41 harvest rules, got $($harvestRules.Count)" }
+if ($harvestRules.Count -lt 43) { throw "Expected >=43 harvest rules, got $($harvestRules.Count)" }
 if ($crops.Count -lt 3) { throw "Expected >=3 crop definitions, got $($crops.Count)" }
 if ($equipmentSlots.Count -ne 5) { throw "Expected 5 equipment slots, got $($equipmentSlots.Count)" }
 if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
@@ -81,8 +81,8 @@ foreach ($item in $items) {
 }
 if ($armorCount -lt 8) { throw "Expected >=8 armor items, got $armorCount" }
 if ($equippableCount -lt 13) { throw "Expected >=13 equippable items, got $equippableCount" }
-foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','repair_station','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
-  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool/rest/repair item: $requiredItem" }
+foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','repair_station','glass_pane','prospecting_kit','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
+  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool/rest/repair/exploration item: $requiredItem" }
 }
 
 foreach ($recipe in $recipes) {
@@ -104,11 +104,12 @@ foreach ($fuel in $fuels) {
 
 $knownBlocks = @(
   'air','grass','dirt','stone','cobblestone','sand','snow','wood','leaves','water','lava',
-  'planks','stone_bricks','glass','stone_slab','oak_stairs','coal_ore','iron_ore','gold_ore',
+  'planks','stone_bricks','glass','glass_pane','glass_pane_ns','stone_slab','oak_stairs','coal_ore','iron_ore','gold_ore',
   'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','oak_bed','repair_station','ladder','torch','wool','ice','bedrock',
   'farmland','wheat_stage_0','wheat_stage_1','wheat_stage_2','wheat_stage_3','farmland_wet',
   'carrot_stage_0','carrot_stage_1','carrot_stage_2','carrot_stage_3',
-  'potato_stage_0','potato_stage_1','potato_stage_2','potato_stage_3'
+  'potato_stage_0','potato_stage_1','potato_stage_2','potato_stage_3',
+  'oak_stairs_east','oak_stairs_north','oak_stairs_west'
 )
 $harvestIds = @{}
 foreach ($rule in $harvestRules) {

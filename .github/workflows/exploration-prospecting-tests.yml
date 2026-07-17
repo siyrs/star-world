@@ -1,0 +1,93 @@
+name: Exploration prospecting quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exploration-prospecting-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exploration-regression:
+    name: Catalog, prospecting, panes and persistence regression
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate production catalog integrity
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_catalog_integrity.ps1
+          .\tests\developer_b\validate_prospecting.ps1
+          .\tests\developer_b\validate_block_visuals.ps1
+
+      - name: Run prospecting regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run glass pane regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/glass_pane_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  real-exploration-desktop:
+    name: Real prospecting, pane placement and reload acceptance
+    needs: exploration-regression
+    runs-on: windows-latest
+    timeout-minutes: 28
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production exploration journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/exploration_iteration_desktop_acceptance.gd' `
+            -OutputPath 'build\exploration-iteration-desktop.png' `
+            -TimeoutMilliseconds 130000
+
+      - name: Upload exploration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exploration-iteration-desktop-${{ github.run_number }}
+          path: |
+            build/exploration-iteration-*.png
+            build/exploration-iteration-*.log
+          if-no-files-found: error
+          retention-days: 14

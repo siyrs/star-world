@@ -57,6 +57,7 @@
     {"id":"raw_iron_from_ore","name":"铁矿破碎","station":"workbench","ingredients":{"iron_ore":1},"output":{"id":"raw_iron","count":1}},
     {"id":"raw_gold_from_ore","name":"金矿破碎","station":"workbench","ingredients":{"gold_ore":1},"output":{"id":"raw_gold","count":1}},
     {"id":"diamond_from_ore","name":"钻石切割","station":"workbench","ingredients":{"diamond_ore":1},"output":{"id":"diamond","count":1}},
+    {"id":"prospecting_kit","name":"简易探矿仪","station":"workbench","ingredients":{"iron_ingot":2,"coal":1,"glass":1,"stick":1},"output":{"id":"prospecting_kit","count":1}},
     {"id":"water_bucket","name":"装水","station":"workbench","ingredients":{"bucket":1,"snow_block":1},"output":{"id":"water_bucket","count":1}}
   ]
 }
