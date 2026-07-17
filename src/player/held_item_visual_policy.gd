@@ -28,7 +28,7 @@ func action_kind(action: StringName) -> StringName:
 	match action:
 		&"attack", &"mine", &"harvest_no_drop":
 			return ACTION_SWING
-		&"place", &"eat", &"interact", &"interact_entity", &"till", &"plant", &"harvest":
+		&"place", &"eat", &"interact", &"interact_entity", &"till", &"plant", &"harvest", &"prospect":
 			return ACTION_USE
 		_:
 			return ACTION_NONE
