@@ -7,11 +7,14 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://resource-distribution-desktop.png"
 const TEST_SEED := 8451397
-const ORE_BLOCKS := ["coal_ore", "iron_ore", "gold_ore", "diamond_ore"]
+const ORE_BLOCKS: Array[String] = ["coal_ore", "iron_ore", "gold_ore", "diamond_ore"]
+const DENSITY_PROFILE_IDS: Array[String] = ["sky_islands", "star_continent", "desert_ruins", "abyss_world"]
+const SAMPLE_HEIGHTS: Array[int] = [5, 15, 25, 40]
 
 var checks := 0
 var failures: Array[String] = []
 var _capture_path := ""
+var _production_ore_count := 0
 
 
 func _initialize() -> void:
@@ -32,7 +35,10 @@ func _run() -> void:
 	var map_buttons: VBoxContainer = panel.get("_map_buttons")
 	_check(map_buttons != null and map_buttons.get_child_count() == 5, "production map selection renders all five maps")
 	if map_buttons != null and map_buttons.get_child_count() == 5:
-		await _click_control(map_buttons.get_child(4) as Control)
+		var abyss_button := map_buttons.get_child(4) as Control
+		_check(abyss_button != null, "abyss map button is a real Control")
+		if abyss_button != null:
+			await _click_control(abyss_button)
 	_check(panel.get_selected_map_id() == "abyss_world", "real pointer input selects the abyss resource profile")
 	var abyss_summary := panel.get_resource_summary("abyss_world")
 	_check(not abyss_summary.is_empty(), "selected map exposes a resource strategy summary")
@@ -40,7 +46,7 @@ func _run() -> void:
 	_check(panel.get_details_text().contains("资源特点"), "resource strategy is explicitly labelled for players")
 
 	var density: Dictionary = {}
-	for profile_id: String in ["sky_islands", "star_continent", "desert_ruins", "abyss_world"]:
+	for profile_id: String in DENSITY_PROFILE_IDS:
 		density[profile_id] = _count_policy_ores(profile_id, TEST_SEED)
 	_check(int(density["abyss_world"]) > int(density["desert_ruins"]), "abyss has the highest deterministic resource density")
 	_check(int(density["desert_ruins"]) > int(density["star_continent"]), "desert ruins are richer than the balanced map")
@@ -63,7 +69,6 @@ func _run() -> void:
 	_check(world.get_loaded_chunk_count() >= 1, "production VoxelWorld builds its spawn chunk")
 	var reference_generator = GeneratorScript.new()
 	reference_generator.configure("abyss_world", TEST_SEED)
-	var production_ore_count := 0
 	for x in range(-16, 17):
 		for z in range(-16, 17):
 			var position := Vector3i(x, 8, z)
@@ -71,8 +76,8 @@ func _run() -> void:
 			var expected := str(reference_generator.get_block(position))
 			_check(actual == expected, "VoxelWorld and production generator agree at %s" % position)
 			if actual in ORE_BLOCKS:
-				production_ore_count += 1
-	_check(production_ore_count > 0, "production abyss world contains generated ores in the sampled underground region")
+				_production_ore_count += 1
+	_check(_production_ore_count > 0, "production abyss world contains generated ores in the sampled underground region")
 
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
@@ -105,7 +110,7 @@ func _generator_signature(profile_id: String, seed_value: int) -> PackedStringAr
 	var result := PackedStringArray()
 	for x in range(-20, 21, 4):
 		for z in range(-20, 21, 4):
-			for y in [5, 15, 25, 40]:
+			for y: int in SAMPLE_HEIGHTS:
 				result.append(str(generator.call("_ore_or_stone", Vector3i(x, y, z))))
 	return result
 
@@ -139,12 +144,12 @@ func _click_control(control: Control) -> void:
 func _save_image(image: Image) -> void:
 	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
 	var error := image.save_png(_capture_path)
-	_check(error == OK, "desktop resource selection screenshot is saved")
+	_check(error == OK and FileAccess.file_exists(_capture_path), "desktop resource selection screenshot is saved")
 
 
 func _finish() -> void:
 	if failures.is_empty():
-		print("QA RESOURCE DISTRIBUTION DESKTOP PASS | checks=%d | ores=%d" % [checks, checks])
+		print("QA RESOURCE DISTRIBUTION DESKTOP PASS | checks=%d | ores=%d | capture=%s" % [checks, _production_ore_count, _capture_path])
 		quit(0)
 	else:
 		for failure: String in failures:
