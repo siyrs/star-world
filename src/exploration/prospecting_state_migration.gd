@@ -21,6 +21,7 @@ static func normalize_exploration_state(raw_state: Variant) -> Dictionary:
 	if raw_state is not Dictionary:
 		return result
 	var state: Dictionary = raw_state
+	var source_version := maxi(0, int(state.get("version", 0)))
 	var records_by_key: Dictionary = {}
 	var record_order: Array[String] = []
 	var raw_records: Variant = state.get("records", [])
@@ -37,11 +38,17 @@ static func normalize_exploration_state(raw_state: Variant) -> Dictionary:
 			records_by_key[record_key] = record
 			record_order.append(record_key)
 	var final_records_by_key: Dictionary = {}
-	var sequence := 1
+	var last_sequence := 0
 	for record_key: String in record_order:
 		var record: Dictionary = records_by_key.get(record_key, {}).duplicate(true)
-		record["sequence"] = sequence
-		sequence += 1
+		var candidate_sequence := maxi(0, int(record.get("sequence", 0)))
+		# v1/v2 had no stable sequence contract, so assign one from record order.
+		# v3+ keeps valid gaps so a player-visible discovery number never changes
+		# merely because the world was saved, loaded, or rendered by the journal.
+		if source_version < VERSION or candidate_sequence <= last_sequence:
+			candidate_sequence = last_sequence + 1
+		record["sequence"] = candidate_sequence
+		last_sequence = candidate_sequence
 		result["records"].append(record)
 		final_records_by_key[record_key] = record
 	var raw_last: Variant = state.get("last_result", {})
