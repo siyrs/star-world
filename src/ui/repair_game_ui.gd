@@ -2,8 +2,8 @@ class_name RepairGameUI
 extends "res://src/ui/character_game_ui.gd"
 
 const RepairPanelScript = preload("res://src/ui/repair_panel.gd")
-const ExtensionOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
-const REPAIR_OVERLAY := ExtensionOverlayIds.REPAIR
+const FeatureOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
+const REPAIR_OVERLAY := FeatureOverlayIds.REPAIR
 
 var repair_panel: Control
 var repair_service: Node
