@@ -10,6 +10,7 @@ const StateMigrationScript = preload("res://src/exploration/prospecting_state_mi
 
 var registry = RegistryScript.new()
 var item_registry: Variant
+var danger_service: Node
 var world: Node
 var player: Node3D
 var _records: Dictionary = {}
@@ -18,9 +19,14 @@ var _last_result: Dictionary = {}
 var _last_scan_msec := -1
 
 
-func setup(p_item_registry: Variant) -> bool:
+func setup(p_item_registry: Variant, p_danger_service: Node = null) -> bool:
 	item_registry = p_item_registry
+	danger_service = p_danger_service
 	return registry.get_validation_errors().is_empty() and registry.validate_item_registry(item_registry)
+
+
+func set_danger_service(service: Node) -> void:
+	danger_service = service
 
 
 func attach_world(p_world: Node, p_player: Node3D) -> void:
@@ -115,6 +121,15 @@ func get_record(record_key: String) -> Dictionary:
 	return raw_record.duplicate(true) if raw_record is Dictionary else {}
 
 
+func get_records() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for record_key: String in _record_order:
+		var record := get_record(record_key)
+		if not record.is_empty():
+			result.append(record)
+	return result
+
+
 func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 	if not world.has_method("world_to_block") or not world.has_method("get_initial_block"):
 		return _reject("world_contract", "当前世界不支持区域勘探")
@@ -177,6 +192,7 @@ func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 		profile_id,
 		config
 	)
+	_apply_danger_snapshot(summary)
 	var chunk_coord := _resolve_chunk_coord(center)
 	var record_key := PolicyScript.record_key(
 		chunk_coord, str(summary.get("depth_band_id", "unknown"))
@@ -187,6 +203,27 @@ func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 	summary["chunk"] = [chunk_coord.x, chunk_coord.y]
 	summary["scanned_at_msec"] = maxi(0, current_msec)
 	return summary
+
+
+func _apply_danger_snapshot(summary: Dictionary) -> void:
+	if danger_service == null or not danger_service.has_method("get_snapshot"):
+		return
+	var raw_danger: Variant = danger_service.call("get_snapshot")
+	if raw_danger is not Dictionary or raw_danger.is_empty():
+		if danger_service.has_method("refresh_now"):
+			raw_danger = danger_service.call("refresh_now")
+	if raw_danger is not Dictionary or raw_danger.is_empty():
+		return
+	var danger: Dictionary = raw_danger
+	summary["danger_tier_id"] = str(danger.get("tier_id", "safe"))
+	summary["danger_label"] = str(danger.get("tier_label", "低"))
+	summary["danger_score"] = clampi(int(danger.get("score", 0)), 0, 100)
+	var raw_reasons: Variant = danger.get("reasons", [])
+	summary["danger_reasons"] = raw_reasons.duplicate() if raw_reasons is Array else []
+	summary["message"] = "%s · 当前危险：%s" % [
+		str(summary.get("message", "区域勘探完成")),
+		str(danger.get("tier_label", "低")),
+	]
 
 
 func _resolve_chunk_coord(center: Vector3i) -> Vector2i:
@@ -212,6 +249,8 @@ func _store_record(result: Dictionary) -> void:
 func _record_from_result(result: Dictionary) -> Dictionary:
 	var raw_chunk: Variant = result.get("chunk", [])
 	var chunk: Array = raw_chunk.duplicate() if raw_chunk is Array else []
+	var raw_reasons: Variant = result.get("danger_reasons", [])
+	var danger_reasons: Array = raw_reasons.duplicate() if raw_reasons is Array else []
 	return {
 		"record_key": str(result.get("record_key", "")),
 		"chunk": chunk,
@@ -223,6 +262,10 @@ func _record_from_result(result: Dictionary) -> Dictionary:
 		"ore_ratio": clampf(float(result.get("ore_ratio", 0.0)), 0.0, 1.0),
 		"dominant_block_id": str(result.get("dominant_block_id", "")),
 		"dominant_label": str(result.get("dominant_label", "")),
+		"danger_tier_id": str(result.get("danger_tier_id", "unknown")),
+		"danger_label": str(result.get("danger_label", "未知")),
+		"danger_score": clampi(int(result.get("danger_score", 0)), 0, 100),
+		"danger_reasons": danger_reasons,
 		"message": str(result.get("message", "")),
 		"scanned_at_msec": maxi(0, int(result.get("scanned_at_msec", 0))),
 	}

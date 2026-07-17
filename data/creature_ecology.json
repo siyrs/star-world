@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "default_profile": "star_continent",
+  "profiles": [
+    {
+      "id": "star_continent",
+      "name": "均衡大陆生态",
+      "danger_base": 8,
+      "spawn_interval_seconds": 8.0,
+      "passive_cap": 12,
+      "hostile_cap_day": 0,
+      "hostile_cap_night": 2,
+      "hostile_chance": {"day": 0.0, "dawn": 0.05, "dusk": 0.25, "night": 0.65},
+      "passive_species": [
+        {"id": "chicken", "weight": 4},
+        {"id": "cow", "weight": 3},
+        {"id": "pig", "weight": 3}
+      ],
+      "hostile_species": [{"id": "zombie", "weight": 1}]
+    },
+    {
+      "id": "desert_ruins",
+      "name": "荒漠遗迹生态",
+      "danger_base": 16,
+      "spawn_interval_seconds": 7.0,
+      "passive_cap": 7,
+      "hostile_cap_day": 0,
+      "hostile_cap_night": 3,
+      "hostile_chance": {"day": 0.0, "dawn": 0.08, "dusk": 0.38, "night": 0.82},
+      "passive_species": [
+        {"id": "chicken", "weight": 3},
+        {"id": "pig", "weight": 2},
+        {"id": "cow", "weight": 1}
+      ],
+      "hostile_species": [{"id": "zombie", "weight": 1}]
+    },
+    {
+      "id": "frozen_wastes",
+      "name": "极寒冰原生态",
+      "danger_base": 20,
+      "spawn_interval_seconds": 8.5,
+      "passive_cap": 6,
+      "hostile_cap_day": 0,
+      "hostile_cap_night": 3,
+      "hostile_chance": {"day": 0.0, "dawn": 0.1, "dusk": 0.42, "night": 0.78},
+      "passive_species": [
+        {"id": "cow", "weight": 4},
+        {"id": "pig", "weight": 2},
+        {"id": "chicken", "weight": 1}
+      ],
+      "hostile_species": [{"id": "zombie", "weight": 1}]
+    },
+    {
+      "id": "sky_islands",
+      "name": "天空群岛生态",
+      "danger_base": 18,
+      "spawn_interval_seconds": 9.0,
+      "passive_cap": 8,
+      "hostile_cap_day": 0,
+      "hostile_cap_night": 1,
+      "hostile_chance": {"day": 0.0, "dawn": 0.03, "dusk": 0.15, "night": 0.42},
+      "passive_species": [
+        {"id": "chicken", "weight": 7},
+        {"id": "pig", "weight": 1},
+        {"id": "cow", "weight": 1}
+      ],
+      "hostile_species": [{"id": "zombie", "weight": 1}]
+    },
+    {
+      "id": "abyss_world",
+      "name": "深渊高危生态",
+      "danger_base": 36,
+      "spawn_interval_seconds": 5.5,
+      "passive_cap": 2,
+      "hostile_cap_day": 2,
+      "hostile_cap_night": 5,
+      "hostile_chance": {"day": 0.45, "dawn": 0.55, "dusk": 0.75, "night": 0.95},
+      "passive_species": [
+        {"id": "pig", "weight": 2},
+        {"id": "chicken", "weight": 1}
+      ],
+      "hostile_species": [{"id": "zombie", "weight": 1}]
+    }
+  ]
+}

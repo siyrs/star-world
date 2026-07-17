@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "assessment_interval_seconds": 0.75,
+  "horizontal_radius": 4,
+  "vertical_radius": 4,
+  "horizontal_step": 2,
+  "vertical_step": 2,
+  "max_samples": 125,
+  "hostile_radius": 18.0,
+  "depth_scores": [
+    {"max_y": 10, "score": 28, "label": "极深层"},
+    {"max_y": 20, "score": 20, "label": "深层"},
+    {"max_y": 32, "score": 12, "label": "下层"},
+    {"max_y": 63, "score": 4, "label": "浅层"}
+  ],
+  "phase_scores": {"day": 0, "dawn": 4, "dusk": 10, "night": 18},
+  "hostile_score_each": 12,
+  "hostile_score_cap": 30,
+  "lava_score_each": 5,
+  "lava_score_cap": 20,
+  "cave_open_thresholds": [
+    {"minimum_ratio": 0.45, "score": 15, "label": "大型空洞"},
+    {"minimum_ratio": 0.25, "score": 8, "label": "洞穴环境"}
+  ],
+  "tiers": [
+    {"id": "safe", "label": "低", "max_score": 19, "tone": "success"},
+    {"id": "guarded", "label": "警戒", "max_score": 39, "tone": "info"},
+    {"id": "dangerous", "label": "危险", "max_score": 64, "tone": "warning"},
+    {"id": "severe", "label": "极高", "max_score": 100, "tone": "error"}
+  ]
+}

@@ -1,0 +1,91 @@
+name: Ecology and danger quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ecology-danger-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ecology-danger-regression:
+    name: Ecology profiles, danger policy and persistence regression
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate ecology and danger data
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_ecology_danger.ps1
+
+      - name: Run ecology and danger regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/ecology_danger_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Re-run prospecting persistence regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  real-ecology-danger-desktop:
+    name: Real abyss ecology, HUD danger and saved discovery acceptance
+    needs: ecology-danger-regression
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production ecology and danger journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/ecology_danger_desktop_acceptance.gd' `
+            -OutputPath 'build\ecology-danger-desktop.png' `
+            -TimeoutMilliseconds 120000
+
+      - name: Upload ecology danger evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecology-danger-desktop-${{ github.run_number }}
+          path: |
+            build/ecology-danger-*.png
+            build/ecology-danger-*.log
+          if-no-files-found: error
+          retention-days: 14
