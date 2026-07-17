@@ -38,10 +38,10 @@ const DEFINITIONS := {
 	"glass": {"name":"玻璃", "color":"#BFE4EA", "solid":true, "transparent":true, "collectible":true, "item_id":"glass", "hardness":0.3},
 	"stone_slab": {"name":"石台阶", "color":"#85888A", "solid":true, "transparent":false, "collectible":true, "item_id":"stone_slab", "hardness":2.0, "shape":"slab"},
 	"oak_stairs": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":0},
-	"coal_ore": {"name":"煤矿石", "color":"#3E4144", "solid":true, "transparent":false, "collectible":true, "item_id":"coal", "hardness":2.4},
-	"iron_ore": {"name":"铁矿石", "color":"#BA967C", "solid":true, "transparent":false, "collectible":true, "item_id":"raw_iron", "hardness":2.7},
-	"gold_ore": {"name":"金矿石", "color":"#E4C343", "solid":true, "transparent":false, "collectible":true, "item_id":"raw_gold", "hardness":3.0},
-	"diamond_ore": {"name":"钻石矿石", "color":"#4DD8D0", "solid":true, "transparent":false, "collectible":true, "item_id":"diamond", "hardness":3.5},
+	"coal_ore": {"name":"煤矿石", "color":"#3E4144", "solid":true, "transparent":false, "collectible":true, "item_id":"coal", "place_item_id":"coal_ore", "hardness":2.4},
+	"iron_ore": {"name":"铁矿石", "color":"#BA967C", "solid":true, "transparent":false, "collectible":true, "item_id":"raw_iron", "place_item_id":"iron_ore", "hardness":2.7},
+	"gold_ore": {"name":"金矿石", "color":"#E4C343", "solid":true, "transparent":false, "collectible":true, "item_id":"raw_gold", "place_item_id":"gold_ore", "hardness":3.0},
+	"diamond_ore": {"name":"钻石矿石", "color":"#4DD8D0", "solid":true, "transparent":false, "collectible":true, "item_id":"diamond", "place_item_id":"diamond_ore", "hardness":3.5},
 	"crafting_table": {"name":"工作台", "color":"#9A6333", "solid":true, "transparent":false, "collectible":true, "item_id":"crafting_table", "hardness":2.0},
 	"furnace": {"name":"熔炉", "color":"#55595D", "solid":true, "transparent":false, "collectible":true, "item_id":"furnace", "hardness":3.0},
 	"chest": {"name":"箱子", "color":"#A66B2C", "solid":true, "transparent":false, "collectible":true, "item_id":"chest", "hardness":2.0},
@@ -113,8 +113,13 @@ static func get_item_id(block_id: String) -> String:
 	return str(get_definition(block_id).get("item_id", ""))
 
 
+static func get_place_item_id(block_id: String) -> String:
+	var definition := get_definition(block_id)
+	return str(definition.get("place_item_id", definition.get("item_id", "")))
+
+
 static func get_block_for_item(item_id: String) -> String:
 	for block_id in BLOCK_IDS:
-		if str(get_definition(block_id).get("item_id", "")) == item_id:
+		if get_place_item_id(block_id) == item_id:
 			return block_id
 	return AIR
