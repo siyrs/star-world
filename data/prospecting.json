@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "tool_item_id": "prospecting_kit",
+  "horizontal_radius": 6,
+  "vertical_radius": 12,
+  "horizontal_step": 2,
+  "vertical_step": 2,
+  "max_samples": 700,
+  "minimum_geology_samples": 24,
+  "cooldown_seconds": 1.0,
+  "max_records": 64,
+  "geology_blocks": [
+    "stone",
+    "stone_bricks",
+    "coal_ore",
+    "iron_ore",
+    "gold_ore",
+    "diamond_ore"
+  ],
+  "ore_blocks": [
+    {"block_id":"diamond_ore", "label":"钻石", "priority":4},
+    {"block_id":"gold_ore", "label":"金矿", "priority":3},
+    {"block_id":"iron_ore", "label":"铁矿", "priority":2},
+    {"block_id":"coal_ore", "label":"煤矿", "priority":1}
+  ],
+  "density_tiers": [
+    {"id":"sparse", "label":"贫瘠", "min_ratio":0.0},
+    {"id":"normal", "label":"普通", "min_ratio":0.02},
+    {"id":"promising", "label":"可观", "min_ratio":0.045},
+    {"id":"rich", "label":"富集", "min_ratio":0.075}
+  ],
+  "depth_bands": [
+    {"id":"deep", "label":"深层", "max_y":10},
+    {"id":"lower", "label":"下层", "max_y":19},
+    {"id":"middle", "label":"中层", "max_y":33},
+    {"id":"upper", "label":"浅层", "max_y":63}
+  ]
+}
