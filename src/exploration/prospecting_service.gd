@@ -11,22 +11,33 @@ const StateMigrationScript = preload("res://src/exploration/prospecting_state_mi
 var registry = RegistryScript.new()
 var item_registry: Variant
 var danger_service: Node
+var day_night_service: Node
 var world: Node
 var player: Node3D
 var _records: Dictionary = {}
 var _record_order: Array[String] = []
 var _last_result: Dictionary = {}
 var _last_scan_msec := -1
+var _next_sequence := 1
 
 
-func setup(p_item_registry: Variant, p_danger_service: Node = null) -> bool:
+func setup(
+	p_item_registry: Variant,
+	p_danger_service: Node = null,
+	p_day_night_service: Node = null
+) -> bool:
 	item_registry = p_item_registry
 	danger_service = p_danger_service
+	day_night_service = p_day_night_service
 	return registry.get_validation_errors().is_empty() and registry.validate_item_registry(item_registry)
 
 
 func set_danger_service(service: Node) -> void:
 	danger_service = service
+
+
+func set_clock_service(service: Node) -> void:
+	day_night_service = service
 
 
 func attach_world(p_world: Node, p_player: Node3D) -> void:
@@ -53,6 +64,7 @@ func use_item(item_id: String, now_msec: int = -1) -> Dictionary:
 	var result := _scan(config, current_msec)
 	if not bool(result.get("success", false)):
 		return result
+	_stamp_result(result)
 	_last_scan_msec = current_msec
 	_store_record(result)
 	_last_result = result.duplicate(true)
@@ -66,11 +78,13 @@ func serialize() -> Dictionary:
 		var raw_record: Variant = _records.get(record_key, {})
 		if raw_record is Dictionary and not raw_record.is_empty():
 			records.append(raw_record.duplicate(true))
-	return {
-		"version": StateMigrationScript.VERSION,
-		"records": records,
-		"last_result": _last_result.duplicate(true),
-	}
+	return StateMigrationScript.normalize_exploration_state(
+		{
+			"version": StateMigrationScript.VERSION,
+			"records": records,
+			"last_result": _last_result.duplicate(true),
+		}
+	)
 
 
 func deserialize(raw_state: Variant) -> void:
@@ -78,6 +92,7 @@ func deserialize(raw_state: Variant) -> void:
 	_record_order.clear()
 	_last_result.clear()
 	_last_scan_msec = -1
+	_next_sequence = 1
 	var state := StateMigrationScript.normalize_exploration_state(raw_state)
 	var max_records := maxi(1, int(registry.get_config().get("max_records", 64)))
 	var raw_records: Variant = state.get("records", [])
@@ -91,8 +106,11 @@ func deserialize(raw_state: Variant) -> void:
 			var record_key := str(record.get("record_key", ""))
 			if record_key.is_empty():
 				continue
+			if record_key in _record_order:
+				_record_order.erase(record_key)
 			_records[record_key] = record.duplicate(true)
 			_record_order.append(record_key)
+			_next_sequence = maxi(_next_sequence, int(record.get("sequence", 0)) + 1)
 	var raw_last: Variant = state.get("last_result", {})
 	if raw_last is Dictionary:
 		_last_result = raw_last.duplicate(true)
@@ -105,6 +123,7 @@ func clear() -> void:
 	_record_order.clear()
 	_last_result.clear()
 	_last_scan_msec = -1
+	_next_sequence = 1
 
 
 func get_snapshot() -> Dictionary:
@@ -113,6 +132,7 @@ func get_snapshot() -> Dictionary:
 		"record_keys": _record_order.duplicate(),
 		"last_result": _last_result.duplicate(true),
 		"tool_item_id": registry.get_tool_item_id(),
+		"next_sequence": _next_sequence,
 	}
 
 
@@ -205,6 +225,20 @@ func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 	return summary
 
 
+func _stamp_result(result: Dictionary) -> void:
+	result["sequence"] = _next_sequence
+	_next_sequence += 1
+	var world_day := 1
+	var world_time := 0.0
+	if day_night_service != null and is_instance_valid(day_night_service):
+		world_day = maxi(1, int(day_night_service.get("day_count")))
+		world_time = float(day_night_service.get("time_of_day"))
+		if not is_finite(world_time):
+			world_time = 0.0
+	result["world_day"] = world_day
+	result["world_time"] = fposmod(world_time, 24.0)
+
+
 func _apply_danger_snapshot(summary: Dictionary) -> void:
 	if danger_service == null or not danger_service.has_method("get_snapshot"):
 		return
@@ -267,6 +301,9 @@ func _record_from_result(result: Dictionary) -> Dictionary:
 		"danger_score": clampi(int(result.get("danger_score", 0)), 0, 100),
 		"danger_reasons": danger_reasons,
 		"message": str(result.get("message", "")),
+		"sequence": maxi(1, int(result.get("sequence", 1))),
+		"world_day": maxi(1, int(result.get("world_day", 1))),
+		"world_time": fposmod(float(result.get("world_time", 0.0)), 24.0),
 		"scanned_at_msec": maxi(0, int(result.get("scanned_at_msec", 0))),
 	}
 
