@@ -24,6 +24,8 @@
     {"block_id":"stone_bricks","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
     {"block_id":"stone_slab","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
     {"block_id":"glass","preferred_tool":"pickaxe","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"glass_pane","preferred_tool":"pickaxe","drop_item":"glass_pane","wrong_tool_speed_multiplier":0.55},
+    {"block_id":"glass_pane_ns","preferred_tool":"pickaxe","drop_item":"glass_pane","wrong_tool_speed_multiplier":0.55},
     {"block_id":"ice","preferred_tool":"pickaxe","wrong_tool_speed_multiplier":0.55},
     {"block_id":"coal_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.25},
     {"block_id":"iron_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":2,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.25},
