@@ -6,6 +6,7 @@ signal back_requested
 
 const DATA_PATH := "res://data/map_profiles.json"
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const ResourceDistributionRegistryScript = preload("res://src/world/resource_distribution_registry.gd")
 
 var _profiles: Array = []
 var _selected_map_id: String = ""
@@ -14,6 +15,7 @@ var _seed: LineEdit
 var _details: RichTextLabel
 var _map_buttons: VBoxContainer
 var _rng := RandomNumberGenerator.new()
+var _resource_registry = ResourceDistributionRegistryScript.new()
 
 
 func _ready() -> void:
@@ -100,9 +102,20 @@ func _build_ui() -> void:
 func _select_profile(map_id: String) -> void:
 	_selected_map_id = map_id
 	for profile in _profiles:
-		if str(profile.get("id", "")) == map_id:
-			_details.text = "[font_size=30]%s[/font_size]\n\n%s\n\n生成规则：%s\n难度：%s" % [profile.get("name", ""), profile.get("description", ""), profile.get("generator", ""), profile.get("difficulty", "")]
-			break
+		if str(profile.get("id", "")) != map_id:
+			continue
+		var resource_summary := get_resource_summary(map_id)
+		_details.text = (
+			"[font_size=30]%s[/font_size]\n\n%s\n\n[b]资源特点[/b]：%s\n\n生成规则：%s\n难度：%s"
+			% [
+				profile.get("name", ""),
+				profile.get("description", ""),
+				resource_summary,
+				profile.get("generator", ""),
+				profile.get("difficulty", ""),
+			]
+		)
+		break
 
 
 func _emit_create() -> void:
@@ -117,3 +130,15 @@ func get_profile(map_id: String) -> Dictionary:
 		if str(profile.get("id", "")) == map_id:
 			return profile.duplicate(true)
 	return {}
+
+
+func get_resource_summary(map_id: String) -> String:
+	return _resource_registry.get_summary(map_id)
+
+
+func get_selected_map_id() -> String:
+	return _selected_map_id
+
+
+func get_details_text() -> String:
+	return _details.text if _details != null else ""
