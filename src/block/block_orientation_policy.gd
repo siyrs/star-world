@@ -3,16 +3,23 @@ extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const STAIR_FAMILY := "oak_stairs"
+const PANE_FAMILY := "glass_pane"
 const STAIR_VARIANTS: Array[String] = [
 	"oak_stairs",
 	"oak_stairs_east",
 	"oak_stairs_north",
 	"oak_stairs_west",
 ]
+const PANE_VARIANTS: Array[String] = [
+	"glass_pane",
+	"glass_pane_ns",
+	"glass_pane",
+	"glass_pane_ns",
+]
 
 
 static func supports(block_id: String) -> bool:
-	return family_id(block_id) == STAIR_FAMILY
+	return not family_id(block_id).is_empty()
 
 
 static func family_id(block_id: String) -> String:
@@ -36,16 +43,18 @@ static func resolve_for_forward(block_id: String, forward: Vector3) -> String:
 	if family.is_empty():
 		return block_id
 	var quarters := rotation_from_forward(forward, rotation_quarters(block_id))
-	if family == STAIR_FAMILY:
-		return STAIR_VARIANTS[quarters]
-	return block_id
+	return variant_for_quarters(block_id, quarters)
 
 
 static func variant_for_quarters(block_id: String, quarters: int) -> String:
 	var family := family_id(block_id)
-	if family == STAIR_FAMILY:
-		return STAIR_VARIANTS[posmod(quarters, 4)]
-	return block_id
+	match family:
+		STAIR_FAMILY:
+			return STAIR_VARIANTS[posmod(quarters, 4)]
+		PANE_FAMILY:
+			return PANE_VARIANTS[posmod(quarters, 4)]
+		_:
+			return block_id
 
 
 static func rotation_from_forward(forward: Vector3, fallback: int = 0) -> int:
