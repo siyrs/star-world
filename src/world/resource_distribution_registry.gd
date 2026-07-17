@@ -43,7 +43,8 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 		if raw_value is not Dictionary:
 			_record_error("Resource distribution profile entry must be an object")
 			continue
-		var normalized := _normalize_profile(raw_value)
+		var raw_profile: Dictionary = raw_value
+		var normalized: Dictionary = _normalize_profile(raw_profile)
 		var profile_id := str(normalized.get("id", ""))
 		if profile_id.is_empty():
 			continue
@@ -58,7 +59,7 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 
 
 func get_profile(profile_id: String) -> Dictionary:
-	var resolved_id := profile_id if _profiles.has(profile_id) else default_profile_id
+	var resolved_id: String = profile_id if _profiles.has(profile_id) else default_profile_id
 	return _profiles.get(resolved_id, {}).duplicate(true)
 
 
@@ -90,6 +91,10 @@ func _normalize_profile(raw_profile: Dictionary) -> Dictionary:
 	if _profiles.has(profile_id):
 		_record_error("Duplicate resource distribution profile: %s" % profile_id)
 		return {}
+	var summary := str(raw_profile.get("summary", "")).strip_edges()
+	if summary.is_empty():
+		_record_error("Resource distribution summary is empty: %s" % profile_id)
+		return {}
 	var fallback_block := str(raw_profile.get("fallback_block", "stone")).strip_edges()
 	if not BlockRegistryScript.has_block(fallback_block):
 		_record_error("Unknown fallback block '%s' for resource profile %s" % [fallback_block, profile_id])
@@ -105,10 +110,11 @@ func _normalize_profile(raw_profile: Dictionary) -> Dictionary:
 		if raw_entry is not Dictionary:
 			_record_error("Resource distribution entry must be an object: %s" % profile_id)
 			continue
-		var block_id := str(raw_entry.get("block_id", "")).strip_edges()
-		var min_y := int(raw_entry.get("min_y", 1))
-		var max_y := int(raw_entry.get("max_y", 0))
-		var threshold := int(raw_entry.get("cumulative_threshold", 0))
+		var entry_data: Dictionary = raw_entry
+		var block_id := str(entry_data.get("block_id", "")).strip_edges()
+		var min_y := int(entry_data.get("min_y", 1))
+		var max_y := int(entry_data.get("max_y", 0))
+		var threshold := int(entry_data.get("cumulative_threshold", 0))
 		if not BlockRegistryScript.has_block(block_id):
 			_record_error("Unknown resource block '%s' for profile %s" % [block_id, profile_id])
 			continue
@@ -135,7 +141,7 @@ func _normalize_profile(raw_profile: Dictionary) -> Dictionary:
 	return {
 		"id": profile_id,
 		"name": str(raw_profile.get("name", profile_id)),
-		"summary": str(raw_profile.get("summary", "")),
+		"summary": summary,
 		"fallback_block": fallback_block,
 		"entries": entries,
 	}
@@ -148,7 +154,7 @@ func _install_builtin_fallback() -> void:
 		"star_continent": {
 			"id": "star_continent",
 			"name": "Built-in balanced resources",
-			"summary": "",
+			"summary": "Balanced built-in resource fallback.",
 			"fallback_block": "stone",
 			"entries": [
 				{"block_id":"diamond_ore", "min_y":1, "max_y":10, "cumulative_threshold":22},
