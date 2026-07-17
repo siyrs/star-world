@@ -10,7 +10,11 @@ const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 var inventory
 var survival
 var day_night
+var danger_service: Node
 var _status_panel: PanelContainer
+var _danger_panel: PanelContainer
+var _danger_label: Label
+var _danger_detail: Label
 var _hotbar_panel: PanelContainer
 var _item_panel: PanelContainer
 var _health_bar: ProgressBar
@@ -29,6 +33,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = ThemeFactory.create_theme()
 	_build_status_panel()
+	_build_danger_panel()
 	_build_hotbar()
 	_build_crosshair()
 	_build_fallback_message()
@@ -54,6 +59,22 @@ func setup(p_inventory, p_survival = null, p_day_night = null) -> void:
 	refresh_inventory()
 
 
+func setup_danger(service: Node) -> void:
+	if danger_service != null and danger_service.has_signal("danger_changed"):
+		var callback := Callable(self, "_on_danger_changed")
+		if danger_service.is_connected("danger_changed", callback):
+			danger_service.disconnect("danger_changed", callback)
+	danger_service = service
+	if danger_service != null and danger_service.has_signal("danger_changed"):
+		danger_service.connect("danger_changed", Callable(self, "_on_danger_changed"))
+	if danger_service != null and danger_service.has_method("get_snapshot"):
+		var raw_snapshot: Variant = danger_service.call("get_snapshot")
+		if raw_snapshot is Dictionary:
+			_on_danger_changed(raw_snapshot)
+	else:
+		_on_danger_changed({})
+
+
 func refresh_inventory() -> void:
 	if inventory == null or _slot_buttons.is_empty():
 		return
@@ -77,6 +98,7 @@ func show_message(message: String, seconds: float = 2.0) -> void:
 func get_layout_rects() -> Dictionary:
 	return {
 		"status": _status_panel.get_global_rect() if _status_panel != null else Rect2(),
+		"danger": _danger_panel.get_global_rect() if _danger_panel != null else Rect2(),
 		"selected_item": _item_panel.get_global_rect() if _item_panel != null else Rect2(),
 		"hotbar": _hotbar_panel.get_global_rect() if _hotbar_panel != null else Rect2(),
 		"crosshair": _crosshair.get_global_rect() if _crosshair != null else Rect2(),
@@ -85,6 +107,10 @@ func get_layout_rects() -> Dictionary:
 
 func get_crosshair() -> Control:
 	return _crosshair
+
+
+func get_danger_panel() -> Control:
+	return _danger_panel
 
 
 func _build_status_panel() -> void:
@@ -135,6 +161,30 @@ func _build_status_panel() -> void:
 		Tokens.panel_style(Tokens.COLOR_HUNGER, Tokens.COLOR_HUNGER, 0, Tokens.RADIUS_SM, 1.0)
 	)
 	content.add_child(_hunger_bar)
+
+
+func _build_danger_panel() -> void:
+	_danger_panel = PanelContainer.new()
+	_danger_panel.anchor_left = 1.0
+	_danger_panel.anchor_right = 1.0
+	_danger_panel.offset_left = -322.0
+	_danger_panel.offset_right = -18.0
+	_danger_panel.offset_top = 18.0
+	_danger_panel.offset_bottom = 96.0
+	_danger_panel.custom_minimum_size = Vector2(304, 78)
+	add_child(_danger_panel)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 3)
+	_danger_panel.add_child(content)
+	_danger_label = Label.new()
+	_danger_label.add_theme_font_size_override("font_size", 17)
+	content.add_child(_danger_label)
+	_danger_detail = Label.new()
+	_danger_detail.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_danger_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_danger_detail.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
+	content.add_child(_danger_detail)
+	_danger_panel.visible = false
 
 
 func _build_hotbar() -> void:
@@ -213,6 +263,41 @@ func _on_hunger_changed(current: float, maximum: float) -> void:
 
 func _on_time_changed(hours: float, day: int) -> void:
 	_time_label.text = "第 %d 天  %02d:%02d" % [day, int(hours), int(fmod(hours, 1.0) * 60.0)]
+
+
+func _on_danger_changed(snapshot: Dictionary) -> void:
+	if _danger_panel == null:
+		return
+	if snapshot.is_empty():
+		_danger_panel.visible = false
+		return
+	var tone := str(snapshot.get("tone", "info"))
+	var color := _danger_color(tone)
+	_danger_panel.add_theme_stylebox_override(
+		"panel", Tokens.panel_style("#101A26E8", color, 2, Tokens.RADIUS_LG, 10.0)
+	)
+	_danger_label.text = "区域危险  %s  ·  %d / 100" % [
+		str(snapshot.get("tier_label", "未知")),
+		clampi(int(snapshot.get("score", 0)), 0, 100),
+	]
+	_danger_label.modulate = Color(color)
+	var raw_reasons: Variant = snapshot.get("reasons", [])
+	var reasons: Array[String] = []
+	if raw_reasons is Array:
+		for raw_reason: Variant in raw_reasons:
+			var reason := str(raw_reason)
+			if not reason.is_empty() and reasons.size() < 3:
+				reasons.append(reason)
+	_danger_detail.text = " · ".join(reasons) if not reasons.is_empty() else "当前环境相对稳定"
+	_danger_panel.visible = true
+
+
+func _danger_color(tone: String) -> String:
+	match tone:
+		"success": return "#58C783"
+		"warning": return "#E9B44C"
+		"error": return "#F06464"
+		_: return "#5FB4E8"
 
 
 func _on_selected_slot_changed(index: int, slot: Dictionary) -> void:
