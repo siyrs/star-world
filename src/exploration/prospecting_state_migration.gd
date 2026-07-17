@@ -1,7 +1,7 @@
 class_name ProspectingStateMigration
 extends RefCounted
 
-const VERSION := 1
+const VERSION := 2
 
 
 static func normalize_world_state(state: Dictionary) -> Dictionary:
@@ -38,6 +38,13 @@ static func _normalize_record(raw_record: Dictionary) -> Dictionary:
 	var chunk: Variant = raw_record.get("chunk", [])
 	if record_key.is_empty() or chunk is not Array or chunk.size() < 2:
 		return {}
+	var raw_reasons: Variant = raw_record.get("danger_reasons", [])
+	var danger_reasons: Array[String] = []
+	if raw_reasons is Array:
+		for raw_reason: Variant in raw_reasons:
+			var reason := str(raw_reason).strip_edges()
+			if not reason.is_empty() and danger_reasons.size() < 6:
+				danger_reasons.append(reason)
 	return {
 		"record_key": record_key,
 		"chunk": [int(chunk[0]), int(chunk[1])],
@@ -49,6 +56,10 @@ static func _normalize_record(raw_record: Dictionary) -> Dictionary:
 		"ore_ratio": clampf(float(raw_record.get("ore_ratio", 0.0)), 0.0, 1.0),
 		"dominant_block_id": str(raw_record.get("dominant_block_id", "")),
 		"dominant_label": str(raw_record.get("dominant_label", "")),
+		"danger_tier_id": str(raw_record.get("danger_tier_id", "unknown")),
+		"danger_label": str(raw_record.get("danger_label", "未知")),
+		"danger_score": clampi(int(raw_record.get("danger_score", 0)), 0, 100),
+		"danger_reasons": danger_reasons,
 		"message": str(raw_record.get("message", "")),
 		"scanned_at_msec": maxi(0, int(raw_record.get("scanned_at_msec", 0))),
 	}
