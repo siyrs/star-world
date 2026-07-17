@@ -13,8 +13,15 @@ const MAP_LABELS := {
 
 
 static func build_snapshot(raw_records: Array, config: Dictionary) -> Dictionary:
+	# The records already follow the v3 sequence contract. Passing the version
+	# explicitly sanitizes fields and duplicate keys without renumbering valid
+	# player-visible discovery IDs.
 	var normalized_state := StateMigrationScript.normalize_exploration_state(
-		{"records": raw_records, "last_result": {}}
+		{
+			"version": StateMigrationScript.VERSION,
+			"records": raw_records,
+			"last_result": {},
+		}
 	)
 	var records: Array[Dictionary] = []
 	var normalized_records: Variant = normalized_state.get("records", [])
