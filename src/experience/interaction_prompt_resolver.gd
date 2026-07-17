@@ -93,6 +93,9 @@ func _block_prompt(
 			subtitle = placement_status
 			var preview: Dictionary = focus.get("placement_preview", {})
 			tone = "info" if bool(preview.get("valid", false)) else "warning"
+	elif bool(selected.get("is_prospecting_tool", false)):
+		subtitle = "扫描当前区块附近岩层，不显示矿物坐标"
+		tone = "info"
 	return {
 		"visible": breakable or not secondary.is_empty() or not profile.is_empty(),
 		"title": str(focus.get("display_name", block_id)),
@@ -175,10 +178,13 @@ func _held_item_prompt(selected: Dictionary) -> Dictionary:
 	var use_hint := _selected_use_hint(selected)
 	if use_hint.is_empty():
 		return {}
+	var subtitle := "瞄准一个合适的位置"
+	if bool(selected.get("is_prospecting_tool", false)):
+		subtitle = "只显示当前区域的粗粒度矿物趋势，不暴露具体坐标"
 	return {
 		"visible": true,
 		"title": str(selected.get("display_name", "选中物品")),
-		"subtitle": "瞄准一个合适的位置",
+		"subtitle": subtitle,
 		"primary": "",
 		"secondary": use_hint,
 		"tone": "info",
@@ -188,6 +194,8 @@ func _held_item_prompt(selected: Dictionary) -> Dictionary:
 func _selected_use_hint(selected: Dictionary) -> String:
 	if not str(selected.get("block_id", "")).is_empty():
 		return "[鼠标右键] 放置 %s" % str(selected.get("display_name", "方块"))
+	if bool(selected.get("is_prospecting_tool", false)):
+		return "[鼠标右键] 勘探当前区域"
 	if bool(selected.get("is_food", false)):
 		return "[鼠标右键] 食用 %s" % str(selected.get("display_name", "食物"))
 	return ""
@@ -199,6 +207,7 @@ func _selected_item_context(inventory: Node) -> Dictionary:
 		"display_name": "空手",
 		"block_id": "",
 		"is_food": false,
+		"is_prospecting_tool": false,
 		"tool_type": "hand",
 		"power": 0,
 		"mining_speed": 1.0,
@@ -224,6 +233,7 @@ func _selected_item_context(inventory: Node) -> Dictionary:
 		"display_name": display_name,
 		"block_id": block_id if block_id != BlockRegistryScript.AIR else "",
 		"is_food": definition.has("food"),
+		"is_prospecting_tool": bool(definition.get("prospecting", false)),
 		"tool_type": str(definition.get("tool_type", "hand")),
 		"power": maxi(0, int(definition.get("power", 0))),
 		"mining_speed": maxf(0.1, float(definition.get("mining_speed", 1.0))),
