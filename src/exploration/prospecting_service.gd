@@ -205,14 +205,16 @@ func _store_record(result: Dictionary) -> void:
 	_record_order.append(record_key)
 	var max_records := maxi(1, int(registry.get_config().get("max_records", 64)))
 	while _record_order.size() > max_records:
-		var expired_key := _record_order.pop_front()
+		var expired_key := str(_record_order.pop_front())
 		_records.erase(expired_key)
 
 
 func _record_from_result(result: Dictionary) -> Dictionary:
+	var raw_chunk: Variant = result.get("chunk", [])
+	var chunk: Array = raw_chunk.duplicate() if raw_chunk is Array else []
 	return {
 		"record_key": str(result.get("record_key", "")),
-		"chunk": result.get("chunk", []).duplicate(),
+		"chunk": chunk,
 		"profile_id": str(result.get("profile_id", "star_continent")),
 		"depth_band_id": str(result.get("depth_band_id", "unknown")),
 		"depth_label": str(result.get("depth_label", "未知")),
