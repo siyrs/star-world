@@ -114,7 +114,7 @@ func _run() -> void:
 		var milestones: Array = panel.call("get_milestone_texts")
 		_check(summary.contains("已记录 3 条发现"), "journal summary reflects deduplicated production records")
 		_check(records.size() == 3, "journal panel renders three production discoveries")
-		_check(str(records[0]).begins_with("#4"), "refreshed record is rendered first before save compaction")
+		_check(str(records[0]).begins_with("#4"), "refreshed record keeps its stable discovery id and renders first")
 		_check(str(records[0]).contains("第 4 天 21:30"), "journal renders stable in-world date and time")
 		_check(milestones.size() >= 1 and str(milestones[0]).begins_with("✓"), "first-discovery milestone is visibly completed")
 		var rects: Dictionary = panel.call("get_layout_rects")
@@ -136,7 +136,7 @@ func _run() -> void:
 	var saved_records: Array = loaded.get("exploration", {}).get("records", [])
 	_check(saved_records.size() == 3, "saved journal keeps deduplicated discoveries")
 	if saved_records.size() == 3:
-		_check(int(saved_records[0].get("sequence", 0)) == 1 and int(saved_records[2].get("sequence", 0)) == 3, "save compacts stable sequences without changing order")
+		_check(int(saved_records[0].get("sequence", 0)) == 2 and int(saved_records[2].get("sequence", 0)) == 4, "save preserves stable sequence gaps without changing order")
 		_check(not str(saved_records).contains("ore_positions") and not str(saved_records).contains("coordinates"), "saved journal contains no forbidden coordinate payloads")
 
 	hub.return_to_menu()
@@ -158,7 +158,7 @@ func _run() -> void:
 	if panel != null:
 		var reloaded_records: Array = panel.call("get_record_texts")
 		_check(reloaded_records.size() == 3, "reloaded journal renders all persisted records")
-		_check(str(reloaded_records[0]).begins_with("#3"), "reloaded journal keeps newest-first ordering after sequence compaction")
+		_check(str(reloaded_records[0]).begins_with("#4"), "reloaded journal keeps the stable newest-first discovery id")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "desktop viewport renders the exploration journal")
