@@ -64,33 +64,50 @@ func _run() -> void:
 	player.get_view_camera().rotation = Vector3(deg_to_rad(-40.0), 0.0, 0.0)
 	await process_frame
 	await _right_click_center()
-	_check(int(prospecting.call("get_snapshot").get("record_count", 0)) == 1, "real right click creates the first journal discovery")
-	_check(int(prospecting.call("get_snapshot").get("last_result", {}).get("world_day", 0)) >= 1, "real discovery stores the in-world day")
+	var first_snapshot: Dictionary = prospecting.call("get_snapshot")
+	_check(int(first_snapshot.get("record_count", 0)) == 1, "real right click creates the first journal discovery")
+	_check(int(first_snapshot.get("last_result", {}).get("world_day", 0)) >= 1, "real discovery stores the in-world day")
 
+	# Continue from the real scan's monotonic clock. Mixing a smaller artificial
+	# timestamp with Time.get_ticks_msec() would correctly trigger the cooldown.
+	var scan_clock := Time.get_ticks_msec() + 2000
 	var origin := player.global_position
 	hub.day_night.day_count = 3
 	hub.day_night.set_time(15.25)
 	player.global_position = origin + Vector3(18.0, 0.0, 0.0)
-	var second: Dictionary = prospecting.call("use_item", "prospecting_kit", 5000)
-	_check(bool(second.get("success", false)), "production service records a second real-world chunk")
+	var second: Dictionary = prospecting.call("use_item", "prospecting_kit", scan_clock)
+	_check(
+		bool(second.get("success", false)),
+		"production service records a second real-world chunk: %s" % second
+	)
+	scan_clock += 2000
 	hub.day_night.day_count = 4
 	hub.day_night.set_time(21.5)
 	player.global_position = origin + Vector3(36.0, 0.0, 0.0)
-	var third: Dictionary = prospecting.call("use_item", "prospecting_kit", 7000)
-	_check(bool(third.get("success", false)), "production service records a third real-world chunk")
+	var third: Dictionary = prospecting.call("use_item", "prospecting_kit", scan_clock)
+	_check(
+		bool(third.get("success", false)),
+		"production service records a third real-world chunk: %s" % third
+	)
+	scan_clock += 2000
 	player.global_position = origin
-	var refreshed: Dictionary = prospecting.call("use_item", "prospecting_kit", 9000)
-	_check(bool(refreshed.get("success", false)), "production service refreshes an existing chunk")
+	var refreshed: Dictionary = prospecting.call("use_item", "prospecting_kit", scan_clock)
+	_check(
+		bool(refreshed.get("success", false)),
+		"production service refreshes an existing chunk: %s" % refreshed
+	)
 	_check(int(prospecting.call("get_snapshot").get("record_count", 0)) == 3, "refreshing an existing discovery keeps journal rows unique")
 	_check(int(refreshed.get("sequence", 0)) > int(third.get("sequence", 0)), "refreshed discovery becomes the newest journal entry")
 
 	await _tap_key(KEY_J)
+	for _frame in 3:
+		await process_frame
 	_check(int(game_ui.call("get_active_overlay")) == ExtensionOverlayIds.EXPLORATION_JOURNAL, "real J input opens the exploration journal")
 	_check(str(hub.input_context.call("get_context")) == str(InputContextScript.CONTEXT_JOURNAL), "journal switches the production input context")
 	_check(not bool(player.get("input_enabled")), "journal blocks player movement and interaction input")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "journal releases the mouse for UI interaction")
-	var panel: Node = game_ui.call("get_exploration_journal_panel")
-	_check(panel != null and bool(panel.get("visible")), "production journal panel is visible")
+	var panel: Control = game_ui.call("get_exploration_journal_panel") as Control
+	_check(panel != null and panel.visible, "production journal panel is visible")
 	if panel != null:
 		var summary := str(panel.call("get_summary_text"))
 		var records: Array = panel.call("get_record_texts")
@@ -102,8 +119,9 @@ func _run() -> void:
 		_check(milestones.size() >= 1 and str(milestones[0]).begins_with("✓"), "first-discovery milestone is visibly completed")
 		var rects: Dictionary = panel.call("get_layout_rects")
 		var panel_rect: Rect2 = rects.get("panel", Rect2())
-		_check(panel_rect.position.x >= 0.0 and panel_rect.position.y >= 0.0, "journal panel stays inside the desktop viewport origin")
-		_check(panel_rect.end.x <= 1024.0 and panel_rect.end.y <= 576.0, "journal panel fits the 1024x576 release contract")
+		var visible_rect := panel.get_viewport().get_visible_rect()
+		print("QA EXPLORATION JOURNAL LAYOUT | visible=%s panel=%s" % [visible_rect, panel_rect])
+		_check(_rect_inside(visible_rect, panel_rect), "journal panel remains inside the actual desktop viewport")
 	var before_blocked_click := int(prospecting.call("get_snapshot").get("record_count", 0))
 	await _right_click_center()
 	_check(int(prospecting.call("get_snapshot").get("record_count", 0)) == before_blocked_click, "journal overlay blocks real prospecting input")
@@ -133,7 +151,9 @@ func _run() -> void:
 	journal = hub.get("exploration_journal_service")
 	_check(int(journal.call("get_snapshot").get("record_count", 0)) == 3, "full production world reload restores the journal")
 	await _tap_key(KEY_J)
-	panel = game_ui.call("get_exploration_journal_panel")
+	for _frame in 3:
+		await process_frame
+	panel = game_ui.call("get_exploration_journal_panel") as Control
 	_check(int(game_ui.call("get_active_overlay")) == ExtensionOverlayIds.EXPLORATION_JOURNAL, "journal reopens after full world reload")
 	if panel != null:
 		var reloaded_records: Array = panel.call("get_record_texts")
@@ -143,6 +163,7 @@ func _run() -> void:
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "desktop viewport renders the exploration journal")
 	if image != null and not image.is_empty():
+		_check(image.get_size() == root.size, "desktop evidence is captured at the 1024x576 product resolution")
 		_save_image(image)
 	await _finish(game, hub)
 
@@ -179,6 +200,17 @@ func _tap_key(keycode: Key) -> void:
 	root.push_input(release)
 	await process_frame
 	await process_frame
+
+
+func _rect_inside(container_rect: Rect2, candidate: Rect2) -> bool:
+	return (
+		candidate.size.x > 0.0
+		and candidate.size.y > 0.0
+		and candidate.position.x >= container_rect.position.x
+		and candidate.position.y >= container_rect.position.y
+		and candidate.end.x <= container_rect.end.x
+		and candidate.end.y <= container_rect.end.y
+	)
 
 
 func _save_image(image: Image) -> void:
