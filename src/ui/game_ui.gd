@@ -86,7 +86,7 @@ func _ready() -> void:
 	container_panel.panel_closed.connect(_close_overlay)
 	exploration_journal_panel = ExplorationJournalPanelScript.new()
 	exploration_journal_panel.name = "ExplorationJournalPanel"
-	_center_control(exploration_journal_panel, Vector2(860, 590))
+	_center_control(exploration_journal_panel, Vector2(860, 540))
 	add_child(exploration_journal_panel)
 	exploration_journal_panel.visible = false
 	exploration_journal_panel.panel_closed.connect(_close_overlay)
