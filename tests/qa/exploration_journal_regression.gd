@@ -148,7 +148,7 @@ func _test_migration_safety() -> void:
 	_check(records.size() == 2, "duplicate record keys collapse to the newest entry")
 	_check(str(records[0].get("record_key", "")) == "1,0:deep", "dedupe preserves relative order of surviving records")
 	_check(str(records[1].get("record_key", "")) == "0,0:middle", "newest duplicate moves to the journal tail")
-	_check(int(records[0].get("sequence", 0)) == 1 and int(records[1].get("sequence", 0)) == 2, "migration assigns stable monotonic sequences")
+	_check(int(records[0].get("sequence", 0)) == 1 and int(records[1].get("sequence", 0)) == 2, "legacy migration assigns stable monotonic sequences")
 	_check(int(records[1].get("world_day", 0)) == 5, "migration preserves in-world discovery day")
 	_check(is_equal_approx(float(records[1].get("world_time", 0.0)), 3.25), "migration normalizes in-world discovery time")
 	_check((records[1].get("danger_reasons", []) as Array).size() <= 6, "migration bounds and deduplicates danger reasons")
@@ -156,6 +156,18 @@ func _test_migration_safety() -> void:
 	_check(int(last_result.get("sequence", 0)) == 2, "matching last result inherits the canonical sequence")
 	_check(not last_result.has("positions") and not last_result.has("ore_positions") and not last_result.has("coordinates"), "last result strips exact coordinate fields")
 	_check(not last_result.has("secret"), "last result uses a strict persistence whitelist")
+	var stable_v3 := ProspectingMigrationScript.normalize_exploration_state(
+		{
+			"version":3,
+			"records":[
+				_make_record("2,0:middle", [2,0], 2, "middle", "normal", "safe"),
+				_make_record("3,0:deep", [3,0], 4, "deep", "rich", "dangerous"),
+			],
+			"last_result":{},
+		}
+	)
+	var stable_records: Array = stable_v3.get("records", [])
+	_check(int(stable_records[0].get("sequence", 0)) == 2 and int(stable_records[1].get("sequence", 0)) == 4, "version 3 migration preserves valid sequence gaps")
 
 
 func _test_service_stable_ordering() -> void:
@@ -198,15 +210,17 @@ func _test_service_stable_ordering() -> void:
 	restored.deserialize(serialized)
 	var restored_records := restored.get_records()
 	_check(restored_records.size() == 2, "stable records survive reload")
-	_check(int(restored_records[0].get("sequence", 0)) == 1 and int(restored_records[1].get("sequence", 0)) == 2, "reload compacts sequence gaps without changing order")
+	_check(int(restored_records[0].get("sequence", 0)) == 2 and int(restored_records[1].get("sequence", 0)) == 3, "reload preserves stable sequence gaps and order")
 	restored.attach_world(world, player)
 	player.global_position = Vector3(50.5, 20.0, 2.5)
 	var third: Dictionary = restored.use_item("prospecting_kit", 5000)
-	_check(int(third.get("sequence", 0)) == 3, "post-reload discovery continues after the restored order")
+	_check(int(third.get("sequence", 0)) == 4, "post-reload discovery continues after the highest restored sequence")
 	var journal = JournalServiceScript.new()
 	root.add_child(journal)
 	_check(journal.setup(restored), "journal service accepts prospecting as its single record source")
-	_check(int(journal.get_snapshot().get("record_count", 0)) == 3, "journal service derives the restored discovery count")
+	var journal_snapshot: Dictionary = journal.get_snapshot()
+	_check(int(journal_snapshot.get("record_count", 0)) == 3, "journal service derives the restored discovery count")
+	_check(int(journal_snapshot.get("latest_sequence", 0)) == 4, "journal keeps the stable player-visible discovery id")
 	journal.queue_free()
 	prospecting.queue_free()
 	restored.queue_free()
