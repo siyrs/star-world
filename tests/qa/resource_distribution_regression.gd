@@ -3,6 +3,7 @@ extends SceneTree
 const RegistryScript = preload("res://src/world/resource_distribution_registry.gd")
 const GeneratorScript = preload("res://src/world/world_generator.gd")
 const MapSelectionPanelScript = preload("res://src/ui/map_selection_panel.gd")
+const PROFILE_IDS: Array[String] = ["star_continent", "desert_ruins", "frozen_wastes", "sky_islands", "abyss_world"]
 
 var checks := 0
 var failures: Array[String] = []
@@ -38,10 +39,11 @@ func _test_registry_contract() -> void:
 	)
 	for profile_id: String in registry.get_profile_ids():
 		var profile: Dictionary = registry.get_profile(profile_id)
+		var entries: Array = profile.get("entries", [])
 		_check(str(profile.get("id", "")) == profile_id, "%s returns its own profile" % profile_id)
 		_check(not str(profile.get("summary", "")).is_empty(), "%s exposes a player-facing resource summary" % profile_id)
 		_check(str(profile.get("fallback_block", "")) == "stone", "%s falls back to stone" % profile_id)
-		_check((profile.get("entries", []) as Array).size() == 4, "%s defines four ordered ore bands" % profile_id)
+		_check(entries.size() == 4, "%s defines four ordered ore bands" % profile_id)
 	_check(registry.get_profile("unknown").get("id", "") == "star_continent", "unknown maps fall back to the balanced profile")
 
 
@@ -121,7 +123,7 @@ func _test_generator_delegation() -> void:
 
 func _test_map_density_ordering() -> void:
 	var counts: Dictionary = {}
-	for profile_id: String in ["sky_islands", "star_continent", "frozen_wastes", "desert_ruins", "abyss_world"]:
+	for profile_id: String in PROFILE_IDS:
 		var generator = GeneratorScript.new()
 		generator.configure(profile_id, 8451397)
 		var ore_count := 0
@@ -142,7 +144,7 @@ func _test_map_selection_contract() -> void:
 	root.add_child(panel)
 	await process_frame
 	await process_frame
-	for profile_id: String in ["star_continent", "desert_ruins", "frozen_wastes", "sky_islands", "abyss_world"]:
+	for profile_id: String in PROFILE_IDS:
 		panel.call("_select_profile", profile_id)
 		var summary := str(panel.call("get_resource_summary", profile_id))
 		var details := str(panel.call("get_details_text"))
