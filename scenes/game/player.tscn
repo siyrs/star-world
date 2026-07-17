@@ -1,6 +1,6 @@
 [gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://src/player/precision_interaction_player.gd" id="1_player"]
+[ext_resource type="Script" path="res://src/player/exploration_player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/player/player_physics_profile.gd" id="2_physics_profile"]
 [ext_resource type="Script" path="res://src/interaction/world_interaction_preview.gd" id="3_preview"]
 [ext_resource type="Script" path="res://src/player/first_person_item_view.gd" id="4_held_item_view"]
