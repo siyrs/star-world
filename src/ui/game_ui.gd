@@ -24,9 +24,12 @@ const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
 const FurnacePanelScript = preload("res://src/ui/furnace_panel.gd")
 const ContainerPanelScript = preload("res://src/ui/container_panel.gd")
+const ExplorationJournalPanelScript = preload("res://src/ui/exploration_journal_panel.gd")
+const ExtensionOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
+const EXPLORATION_JOURNAL_OVERLAY := ExtensionOverlayIds.EXPLORATION_JOURNAL
 
 var inventory
 var crafting
@@ -37,12 +40,14 @@ var gameplay_input
 var container_storage
 var furnace_service
 var experience_coordinator
+var exploration_journal_service: Node
 var hud
 var guidance_overlay
 var inventory_panel
 var crafting_panel
 var furnace_panel
 var container_panel
+var exploration_journal_panel: Control
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
 var _death_title: Label
@@ -79,6 +84,12 @@ func _ready() -> void:
 	add_child(container_panel)
 	container_panel.visible = false
 	container_panel.panel_closed.connect(_close_overlay)
+	exploration_journal_panel = ExplorationJournalPanelScript.new()
+	exploration_journal_panel.name = "ExplorationJournalPanel"
+	_center_control(exploration_journal_panel, Vector2(860, 540))
+	add_child(exploration_journal_panel)
+	exploration_journal_panel.visible = false
+	exploration_journal_panel.panel_closed.connect(_close_overlay)
 	_build_pause_panel()
 	_build_death_panel()
 
@@ -113,6 +124,12 @@ func setup(
 		var callback := Callable(self, "_on_player_died")
 		if not survival.is_connected("player_died", callback):
 			survival.connect("player_died", callback)
+
+
+func setup_exploration_journal(p_journal_service: Node) -> void:
+	exploration_journal_service = p_journal_service
+	if exploration_journal_panel != null and exploration_journal_panel.has_method("setup"):
+		exploration_journal_panel.call("setup", exploration_journal_service)
 
 
 func begin_gameplay() -> void:
@@ -189,6 +206,22 @@ func open_container(container_id: String, title: String = "箱子") -> bool:
 	return true
 
 
+func open_exploration_journal() -> bool:
+	if not _can_change_overlay() or exploration_journal_panel == null:
+		return false
+	if exploration_journal_panel.has_method("refresh"):
+		exploration_journal_panel.call("refresh")
+	_set_overlay(EXPLORATION_JOURNAL_OVERLAY)
+	return true
+
+
+func toggle_exploration_journal() -> void:
+	if _overlay == EXPLORATION_JOURNAL_OVERLAY:
+		_set_overlay(Overlay.NONE)
+	else:
+		open_exploration_journal()
+
+
 func toggle_pause() -> void:
 	if not _can_change_overlay():
 		return
@@ -209,6 +242,10 @@ func get_guidance_overlay() -> Node:
 
 func get_furnace_panel() -> Node:
 	return furnace_panel
+
+
+func get_exploration_journal_panel() -> Node:
+	return exploration_journal_panel
 
 
 func is_gameplay_input_blocked() -> bool:
@@ -250,6 +287,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _event_toggles_crafting(event):
 		toggle_crafting("hand")
 		get_viewport().set_input_as_handled()
+	elif _event_toggles_exploration_journal(event):
+		toggle_exploration_journal()
+		get_viewport().set_input_as_handled()
 
 
 func _event_toggles_inventory(event: InputEvent) -> bool:
@@ -262,6 +302,12 @@ func _event_toggles_crafting(event: InputEvent) -> bool:
 	if gameplay_input != null and gameplay_input.has_method("event_toggles_crafting"):
 		return bool(gameplay_input.call("event_toggles_crafting", event))
 	return event.is_action_pressed(InputActionsScript.TOGGLE_CRAFTING)
+
+
+func _event_toggles_exploration_journal(event: InputEvent) -> bool:
+	if gameplay_input != null and gameplay_input.has_method("event_toggles_exploration_journal"):
+		return bool(gameplay_input.call("event_toggles_exploration_journal", event))
+	return event.is_action_pressed(InputActionsScript.TOGGLE_EXPLORATION_JOURNAL)
 
 
 func _can_change_overlay() -> bool:
@@ -307,6 +353,8 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 			_pause_status.text = ""
 		Overlay.DEATH:
 			_death_panel.visible = true
+	if _overlay == EXPLORATION_JOURNAL_OVERLAY and exploration_journal_panel != null:
+		exploration_journal_panel.visible = true
 	var context := _context_for_overlay()
 	if guidance_overlay != null:
 		guidance_overlay.set_overlay_blocked(_overlay != Overlay.NONE)
@@ -324,6 +372,8 @@ func _hide_all_overlays() -> void:
 		furnace_panel.visible = false
 	if container_panel != null:
 		container_panel.visible = false
+	if exploration_journal_panel != null:
+		exploration_journal_panel.visible = false
 	if _pause_panel != null:
 		_pause_panel.visible = false
 	if _death_panel != null:
@@ -331,6 +381,8 @@ func _hide_all_overlays() -> void:
 
 
 func _context_for_overlay() -> StringName:
+	if _overlay == EXPLORATION_JOURNAL_OVERLAY:
+		return InputContextScript.CONTEXT_JOURNAL
 	match _overlay:
 		Overlay.INVENTORY:
 			return InputContextScript.CONTEXT_INVENTORY

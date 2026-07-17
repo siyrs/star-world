@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_resource_distribution.ps1"
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_ecology_danger.ps1"
+& "$PSScriptRoot\developer_b\validate_exploration_journal.ps1"
 & "$PSScriptRoot\developer_b\validate_block_visuals.ps1"
 & "$PSScriptRoot\developer_b\validate_fertilizers.ps1"
 & "$PSScriptRoot\developer_b\validate_rest.ps1"
@@ -52,6 +53,7 @@ Invoke-GodotTest 'res://tests/qa/block_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/resource_distribution_regression.gd'
 Invoke-GodotTest 'res://tests/qa/prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ecology_danger_regression.gd'
+Invoke-GodotTest 'res://tests/qa/exploration_journal_regression.gd'
 Invoke-GodotTest 'res://tests/qa/glass_pane_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/non_cube_block_geometry_regression.gd'
@@ -82,4 +84,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: catalog + resources + prospecting + ecology danger + panes + directional geometry + runtime checks'
+Write-Host 'PASS: catalog + resources + prospecting + ecology danger + exploration journal + panes + directional geometry + runtime checks'
