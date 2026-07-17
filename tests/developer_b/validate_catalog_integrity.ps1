@@ -26,10 +26,13 @@ foreach ($match in $definitionMatches) {
   $blockId = $match.Groups[1].Value
   $body = $match.Groups[2].Value
   $itemMatch = [regex]::Match($body, '"item_id"\s*:\s*"([^"]*)"')
+  $placeItemMatch = [regex]::Match($body, '"place_item_id"\s*:\s*"([^"]*)"')
   $parentMatch = [regex]::Match($body, '"visual_parent"\s*:\s*"([^"]*)"')
   $familyMatch = [regex]::Match($body, '"orientation_family"\s*:\s*"([^"]*)"')
+  $dropItemId = if ($itemMatch.Success) { $itemMatch.Groups[1].Value } else { '' }
   $definitions[$blockId] = @{
-    item_id = if ($itemMatch.Success) { $itemMatch.Groups[1].Value } else { '' }
+    item_id = $dropItemId
+    place_item_id = if ($placeItemMatch.Success) { $placeItemMatch.Groups[1].Value } else { $dropItemId }
     visual_parent = if ($parentMatch.Success) { $parentMatch.Groups[1].Value } else { '' }
     orientation_family = if ($familyMatch.Success) { $familyMatch.Groups[1].Value } else { '' }
   }
@@ -57,9 +60,11 @@ foreach ($item in $items) {
   $itemSet[$itemId] = $true
 }
 foreach ($blockId in $knownBlocks) {
-  $itemId = [string]$definitions[$blockId].item_id
-  if (-not [string]::IsNullOrWhiteSpace($itemId) -and -not $itemSet.ContainsKey($itemId)) {
-    throw "Block $blockId drops or maps to unknown item $itemId"
+  foreach ($field in @('item_id','place_item_id')) {
+    $itemId = [string]$definitions[$blockId].$field
+    if (-not [string]::IsNullOrWhiteSpace($itemId) -and -not $itemSet.ContainsKey($itemId)) {
+      throw "Block $blockId references unknown $field $itemId"
+    }
   }
 }
 foreach ($item in $items) {
@@ -68,12 +73,12 @@ foreach ($item in $items) {
   $blockId = [string]$item.block_id
   if ([string]::IsNullOrWhiteSpace($blockId)) { throw "Block item has no block_id: $itemId" }
   if (-not $blockSet.ContainsKey($blockId)) { throw "Block item $itemId references unregistered block $blockId" }
-  if ([string]$definitions[$blockId].item_id -ne $itemId) {
-    throw "Block item $itemId does not round-trip through BlockRegistry definition $blockId"
+  if ([string]$definitions[$blockId].place_item_id -ne $itemId) {
+    throw "Block item $itemId does not round-trip through BlockRegistry placement definition $blockId"
   }
   $canonical = $null
   foreach ($candidate in $knownBlocks) {
-    if ([string]$definitions[$candidate].item_id -eq $itemId) {
+    if ([string]$definitions[$candidate].place_item_id -eq $itemId) {
       $canonical = $candidate
       break
     }
