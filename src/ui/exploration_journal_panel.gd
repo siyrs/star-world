@@ -18,7 +18,7 @@ var _record_texts: Array[String] = []
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
-	custom_minimum_size = Vector2(860, 590)
+	custom_minimum_size = Vector2(860, 540)
 	_build_ui()
 	refresh()
 
