@@ -2,7 +2,10 @@
 
 ## 背景
 
-审计发现 `glass_pane` 已存在于 `items.json` 和 `recipes.json`，但生产 `BlockRegistry` 没有对应方块。玩家可以制作玻璃板，却无法把它解析为可放置世界方块，属于真实的死内容。
+审计发现两类跨目录断裂：
+
+1. `glass_pane` 已存在于 `items.json` 和 `recipes.json`，但生产 `BlockRegistry` 没有对应方块；玩家可以制作，却无法放置。
+2. 煤、铁、金、钻石矿石方块的采集掉落与放置物品共用 `item_id`；天然矿石需要掉落煤炭或粗矿，但这会让矿石方块物品无法解析为世界方块。
 
 这类问题不能只靠分别校验 JSON，因为每个文件单独合法并不代表跨目录能闭环。
 
@@ -13,20 +16,44 @@ BlockRegistry.BLOCK_IDS
 ↔ BlockRegistry.DEFINITIONS
 ↔ ItemRegistry block item
 ↔ Crafting output
+↔ Placement item
 ↔ Harvest drop
 ↔ Block visuals
 ```
 
+Definition 现在明确区分：
+
+```text
+item_id       → 默认采集掉落
+place_item_id → 背包物品解析为该世界方块
+```
+
+没有 `place_item_id` 时，默认回退到 `item_id`，保持旧方块兼容。
+
 对于 `category=block` 的普通方块物品，必须满足：
 
 1. `item.block_id` 在 `BlockRegistry.BLOCK_IDS` 中；
-2. 对应 Definition 的 `item_id` 等于该物品 ID；
+2. 对应 Definition 的 `place_item_id`（或兼容回退的 `item_id`）等于该物品 ID；
 3. `BlockRegistry.get_block_for_item(item_id)` 返回该 canonical block；
-4. 所有内部方向变体继续掉落 canonical item；
-5. 视觉档案或 `visual_parent` 存在；
-6. 可采集变体的掉落规则返回 canonical item。
+4. Definition 的采集 `item_id` 必须引用已注册物品，但允许与放置物品不同；
+5. 所有内部方向变体继续掉落 canonical item；
+6. 视觉档案或 `visual_parent` 存在；
+7. 可采集变体的掉落规则返回正确 item。
 
 流体桶等 utility 能力不受普通 block item 的 round-trip 约束。
+
+## 矿石放置与掉落
+
+四种矿石保持既有采集收益，同时恢复方块物品放置：
+
+| 方块 | `place_item_id` | 默认/规则掉落 |
+|---|---|---|
+| `coal_ore` | `coal_ore` | `coal` |
+| `iron_ore` | `iron_ore` | `raw_iron` |
+| `gold_ore` | `gold_ore` | `raw_gold` |
+| `diamond_ore` | `diamond_ore` | `diamond` |
+
+这样不会为了让矿石方块可放置而破坏原有采集成长规则。
 
 ## 玻璃板修复
 
@@ -49,8 +76,8 @@ BlockRegistry.BLOCK_IDS
 - 每个注册 ID 有 Definition；
 - Definition 不会游离在 `BLOCK_IDS` 外；
 - `visual_parent` 和 `orientation_family` 指向已注册方块；
-- Definition 中的非空 `item_id` 必须存在；
-- 每个普通 block item 都能双向 round-trip；
+- `item_id` 与 `place_item_id` 均引用已注册物品；
+- 每个普通 block item 都能通过 placement item 双向 round-trip；
 - canonical block 与 item 声明一致；
 - Harvest Rule 只引用已注册方块。
 
@@ -63,10 +90,11 @@ BlockRegistry.BLOCK_IDS
 ```text
 Block ID（只追加）
 → Definition
-→ Item block_id / item_id round-trip
+→ placement item / harvest drop 分工
+→ Item block_id round-trip
 → Visual profile 或 visual_parent
 → Shape / orientation（如需要）
-→ Harvest drop
+→ Harvest rule
 → Placement preview
 → 生产 Chunk mesh/collision
 → 存档与真实桌面验收
