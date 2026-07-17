@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "default_profile": "star_continent",
+  "profiles": [
+    {
+      "id": "star_continent",
+      "name": "均衡矿层",
+      "summary": "煤与铁分布均衡；金矿主要位于 Y20 以下，钻石主要位于 Y11 以下。",
+      "fallback_block": "stone",
+      "entries": [
+        {"block_id": "diamond_ore", "min_y": 1, "max_y": 10, "cumulative_threshold": 22},
+        {"block_id": "gold_ore", "min_y": 1, "max_y": 19, "cumulative_threshold": 70},
+        {"block_id": "iron_ore", "min_y": 1, "max_y": 33, "cumulative_threshold": 205},
+        {"block_id": "coal_ore", "min_y": 1, "max_y": 63, "cumulative_threshold": 500}
+      ]
+    },
+    {
+      "id": "desert_ruins",
+      "name": "富集遗迹矿层",
+      "summary": "地下矿物约为均衡世界的 1.35 倍，适合快速建立铁、金与钻石资源储备。",
+      "fallback_block": "stone",
+      "entries": [
+        {"block_id": "diamond_ore", "min_y": 1, "max_y": 10, "cumulative_threshold": 29},
+        {"block_id": "gold_ore", "min_y": 1, "max_y": 19, "cumulative_threshold": 94},
+        {"block_id": "iron_ore", "min_y": 1, "max_y": 33, "cumulative_threshold": 276},
+        {"block_id": "coal_ore", "min_y": 1, "max_y": 63, "cumulative_threshold": 675}
+      ]
+    },
+    {
+      "id": "frozen_wastes",
+      "name": "稳定冰原矿层",
+      "summary": "矿物深度与星辰大陆一致，地表生存压力更高，但地下资源收益稳定。",
+      "fallback_block": "stone",
+      "entries": [
+        {"block_id": "diamond_ore", "min_y": 1, "max_y": 10, "cumulative_threshold": 22},
+        {"block_id": "gold_ore", "min_y": 1, "max_y": 19, "cumulative_threshold": 70},
+        {"block_id": "iron_ore", "min_y": 1, "max_y": 33, "cumulative_threshold": 205},
+        {"block_id": "coal_ore", "min_y": 1, "max_y": 63, "cumulative_threshold": 500}
+      ]
+    },
+    {
+      "id": "sky_islands",
+      "name": "稀缺浮岛矿层",
+      "summary": "矿物约为均衡世界的 70%，单个岛屿资源有限，需要跨岛探索与搭桥。",
+      "fallback_block": "stone",
+      "entries": [
+        {"block_id": "diamond_ore", "min_y": 1, "max_y": 10, "cumulative_threshold": 15},
+        {"block_id": "gold_ore", "min_y": 1, "max_y": 19, "cumulative_threshold": 49},
+        {"block_id": "iron_ore", "min_y": 1, "max_y": 33, "cumulative_threshold": 143},
+        {"block_id": "coal_ore", "min_y": 1, "max_y": 63, "cumulative_threshold": 350}
+      ]
+    },
+    {
+      "id": "abyss_world",
+      "name": "深渊高密矿层",
+      "summary": "地下矿物约为均衡世界的 1.65 倍，但洞穴、岩浆与敌对生物让开采风险更高。",
+      "fallback_block": "stone",
+      "entries": [
+        {"block_id": "diamond_ore", "min_y": 1, "max_y": 10, "cumulative_threshold": 36},
+        {"block_id": "gold_ore", "min_y": 1, "max_y": 19, "cumulative_threshold": 115},
+        {"block_id": "iron_ore", "min_y": 1, "max_y": 33, "cumulative_threshold": 338},
+        {"block_id": "coal_ore", "min_y": 1, "max_y": 63, "cumulative_threshold": 825}
+      ]
+    }
+  ]
+}
