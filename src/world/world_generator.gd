@@ -2,14 +2,17 @@ class_name StarWorldGenerator
 extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const ResourceDistributionRegistryScript = preload("res://src/world/resource_distribution_registry.gd")
 const WORLD_HEIGHT := 64
 const SEA_LEVEL := 18
+const RESOURCE_ROLL_SALT := 211
 
 var profile_id := "star_continent"
 var seed_value := 734521
 var height_noise := FastNoiseLite.new()
 var detail_noise := FastNoiseLite.new()
 var cave_noise := FastNoiseLite.new()
+var resource_distribution = ResourceDistributionRegistryScript.new()
 
 
 func configure(p_profile_id: String, p_seed: int) -> void:
@@ -131,16 +134,8 @@ func _layer_block(position: Vector3i, terrain_height: int) -> String:
 
 
 func _ore_or_stone(position: Vector3i) -> String:
-	var roll := _hash_roll(position.x, position.y, position.z, 211)
-	var bonus := 1.0
-	if profile_id == "desert_ruins": bonus = 1.35
-	elif profile_id == "abyss_world": bonus = 1.65
-	elif profile_id == "sky_islands": bonus = 0.7
-	if position.y < 11 and roll < int(22.0 * bonus): return "diamond_ore"
-	if position.y < 20 and roll < int(70.0 * bonus): return "gold_ore"
-	if position.y < 34 and roll < int(205.0 * bonus): return "iron_ore"
-	if roll < int(500.0 * bonus): return "coal_ore"
-	return "stone"
+	var roll := _hash_roll(position.x, position.y, position.z, RESOURCE_ROLL_SALT)
+	return resource_distribution.resolve_block(profile_id, position.y, roll)
 
 
 func _get_sky_block(position: Vector3i, terrain_height: int) -> String:
