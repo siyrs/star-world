@@ -23,7 +23,9 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 }
 
 & "$PSScriptRoot\developer_b\validate_data.ps1"
+& "$PSScriptRoot\developer_b\validate_catalog_integrity.ps1"
 & "$PSScriptRoot\developer_b\validate_resource_distribution.ps1"
+& "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_block_visuals.ps1"
 & "$PSScriptRoot\developer_b\validate_fertilizers.ps1"
 & "$PSScriptRoot\developer_b\validate_rest.ps1"
@@ -47,6 +49,8 @@ Invoke-GodotTest 'res://tests/qa/movement_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/physics_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/resource_distribution_regression.gd'
+Invoke-GodotTest 'res://tests/qa/prospecting_regression.gd'
+Invoke-GodotTest 'res://tests/qa/glass_pane_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/non_cube_block_geometry_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_stair_regression.gd'
@@ -76,4 +80,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: data + resource distribution + directional textured geometry + first-person + mining cracks + Godot runtime checks'
+Write-Host 'PASS: catalog + resources + prospecting + panes + directional textured geometry + first-person + runtime checks'
