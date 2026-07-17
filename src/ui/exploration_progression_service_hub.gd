@@ -8,9 +8,13 @@ const ProspectingStateMigrationScript = preload(
 const DangerServiceScript = preload(
 	"res://src/exploration/exploration_danger_service.gd"
 )
+const JournalServiceScript = preload(
+	"res://src/exploration/exploration_journal_service.gd"
+)
 
 var prospecting_service: Node
 var exploration_danger_service: Node
+var exploration_journal_service: Node
 var _last_announced_danger_tier := ""
 
 
@@ -26,11 +30,19 @@ func _ready() -> void:
 	prospecting_service = _add_service(
 		ProspectingServiceScript.new(), "ProspectingService"
 	)
-	prospecting_service.call("setup", inventory.registry, exploration_danger_service)
+	prospecting_service.call(
+		"setup", inventory.registry, exploration_danger_service, day_night
+	)
 	prospecting_service.connect("scan_completed", Callable(self, "_on_prospecting_completed"))
 	prospecting_service.connect("scan_rejected", Callable(self, "_on_prospecting_rejected"))
+	exploration_journal_service = _add_service(
+		JournalServiceScript.new(), "ExplorationJournalService"
+	)
+	exploration_journal_service.call("setup", prospecting_service)
 	if game_ui != null and game_ui.get("hud") != null and game_ui.hud.has_method("setup_danger"):
 		game_ui.hud.call("setup_danger", exploration_danger_service)
+	if game_ui != null and game_ui.has_method("setup_exploration_journal"):
+		game_ui.call("setup_exploration_journal", exploration_journal_service)
 
 
 func _begin_world(state: Dictionary) -> void:
@@ -44,6 +56,8 @@ func _begin_world(state: Dictionary) -> void:
 	_last_announced_danger_tier = ""
 	if prospecting_service != null:
 		prospecting_service.call("deserialize", migrated_state.get("exploration", {}))
+	if exploration_journal_service != null:
+		exploration_journal_service.call("refresh")
 	super._begin_world(migrated_state)
 
 
@@ -90,6 +104,11 @@ func get_character_snapshot() -> Dictionary:
 	var snapshot: Dictionary = super.get_character_snapshot()
 	snapshot["exploration"] = (
 		prospecting_service.call("get_snapshot") if prospecting_service != null else {}
+	)
+	snapshot["exploration_journal"] = (
+		exploration_journal_service.call("get_snapshot")
+		if exploration_journal_service != null
+		else {}
 	)
 	snapshot["danger"] = (
 		exploration_danger_service.call("get_snapshot")
@@ -150,3 +169,5 @@ func _clear_exploration_state() -> void:
 		exploration_danger_service.call("clear")
 	if prospecting_service != null and prospecting_service.has_method("clear"):
 		prospecting_service.call("clear")
+	if exploration_journal_service != null and exploration_journal_service.has_method("clear"):
+		exploration_journal_service.call("clear")
