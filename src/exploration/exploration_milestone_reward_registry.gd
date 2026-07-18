@@ -4,13 +4,7 @@ extends RefCounted
 const DEFAULT_DATA_PATH := "res://data/exploration_milestone_rewards.json"
 const ItemRegistryScript = preload("res://src/inventory/item_registry.gd")
 const JournalRegistryScript = preload("res://src/exploration/exploration_journal_registry.gd")
-const PROFILE_IDS: Array[String] = [
-	"star_continent",
-	"desert_ruins",
-	"frozen_wastes",
-	"sky_islands",
-	"abyss_world",
-]
+const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
 
 var schema_version := 0
 var item_registry = ItemRegistryScript.new()
@@ -44,7 +38,7 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 		return false
 	var data: Dictionary = parsed
 	schema_version = int(data.get("schema_version", 0))
-	if schema_version != 1:
+	if schema_version != 2:
 		_record_error("Unsupported exploration reward schema_version: %d" % schema_version)
 	var milestone_ids: Dictionary = {}
 	for milestone: Dictionary in journal_registry.get_milestones():
@@ -70,22 +64,34 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 			_record_error("Exploration reward references unknown milestone: %s" % milestone_id)
 			continue
 		var items := _normalize_items(reward.get("items", []), milestone_id)
-		if items.is_empty():
-			_record_error("Exploration reward contains no valid items: %s" % milestone_id)
-			continue
 		var profile_bonus: Dictionary = {}
 		var raw_profile_bonus: Variant = reward.get("profile_bonus", {})
 		if raw_profile_bonus is Dictionary:
 			for raw_profile_id: Variant in raw_profile_bonus.keys():
 				var profile_id := str(raw_profile_id).strip_edges()
-				if profile_id not in PROFILE_IDS:
+				if not MapProfileCatalogScript.is_valid(profile_id):
 					_record_error("Exploration reward has unknown map profile '%s': %s" % [profile_id, milestone_id])
 					continue
-				var bonus_items := _normalize_items(raw_profile_bonus[raw_profile_id], "%s/%s" % [milestone_id, profile_id])
+				var bonus_items := _normalize_items(
+					raw_profile_bonus[raw_profile_id], "%s/%s" % [milestone_id, profile_id]
+				)
 				if bonus_items.is_empty():
 					_record_error("Exploration reward map bonus is empty: %s/%s" % [milestone_id, profile_id])
 					continue
 				profile_bonus[profile_id] = bonus_items
+		var reward_valid := true
+		for profile_id: String in MapProfileCatalogScript.get_ids():
+			var resolved_items: Array = items.duplicate(true)
+			var raw_bonus: Variant = profile_bonus.get(profile_id, [])
+			if raw_bonus is Array:
+				for raw_item: Variant in raw_bonus:
+					if raw_item is Dictionary:
+						resolved_items.append(raw_item.duplicate(true))
+			if _combine_items(resolved_items).is_empty():
+				_record_error("Exploration reward resolves to no items for %s/%s" % [milestone_id, profile_id])
+				reward_valid = false
+		if not reward_valid:
+			continue
 		var normalized := {
 			"milestone_id": milestone_id,
 			"description": description,
@@ -200,7 +206,7 @@ func _combine_items(items: Array) -> Array[Dictionary]:
 
 
 func _install_fallback() -> void:
-	schema_version = 1
+	schema_version = 2
 	_rewards = {
 		"first_discovery": {
 			"milestone_id":"first_discovery",
@@ -219,5 +225,6 @@ func _install_fallback() -> void:
 
 
 func _record_error(message: String) -> void:
-	_validation_errors.append(message)
+	if message not in _validation_errors:
+		_validation_errors.append(message)
 	push_warning(message)
