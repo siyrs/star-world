@@ -133,8 +133,8 @@ func _run() -> void:
 	var claimed_ids: Array = loaded.get("exploration_rewards", {}).get("claimed", [])
 	_check("signature_finding" in claimed_ids, "saved world retains the claimed map signature")
 	_check(int(loaded.get("exploration", {}).get("records", []).size()) == 2, "saved world retains both base and calibrated discoveries")
-	var calibrated_before_reload := inventory.count_item("abyss_prospecting_kit")
-	var cinder_before_reload := inventory.count_item("abyss_cinder")
+	var calibrated_before_reload: int = int(inventory.count_item("abyss_prospecting_kit"))
+	var cinder_before_reload: int = int(inventory.count_item("abyss_cinder"))
 	hub.return_to_menu()
 	for _frame in 6:
 		await process_frame
