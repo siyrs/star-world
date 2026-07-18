@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "rewards": [
+    {
+      "milestone_id": "first_discovery",
+      "description": "完成第一份区域勘探后领取基础野外补给，并获得与当前地图相符的额外物资。",
+      "items": [
+        {"item_id": "torch", "count": 4}
+      ],
+      "profile_bonus": {
+        "star_continent": [{"item_id": "apple", "count": 2}],
+        "desert_ruins": [{"item_id": "glass", "count": 4}],
+        "frozen_wastes": [{"item_id": "snow_block", "count": 2}],
+        "sky_islands": [{"item_id": "oak_planks", "count": 8}],
+        "abyss_world": [{"item_id": "cooked_chicken", "count": 2}]
+      }
+    },
+    {
+      "milestone_id": "three_regions",
+      "description": "踏勘三个不同区块后领取用于升级工具的铁锭。",
+      "items": [
+        {"item_id": "iron_ingot", "count": 2}
+      ]
+    },
+    {
+      "milestone_id": "deep_delver",
+      "description": "完成深层勘探后领取照明与食物补给。",
+      "items": [
+        {"item_id": "coal", "count": 8},
+        {"item_id": "bread", "count": 2}
+      ]
+    },
+    {
+      "milestone_id": "rich_signal",
+      "description": "发现富集区域后领取一枚钻石作为勘探成果。",
+      "items": [
+        {"item_id": "diamond", "count": 1}
+      ]
+    },
+    {
+      "milestone_id": "danger_scout",
+      "description": "在危险区域完成勘探后领取防护与恢复补给。",
+      "items": [
+        {"item_id": "iron_ingot", "count": 2},
+        {"item_id": "cooked_chicken", "count": 4}
+      ]
+    },
+    {
+      "milestone_id": "four_depths",
+      "description": "覆盖全部四种地质层后领取金锭与照明物资。",
+      "items": [
+        {"item_id": "gold_ingot", "count": 3},
+        {"item_id": "torch", "count": 8}
+      ]
+    },
+    {
+      "milestone_id": "seasoned_explorer",
+      "description": "累计十二条发现后领取资深探索者工具包。",
+      "items": [
+        {"item_id": "iron_pickaxe", "count": 1},
+        {"item_id": "torch", "count": 16},
+        {"item_id": "bread", "count": 4}
+      ]
+    }
+  ]
+}
