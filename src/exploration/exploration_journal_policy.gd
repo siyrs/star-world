@@ -2,14 +2,7 @@ class_name ExplorationJournalPolicy
 extends RefCounted
 
 const StateMigrationScript = preload("res://src/exploration/prospecting_state_migration.gd")
-
-const MAP_LABELS := {
-	"star_continent": "星辰大陆",
-	"desert_ruins": "荒漠遗迹",
-	"frozen_wastes": "极寒冰原",
-	"sky_islands": "天空群岛",
-	"abyss_world": "深渊世界",
-}
+const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
 
 
 static func build_snapshot(raw_records: Array, config: Dictionary) -> Dictionary:
@@ -70,6 +63,7 @@ static func build_snapshot(raw_records: Array, config: Dictionary) -> Dictionary
 		"rich_count": rich_count,
 		"highest_danger_score": highest_danger_score,
 		"latest_sequence": latest_sequence,
+		"records": records,
 	}
 	var milestones := _evaluate_milestones(config.get("milestones", []), metrics)
 	var completed_count := 0
@@ -96,7 +90,7 @@ static func build_snapshot(raw_records: Array, config: Dictionary) -> Dictionary
 
 
 static func map_label(profile_id: String) -> String:
-	return str(MAP_LABELS.get(profile_id, profile_id if not profile_id.is_empty() else "未知地图"))
+	return MapProfileCatalogScript.label(profile_id)
 
 
 static func _evaluate_milestones(raw_milestones: Variant, metrics: Dictionary) -> Array[Dictionary]:
@@ -111,6 +105,10 @@ static func _evaluate_milestones(raw_milestones: Variant, metrics: Dictionary) -
 		milestone["completed"] = bool(status.get("completed", false))
 		milestone["progress"] = int(status.get("progress", 0))
 		milestone["target"] = int(status.get("target", 1))
+		for raw_key: Variant in status.keys():
+			var key := str(raw_key)
+			if key not in ["completed", "progress", "target"]:
+				milestone[key] = status[raw_key]
 		result.append(milestone)
 	return result
 
@@ -148,8 +146,52 @@ static func _milestone_status(milestone: Dictionary, metrics: Dictionary) -> Dic
 						completed = true
 						break
 			return {"completed": completed, "progress": int(completed), "target": 1}
+		"profile_rule":
+			return _profile_rule_status(milestone, metrics.get("records", []))
 		_:
 			return {"completed": false, "progress": 0, "target": 1}
+
+
+static func _profile_rule_status(milestone: Dictionary, raw_records: Variant) -> Dictionary:
+	if raw_records is not Array:
+		return {"completed": false, "progress": 0, "target": 1}
+	var raw_rules: Variant = milestone.get("rules", {})
+	if raw_rules is not Dictionary:
+		return {"completed": false, "progress": 0, "target": 1}
+	var rules: Dictionary = raw_rules
+	for raw_record: Variant in raw_records:
+		if raw_record is not Dictionary:
+			continue
+		var record: Dictionary = raw_record
+		var profile_id := str(record.get("profile_id", ""))
+		var raw_rule: Variant = rules.get(profile_id, {})
+		if raw_rule is not Dictionary:
+			continue
+		if _record_matches_profile_rule(record, raw_rule):
+			return {
+				"completed": true,
+				"progress": 1,
+				"target": 1,
+				"matched_profile_id": profile_id,
+				"matched_sequence": int(record.get("sequence", 0)),
+			}
+	return {"completed": false, "progress": 0, "target": 1}
+
+
+static func _record_matches_profile_rule(record: Dictionary, raw_rule: Dictionary) -> bool:
+	var depth_ids: Array = raw_rule.get("depth_band_ids", [])
+	if not depth_ids.is_empty() and str(record.get("depth_band_id", "")) not in depth_ids:
+		return false
+	var density_ids: Array = raw_rule.get("density_ids", [])
+	if not density_ids.is_empty() and str(record.get("density_id", "")) not in density_ids:
+		return false
+	var danger_ids: Array = raw_rule.get("danger_tier_ids", [])
+	if not danger_ids.is_empty() and str(record.get("danger_tier_id", "")) not in danger_ids:
+		return false
+	var minimum_danger_score := clampi(int(raw_rule.get("minimum_danger_score", 0)), 0, 100)
+	if clampi(int(record.get("danger_score", 0)), 0, 100) < minimum_danger_score:
+		return false
+	return true
 
 
 static func _threshold_status(value: int, threshold: int) -> Dictionary:
