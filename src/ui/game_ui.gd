@@ -41,6 +41,7 @@ var container_storage
 var furnace_service
 var experience_coordinator
 var exploration_journal_service: Node
+var exploration_reward_service: Node
 var hud
 var guidance_overlay
 var inventory_panel
@@ -126,10 +127,18 @@ func setup(
 			survival.connect("player_died", callback)
 
 
-func setup_exploration_journal(p_journal_service: Node) -> void:
+func setup_exploration_journal(
+	p_journal_service: Node,
+	p_reward_service: Node = null
+) -> void:
 	exploration_journal_service = p_journal_service
+	exploration_reward_service = p_reward_service
 	if exploration_journal_panel != null and exploration_journal_panel.has_method("setup"):
-		exploration_journal_panel.call("setup", exploration_journal_service)
+		exploration_journal_panel.call(
+			"setup",
+			exploration_journal_service,
+			exploration_reward_service
+		)
 
 
 func begin_gameplay() -> void:
