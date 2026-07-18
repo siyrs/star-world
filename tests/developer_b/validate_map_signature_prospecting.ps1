@@ -72,21 +72,30 @@ foreach ($mapId in $catalogIds) {
   $materialId = [string]$materialByProfile[$mapId]
   $toolId = [string]$expectedTools[$mapId]
   if (-not $itemById.ContainsKey($materialId)) { throw "Missing signature material item: $materialId" }
-  if ([string]$itemById[$materialId].category -ne 'material' -or [int]$itemById[$materialId].max_stack -gt 16) { throw "Invalid signature material contract: $materialId" }
-  if ($null -ne $itemById[$materialId].block_id) { throw "Signature material must not consume a block numeric id: $materialId" }
+  $material = $itemById[$materialId]
+  if ([string]$material.category -ne 'material' -or [int]$material.max_stack -gt 16) { throw "Invalid signature material contract: $materialId" }
+  if ($null -ne $material.PSObject.Properties['block_id']) { throw "Signature material must not consume a block numeric id: $materialId" }
   if (-not $itemById.ContainsKey($toolId)) { throw "Missing calibrated prospecting tool: $toolId" }
-  if ([string]$itemById[$toolId].category -ne 'utility' -or -not [bool]$itemById[$toolId].prospecting -or [int]$itemById[$toolId].max_stack -ne 1) { throw "Invalid calibrated prospecting tool contract: $toolId" }
+  $toolItem = $itemById[$toolId]
+  if ([string]$toolItem.category -ne 'utility' -or -not [bool]$toolItem.prospecting -or [int]$toolItem.max_stack -ne 1) { throw "Invalid calibrated prospecting tool contract: $toolId" }
   if (-not $toolByProfile.ContainsKey($mapId) -or [string]$toolByProfile[$mapId] -ne $toolId) { throw "Prospecting profile does not map $mapId to $toolId" }
   if (-not $recipeByOutput.ContainsKey($toolId)) { throw "Calibrated tool has no recipe: $toolId" }
   $recipe = $recipeByOutput[$toolId]
   if ([string]$recipe.station -ne 'workbench' -or [int]$recipe.output.count -ne 1) { throw "Invalid calibrated tool recipe: $toolId" }
-  if ([int]$recipe.ingredients.prospecting_kit -ne 1 -or [int]$recipe.ingredients.$materialId -ne 1) { throw "Calibrated tool recipe must consume one base kit and one signature material: $toolId" }
-  $bonusItems = @($signatureReward[0].profile_bonus.$mapId)
+  $baseIngredient = $recipe.ingredients.PSObject.Properties['prospecting_kit']
+  $materialIngredient = $recipe.ingredients.PSObject.Properties[$materialId]
+  if ($null -eq $baseIngredient -or [int]$baseIngredient.Value -ne 1 -or $null -eq $materialIngredient -or [int]$materialIngredient.Value -ne 1) {
+    throw "Calibrated tool recipe must consume one base kit and one signature material: $toolId"
+  }
+  $profileBonusProperty = $signatureReward[0].profile_bonus.PSObject.Properties[$mapId]
+  if ($null -eq $profileBonusProperty) { throw "Signature reward has no map bonus: $mapId" }
+  $bonusItems = @($profileBonusProperty.Value)
   if ($bonusItems.Count -ne 1 -or [string]$bonusItems[0].item_id -ne $materialId -or [int]$bonusItems[0].count -ne 1) { throw "Signature reward does not grant the calibrated recipe material: $mapId" }
 
-  $rule = $signatureMilestone[0].rules.$mapId
-  if ($null -eq $rule) { throw "Signature milestone has no rule for $mapId" }
-  $acceptedDensities = @($rule.density_ids)
+  $ruleProperty = $signatureMilestone[0].rules.PSObject.Properties[$mapId]
+  if ($null -eq $ruleProperty) { throw "Signature milestone has no rule for $mapId" }
+  $rule = $ruleProperty.Value
+  $acceptedDensities = @($rule.density_ids | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
   if ($acceptedDensities.Count -gt 0) {
     $reachable = $false
     foreach ($densityId in $acceptedDensities) {
@@ -95,7 +104,7 @@ foreach ($mapId in $catalogIds) {
     }
     if (-not $reachable) { throw "Signature density rule is unreachable with the production resource ceiling: $mapId max=$($resourceRatio[$mapId])" }
   }
-  $acceptedDangers = @($rule.danger_tier_ids)
+  $acceptedDangers = @($rule.danger_tier_ids | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
   if ($acceptedDangers.Count -gt 0) {
     if (-not $ecologyById.ContainsKey($mapId) -or [int]$ecologyById[$mapId].hostile_cap_night -lt 1) { throw "Signature danger rule has no production hostile pressure: $mapId" }
   }
