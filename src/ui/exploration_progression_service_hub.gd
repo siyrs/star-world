@@ -11,10 +11,14 @@ const DangerServiceScript = preload(
 const JournalServiceScript = preload(
 	"res://src/exploration/exploration_journal_service.gd"
 )
+const RewardServiceScript = preload(
+	"res://src/exploration/exploration_milestone_reward_service.gd"
+)
 
 var prospecting_service: Node
 var exploration_danger_service: Node
 var exploration_journal_service: Node
+var exploration_reward_service: Node
 var _last_announced_danger_tier := ""
 
 
@@ -39,10 +43,24 @@ func _ready() -> void:
 		JournalServiceScript.new(), "ExplorationJournalService"
 	)
 	exploration_journal_service.call("setup", prospecting_service)
+	exploration_reward_service = _add_service(
+		RewardServiceScript.new(), "ExplorationMilestoneRewardService"
+	)
+	exploration_reward_service.call("setup", inventory, exploration_journal_service)
+	exploration_reward_service.connect(
+		"reward_claimed", Callable(self, "_on_exploration_reward_claimed")
+	)
+	exploration_reward_service.connect(
+		"reward_rejected", Callable(self, "_on_exploration_reward_rejected")
+	)
 	if game_ui != null and game_ui.get("hud") != null and game_ui.hud.has_method("setup_danger"):
 		game_ui.hud.call("setup_danger", exploration_danger_service)
 	if game_ui != null and game_ui.has_method("setup_exploration_journal"):
-		game_ui.call("setup_exploration_journal", exploration_journal_service)
+		game_ui.call(
+			"setup_exploration_journal",
+			exploration_journal_service,
+			exploration_reward_service
+		)
 
 
 func _begin_world(state: Dictionary) -> void:
@@ -58,6 +76,12 @@ func _begin_world(state: Dictionary) -> void:
 		prospecting_service.call("deserialize", migrated_state.get("exploration", {}))
 	if exploration_journal_service != null:
 		exploration_journal_service.call("refresh")
+	if exploration_reward_service != null:
+		exploration_reward_service.call("set_profile", map_id)
+		exploration_reward_service.call(
+			"deserialize",
+			migrated_state.get("exploration_rewards", {})
+		)
 	super._begin_world(migrated_state)
 
 
@@ -86,6 +110,8 @@ func activate_gameplay() -> void:
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
 	if prospecting_service != null:
 		current_state["exploration"] = prospecting_service.call("serialize")
+	if exploration_reward_service != null:
+		current_state["exploration_rewards"] = exploration_reward_service.call("serialize")
 	return super.save_current(world_state, player_state)
 
 
@@ -108,6 +134,11 @@ func get_character_snapshot() -> Dictionary:
 	snapshot["exploration_journal"] = (
 		exploration_journal_service.call("get_snapshot")
 		if exploration_journal_service != null
+		else {}
+	)
+	snapshot["exploration_rewards"] = (
+		exploration_reward_service.call("get_snapshot")
+		if exploration_reward_service != null
 		else {}
 	)
 	snapshot["danger"] = (
@@ -148,6 +179,30 @@ func _on_prospecting_rejected(reason: String, context: Dictionary) -> void:
 	)
 
 
+func _on_exploration_reward_claimed(milestone_id: String, result: Dictionary) -> void:
+	_publish_character_message(
+		str(result.get("message", "探索奖励已领取")),
+		"success",
+		"exploration_reward:%s" % milestone_id,
+		3.2
+	)
+	if audio_service != null and audio_service.has_method("play_pickup"):
+		audio_service.call("play_pickup")
+
+
+func _on_exploration_reward_rejected(
+	milestone_id: String,
+	reason: String,
+	context: Dictionary
+) -> void:
+	_publish_character_message(
+		str(context.get("message", "探索奖励暂时无法领取")),
+		"warning",
+		"exploration_reward_rejected:%s:%s" % [milestone_id, reason],
+		2.8
+	)
+
+
 func _on_exploration_danger_changed(snapshot: Dictionary) -> void:
 	var tier_id := str(snapshot.get("tier_id", "safe"))
 	if tier_id == _last_announced_danger_tier:
@@ -171,3 +226,5 @@ func _clear_exploration_state() -> void:
 		prospecting_service.call("clear")
 	if exploration_journal_service != null and exploration_journal_service.has_method("clear"):
 		exploration_journal_service.call("clear")
+	if exploration_reward_service != null and exploration_reward_service.has_method("clear"):
+		exploration_reward_service.call("clear")

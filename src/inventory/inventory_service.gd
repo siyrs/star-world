@@ -10,6 +10,7 @@ signal slot_equipped(source_index: int, hotbar_index: int, slot: Dictionary)
 
 const SERIAL_VERSION := 1
 const ItemRegistryScript = preload("res://src/inventory/item_registry.gd")
+const TransactionPolicyScript = preload("res://src/inventory/inventory_transaction_policy.gd")
 
 var registry = ItemRegistryScript.new()
 var slot_count: int = 36
@@ -93,6 +94,46 @@ func get_add_capacity(item_id: String, metadata: Dictionary = {}) -> int:
 
 func can_add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> bool:
 	return count <= 0 or get_add_capacity(item_id, metadata) >= count
+
+
+func can_transact_items(removals: Dictionary = {}, additions: Array = []) -> bool:
+	return bool(
+		TransactionPolicyScript.plan(slots, registry, removals, additions).get("success", false)
+	)
+
+
+func transact_items(removals: Dictionary = {}, additions: Array = []) -> Dictionary:
+	var plan: Dictionary = TransactionPolicyScript.plan(slots, registry, removals, additions)
+	if not bool(plan.get("success", false)):
+		return plan
+	var raw_slots: Variant = plan.get("slots", [])
+	if raw_slots is not Array or raw_slots.size() != slots.size():
+		return {"success": false, "reason": "invalid_plan"}
+	var next_slots: Array = raw_slots
+	slots = []
+	for raw_slot: Variant in next_slots:
+		slots.append(raw_slot.duplicate(true) if raw_slot is Dictionary else {})
+	var changed_indices: Array = plan.get("changed_indices", [])
+	for raw_index: Variant in changed_indices:
+		var index := int(raw_index)
+		if index >= 0 and index < slots.size():
+			slot_changed.emit(index, get_slot(index))
+	var removed_totals: Dictionary = plan.get("removed", {})
+	for raw_item_id: Variant in removed_totals.keys():
+		var removed_count := int(removed_totals[raw_item_id])
+		if removed_count > 0:
+			item_removed.emit(str(raw_item_id), removed_count)
+	var added_totals: Dictionary = plan.get("added", {})
+	for raw_item_id: Variant in added_totals.keys():
+		var added_count := int(added_totals[raw_item_id])
+		if added_count > 0:
+			item_added.emit(str(raw_item_id), added_count)
+	if not changed_indices.is_empty():
+		inventory_changed.emit()
+		_emit_selected_slot()
+	var result := plan.duplicate(true)
+	result.erase("slots")
+	return result
 
 
 func remove_item(item_id: String, count: int = 1) -> int:

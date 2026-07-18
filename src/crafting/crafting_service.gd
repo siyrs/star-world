@@ -82,9 +82,7 @@ func can_craft(recipe_id: String, times: int = 1) -> bool:
 	var recipe: Dictionary = _recipes[recipe_id]
 	if not _station_allowed(str(recipe.get("station", "hand"))):
 		return false
-	var required: Dictionary = {}
-	for item_id in recipe.get("ingredients", {}):
-		required[item_id] = int(recipe["ingredients"][item_id]) * times
+	var required := _requirements_for(recipe, times)
 	return inventory.has_items(required)
 
 
@@ -95,26 +93,56 @@ func craft(recipe_id: String, times: int = 1) -> bool:
 	if not _recipes.has(recipe_id):
 		craft_failed.emit(recipe_id, "unknown_recipe")
 		return false
-	if not can_craft(recipe_id, times):
+	if times <= 0 or not _station_allowed(str(_recipes[recipe_id].get("station", "hand"))):
 		craft_failed.emit(recipe_id, "requirements_or_station")
 		return false
 	var recipe: Dictionary = _recipes[recipe_id]
-	var ingredients: Dictionary = recipe.get("ingredients", {})
-	for item_id in ingredients:
-		inventory.remove_item(str(item_id), int(ingredients[item_id]) * times)
+	var required := _requirements_for(recipe, times)
 	var output: Dictionary = recipe.get("output", {})
 	var output_id := str(output.get("id", ""))
 	var output_count := int(output.get("count", 1)) * times
-	var leftover: int = inventory.add_item(output_id, output_count)
-	if leftover > 0:
-		inventory.remove_item(output_id, output_count - leftover)
-		for item_id in ingredients:
-			inventory.add_item(str(item_id), int(ingredients[item_id]) * times)
-		craft_failed.emit(recipe_id, "inventory_full")
+	if output_id.is_empty() or output_count <= 0:
+		craft_failed.emit(recipe_id, "invalid_output")
 		return false
+	if inventory.has_method("transact_items"):
+		var transaction: Dictionary = inventory.call(
+			"transact_items",
+			required,
+			[{"item_id": output_id, "count": output_count}]
+		)
+		if not bool(transaction.get("success", false)):
+			var reason := str(transaction.get("reason", "transaction_failed"))
+			craft_failed.emit(
+				recipe_id,
+				"inventory_full" if reason == "inventory_full" else "requirements_or_station"
+			)
+			return false
+	else:
+		if not inventory.has_items(required):
+			craft_failed.emit(recipe_id, "requirements_or_station")
+			return false
+		for item_id in required:
+			inventory.remove_item(str(item_id), int(required[item_id]))
+		var leftover: int = inventory.add_item(output_id, output_count)
+		if leftover > 0:
+			inventory.remove_item(output_id, output_count - leftover)
+			for item_id in required:
+				inventory.add_item(str(item_id), int(required[item_id]))
+			craft_failed.emit(recipe_id, "inventory_full")
+			return false
 	var crafted_output := {"item_id": output_id, "count": output_count}
 	craft_succeeded.emit(recipe_id, crafted_output)
 	return true
+
+
+func _requirements_for(recipe: Dictionary, times: int) -> Dictionary:
+	var required: Dictionary = {}
+	var raw_ingredients: Variant = recipe.get("ingredients", {})
+	if raw_ingredients is not Dictionary:
+		return required
+	for raw_item_id: Variant in raw_ingredients.keys():
+		required[str(raw_item_id)] = int(raw_ingredients[raw_item_id]) * maxi(1, times)
+	return required
 
 
 func _station_allowed(required_station: String) -> bool:

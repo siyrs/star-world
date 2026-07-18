@@ -8,12 +8,15 @@ const Tokens = preload("res://src/ui/design_tokens.gd")
 const JournalPolicyScript = preload("res://src/exploration/exploration_journal_policy.gd")
 
 var journal_service: Node
+var reward_service: Node
 var _summary_label: Label
 var _milestone_box: VBoxContainer
 var _records_box: VBoxContainer
 var _summary_text := ""
 var _milestone_texts: Array[String] = []
 var _record_texts: Array[String] = []
+var _reward_statuses: Dictionary = {}
+var _claim_buttons: Dictionary = {}
 
 
 func _ready() -> void:
@@ -23,11 +26,15 @@ func _ready() -> void:
 	refresh()
 
 
-func setup(p_journal_service: Node) -> void:
+func setup(p_journal_service: Node, p_reward_service: Node = null) -> void:
 	_disconnect_journal()
+	_disconnect_rewards()
 	journal_service = p_journal_service
+	reward_service = p_reward_service
 	if journal_service != null and journal_service.has_signal("journal_changed"):
 		journal_service.connect("journal_changed", Callable(self, "_on_journal_changed"))
+	if reward_service != null and reward_service.has_signal("rewards_changed"):
+		reward_service.connect("rewards_changed", Callable(self, "_on_rewards_changed"))
 	refresh()
 
 
@@ -37,8 +44,13 @@ func refresh() -> void:
 		var raw_snapshot: Variant = journal_service.call("get_snapshot")
 		if raw_snapshot is Dictionary:
 			snapshot = raw_snapshot
-	_render_summary(snapshot)
-	_render_milestones(snapshot)
+	var reward_snapshot: Dictionary = {}
+	if reward_service != null and reward_service.has_method("get_snapshot"):
+		var raw_rewards: Variant = reward_service.call("get_snapshot")
+		if raw_rewards is Dictionary:
+			reward_snapshot = raw_rewards
+	_render_summary(snapshot, reward_snapshot)
+	_render_milestones(snapshot, reward_snapshot)
 	_render_records(snapshot)
 
 
@@ -52,6 +64,15 @@ func get_milestone_texts() -> Array[String]:
 
 func get_record_texts() -> Array[String]:
 	return _record_texts.duplicate()
+
+
+func get_reward_status(milestone_id: String) -> String:
+	return str(_reward_statuses.get(milestone_id, ""))
+
+
+func get_claim_button(milestone_id: String) -> Button:
+	var raw_button: Variant = _claim_buttons.get(milestone_id)
+	return raw_button as Button if raw_button is Button and is_instance_valid(raw_button) else null
 
 
 func get_layout_rects() -> Dictionary:
@@ -97,7 +118,7 @@ func _build_ui() -> void:
 	body.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(body)
 	var milestone_panel := PanelContainer.new()
-	milestone_panel.custom_minimum_size.x = 310
+	milestone_panel.custom_minimum_size.x = 330
 	milestone_panel.add_theme_stylebox_override(
 		"panel",
 		Tokens.panel_style(Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_MD, Tokens.SPACE_MD)
@@ -107,7 +128,7 @@ func _build_ui() -> void:
 	milestone_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	milestone_panel.add_child(milestone_root)
 	var milestone_title := Label.new()
-	milestone_title.text = "里程碑"
+	milestone_title.text = "里程碑与奖励"
 	milestone_title.add_theme_font_size_override("font_size", Tokens.FONT_BUTTON)
 	milestone_root.add_child(milestone_title)
 	var milestone_scroll := ScrollContainer.new()
@@ -139,23 +160,27 @@ func _build_ui() -> void:
 	_records_box.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	record_scroll.add_child(_records_box)
 	var hint := Label.new()
-	hint.text = "探矿记录不会保存矿物或环境的精确坐标；重新扫描同一区块与深度会更新原记录。"
+	hint.text = "奖励只能由事务服务领取；背包空间不足时会继续保留。探矿日志仍不保存矿物或危险的精确坐标。"
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	root.add_child(hint)
 
 
-func _render_summary(snapshot: Dictionary) -> void:
+func _render_summary(snapshot: Dictionary, reward_snapshot: Dictionary) -> void:
 	var records := int(snapshot.get("record_count", 0))
 	var chunks := int(snapshot.get("unique_chunk_count", 0))
 	var completed := int(snapshot.get("completed_milestone_count", 0))
 	var milestone_count := int(snapshot.get("milestone_count", 0))
 	var highest_danger := int(snapshot.get("highest_danger_score", 0))
-	_summary_text = "已记录 %d 条发现 · %d 个区块 · 里程碑 %d / %d · 最高危险 %d / 100" % [
+	var claimable := int(reward_snapshot.get("claimable_count", 0))
+	var claimed := int(reward_snapshot.get("claimed_count", 0))
+	_summary_text = "已记录 %d 条发现 · %d 个区块 · 里程碑 %d / %d · 奖励已领 %d / 待领 %d · 最高危险 %d / 100" % [
 		records,
 		chunks,
 		completed,
 		milestone_count,
+		claimed,
+		claimable,
 		highest_danger,
 	]
 	if records == 0:
@@ -163,9 +188,12 @@ func _render_summary(snapshot: Dictionary) -> void:
 	_summary_label.text = _summary_text
 
 
-func _render_milestones(snapshot: Dictionary) -> void:
+func _render_milestones(snapshot: Dictionary, reward_snapshot: Dictionary) -> void:
 	_clear_container(_milestone_box)
 	_milestone_texts.clear()
+	_reward_statuses.clear()
+	_claim_buttons.clear()
+	var reward_by_id := _reward_by_milestone(reward_snapshot)
 	var raw_milestones: Variant = snapshot.get("milestones", [])
 	if raw_milestones is not Array or raw_milestones.is_empty():
 		_add_empty_label(_milestone_box, "暂无里程碑数据")
@@ -174,34 +202,64 @@ func _render_milestones(snapshot: Dictionary) -> void:
 		if raw_milestone is not Dictionary:
 			continue
 		var milestone: Dictionary = raw_milestone
+		var milestone_id := str(milestone.get("id", ""))
+		var reward: Dictionary = reward_by_id.get(milestone_id, {})
 		var completed := bool(milestone.get("completed", false))
 		var progress := int(milestone.get("progress", 0))
 		var target := maxi(1, int(milestone.get("target", 1)))
+		var reward_status := str(reward.get("status", ""))
 		var status := "完成" if completed else "%d / %d" % [progress, target]
-		var text := "%s %s · %s\n%s" % [
+		if reward_status == "claimable":
+			status = "可领取"
+		elif reward_status == "claimed":
+			status = "已领取"
+		_reward_statuses[milestone_id] = reward_status
+		var reward_label := str(reward.get("reward_label", ""))
+		var text := "%s %s · %s\n%s%s" % [
 			"✓" if completed else "○",
 			str(milestone.get("name", "里程碑")),
 			status,
 			str(milestone.get("description", "")),
+			"\n奖励：%s" % reward_label if not reward_label.is_empty() else "",
 		]
 		_milestone_texts.append(text)
 		var card := PanelContainer.new()
+		var border := Tokens.COLOR_BORDER
+		if reward_status == "claimed":
+			border = Tokens.COLOR_SUCCESS
+		elif reward_status == "claimable":
+			border = Tokens.COLOR_WARNING
 		card.add_theme_stylebox_override(
 			"panel",
 			Tokens.panel_style(
 				Tokens.COLOR_SURFACE_RAISED,
-				Tokens.COLOR_SUCCESS if completed else Tokens.COLOR_BORDER,
+				border,
 				1,
 				Tokens.RADIUS_SM,
 				Tokens.SPACE_SM
 			)
 		)
 		_milestone_box.add_child(card)
+		var card_root := VBoxContainer.new()
+		card_root.add_theme_constant_override("separation", Tokens.SPACE_XS)
+		card.add_child(card_root)
 		var label := Label.new()
 		label.text = text
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.modulate = Tokens.color(Tokens.COLOR_SUCCESS if completed else Tokens.COLOR_TEXT)
-		card.add_child(label)
+		label.modulate = Tokens.color(Tokens.COLOR_SUCCESS if reward_status == "claimed" else Tokens.COLOR_TEXT)
+		card_root.add_child(label)
+		if not reward.is_empty():
+			var claim_button := Button.new()
+			claim_button.custom_minimum_size.y = 34.0
+			claim_button.text = (
+				"领取奖励"
+				if reward_status == "claimable"
+				else ("已领取" if reward_status == "claimed" else "未解锁")
+			)
+			claim_button.disabled = reward_status != "claimable"
+			claim_button.pressed.connect(Callable(self, "_claim_reward").bind(milestone_id))
+			card_root.add_child(claim_button)
+			_claim_buttons[milestone_id] = claim_button
 
 
 func _render_records(snapshot: Dictionary) -> void:
@@ -262,6 +320,25 @@ func _record_text(record: Dictionary) -> String:
 	return "%s\n%s%s" % [headline, detail, "\n主要风险：%s" % reasons if not reasons.is_empty() else ""]
 
 
+func _reward_by_milestone(snapshot: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	var raw_rewards: Variant = snapshot.get("rewards", [])
+	if raw_rewards is not Array:
+		return result
+	for raw_reward: Variant in raw_rewards:
+		if raw_reward is not Dictionary:
+			continue
+		var milestone_id := str(raw_reward.get("milestone_id", ""))
+		if not milestone_id.is_empty():
+			result[milestone_id] = raw_reward.duplicate(true)
+	return result
+
+
+func _claim_reward(milestone_id: String) -> void:
+	if reward_service != null and reward_service.has_method("claim"):
+		reward_service.call("claim", milestone_id)
+
+
 func _reason_text(raw_reasons: Variant) -> String:
 	if raw_reasons is not Array:
 		return ""
@@ -296,6 +373,10 @@ func _on_journal_changed(_snapshot: Dictionary) -> void:
 	refresh()
 
 
+func _on_rewards_changed(_snapshot: Dictionary) -> void:
+	refresh()
+
+
 func _disconnect_journal() -> void:
 	if journal_service == null or not journal_service.has_signal("journal_changed"):
 		return
@@ -304,5 +385,14 @@ func _disconnect_journal() -> void:
 		journal_service.disconnect("journal_changed", callback)
 
 
+func _disconnect_rewards() -> void:
+	if reward_service == null or not reward_service.has_signal("rewards_changed"):
+		return
+	var callback := Callable(self, "_on_rewards_changed")
+	if reward_service.is_connected("rewards_changed", callback):
+		reward_service.disconnect("rewards_changed", callback)
+
+
 func _exit_tree() -> void:
 	_disconnect_journal()
+	_disconnect_rewards()

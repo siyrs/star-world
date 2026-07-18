@@ -78,6 +78,8 @@ func create_world(
 			"respawn_position": [],
 		},
 		"experience": {"version": 1, "onboarding": {}},
+		"exploration": {"version": 3, "records": [], "last_result": {}},
+		"exploration_rewards": {"version": 1, "claimed": []},
 	}
 	if save_world(world_id, state):
 		return state
@@ -251,6 +253,10 @@ func _migrate(payload: Dictionary) -> Dictionary:
 		}
 	if not payload.has("experience") or payload["experience"] is not Dictionary:
 		payload["experience"] = {"version": 1, "onboarding": {}}
+	if not payload.has("exploration") or payload["exploration"] is not Dictionary:
+		payload["exploration"] = {"version": 3, "records": [], "last_result": {}}
+	if not payload.has("exploration_rewards") or payload["exploration_rewards"] is not Dictionary:
+		payload["exploration_rewards"] = {"version": 1, "claimed": []}
 	return payload
 
 
@@ -259,20 +265,13 @@ func _ensure_directory(path: String) -> void:
 
 
 func _sanitize_id(value: String) -> String:
-	var result := ""
-	for character in value.to_lower():
-		if character.is_valid_identifier() or character.is_valid_int() or character in ["-", "_"]:
-			result += character
-		elif character == " ":
-			result += "-"
-	return result.left(40).strip_edges()
+	var result := value.strip_edges().to_lower()
+	for invalid in ["/", "\\", ":", "*", "?", "\"", "<", ">", "|", " "]:
+		result = result.replace(invalid, "-")
+	while "--" in result:
+		result = result.replace("--", "-")
+	return result.trim_prefix("-").trim_suffix("-")
 
 
-func _is_safe_id(world_id: String) -> bool:
-	return (
-		not world_id.is_empty()
-		and world_id == world_id.get_file()
-		and ".." not in world_id
-		and "/" not in world_id
-		and "\\" not in world_id
-	)
+func _is_safe_id(value: String) -> bool:
+	return not value.is_empty() and value == _sanitize_id(value)
