@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "rewards": [
     {
       "milestone_id": "first_discovery",
@@ -61,6 +61,18 @@
         {"item_id": "torch", "count": 16},
         {"item_id": "bread", "count": 4}
       ]
+    },
+    {
+      "milestone_id": "signature_finding",
+      "description": "完成当前地图的标志性勘探后领取一份专属地质材料，可用于制作对应的校准探矿仪。",
+      "items": [],
+      "profile_bonus": {
+        "star_continent": [{"item_id": "verdant_resonance", "count": 1}],
+        "desert_ruins": [{"item_id": "ruin_sun_glass", "count": 1}],
+        "frozen_wastes": [{"item_id": "frost_heart_crystal", "count": 1}],
+        "sky_islands": [{"item_id": "sky_wind_crystal", "count": 1}],
+        "abyss_world": [{"item_id": "abyss_cinder", "count": 1}]
+      }
     }
   ]
 }
