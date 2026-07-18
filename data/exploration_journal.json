@@ -2,80 +2,24 @@
   "schema_version": 2,
   "max_visible_records": 24,
   "milestones": [
+    {"id":"first_discovery","name":"初次勘探","description":"保存第一条区域发现。","kind":"record_count","threshold":1},
+    {"id":"three_regions","name":"踏勘者","description":"记录三个不同区块。","kind":"unique_chunks","threshold":3},
+    {"id":"deep_delver","name":"深入地层","description":"在深层完成一次勘探。","kind":"depth_band","value":"deep"},
+    {"id":"rich_signal","name":"富集信号","description":"发现一处富集资源区域。","kind":"density","value":"rich"},
+    {"id":"danger_scout","name":"险境侦察","description":"在危险或极高风险区域完成勘探。","kind":"danger_tier","values":["dangerous","severe"]},
+    {"id":"four_depths","name":"地质全览","description":"记录浅层、中层、下层和深层四种地质层。","kind":"depth_band_count","threshold":4},
+    {"id":"seasoned_explorer","name":"资深探索者","description":"累计保存十二条区域发现。","kind":"record_count","threshold":12},
     {
-      "id": "first_discovery",
-      "name": "初次勘探",
-      "description": "保存第一条区域发现。",
-      "kind": "record_count",
-      "threshold": 1
-    },
-    {
-      "id": "three_regions",
-      "name": "踏勘者",
-      "description": "记录三个不同区块。",
-      "kind": "unique_chunks",
-      "threshold": 3
-    },
-    {
-      "id": "deep_delver",
-      "name": "深入地层",
-      "description": "在深层完成一次勘探。",
-      "kind": "depth_band",
-      "value": "deep"
-    },
-    {
-      "id": "rich_signal",
-      "name": "富集信号",
-      "description": "发现一处富集资源区域。",
-      "kind": "density",
-      "value": "rich"
-    },
-    {
-      "id": "danger_scout",
-      "name": "险境侦察",
-      "description": "在危险或极高风险区域完成勘探。",
-      "kind": "danger_tier",
-      "values": ["dangerous", "severe"]
-    },
-    {
-      "id": "four_depths",
-      "name": "地质全览",
-      "description": "记录浅层、中层、下层和深层四种地质层。",
-      "kind": "depth_band_count",
-      "threshold": 4
-    },
-    {
-      "id": "seasoned_explorer",
-      "name": "资深探索者",
-      "description": "累计保存十二条区域发现。",
-      "kind": "record_count",
-      "threshold": 12
-    },
-    {
-      "id": "signature_finding",
-      "name": "地图印记",
-      "description": "完成符合当前地图地质或危险特征的标志性勘探。",
-      "kind": "profile_rule",
-      "rules": {
-        "star_continent": {
-          "depth_band_ids": ["middle", "lower"],
-          "density_ids": ["promising", "rich"]
-        },
-        "desert_ruins": {
-          "density_ids": ["rich"]
-        },
-        "frozen_wastes": {
-          "depth_band_ids": ["lower", "deep"],
-          "density_ids": ["normal", "promising", "rich"]
-        },
-        "sky_islands": {
-          "depth_band_ids": ["upper"],
-          "density_ids": ["normal", "promising", "rich"]
-        },
-        "abyss_world": {
-          "depth_band_ids": ["middle", "lower", "deep"],
-          "danger_tier_ids": ["dangerous", "severe"]
-        }
+      "id":"signature_finding",
+      "name":"地图印记",
+      "description":"完成符合当前地图地质或危险特征的标志性勘探。",
+      "kind":"profile_rule",
+      "rules":{
+        "star_continent":{"depth_band_ids":["middle","lower"],"density_ids":["promising","rich"]},
+        "desert_ruins":{"density_ids":["promising","rich"]},
+        "frozen_wastes":{"depth_band_ids":["lower","deep"],"density_ids":["normal","promising","rich"]},
+        "sky_islands":{"depth_band_ids":["upper"],"density_ids":["normal","promising","rich"]},
+        "abyss_world":{"depth_band_ids":["middle","lower","deep"],"danger_tier_ids":["dangerous","severe"]}
       }
     }
   ]
