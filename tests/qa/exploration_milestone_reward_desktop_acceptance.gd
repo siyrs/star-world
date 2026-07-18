@@ -85,8 +85,8 @@ func _run() -> void:
 	await _tap_key(KEY_J)
 	_check(int(game_ui.call("get_active_overlay")) == 0, "second J closes the reward journal")
 
-	var origin := player.global_position
-	var base_msec := Time.get_ticks_msec() + 2000
+	var origin: Vector3 = player.global_position
+	var base_msec: int = Time.get_ticks_msec() + 2000
 	player.global_position = origin + Vector3(18.0, 0.0, 0.0)
 	var second: Dictionary = prospecting.call("use_item", "prospecting_kit", base_msec)
 	player.global_position = origin + Vector3(36.0, 0.0, 0.0)
@@ -97,7 +97,7 @@ func _run() -> void:
 
 	var serial := 0
 	while serial < 48:
-		var remaining := inventory.add_item("wooden_pickaxe", 1, {"serial":serial})
+		var remaining: int = int(inventory.add_item("wooden_pickaxe", 1, {"serial":serial}))
 		if remaining > 0:
 			break
 		serial += 1
@@ -124,8 +124,8 @@ func _run() -> void:
 	var claimed_ids: Array = loaded.get("exploration_rewards", {}).get("claimed", [])
 	_check(int(loaded.get("exploration_rewards", {}).get("version", 0)) == 1, "saved world contains reward state version one")
 	_check("first_discovery" in claimed_ids and "three_regions" in claimed_ids, "saved world retains both claimed milestones")
-	var torch_before_reload := inventory.count_item("torch")
-	var iron_before_reload := inventory.count_item("iron_ingot")
+	var torch_before_reload: int = int(inventory.count_item("torch"))
+	var iron_before_reload: int = int(inventory.count_item("iron_ingot"))
 	await _tap_key(KEY_J)
 	hub.return_to_menu()
 	for _frame in 6:
