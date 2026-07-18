@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "max_visible_records": 24,
   "milestones": [
     {
@@ -50,6 +50,33 @@
       "description": "累计保存十二条区域发现。",
       "kind": "record_count",
       "threshold": 12
+    },
+    {
+      "id": "signature_finding",
+      "name": "地图印记",
+      "description": "完成符合当前地图地质或危险特征的标志性勘探。",
+      "kind": "profile_rule",
+      "rules": {
+        "star_continent": {
+          "depth_band_ids": ["middle", "lower"],
+          "density_ids": ["promising", "rich"]
+        },
+        "desert_ruins": {
+          "density_ids": ["rich"]
+        },
+        "frozen_wastes": {
+          "depth_band_ids": ["lower", "deep"],
+          "density_ids": ["normal", "promising", "rich"]
+        },
+        "sky_islands": {
+          "depth_band_ids": ["upper"],
+          "density_ids": ["normal", "promising", "rich"]
+        },
+        "abyss_world": {
+          "depth_band_ids": ["middle", "lower", "deep"],
+          "danger_tier_ids": ["dangerous", "severe"]
+        }
+      }
     }
   ]
 }
