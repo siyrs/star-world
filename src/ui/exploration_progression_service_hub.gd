@@ -8,17 +8,20 @@ const ProspectingStateMigrationScript = preload(
 const DangerServiceScript = preload(
 	"res://src/exploration/exploration_danger_service.gd"
 )
-const JournalServiceScript = preload(
-	"res://src/exploration/exploration_journal_service.gd"
+const FeatureCoordinatorScript = preload(
+	"res://src/core/service_hub_feature_coordinator.gd"
 )
-const RewardServiceScript = preload(
-	"res://src/exploration/exploration_milestone_reward_service.gd"
+const JournalRewardParticipantScript = preload(
+	"res://src/exploration/exploration_journal_reward_participant.gd"
 )
+const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
 
 var prospecting_service: Node
 var exploration_danger_service: Node
 var exploration_journal_service: Node
 var exploration_reward_service: Node
+var feature_lifecycle: Node
+var exploration_journal_reward_participant: Node
 var _last_announced_danger_tier := ""
 
 
@@ -39,28 +42,30 @@ func _ready() -> void:
 	)
 	prospecting_service.connect("scan_completed", Callable(self, "_on_prospecting_completed"))
 	prospecting_service.connect("scan_rejected", Callable(self, "_on_prospecting_rejected"))
-	exploration_journal_service = _add_service(
-		JournalServiceScript.new(), "ExplorationJournalService"
+	feature_lifecycle = _add_service(
+		FeatureCoordinatorScript.new(), "FeatureLifecycle"
 	)
-	exploration_journal_service.call("setup", prospecting_service)
-	exploration_reward_service = _add_service(
-		RewardServiceScript.new(), "ExplorationMilestoneRewardService"
+	feature_lifecycle.call("setup", self)
+	var registration: Dictionary = feature_lifecycle.call(
+		"register_participant",
+		JOURNAL_REWARD_FEATURE,
+		JournalRewardParticipantScript.new()
 	)
-	exploration_reward_service.call("setup", inventory, exploration_journal_service)
-	exploration_reward_service.connect(
-		"reward_claimed", Callable(self, "_on_exploration_reward_claimed")
-	)
-	exploration_reward_service.connect(
-		"reward_rejected", Callable(self, "_on_exploration_reward_rejected")
-	)
+	if bool(registration.get("success", false)):
+		exploration_journal_reward_participant = registration.get("participant") as Node
+		exploration_journal_service = exploration_journal_reward_participant.call(
+			"get_journal_service"
+		)
+		exploration_reward_service = exploration_journal_reward_participant.call(
+			"get_reward_service"
+		)
+	else:
+		push_error(
+			"Unable to install exploration journal/reward lifecycle participant: %s"
+			% str(registration.get("reason", "unknown"))
+		)
 	if game_ui != null and game_ui.get("hud") != null and game_ui.hud.has_method("setup_danger"):
 		game_ui.hud.call("setup_danger", exploration_danger_service)
-	if game_ui != null and game_ui.has_method("setup_exploration_journal"):
-		game_ui.call(
-			"setup_exploration_journal",
-			exploration_journal_service,
-			exploration_reward_service
-		)
 
 
 func _begin_world(state: Dictionary) -> void:
@@ -74,14 +79,8 @@ func _begin_world(state: Dictionary) -> void:
 	_last_announced_danger_tier = ""
 	if prospecting_service != null:
 		prospecting_service.call("deserialize", migrated_state.get("exploration", {}))
-	if exploration_journal_service != null:
-		exploration_journal_service.call("refresh")
-	if exploration_reward_service != null:
-		exploration_reward_service.call("set_profile", map_id)
-		exploration_reward_service.call(
-			"deserialize",
-			migrated_state.get("exploration_rewards", {})
-		)
+	if feature_lifecycle != null:
+		feature_lifecycle.call("begin_world", migrated_state)
 	super._begin_world(migrated_state)
 
 
@@ -99,47 +98,47 @@ func attach_game(
 		prospecting_service.call("attach_world", world, player)
 	if player != null and player.has_method("bind_prospecting_service"):
 		player.call("bind_prospecting_service", prospecting_service)
+	if feature_lifecycle != null:
+		feature_lifecycle.call(
+			"attach_game", world, player, sun, environment, ground_resolver
+		)
 
 
 func activate_gameplay() -> void:
 	super.activate_gameplay()
 	if exploration_danger_service != null:
 		exploration_danger_service.call("activate")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("activate")
 
 
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
 	if prospecting_service != null:
 		current_state["exploration"] = prospecting_service.call("serialize")
-	if exploration_reward_service != null:
-		current_state["exploration_rewards"] = exploration_reward_service.call("serialize")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("save_into", current_state)
 	return super.save_current(world_state, player_state)
 
 
 func handle_world_start_failed(reason: String) -> void:
-	_clear_exploration_state()
+	if feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"world_start_failed")
+	_clear_exploration_runtime()
 	super.handle_world_start_failed(reason)
 
 
 func return_to_menu() -> void:
 	super.return_to_menu()
 	if current_world_id.is_empty():
-		_clear_exploration_state()
+		if feature_lifecycle != null:
+			feature_lifecycle.call("clear", &"return_to_menu")
+		_clear_exploration_runtime()
 
 
 func get_character_snapshot() -> Dictionary:
 	var snapshot: Dictionary = super.get_character_snapshot()
 	snapshot["exploration"] = (
 		prospecting_service.call("get_snapshot") if prospecting_service != null else {}
-	)
-	snapshot["exploration_journal"] = (
-		exploration_journal_service.call("get_snapshot")
-		if exploration_journal_service != null
-		else {}
-	)
-	snapshot["exploration_rewards"] = (
-		exploration_reward_service.call("get_snapshot")
-		if exploration_reward_service != null
-		else {}
 	)
 	snapshot["danger"] = (
 		exploration_danger_service.call("get_snapshot")
@@ -151,11 +150,16 @@ func get_character_snapshot() -> Dictionary:
 		if creature_spawner != null and creature_spawner.has_method("get_ecology_snapshot")
 		else {}
 	)
+	if feature_lifecycle != null:
+		feature_lifecycle.call("snapshot_into", snapshot)
+		snapshot["feature_lifecycle"] = feature_lifecycle.call("get_snapshot")
 	return snapshot
 
 
 func _exit_tree() -> void:
-	_clear_exploration_state()
+	if feature_lifecycle != null and feature_lifecycle.has_method("shutdown"):
+		feature_lifecycle.call("shutdown")
+	_clear_exploration_runtime()
 	super._exit_tree()
 
 
@@ -179,30 +183,6 @@ func _on_prospecting_rejected(reason: String, context: Dictionary) -> void:
 	)
 
 
-func _on_exploration_reward_claimed(milestone_id: String, result: Dictionary) -> void:
-	_publish_character_message(
-		str(result.get("message", "探索奖励已领取")),
-		"success",
-		"exploration_reward:%s" % milestone_id,
-		3.2
-	)
-	if audio_service != null and audio_service.has_method("play_pickup"):
-		audio_service.call("play_pickup")
-
-
-func _on_exploration_reward_rejected(
-	milestone_id: String,
-	reason: String,
-	context: Dictionary
-) -> void:
-	_publish_character_message(
-		str(context.get("message", "探索奖励暂时无法领取")),
-		"warning",
-		"exploration_reward_rejected:%s:%s" % [milestone_id, reason],
-		2.8
-	)
-
-
 func _on_exploration_danger_changed(snapshot: Dictionary) -> void:
 	var tier_id := str(snapshot.get("tier_id", "safe"))
 	if tier_id == _last_announced_danger_tier:
@@ -218,13 +198,9 @@ func _on_exploration_danger_changed(snapshot: Dictionary) -> void:
 	)
 
 
-func _clear_exploration_state() -> void:
+func _clear_exploration_runtime() -> void:
 	_last_announced_danger_tier = ""
 	if exploration_danger_service != null and exploration_danger_service.has_method("clear"):
 		exploration_danger_service.call("clear")
 	if prospecting_service != null and prospecting_service.has_method("clear"):
 		prospecting_service.call("clear")
-	if exploration_journal_service != null and exploration_journal_service.has_method("clear"):
-		exploration_journal_service.call("clear")
-	if exploration_reward_service != null and exploration_reward_service.has_method("clear"):
-		exploration_reward_service.call("clear")
