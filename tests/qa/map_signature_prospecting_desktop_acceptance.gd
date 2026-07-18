@@ -95,7 +95,10 @@ func _run() -> void:
 	var signature_button: Button = panel.call("get_claim_button", "signature_finding") as Button if panel != null else null
 	_check(signature_button != null and not signature_button.disabled, "map signature exposes a real enabled claim button")
 	if signature_button != null:
-		await _click_control(signature_button)
+		var claim_visible: bool = await _ensure_control_visible(signature_button)
+		_check(claim_visible, "map signature claim button can be scrolled into the real milestone viewport")
+		if claim_visible:
+			await _click_control(signature_button)
 	_check(inventory.count_item("abyss_cinder") == 1, "real claim grants exactly one abyss signature material")
 	_check(rewards.call("is_claimed", "signature_finding"), "successful signature claim becomes durable claimed state")
 	_check(panel != null and str(panel.call("get_reward_status", "signature_finding")) == "claimed", "journal refreshes the claimed signature card")
@@ -169,6 +172,25 @@ func _find_item_slot(inventory: Node, item_id: String) -> int:
 		if str(inventory.get_slot(index).get("item_id", "")) == item_id:
 			return index
 	return -1
+
+
+func _ensure_control_visible(control: Control) -> bool:
+	var ancestor: Node = control.get_parent()
+	while ancestor != null and ancestor is not ScrollContainer:
+		ancestor = ancestor.get_parent()
+	if ancestor is not ScrollContainer:
+		return false
+	var scroll := ancestor as ScrollContainer
+	scroll.ensure_control_visible(control)
+	for _frame in 3:
+		await process_frame
+	var viewport_rect := scroll.get_global_rect()
+	var control_rect := control.get_global_rect()
+	var inset := Vector2(2.0, 2.0)
+	return (
+		viewport_rect.has_point(control_rect.position + inset)
+		and viewport_rect.has_point(control_rect.end - inset)
+	)
 
 
 func _click_control(control: Control) -> void:
