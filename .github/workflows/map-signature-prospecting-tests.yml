@@ -1,0 +1,109 @@
+name: Map signature prospecting quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-signature-prospecting-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signature-prospecting-regression:
+    name: Catalog, reachability, calibrated tools and rewards regression
+    runs-on: windows-latest
+    timeout-minutes: 22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate map signature and calibrated prospecting contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_data.ps1
+          .\tests\developer_b\validate_prospecting.ps1
+          .\tests\developer_b\validate_exploration_journal.ps1
+          .\tests\developer_b\validate_exploration_rewards.ps1
+          .\tests\developer_b\validate_map_signature_prospecting.ps1
+
+      - name: Run prospecting compatibility regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run exploration journal and reward regressions
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/exploration_journal_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/exploration_milestone_reward_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run map signature cross-domain regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/map_signature_prospecting_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Re-run atomic inventory and crafting regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/inventory_transaction_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  real-signature-prospecting-desktop:
+    name: Real abyss signature, calibrated scan and full reload acceptance
+    needs: signature-prospecting-regression
+    runs-on: windows-latest
+    timeout-minutes: 28
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production map signature journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/map_signature_prospecting_desktop_acceptance.gd' `
+            -OutputPath 'build\map-signature-prospecting-desktop.png' `
+            -TimeoutMilliseconds 140000
+
+      - name: Upload map signature evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-signature-prospecting-desktop-${{ github.run_number }}
+          path: |
+            build/map-signature-prospecting-*.png
+            build/map-signature-prospecting-*.log
+          if-no-files-found: error
+          retention-days: 14

@@ -47,23 +47,41 @@ func attach_world(p_world: Node, p_player: Node3D) -> void:
 
 
 func use_item(item_id: String, now_msec: int = -1) -> Dictionary:
-	if item_id != registry.get_tool_item_id():
+	if not registry.is_tool_item(item_id):
 		return {"handled": false, "success": false}
 	if world == null or player == null or not is_instance_valid(world) or not is_instance_valid(player):
 		return _reject("runtime_unavailable", "当前世界还没有准备好，暂时无法勘探")
+	var config := registry.get_tool_config(item_id)
+	if config.is_empty():
+		return _reject("tool_config_missing", "探矿仪配置缺失，暂时无法使用")
+	var profile_id := _world_profile_id()
+	var required_profile_id := str(config.get("required_profile_id", ""))
+	if not required_profile_id.is_empty() and required_profile_id != profile_id:
+		return _reject(
+			"wrong_calibration",
+			"%s只适用于%s" % [
+				str(config.get("label", "校准探矿仪")),
+				str(config.get("required_profile_label", required_profile_id)),
+			],
+			{
+				"tool_item_id": item_id,
+				"required_profile_id": required_profile_id,
+				"profile_id": profile_id,
+			}
+		)
 	var current_msec := now_msec if now_msec >= 0 else Time.get_ticks_msec()
-	var config := registry.get_config()
 	var cooldown_msec := roundi(maxf(0.0, float(config.get("cooldown_seconds", 0.0))) * 1000.0)
 	if _last_scan_msec >= 0 and current_msec - _last_scan_msec < cooldown_msec:
 		var remaining := float(cooldown_msec - (current_msec - _last_scan_msec)) / 1000.0
 		return _reject(
 			"cooldown",
-			"探矿仪正在校准，请等待 %.1f 秒" % maxf(0.1, remaining),
-			{"remaining_seconds": remaining}
+			"%s正在校准，请等待 %.1f 秒" % [str(config.get("label", "探矿仪")), maxf(0.1, remaining)],
+			{"remaining_seconds": remaining, "tool_item_id": item_id}
 		)
 	var result := _scan(config, current_msec)
 	if not bool(result.get("success", false)):
 		return result
+	_apply_tool_context(result, config)
 	_stamp_result(result)
 	_last_scan_msec = current_msec
 	_store_record(result)
@@ -132,6 +150,7 @@ func get_snapshot() -> Dictionary:
 		"record_keys": _record_order.duplicate(),
 		"last_result": _last_result.duplicate(true),
 		"tool_item_id": registry.get_tool_item_id(),
+		"tool_item_ids": registry.get_tool_ids(),
 		"next_sequence": _next_sequence,
 	}
 
@@ -158,12 +177,12 @@ func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 	var vertical_radius := maxi(1, int(config.get("vertical_radius", 12)))
 	var horizontal_step := maxi(1, int(config.get("horizontal_step", 2)))
 	var vertical_step := maxi(1, int(config.get("vertical_step", 2)))
-	var max_samples := maxi(1, int(config.get("max_samples", 700)))
+	var max_samples := maxi(1, int(config.get("max_samples", 637)))
 	var geology_blocks: Array = config.get("geology_blocks", [])
 	var ore_profiles: Array = config.get("ore_blocks", [])
 	var ore_ids: Array[String] = []
 	var counts: Dictionary = {}
-	for raw_profile in ore_profiles:
+	for raw_profile: Variant in ore_profiles:
 		if raw_profile is not Dictionary:
 			continue
 		var block_id := str(raw_profile.get("block_id", ""))
@@ -201,9 +220,10 @@ func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 			{
 				"sample_count": total_samples,
 				"geology_samples": geology_samples,
+				"tool_item_id": str(config.get("item_id", "")),
 			}
 		)
-	var profile_id := str(world.get("profile_id"))
+	var profile_id := _world_profile_id()
 	var summary := PolicyScript.summarize(
 		counts,
 		geology_samples,
@@ -223,6 +243,23 @@ func _scan(config: Dictionary, current_msec: int) -> Dictionary:
 	summary["chunk"] = [chunk_coord.x, chunk_coord.y]
 	summary["scanned_at_msec"] = maxi(0, current_msec)
 	return summary
+
+
+func _apply_tool_context(result: Dictionary, config: Dictionary) -> void:
+	var tool_label := str(config.get("label", "探矿仪"))
+	result["tool_item_id"] = str(config.get("item_id", registry.get_tool_item_id()))
+	result["tool_label"] = tool_label
+	result["calibration_id"] = str(config.get("calibration_id", "basic"))
+	result["scan_profile"] = {
+		"horizontal_radius": int(config.get("horizontal_radius", 0)),
+		"vertical_radius": int(config.get("vertical_radius", 0)),
+		"horizontal_step": int(config.get("horizontal_step", 0)),
+		"vertical_step": int(config.get("vertical_step", 0)),
+		"max_samples": int(config.get("max_samples", 0)),
+		"minimum_geology_samples": int(config.get("minimum_geology_samples", 0)),
+		"theoretical_samples": int(config.get("theoretical_samples", 0)),
+	}
+	result["message"] = "%s · %s" % [str(result.get("message", "区域勘探完成")), tool_label]
 
 
 func _stamp_result(result: Dictionary) -> void:
@@ -258,6 +295,13 @@ func _apply_danger_snapshot(summary: Dictionary) -> void:
 		str(summary.get("message", "区域勘探完成")),
 		str(danger.get("tier_label", "低")),
 	]
+
+
+func _world_profile_id() -> String:
+	if world == null:
+		return "star_continent"
+	var profile_id := str(world.get("profile_id"))
+	return profile_id if not profile_id.is_empty() else "star_continent"
 
 
 func _resolve_chunk_coord(center: Vector3i) -> Vector2i:

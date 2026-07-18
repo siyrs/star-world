@@ -65,33 +65,43 @@ func _run() -> void:
 
 func _test_registry_and_policy() -> void:
 	var registry = RewardRegistryScript.new()
-	_check(registry.schema_version == 1, "milestone reward schema version is stable")
+	_check(registry.schema_version == 2, "milestone reward schema version is stable")
 	_check(registry.get_validation_errors().is_empty(), "production reward bundles have no validation errors")
-	_check(registry.get_reward_ids().size() == 7, "every production exploration milestone has a reward")
+	_check(registry.get_reward_ids().size() == 8, "every production exploration milestone has a reward")
 	var star_reward := registry.get_reward("first_discovery", "star_continent")
 	var abyss_reward := registry.get_reward("first_discovery", "abyss_world")
 	_check(_item_count(star_reward.get("items", []), "torch") == 4, "first discovery always grants base torches")
 	_check(_item_count(star_reward.get("items", []), "apple") == 2, "star continent receives its map-aware apple bonus")
 	_check(_item_count(abyss_reward.get("items", []), "cooked_chicken") == 2, "abyss receives its map-aware food bonus")
 	_check(str(star_reward.get("reward_label", "")).contains("苹果"), "reward registry exposes a player-facing map bonus label")
+	var signature_items := {
+		"star_continent":"verdant_resonance",
+		"desert_ruins":"ruin_sun_glass",
+		"frozen_wastes":"frost_heart_crystal",
+		"sky_islands":"sky_wind_crystal",
+		"abyss_world":"abyss_cinder",
+	}
+	for profile_id: String in signature_items:
+		var signature := registry.get_reward("signature_finding", profile_id)
+		var material_id := str(signature_items[profile_id])
+		_check(_item_count(signature.get("items", []), material_id) == 1, "%s signature reward resolves to its unique material" % profile_id)
+		_check((signature.get("items", []) as Array).size() == 1, "%s signature reward contains no generic fallback item" % profile_id)
 	var journal = FakeJournal.new()
-	journal.set_completed(["first_discovery"])
+	journal.set_completed(["first_discovery", "signature_finding"])
 	var snapshot := RewardPolicyScript.build_snapshot(
-		journal.get_snapshot(),
-		registry,
-		[],
-		"desert_ruins"
+		journal.get_snapshot(), registry, [], "desert_ruins"
 	)
 	var first := RewardPolicyScript.find_reward(snapshot, "first_discovery")
+	var signature := RewardPolicyScript.find_reward(snapshot, "signature_finding")
 	_check(str(first.get("status", "")) == "claimable", "completed unclaimed milestones become claimable")
 	_check(_item_count(first.get("reward_items", []), "glass") == 4, "policy resolves the active map bonus")
+	_check(str(signature.get("status", "")) == "claimable", "completed map signature becomes claimable")
+	_check(_item_count(signature.get("reward_items", []), "ruin_sun_glass") == 1, "policy resolves the desert signature material")
 	var claimed_snapshot := RewardPolicyScript.build_snapshot(
-		journal.get_snapshot(),
-		registry,
-		["first_discovery"],
-		"desert_ruins"
+		journal.get_snapshot(), registry, ["first_discovery", "signature_finding"], "desert_ruins"
 	)
 	_check(str(RewardPolicyScript.find_reward(claimed_snapshot, "first_discovery").get("status", "")) == "claimed", "claimed state overrides derived completion")
+	_check(str(RewardPolicyScript.find_reward(claimed_snapshot, "signature_finding").get("status", "")) == "claimed", "profile-only claimed state is idempotent")
 
 
 func _test_claim_lifecycle() -> void:
@@ -105,18 +115,22 @@ func _test_claim_lifecycle() -> void:
 	service.set_profile("abyss_world")
 	var locked: Dictionary = service.claim("first_discovery")
 	_check(str(locked.get("reason", "")) == "milestone_locked", "locked milestone cannot grant inventory items")
-	journal.set_completed(["first_discovery"])
+	journal.set_completed(["first_discovery", "signature_finding"])
 	_check(str(service.get_reward("first_discovery").get("status", "")) == "claimable", "journal completion refreshes reward state")
 	var claimed: Dictionary = service.claim("first_discovery")
 	_check(bool(claimed.get("success", false)), "claimable reward commits successfully")
 	_check(inventory.count_item("torch") == 4, "claim transaction grants the base reward")
 	_check(inventory.count_item("cooked_chicken") == 2, "claim transaction grants the abyss map bonus")
 	_check(service.is_claimed("first_discovery"), "successful transaction marks the milestone claimed")
-	var duplicate: Dictionary = service.claim("first_discovery")
-	_check(str(duplicate.get("reason", "")) == "already_claimed", "duplicate claims are rejected idempotently")
-	_check(inventory.count_item("torch") == 4 and inventory.count_item("cooked_chicken") == 2, "duplicate claim does not duplicate items")
+	var signature_claim: Dictionary = service.claim("signature_finding")
+	_check(bool(signature_claim.get("success", false)), "profile-only signature reward commits successfully")
+	_check(inventory.count_item("abyss_cinder") == 1, "abyss signature claim grants exactly one abyss cinder")
+	_check(service.is_claimed("signature_finding"), "signature reward receives durable claimed state")
+	var duplicate: Dictionary = service.claim("signature_finding")
+	_check(str(duplicate.get("reason", "")) == "already_claimed", "duplicate profile-only claims are rejected idempotently")
+	_check(inventory.count_item("abyss_cinder") == 1, "duplicate signature claim does not duplicate the material")
 
-	journal.set_completed(["first_discovery", "three_regions"])
+	journal.set_completed(["first_discovery", "signature_finding", "three_regions"])
 	var serial := 0
 	while serial < 40:
 		var remaining := inventory.add_item("wooden_pickaxe", 1, {"serial":serial})
@@ -136,15 +150,15 @@ func _test_claim_lifecycle() -> void:
 	_check(service.is_claimed("three_regions"), "successful retry marks the reward claimed")
 	var saved := service.serialize()
 	_check(int(saved.get("version", 0)) == 1, "reward state serializes with its own version")
-	_check((saved.get("claimed", []) as Array).size() == 2, "reward state saves exactly two claimed milestones")
+	_check((saved.get("claimed", []) as Array).size() == 3, "reward state saves all three claimed milestones")
 
 	var restored = RewardServiceScript.new()
 	root.add_child(restored)
 	_check(restored.setup(inventory, journal), "restored reward service accepts the same production ports")
 	restored.set_profile("abyss_world")
 	restored.deserialize(saved)
-	_check(restored.is_claimed("first_discovery") and restored.is_claimed("three_regions"), "claimed rewards survive reload")
-	_check(str(restored.get_reward("first_discovery").get("status", "")) == "claimed", "restored snapshot preserves claimed status")
+	_check(restored.is_claimed("first_discovery") and restored.is_claimed("signature_finding") and restored.is_claimed("three_regions"), "claimed rewards survive reload")
+	_check(str(restored.get_reward("signature_finding").get("status", "")) == "claimed", "restored snapshot preserves signature claimed status")
 	service.queue_free()
 	restored.queue_free()
 	journal.queue_free()
@@ -156,11 +170,11 @@ func _test_claim_lifecycle() -> void:
 func _test_state_migration() -> void:
 	var normalized := RewardMigrationScript.normalize_reward_state({
 		"version":0,
-		"claimed":["first_discovery", "", "first_discovery", "unknown_reward"],
+		"claimed":["first_discovery", "", "first_discovery", "signature_finding", "unknown_reward"],
 	})
 	_check(int(normalized.get("version", 0)) == 1, "legacy reward state migrates to version one")
 	var claimed: Array = normalized.get("claimed", [])
-	_check(claimed == ["first_discovery", "unknown_reward"], "migration removes empty and duplicate claimed ids without guessing registry policy")
+	_check(claimed == ["first_discovery", "signature_finding", "unknown_reward"], "migration removes empty and duplicate claimed ids without guessing registry policy")
 	var inventory = InventoryScript.new()
 	var journal = FakeJournal.new()
 	var service = RewardServiceScript.new()
@@ -169,7 +183,7 @@ func _test_state_migration() -> void:
 	root.add_child(service)
 	service.setup(inventory, journal)
 	service.deserialize(normalized)
-	_check(service.is_claimed("first_discovery"), "service keeps known migrated claims")
+	_check(service.is_claimed("first_discovery") and service.is_claimed("signature_finding"), "service keeps known migrated claims")
 	_check(not service.is_claimed("unknown_reward"), "service drops claims that no longer exist in the reward registry")
 	service.queue_free()
 	journal.queue_free()
@@ -187,9 +201,7 @@ func _test_production_composition() -> void:
 	_check(reward_service != null and journal_service != null, "production service hub composes journal and reward services")
 	_check(panel != null and panel.get("reward_service") == reward_service, "production journal panel receives the reward domain service")
 	var state: Dictionary = hub.save_service.create_world(
-		"reward-schema-%d" % Time.get_ticks_msec(),
-		"star_continent",
-		417239
+		"reward-schema-%d" % Time.get_ticks_msec(), "star_continent", 417239
 	)
 	var world_id := str(state.get("metadata", {}).get("id", ""))
 	_check(state.get("exploration", {}) is Dictionary, "new worlds include the canonical exploration state")

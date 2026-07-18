@@ -89,6 +89,16 @@
     {"id":"iron_chestplate","name":"铁胸甲","category":"armor","max_stack":1,"durability":240,"rarity":"uncommon","equipment":{"slot":"chestplate","attributes":{"defense":6}},"color":"#C9CED0"},
     {"id":"iron_leggings","name":"铁护腿","category":"armor","max_stack":1,"durability":225,"rarity":"uncommon","equipment":{"slot":"leggings","attributes":{"defense":5}},"color":"#BEC4C7"},
     {"id":"iron_boots","name":"铁靴","category":"armor","max_stack":1,"durability":195,"rarity":"uncommon","equipment":{"slot":"boots","attributes":{"defense":2}},"color":"#B5BCC0"},
-    {"id":"prospecting_kit","name":"简易探矿仪","category":"utility","max_stack":1,"prospecting":true,"color":"#D7B56D"}
+    {"id":"prospecting_kit","name":"简易探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"均衡扫描当前区块附近的岩层。","color":"#D7B56D"},
+    {"id":"verdant_resonance","name":"翠绿共鸣石","category":"material","max_stack":16,"rarity":"rare","description":"星辰大陆地层中形成的稳定共鸣样本。","color":"#72C76A"},
+    {"id":"ruin_sun_glass","name":"遗迹日耀玻璃","category":"material","max_stack":16,"rarity":"rare","description":"荒漠遗迹高温与矿砂共同烧结的透亮样本。","color":"#E7B85E"},
+    {"id":"frost_heart_crystal","name":"冰原寒心晶","category":"material","max_stack":16,"rarity":"rare","description":"极寒冰原深层岩隙中凝结的低温晶体。","color":"#A8E1F1"},
+    {"id":"sky_wind_crystal","name":"浮岛风鸣晶","category":"material","max_stack":16,"rarity":"rare","description":"天空群岛岩层受高空风压形成的轻质晶体。","color":"#8ED6F8"},
+    {"id":"abyss_cinder","name":"深渊余烬","category":"material","max_stack":16,"rarity":"rare","description":"深渊洞窟危险岩层中残留的稳定热核。","color":"#E76B3C"},
+    {"id":"verdant_prospecting_kit","name":"翠绿校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"扩大星辰大陆平原与林地下方的水平扫描覆盖。","color":"#78C96E"},
+    {"id":"ruin_prospecting_kit","name":"遗迹校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"扩大荒漠遗迹周边矿层的水平扫描范围。","color":"#D9A94F"},
+    {"id":"frost_prospecting_kit","name":"冰原校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"强化冰峰和厚雪层下方的垂直扫描。","color":"#9ED9EA"},
+    {"id":"sky_prospecting_kit","name":"浮岛校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"扩大浅层岛面覆盖，并适应稀薄岩层。","color":"#7CCAF0"},
+    {"id":"abyss_prospecting_kit","name":"深渊校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"强化深渊洞穴中的垂直扫描并降低连续岩层要求。","color":"#D95B35"}
   ]
 }

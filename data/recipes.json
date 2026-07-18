@@ -58,6 +58,11 @@
     {"id":"raw_gold_from_ore","name":"金矿破碎","station":"workbench","ingredients":{"gold_ore":1},"output":{"id":"raw_gold","count":1}},
     {"id":"diamond_from_ore","name":"钻石切割","station":"workbench","ingredients":{"diamond_ore":1},"output":{"id":"diamond","count":1}},
     {"id":"prospecting_kit","name":"简易探矿仪","station":"workbench","ingredients":{"iron_ingot":2,"coal":1,"glass":1,"stick":1},"output":{"id":"prospecting_kit","count":1}},
+    {"id":"verdant_prospecting_kit","name":"翠绿校准探矿仪","station":"workbench","ingredients":{"prospecting_kit":1,"verdant_resonance":1,"iron_ingot":1,"leaves":4},"output":{"id":"verdant_prospecting_kit","count":1}},
+    {"id":"ruin_prospecting_kit","name":"遗迹校准探矿仪","station":"workbench","ingredients":{"prospecting_kit":1,"ruin_sun_glass":1,"gold_ingot":1,"glass":4},"output":{"id":"ruin_prospecting_kit","count":1}},
+    {"id":"frost_prospecting_kit","name":"冰原校准探矿仪","station":"workbench","ingredients":{"prospecting_kit":1,"frost_heart_crystal":1,"iron_ingot":1,"snowball":4},"output":{"id":"frost_prospecting_kit","count":1}},
+    {"id":"sky_prospecting_kit","name":"浮岛校准探矿仪","station":"workbench","ingredients":{"prospecting_kit":1,"sky_wind_crystal":1,"feather":4,"string":2},"output":{"id":"sky_prospecting_kit","count":1}},
+    {"id":"abyss_prospecting_kit","name":"深渊校准探矿仪","station":"workbench","ingredients":{"prospecting_kit":1,"abyss_cinder":1,"gold_ingot":1,"coal":4},"output":{"id":"abyss_prospecting_kit","count":1}},
     {"id":"water_bucket","name":"装水","station":"workbench","ingredients":{"bucket":1,"snow_block":1},"output":{"id":"water_bucket","count":1}}
   ]
 }

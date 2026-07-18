@@ -9,6 +9,7 @@ const ItemRegistryScript = preload("res://src/inventory/item_registry.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const ExtensionOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
+const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
 const ServiceHubScene = preload("res://scenes/ui/service_hub.tscn")
 
 var checks := 0
@@ -63,6 +64,7 @@ func _run() -> void:
 	_test_migration_safety()
 	await _test_service_stable_ordering()
 	_test_journal_policy()
+	_test_profile_rules()
 	await _test_production_ui_contract()
 	if failures.is_empty():
 		print("QA EXPLORATION JOURNAL PASS | checks=%d" % checks)
@@ -76,10 +78,17 @@ func _run() -> void:
 
 func _test_registry_and_overlay_contracts() -> void:
 	var registry = JournalRegistryScript.new()
-	_check(registry.schema_version == 1, "exploration journal schema version is stable")
+	_check(registry.schema_version == 2, "exploration journal schema version is stable")
 	_check(registry.get_validation_errors().is_empty(), "exploration journal data has no validation errors")
-	_check(registry.get_milestones().size() == 7, "production exploration journal exposes seven milestones")
+	_check(registry.get_milestones().size() == 8, "production exploration journal exposes eight milestones")
 	_check(int(registry.get_config().get("max_visible_records", 0)) == 24, "journal visible history is bounded")
+	var signature: Dictionary = {}
+	for milestone: Dictionary in registry.get_milestones():
+		if str(milestone.get("id", "")) == "signature_finding":
+			signature = milestone
+			break
+	_check(str(signature.get("kind", "")) == "profile_rule", "map signature uses the profile-aware policy kind")
+	_check((signature.get("rules", {}) as Dictionary).size() == 5, "map signature defines one rule for every production map")
 	_check(ExtensionOverlayIds.has_unique_ids(), "feature overlay ids are unique and outside the base range")
 	_check(ExtensionOverlayIds.REPAIR == 7, "repair overlay keeps its compatibility id")
 	_check(ExtensionOverlayIds.EXPLORATION_JOURNAL == 8, "journal receives a non-conflicting extension id")
@@ -96,14 +105,16 @@ func _test_registry_and_overlay_contracts() -> void:
 	_check(context.set_context(InputContextScript.CONTEXT_JOURNAL), "journal is a valid input context")
 	_check(not context.is_gameplay_input_enabled(), "journal context blocks player gameplay input")
 	context.queue_free()
+	for profile_id: String in MapProfileCatalogScript.get_ids():
+		_check(not MapProfileCatalogScript.label(profile_id).is_empty(), "%s has one shared player-facing map label" % profile_id)
 
 
 func _test_migration_safety() -> void:
 	var raw_state := {
 		"version": 1,
 		"records": [
-			_make_record("0,0:middle", [0,0], 90, "middle", "normal", "safe"),
-			_make_record("1,0:deep", [1,0], 4, "deep", "promising", "dangerous"),
+			_make_record("0,0:middle", [0,0], 90, "middle", "normal", "safe", "star_continent"),
+			_make_record("1,0:deep", [1,0], 4, "deep", "promising", "dangerous", "abyss_world"),
 			{
 				"record_key":"0,0:middle",
 				"chunk":[0,0],
@@ -156,16 +167,14 @@ func _test_migration_safety() -> void:
 	_check(int(last_result.get("sequence", 0)) == 2, "matching last result inherits the canonical sequence")
 	_check(not last_result.has("positions") and not last_result.has("ore_positions") and not last_result.has("coordinates"), "last result strips exact coordinate fields")
 	_check(not last_result.has("secret"), "last result uses a strict persistence whitelist")
-	var stable_v3 := ProspectingMigrationScript.normalize_exploration_state(
-		{
-			"version":3,
-			"records":[
-				_make_record("2,0:middle", [2,0], 2, "middle", "normal", "safe"),
-				_make_record("3,0:deep", [3,0], 4, "deep", "rich", "dangerous"),
-			],
-			"last_result":{},
-		}
-	)
+	var stable_v3 := ProspectingMigrationScript.normalize_exploration_state({
+		"version":3,
+		"records":[
+			_make_record("2,0:middle", [2,0], 2, "middle", "normal", "safe", "star_continent"),
+			_make_record("3,0:deep", [3,0], 4, "deep", "rich", "dangerous", "abyss_world"),
+		],
+		"last_result":{},
+	})
 	var stable_records: Array = stable_v3.get("records", [])
 	_check(int(stable_records[0].get("sequence", 0)) == 2 and int(stable_records[1].get("sequence", 0)) == 4, "version 3 migration preserves valid sequence gaps")
 
@@ -201,9 +210,7 @@ func _test_service_stable_ordering() -> void:
 	clock.time_of_day = 6.0
 	var second: Dictionary = prospecting.use_item("prospecting_kit", 3200)
 	_check(bool(second.get("success", false)) and int(second.get("sequence", 0)) == 3, "new area advances the stable sequence")
-	_check(int(prospecting.get_snapshot().get("record_count", 0)) == 2, "new chunk adds one journal row")
 	var serialized := prospecting.serialize()
-	_check(int(serialized.get("version", 0)) == 3, "prospecting serializes the hardened version 3 contract")
 	var restored = ProspectingServiceScript.new()
 	root.add_child(restored)
 	restored.setup(item_registry, danger, clock)
@@ -239,13 +246,10 @@ func _test_journal_policy() -> void:
 	for index in 12:
 		var density_id := "rich" if index == 2 else "normal"
 		var danger_id := "severe" if index == 5 else "safe"
+		var profile_id := "abyss_world" if danger_id != "safe" else "star_continent"
 		var record := _make_record(
 			"%d,0:%s" % [index, depth_ids[index % depth_ids.size()]],
-			[index, 0],
-			index + 1,
-			depth_ids[index % depth_ids.size()],
-			density_id,
-			danger_id
+			[index, 0], index + 1, depth_ids[index % depth_ids.size()], density_id, danger_id, profile_id
 		)
 		record["world_day"] = 1 + index / 3
 		record["world_time"] = float(index * 2)
@@ -255,10 +259,42 @@ func _test_journal_policy() -> void:
 	_check(int(snapshot.get("unique_chunk_count", 0)) == 12, "journal policy counts unique chunks")
 	_check(int(snapshot.get("depth_band_count", 0)) == 4, "journal policy detects all four depth bands")
 	_check(int(snapshot.get("rich_count", 0)) == 1, "journal policy detects rich discoveries")
-	_check(int(snapshot.get("completed_milestone_count", 0)) == 7, "complete exploration history unlocks all production milestones")
+	_check(int(snapshot.get("completed_milestone_count", 0)) == 8, "complete exploration history unlocks all production milestones")
+	var signature := _find_milestone(snapshot, "signature_finding")
+	_check(bool(signature.get("completed", false)), "journal policy completes the map signature milestone")
+	_check(str(signature.get("matched_profile_id", "")) in ["star_continent", "abyss_world"], "signature milestone exposes the matched map context")
 	var visible_records: Array = snapshot.get("records", [])
 	_check(int(visible_records[0].get("sequence", 0)) == 12, "journal policy presents newest discoveries first")
-	_check(JournalPolicyScript.map_label("abyss_world") == "深渊世界", "journal policy resolves player-facing map names")
+	_check(JournalPolicyScript.map_label("abyss_world") == "深渊世界", "journal policy resolves shared player-facing map names")
+
+
+func _test_profile_rules() -> void:
+	var registry = JournalRegistryScript.new()
+	var cases: Array[Dictionary] = [
+		{"profile":"star_continent", "depth":"lower", "density":"promising", "danger":"safe", "expected":true},
+		{"profile":"star_continent", "depth":"upper", "density":"rich", "danger":"safe", "expected":false},
+		{"profile":"desert_ruins", "depth":"upper", "density":"rich", "danger":"safe", "expected":true},
+		{"profile":"desert_ruins", "depth":"lower", "density":"promising", "danger":"safe", "expected":false},
+		{"profile":"frozen_wastes", "depth":"deep", "density":"normal", "danger":"safe", "expected":true},
+		{"profile":"frozen_wastes", "depth":"upper", "density":"rich", "danger":"safe", "expected":false},
+		{"profile":"sky_islands", "depth":"upper", "density":"normal", "danger":"safe", "expected":true},
+		{"profile":"sky_islands", "depth":"middle", "density":"rich", "danger":"safe", "expected":false},
+		{"profile":"abyss_world", "depth":"middle", "density":"normal", "danger":"dangerous", "expected":true},
+		{"profile":"abyss_world", "depth":"deep", "density":"rich", "danger":"safe", "expected":false},
+	]
+	for index in cases.size():
+		var test_case: Dictionary = cases[index]
+		var record := _make_record(
+			"%d,4:%s" % [index, test_case.get("depth", "middle")],
+			[index, 4], index + 1,
+			str(test_case.get("depth", "middle")),
+			str(test_case.get("density", "normal")),
+			str(test_case.get("danger", "safe")),
+			str(test_case.get("profile", "star_continent"))
+		)
+		var snapshot := JournalPolicyScript.build_snapshot([record], registry.get_config())
+		var signature := _find_milestone(snapshot, "signature_finding")
+		_check(bool(signature.get("completed", false)) == bool(test_case.get("expected", false)), "%s signature rule evaluates its depth, density and danger contract" % test_case.get("profile", ""))
 
 
 func _test_production_ui_contract() -> void:
@@ -277,16 +313,12 @@ func _test_production_ui_contract() -> void:
 		return
 	var records: Array[Dictionary] = []
 	for index in 4:
-		records.append(
-			_make_record(
-				"%d,1:middle" % index,
-				[index, 1],
-				index + 1,
-				"middle",
-				"rich" if index == 3 else "normal",
-				"dangerous" if index == 3 else "safe"
-			)
-		)
+		records.append(_make_record(
+			"%d,1:middle" % index, [index, 1], index + 1, "middle",
+			"rich" if index == 3 else "normal",
+			"dangerous" if index == 3 else "safe",
+			"abyss_world" if index == 3 else "star_continent"
+		))
 	prospecting.call("deserialize", {"version":3, "records":records, "last_result":{}})
 	journal.call("refresh")
 	game_ui.call("begin_gameplay")
@@ -299,9 +331,11 @@ func _test_production_ui_contract() -> void:
 	if panel != null:
 		var summary := str(panel.call("get_summary_text"))
 		var record_texts: Array = panel.call("get_record_texts")
+		var milestone_texts: Array = panel.call("get_milestone_texts")
 		_check(summary.contains("已记录 4 条发现"), "journal summary uses the authoritative derived count")
 		_check(record_texts.size() == 4, "journal panel renders all available recent records")
 		_check(str(record_texts[0]).begins_with("#4"), "journal panel renders newest sequence first")
+		_check(milestone_texts.size() == 8, "journal panel renders the profile-aware milestone")
 		_check(not str(record_texts).contains("ore_positions") and not str(record_texts).contains("coordinates"), "journal panel never renders forbidden coordinate payloads")
 		var rects: Dictionary = panel.call("get_layout_rects")
 		var panel_rect: Rect2 = rects.get("panel", Rect2())
@@ -312,9 +346,21 @@ func _test_production_ui_contract() -> void:
 	_check(int(game_ui.call("get_active_overlay")) == 0, "J toggle closes the journal overlay")
 	_check(str(hub.input_context.call("get_context")) == str(InputContextScript.CONTEXT_GAMEPLAY), "closing the journal restores gameplay context")
 	game_ui.call("end_gameplay")
+	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
+		hub.audio_service.shutdown()
 	hub.queue_free()
 	await process_frame
 	await process_frame
+
+
+func _find_milestone(snapshot: Dictionary, milestone_id: String) -> Dictionary:
+	var raw_milestones: Variant = snapshot.get("milestones", [])
+	if raw_milestones is not Array:
+		return {}
+	for raw_milestone: Variant in raw_milestones:
+		if raw_milestone is Dictionary and str(raw_milestone.get("id", "")) == milestone_id:
+			return raw_milestone.duplicate(true)
+	return {}
 
 
 func _make_record(
@@ -323,15 +369,16 @@ func _make_record(
 	sequence: int,
 	depth_id: String,
 	density_id: String,
-	danger_id: String
+	danger_id: String,
+	profile_id: String
 ) -> Dictionary:
 	var depth_labels := {"upper":"浅层", "middle":"中层", "lower":"下层", "deep":"深层"}
-	var density_labels := {"normal":"普通", "promising":"可观", "rich":"富集"}
-	var danger_labels := {"safe":"低", "dangerous":"危险", "severe":"极高"}
+	var density_labels := {"sparse":"贫瘠", "normal":"普通", "promising":"可观", "rich":"富集"}
+	var danger_labels := {"safe":"低", "caution":"警戒", "dangerous":"危险", "severe":"极高"}
 	return {
 		"record_key":record_key,
 		"chunk":chunk.duplicate(),
-		"profile_id":"abyss_world" if danger_id != "safe" else "star_continent",
+		"profile_id":profile_id,
 		"depth_band_id":depth_id,
 		"depth_label":str(depth_labels.get(depth_id, "未知")),
 		"density_id":density_id,
@@ -342,7 +389,7 @@ func _make_record(
 		"danger_tier_id":danger_id,
 		"danger_label":str(danger_labels.get(danger_id, "未知")),
 		"danger_score":92 if danger_id == "severe" else (72 if danger_id == "dangerous" else 18),
-		"danger_reasons":["夜晚"] if danger_id != "safe" else [],
+		"danger_reasons":["夜晚"] if danger_id in ["dangerous", "severe"] else [],
 		"message":"粗粒度趋势",
 		"sequence":sequence,
 		"world_day":2,

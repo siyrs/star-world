@@ -1,14 +1,89 @@
 {
-  "schema_version": 1,
-  "tool_item_id": "prospecting_kit",
+  "schema_version": 2,
+  "default_tool_item_id": "prospecting_kit",
   "horizontal_radius": 6,
   "vertical_radius": 12,
   "horizontal_step": 2,
   "vertical_step": 2,
-  "max_samples": 700,
+  "max_samples": 637,
   "minimum_geology_samples": 24,
   "cooldown_seconds": 1.0,
   "max_records": 64,
+  "tools": [
+    {
+      "item_id": "prospecting_kit",
+      "label": "简易探矿仪",
+      "calibration_id": "basic",
+      "summary": "均衡扫描当前区块附近的岩层。"
+    },
+    {
+      "item_id": "verdant_prospecting_kit",
+      "label": "翠绿校准探矿仪",
+      "calibration_id": "verdant",
+      "required_profile_id": "star_continent",
+      "summary": "扩大水平覆盖，适合河谷、平原与林地下方的广域踏勘。",
+      "overrides": {
+        "horizontal_radius": 8,
+        "vertical_radius": 8,
+        "max_samples": 729,
+        "cooldown_seconds": 0.8
+      }
+    },
+    {
+      "item_id": "ruin_prospecting_kit",
+      "label": "遗迹校准探矿仪",
+      "calibration_id": "ruin",
+      "required_profile_id": "desert_ruins",
+      "summary": "扩大沙海遗迹周边的水平扫描范围。",
+      "overrides": {
+        "horizontal_radius": 7,
+        "vertical_radius": 10,
+        "max_samples": 704,
+        "cooldown_seconds": 0.8
+      }
+    },
+    {
+      "item_id": "frost_prospecting_kit",
+      "label": "冰原校准探矿仪",
+      "calibration_id": "frost",
+      "required_profile_id": "frozen_wastes",
+      "summary": "收窄水平范围并加深垂直扫描，适合冰峰与厚雪层。",
+      "overrides": {
+        "horizontal_radius": 5,
+        "vertical_radius": 18,
+        "max_samples": 684,
+        "cooldown_seconds": 0.9
+      }
+    },
+    {
+      "item_id": "sky_prospecting_kit",
+      "label": "浮岛校准探矿仪",
+      "calibration_id": "sky",
+      "required_profile_id": "sky_islands",
+      "summary": "扩大浅层岛面覆盖，并降低稀薄浮岛所需的有效岩层样本。",
+      "overrides": {
+        "horizontal_radius": 8,
+        "vertical_radius": 6,
+        "max_samples": 567,
+        "minimum_geology_samples": 12,
+        "cooldown_seconds": 0.65
+      }
+    },
+    {
+      "item_id": "abyss_prospecting_kit",
+      "label": "深渊校准探矿仪",
+      "calibration_id": "abyss",
+      "required_profile_id": "abyss_world",
+      "summary": "强化垂直岩层扫描，并适应洞穴中较稀疏的连续岩层。",
+      "overrides": {
+        "horizontal_radius": 5,
+        "vertical_radius": 18,
+        "max_samples": 684,
+        "minimum_geology_samples": 20,
+        "cooldown_seconds": 0.9
+      }
+    }
+  ],
   "geology_blocks": [
     "stone",
     "stone_bricks",
