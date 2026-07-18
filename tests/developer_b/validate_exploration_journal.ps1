@@ -38,7 +38,10 @@ foreach ($milestone in $milestones) {
   if ($kind -in @('depth_band','density') -and [string]::IsNullOrWhiteSpace([string]$milestone.value)) {
     throw "Milestone value is empty: $id"
   }
-  if ($kind -eq 'danger_tier' -and @($milestone.values).Count -lt 1) { throw "Danger milestone has no accepted tiers: $id" }
+  if ($kind -eq 'danger_tier') {
+    $dangerValues = @($milestone.values | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($dangerValues.Count -lt 1) { throw "Danger milestone has no accepted tiers: $id" }
+  }
   if ($kind -eq 'profile_rule') {
     $rules = $milestone.rules
     if ($null -eq $rules) { throw "Profile milestone has no rules: $id" }
@@ -47,9 +50,9 @@ foreach ($milestone in $milestones) {
       $profileId = [string]$property.Name
       if (-not $mapIds.ContainsKey($profileId)) { throw "Profile milestone has unknown map: $id/$profileId" }
       $rule = $property.Value
-      $depths = @($rule.depth_band_ids)
-      $densities = @($rule.density_ids)
-      $dangers = @($rule.danger_tier_ids)
+      $depths = @($rule.depth_band_ids | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+      $densities = @($rule.density_ids | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+      $dangers = @($rule.danger_tier_ids | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
       $minimumDanger = [int]$rule.minimum_danger_score
       foreach ($depth in $depths) { if ([string]$depth -notin $allowedDepths) { throw "Unknown profile milestone depth: $id/$profileId/$depth" } }
       foreach ($density in $densities) { if ([string]$density -notin $allowedDensities) { throw "Unknown profile milestone density: $id/$profileId/$density" } }
