@@ -7,7 +7,7 @@
 ## 已实现玩法
 
 - 五张地图：星辰大陆、荒漠遗迹、极寒冰原、天空群岛和深渊世界；每张地图拥有独立资源档案、生态、危险基础值、地图印记和校准探矿路线。
-- 45 种以上注册体素与作物阶段，以及 90 种以上物品；新增地图材料不会占用方块 numeric ID。
+- 45 种以上注册体素与作物阶段，以及 90 种以上物品；地图材料不会占用方块 numeric ID。
 - 原创程序化 16×16 像素纹理、共享确定性图集、最近邻过滤和顶/侧/底方向明暗；不复制第三方游戏资产。
 - 16×16 水平分块、确定性 Seed、预算化渐进加载/卸载、自适应区块构建和稀疏修改存档。
 - 第一人称移动、跳跃、冲刺、碰撞、按住采集、单击攻击，以及右键交互、放置、食用、耕种和探矿。
@@ -29,6 +29,8 @@
 - 五种地图材料分别用于升级翠绿、遗迹、冰原、浮岛和深渊校准探矿仪；旧简易探矿仪仍可在所有地图使用。
 - 校准仪拥有不同水平/垂直扫描档案，全部受理论样本和全局 768 样本硬上限保护；错误地图不会扫描或进入冷却。
 - 里程碑奖励背包满时保持待领取，释放空间后可以重试；重复点击和世界重载不会重复发放。
+- 新解锁的探索奖励会在运行中提示一次“按 J 查看”；继续世界会建立基线，不重复提醒已有待领奖励。
+- ServiceHub 已开始从七层深继承迁移到小型生命周期参与者；日志与奖励完成第一批组合化，同时保留旧字段和节点路径。
 - 主菜单、多存档、设置、HUD、角色/背包、合成、机器、容器、修理、探索日志、真实暂停和死亡 UI。
 - 持久化新手引导、上下文提示、F3 运行诊断、有界反馈队列和可靠原子 JSON 保存。
 - 无外部版权资产：纹理、生物模型和环境/方块/生物音效均在运行时程序化生成。
@@ -45,6 +47,7 @@
 - [构建与运行](BUILD.md)
 - [总体架构](ARCHITECTURE.md)
 - [产品与架构路线](docs/PRODUCT_ROADMAP.md)
+- [ServiceHub 功能生命周期合同](docs/SERVICE_HUB_FEATURE_LIFECYCLE.md)
 - [地图资源分布合同](docs/RESOURCE_DISTRIBUTION.md)
 - [粗粒度探矿合同](docs/PROSPECTING_SYSTEM.md)
 - [地图生态与危险反馈合同](docs/CREATURE_ECOLOGY_DANGER.md)
@@ -89,7 +92,7 @@
 
 1. 在工作台制作简易探矿仪。
 2. 在当前地图符合特征的区域完成勘探：例如荒漠的浅/中层可观信号，或深渊的危险环境。
-3. 按 `J` 查看“地图印记”，点击领取当前地图唯一材料。
+3. 新解锁的奖励会提示按 `J` 查看；打开日志后领取当前地图唯一材料。
 4. 使用简易探矿仪、地图材料和普通材料，在工作台制作对应校准仪。
 5. 校准仪只能在对应地图工作；错误地图会给出明确拒绝，不会创建记录。
 6. 校准扫描仍只返回区块、深度、密度、主矿物和危险等粗粒度信息。
@@ -134,7 +137,7 @@ Windows 默认位置：
 %APPDATA%\Godot\app_userdata\星的世界\worlds\<world-id>\world.json
 ```
 
-存档包含地图和 Seed、稀疏方块修改、玩家、背包和 metadata、装备与属性、农业、动物、容器、机器、生存、昼夜、重生点、引导、探索记录和已领取奖励。地图材料和校准仪是普通物品，直接随背包保存；扫描工具诊断不扩大探索存档白名单。
+存档包含地图和 Seed、稀疏方块修改、玩家、背包和 metadata、装备与属性、农业、动物、容器、机器、生存、昼夜、重生点、引导、探索记录和已领取奖励。地图材料和校准仪是普通物品，直接随背包保存；扫描工具诊断和生命周期诊断不会扩大探索存档白名单。
 
 写入先落到临时文件，旧主文件保留为备份；正式文件损坏时会尝试恢复有效临时文件或上一版本。
 
@@ -144,11 +147,14 @@ Windows 默认位置：
 # 一键运行静态合同和全部 Godot 回归
 powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\godot.exe
 
+# ServiceHub 参与者、顺序、兼容字段和提示基线合同
+powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_service_hub_lifecycle.ps1
+
+# 生命周期组合领域回归
+godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
+
 # 地图印记、材料、配方和校准仪跨目录合同
 powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_map_signature_prospecting.ps1
-
-# 五地图领域集成回归
-godot --headless --path . --script res://tests/qa/map_signature_prospecting_regression.gd
 
 # 导出并启动真实 Windows Release
 powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 `
@@ -157,11 +163,11 @@ powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smok
 
 CI 包括：
 
-1. 数据、目录、目标可达性、奖励和原子事务静态合同；
+1. 数据、目录、目标可达性、生命周期、奖励和原子事务静态合同；
 2. 全量 Runtime 与领域回归；
-3. 真实桌面输入、机器、采集、农业、探索、领取、制作、校准扫描和完整世界重载；
+3. 真实桌面输入、机器、采集、农业、探索、单次奖励提示、领取、返回菜单、重载和失败启动；
 4. 实际 Windows Release 导出、启动、画面和退出资源检查。
 
 ## 当前边界
 
-当前版本定位为可持续扩展的单人核心。水和岩浆仍为静态体素；部分建筑交互仍为简化规则。下一阶段重点是把 ServiceHub 生命周期逐步从深继承迁移为小型组合参与者，并继续推进敌对攻击前摇、少量精英生态、共享 Machine Base、UI 扩展注册和 GitHub Actions reusable workflow。多人和大型商业内容库不在当前阶段范围内。
+当前版本定位为可持续扩展的单人核心。水和岩浆仍为静态体素；部分建筑交互仍为简化规则。ServiceHub 当前只完成日志/奖励的第一批参与者迁移，探矿与危险、牧场和农业仍在继承层中。下一阶段重点是继续迁移探矿/危险生命周期，并推进敌对攻击前摇、少量精英生态、共享 Machine Base、UI 扩展注册和 GitHub Actions reusable workflow。多人和大型商业内容库不在当前阶段范围内。
