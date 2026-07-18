@@ -2,6 +2,7 @@ class_name ExplorationJournalRegistry
 extends RefCounted
 
 const DEFAULT_DATA_PATH := "res://data/exploration_journal.json"
+const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
 const ALLOWED_KINDS: Array[String] = [
 	"record_count",
 	"unique_chunks",
@@ -9,7 +10,11 @@ const ALLOWED_KINDS: Array[String] = [
 	"density",
 	"danger_tier",
 	"depth_band_count",
+	"profile_rule",
 ]
+const DEPTH_BAND_IDS: Array[String] = ["upper", "middle", "lower", "deep"]
+const DENSITY_IDS: Array[String] = ["sparse", "normal", "promising", "rich"]
+const DANGER_TIER_IDS: Array[String] = ["safe", "caution", "dangerous", "severe"]
 
 var schema_version := 0
 var max_visible_records := 24
@@ -41,7 +46,7 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 	var data: Dictionary = parsed
 	schema_version = int(data.get("schema_version", 0))
 	max_visible_records = clampi(int(data.get("max_visible_records", 24)), 1, 64)
-	if schema_version != 1:
+	if schema_version != 2:
 		_record_error("Unsupported exploration journal schema_version: %d" % schema_version)
 	var raw_milestones: Variant = data.get("milestones", [])
 	if raw_milestones is not Array:
@@ -86,17 +91,17 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 					continue
 				normalized["value"] = value
 			"danger_tier":
-				var raw_values: Variant = milestone.get("values", [])
-				var values: Array[String] = []
-				if raw_values is Array:
-					for raw_value: Variant in raw_values:
-						var value := str(raw_value).strip_edges()
-						if not value.is_empty() and value not in values:
-							values.append(value)
+				var values := _normalize_string_list(
+					milestone.get("values", []), DANGER_TIER_IDS, "%s danger tiers" % milestone_id
+				)
 				if values.is_empty():
-					_record_error("Exploration journal danger milestone has no tiers: %s" % milestone_id)
 					continue
 				normalized["values"] = values
+			"profile_rule":
+				var rules := _normalize_profile_rules(milestone.get("rules", {}), milestone_id)
+				if rules.is_empty():
+					continue
+				normalized["rules"] = rules
 		seen_ids[milestone_id] = true
 		_milestones.append(normalized)
 	if _milestones.is_empty():
@@ -123,8 +128,62 @@ func get_validation_errors() -> Array[String]:
 	return _validation_errors.duplicate()
 
 
+func _normalize_profile_rules(raw_value: Variant, milestone_id: String) -> Dictionary:
+	var result: Dictionary = {}
+	if raw_value is not Dictionary:
+		_record_error("Exploration journal profile rules must be an object: %s" % milestone_id)
+		return result
+	var raw_rules: Dictionary = raw_value
+	for profile_id: String in MapProfileCatalogScript.get_ids():
+		var raw_rule: Variant = raw_rules.get(profile_id, {})
+		if raw_rule is not Dictionary:
+			_record_error("Exploration journal profile rule is missing: %s/%s" % [milestone_id, profile_id])
+			continue
+		var rule: Dictionary = raw_rule
+		var depth_ids := _normalize_string_list(
+			rule.get("depth_band_ids", []), DEPTH_BAND_IDS, "%s/%s depth bands" % [milestone_id, profile_id]
+		)
+		var density_ids := _normalize_string_list(
+			rule.get("density_ids", []), DENSITY_IDS, "%s/%s density tiers" % [milestone_id, profile_id]
+		)
+		var danger_ids := _normalize_string_list(
+			rule.get("danger_tier_ids", []), DANGER_TIER_IDS, "%s/%s danger tiers" % [milestone_id, profile_id]
+		)
+		var minimum_danger_score := clampi(int(rule.get("minimum_danger_score", 0)), 0, 100)
+		if depth_ids.is_empty() and density_ids.is_empty() and danger_ids.is_empty() and minimum_danger_score <= 0:
+			_record_error("Exploration journal profile rule has no conditions: %s/%s" % [milestone_id, profile_id])
+			continue
+		result[profile_id] = {
+			"depth_band_ids": depth_ids,
+			"density_ids": density_ids,
+			"danger_tier_ids": danger_ids,
+			"minimum_danger_score": minimum_danger_score,
+		}
+	for raw_profile_id: Variant in raw_rules.keys():
+		var profile_id := str(raw_profile_id)
+		if not MapProfileCatalogScript.is_valid(profile_id):
+			_record_error("Exploration journal profile rule uses unknown map: %s/%s" % [milestone_id, profile_id])
+	return result if result.size() == MapProfileCatalogScript.get_ids().size() else {}
+
+
+func _normalize_string_list(raw_value: Variant, allowed: Array[String], context: String) -> Array[String]:
+	var result: Array[String] = []
+	if raw_value is not Array:
+		_record_error("Exploration journal value list must be an array: %s" % context)
+		return result
+	for raw_entry: Variant in raw_value:
+		var entry := str(raw_entry).strip_edges()
+		if entry.is_empty() or entry in result:
+			continue
+		if entry not in allowed:
+			_record_error("Exploration journal value is unsupported '%s': %s" % [entry, context])
+			continue
+		result.append(entry)
+	return result
+
+
 func _install_fallback() -> void:
-	schema_version = 1
+	schema_version = 2
 	max_visible_records = 24
 	_milestones = [
 		{
@@ -145,5 +204,6 @@ func _install_fallback() -> void:
 
 
 func _record_error(message: String) -> void:
-	_validation_errors.append(message)
+	if message not in _validation_errors:
+		_validation_errors.append(message)
 	push_warning(message)
