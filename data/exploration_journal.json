@@ -19,7 +19,7 @@
         "desert_ruins":{"density_ids":["promising","rich"]},
         "frozen_wastes":{"depth_band_ids":["lower","deep"],"density_ids":["normal","promising","rich"]},
         "sky_islands":{"depth_band_ids":["upper"],"density_ids":["normal","promising","rich"]},
-        "abyss_world":{"depth_band_ids":["middle","lower","deep"],"danger_tier_ids":["dangerous","severe"]}
+        "abyss_world":{"danger_tier_ids":["dangerous","severe"]}
       }
     }
   ]
