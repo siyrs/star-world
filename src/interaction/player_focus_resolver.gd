@@ -84,6 +84,8 @@ func _entity_focus(collider: Node) -> Dictionary:
 		"entity_id": collider.get_instance_id(),
 		"species_id": species_id,
 		"display_name": display_name,
+		"elite": bool(_property_value(collider, "elite", false)),
+		"danger_weight": maxf(0.0, float(_property_value(collider, "danger_weight", 1.0))),
 	}
 	if health_value != null and maximum_value != null:
 		result["health"] = float(health_value)
@@ -96,7 +98,7 @@ func _entity_focus(collider: Node) -> Dictionary:
 
 
 func _property_value(target: Object, property_name: String, fallback: Variant) -> Variant:
-	for property in target.get_property_list():
+	for property: Dictionary in target.get_property_list():
 		if str(property.get("name", "")) == property_name:
 			return target.get(property_name)
 	return fallback
