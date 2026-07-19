@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   feature-lifecycle-regression:
-    name: Dependencies, runtime binding, persistence and reverse cleanup
+    name: Dependencies, normalization, persistence and reverse cleanup
     runs-on: windows-latest
-    timeout-minutes: 26
+    timeout-minutes: 28
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,25 +35,30 @@ jobs:
           godot --headless --path . --editor --quit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate lifecycle and exploration contracts
+      - name: Validate lifecycle, ranch and exploration contracts
         shell: pwsh
         run: |
           .\tests\developer_b\validate_service_hub_lifecycle.ps1
+          .\tests\developer_b\validate_ranch.ps1
+          .\tests\developer_b\validate_ranch_lifecycle.ps1
           .\tests\developer_b\validate_prospecting.ps1
           .\tests\developer_b\validate_ecology_danger.ps1
           .\tests\developer_b\validate_exploration_journal.ps1
           .\tests\developer_b\validate_exploration_rewards.ps1
 
-      - name: Run lifecycle composition regression
+      - name: Run lifecycle composition regressions
         shell: pwsh
         run: |
           godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/ranch_runtime_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Re-run adjacent exploration regressions
+      - name: Re-run adjacent ranch and exploration regressions
         shell: pwsh
         run: |
           $scripts = @(
+            'res://tests/qa/ranch_products_regression.gd',
             'res://tests/qa/prospecting_regression.gd',
             'res://tests/qa/ecology_danger_regression.gd',
             'res://tests/qa/exploration_journal_regression.gd',

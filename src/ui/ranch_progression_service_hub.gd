@@ -1,48 +1,50 @@
 class_name RanchProgressionServiceHub
 extends "res://src/ui/husbandry_progression_service_hub.gd"
 
-const AttractionServiceScript = preload(
-	"res://src/husbandry/animal_attraction_service.gd"
+const FeatureCoordinatorScript = preload(
+	"res://src/core/service_hub_feature_coordinator.gd"
 )
-const ProductServiceScript = preload(
-	"res://src/husbandry/animal_product_service.gd"
+const RanchRuntimeParticipantScript = preload(
+	"res://src/husbandry/ranch_runtime_participant.gd"
 )
-const ProductStateMigrationScript = preload(
-	"res://src/husbandry/animal_product_state_migration.gd"
-)
+const RANCH_RUNTIME_FEATURE := &"ranch_runtime"
 
 var animal_attraction_service: Node
 var animal_product_service: Node
+var feature_lifecycle: Node
+var ranch_runtime_participant: Node
 
 
 func _ready() -> void:
 	super._ready()
-	animal_attraction_service = _add_service(
-		AttractionServiceScript.new(), "AnimalAttractionService"
+	feature_lifecycle = _add_service(
+		FeatureCoordinatorScript.new(), "FeatureLifecycle"
 	)
-	animal_attraction_service.call("setup", inventory, creature_spawner)
-	animal_product_service = _add_service(
-		ProductServiceScript.new(), "AnimalProductService"
+	feature_lifecycle.call("setup", self)
+	ranch_runtime_participant = _register_feature_participant(
+		RANCH_RUNTIME_FEATURE,
+		RanchRuntimeParticipantScript.new(),
+		"ranch runtime"
 	)
-	animal_product_service.call(
-		"setup", inventory.registry, inventory, husbandry_service, creature_spawner
-	)
-	if husbandry_interaction != null and husbandry_interaction.has_method("set_product_service"):
-		husbandry_interaction.call("set_product_service", animal_product_service)
-	if animal_product_service.has_signal("product_spawned"):
-		animal_product_service.connect(
-			"product_spawned", Callable(self, "_on_animal_product_spawned")
-		)
+	if ranch_runtime_participant != null:
+		animal_attraction_service = ranch_runtime_participant.call(
+			"get_attraction_service"
+		) as Node
+		animal_product_service = ranch_runtime_participant.call(
+			"get_product_service"
+		) as Node
 
 
 func _begin_world(state: Dictionary) -> void:
-	var migrated_state: Dictionary = ProductStateMigrationScript.normalize_world_state(state)
-	if animal_product_service != null:
-		animal_product_service.call(
-			"deserialize", migrated_state.get("animal_products", {})
+	var migrated_state := state.duplicate(true)
+	if feature_lifecycle != null and feature_lifecycle.has_method("normalize_world_state"):
+		var raw_migrated: Variant = feature_lifecycle.call(
+			"normalize_world_state", state
 		)
-	if animal_attraction_service != null:
-		animal_attraction_service.call("deactivate")
+		if raw_migrated is Dictionary:
+			migrated_state = raw_migrated
+	if feature_lifecycle != null:
+		feature_lifecycle.call("begin_world", migrated_state)
 	super._begin_world(migrated_state)
 
 
@@ -54,73 +56,62 @@ func attach_game(
 	ground_resolver: Callable = Callable()
 ) -> void:
 	super.attach_game(world, player, sun, environment, ground_resolver)
-	if animal_attraction_service != null:
-		animal_attraction_service.call("attach_player", player)
-	if animal_product_service != null:
-		animal_product_service.call("attach_player", player)
+	if feature_lifecycle != null:
+		feature_lifecycle.call(
+			"attach_game", world, player, sun, environment, ground_resolver
+		)
 
 
 func activate_gameplay() -> void:
 	super.activate_gameplay()
-	if animal_attraction_service != null:
-		animal_attraction_service.call("activate")
-	if animal_product_service != null:
-		animal_product_service.call("activate")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("activate")
 
 
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
-	if animal_product_service != null:
-		current_state["animal_products"] = animal_product_service.call("serialize")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("save_into", current_state)
 	return super.save_current(world_state, player_state)
 
 
 func handle_world_start_failed(reason: String) -> void:
-	_clear_ranch_state()
+	if feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"world_start_failed")
 	super.handle_world_start_failed(reason)
 
 
 func return_to_menu() -> void:
 	super.return_to_menu()
-	if current_world_id.is_empty():
-		_clear_ranch_state()
+	if current_world_id.is_empty() and feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"return_to_menu")
 
 
 func get_character_snapshot() -> Dictionary:
 	var snapshot: Dictionary = super.get_character_snapshot()
-	snapshot["animal_attraction"] = (
-		animal_attraction_service.call("get_snapshot")
-		if animal_attraction_service != null
-		else {}
-	)
-	snapshot["animal_products"] = (
-		animal_product_service.call("get_snapshot")
-		if animal_product_service != null
-		else {}
-	)
+	if feature_lifecycle != null:
+		feature_lifecycle.call("snapshot_into", snapshot)
+		snapshot["feature_lifecycle"] = feature_lifecycle.call("get_snapshot")
 	return snapshot
 
 
 func _exit_tree() -> void:
-	_clear_ranch_state()
+	if feature_lifecycle != null and feature_lifecycle.has_method("shutdown"):
+		feature_lifecycle.call("shutdown")
 	super._exit_tree()
 
 
-func _on_animal_product_spawned(result: Dictionary) -> void:
-	_publish_character_message(
-		str(result.get("message", "动物产物已生成")),
-		"success",
-		"animal_product:%s:%s" % [
-			str(result.get("husbandry_id", "animal")),
-			str(result.get("product_item", "product")),
-		],
-		2.8
+func _register_feature_participant(
+	participant_id: StringName, participant: Node, label: String
+) -> Node:
+	if feature_lifecycle == null:
+		return null
+	var registration: Dictionary = feature_lifecycle.call(
+		"register_participant", participant_id, participant
 	)
-	if audio_service != null and audio_service.has_method("play_pickup"):
-		audio_service.call("play_pickup")
-
-
-func _clear_ranch_state() -> void:
-	if animal_attraction_service != null and animal_attraction_service.has_method("clear"):
-		animal_attraction_service.call("clear")
-	if animal_product_service != null and animal_product_service.has_method("clear"):
-		animal_product_service.call("clear")
+	if bool(registration.get("success", false)):
+		return registration.get("participant") as Node
+	push_error(
+		"Unable to install %s lifecycle participant: %s"
+		% [label, str(registration.get("reason", "unknown"))]
+	)
+	return null

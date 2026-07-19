@@ -33,17 +33,27 @@ func setup(
 	p_inventory: Node,
 	p_husbandry_service: Node,
 	p_spawner: Node
-) -> void:
+) -> bool:
 	_disconnect_husbandry()
 	item_registry = p_item_registry
 	inventory = p_inventory
 	husbandry_service = p_husbandry_service
 	spawner = p_spawner
-	registry.ensure_loaded()
+	var loaded := registry.ensure_loaded()
 	if husbandry_service != null and husbandry_service.has_signal("state_changed"):
 		husbandry_service.connect(
 			"state_changed", Callable(self, "_on_husbandry_state_changed")
 		)
+	return (
+		loaded
+		and item_registry != null
+		and inventory != null
+		and is_instance_valid(inventory)
+		and husbandry_service != null
+		and is_instance_valid(husbandry_service)
+		and spawner != null
+		and is_instance_valid(spawner)
+	)
 
 
 func attach_player(p_player: Node3D) -> void:
@@ -68,6 +78,15 @@ func deactivate() -> void:
 func clear() -> void:
 	deactivate()
 	records.clear()
+
+
+func shutdown() -> void:
+	clear()
+	_disconnect_husbandry()
+	item_registry = null
+	inventory = null
+	husbandry_service = null
+	spawner = null
 
 
 func get_snapshot() -> Dictionary:
@@ -346,4 +365,4 @@ func _disconnect_husbandry() -> void:
 
 
 func _exit_tree() -> void:
-	_disconnect_husbandry()
+	shutdown()

@@ -98,6 +98,26 @@ func get_participant_dependencies(participant_id: StringName) -> Array[String]:
 	return result
 
 
+func normalize_world_state(state: Dictionary) -> Dictionary:
+	var normalized := state.duplicate(true)
+	var invoked: Array[String] = []
+	for participant: Node in _participants:
+		if (
+			participant == null
+			or not is_instance_valid(participant)
+			or not participant.has_method("normalize_world_state")
+		):
+			continue
+		var raw_state: Variant = participant.call(
+			"normalize_world_state", normalized.duplicate(true)
+		)
+		if raw_state is Dictionary:
+			normalized = raw_state.duplicate(true)
+		invoked.append(_participant_id_for(participant))
+	_record_phase("normalize_world_state", invoked)
+	return normalized
+
+
 func begin_world(state: Dictionary) -> void:
 	var invoked := _invoke_forward("begin_world", [state.duplicate(true)])
 	_record_phase("begin_world", invoked)
