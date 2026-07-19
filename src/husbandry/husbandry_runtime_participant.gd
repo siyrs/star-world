@@ -59,10 +59,14 @@ func install(p_hub: Node) -> bool:
 	husbandry_service = hub.call(
 		"_add_service", HusbandryServiceScript.new(), "AnimalHusbandryService"
 	) as Node
-	if husbandry_service == null or not bool(
-		husbandry_service.call(
-			"setup", inventory.get("registry"), inventory, creature_spawner
-		)
+	if husbandry_service == null:
+		return false
+	husbandry_service.call(
+		"setup", inventory.get("registry"), inventory, creature_spawner
+	)
+	if (
+		not husbandry_service.has_method("is_ready")
+		or not bool(husbandry_service.call("is_ready"))
 	):
 		_dispose_service(husbandry_service)
 		husbandry_service = null
@@ -70,11 +74,17 @@ func install(p_hub: Node) -> bool:
 	husbandry_interaction = hub.call(
 		"_add_service", InteractionScript.new(), "HusbandryInteraction"
 	) as Node
-	if husbandry_interaction == null or not bool(
-		husbandry_interaction.call("setup", husbandry_service)
+	if husbandry_interaction == null:
+		husbandry_service.call("shutdown")
+		_dispose_service(husbandry_service)
+		husbandry_service = null
+		return false
+	husbandry_interaction.call("setup", husbandry_service)
+	if (
+		not husbandry_interaction.has_method("is_ready")
+		or not bool(husbandry_interaction.call("is_ready"))
 	):
-		if husbandry_service.has_method("shutdown"):
-			husbandry_service.call("shutdown")
+		husbandry_service.call("shutdown")
 		_dispose_service(husbandry_interaction)
 		_dispose_service(husbandry_service)
 		husbandry_interaction = null
@@ -100,7 +110,7 @@ func begin_world(state: Dictionary) -> void:
 	if husbandry_service != null:
 		if husbandry_service.has_method("clear"):
 			husbandry_service.call("clear")
-		var normalized := normalize_world_state(state)
+		var normalized: Dictionary = normalize_world_state(state)
 		husbandry_service.call("deserialize", normalized.get("husbandry", {}))
 
 
@@ -174,7 +184,9 @@ func get_lifecycle_snapshot() -> Dictionary:
 		"installed": _installed,
 		"active": _active,
 		"shutdown": _shutdown,
-		"service_ready": husbandry_service != null and is_instance_valid(husbandry_service),
+		"service_ready": (
+			husbandry_service != null and is_instance_valid(husbandry_service)
+		),
 		"interaction_ready": (
 			husbandry_interaction != null and is_instance_valid(husbandry_interaction)
 		),
@@ -276,9 +288,7 @@ func _on_animal_grew(result: Dictionary) -> void:
 	_enqueue_lifecycle_event("grown", result)
 
 
-func _on_interaction_rejected(
-	reason: String, context: Dictionary
-) -> void:
+func _on_interaction_rejected(reason: String, context: Dictionary) -> void:
 	if not _active:
 		return
 	_rejection_count += 1
@@ -314,9 +324,11 @@ func _flush_lifecycle_batch() -> void:
 	if not _active:
 		_reset_pending_lifecycle_batch()
 		return
-	var events := _pending_lifecycle_events.duplicate(true)
+	var events: Array[Dictionary] = []
+	for event: Dictionary in _pending_lifecycle_events:
+		events.append(event.duplicate(true))
 	_pending_lifecycle_events.clear()
-	var summary := NotificationPolicyScript.lifecycle_batch(events)
+	var summary: Dictionary = NotificationPolicyScript.lifecycle_batch(events)
 	if summary.is_empty():
 		return
 	_lifecycle_batch_count += 1
