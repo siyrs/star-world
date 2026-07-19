@@ -19,6 +19,10 @@ var _announcement_count := 0
 var _installed := false
 
 
+func get_dependencies() -> Array[StringName]:
+	return [&"exploration_runtime"]
+
+
 func install(p_hub: Node) -> bool:
 	if _installed or p_hub == null or not is_instance_valid(p_hub):
 		return false

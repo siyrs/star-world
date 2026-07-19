@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   feature-lifecycle-regression:
-    name: Participant contract, ordering, persistence and failure cleanup
+    name: Dependencies, runtime binding, persistence and reverse cleanup
     runs-on: windows-latest
-    timeout-minutes: 24
+    timeout-minutes: 26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,10 +35,12 @@ jobs:
           godot --headless --path . --editor --quit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate lifecycle composition contract
+      - name: Validate lifecycle and exploration contracts
         shell: pwsh
         run: |
           .\tests\developer_b\validate_service_hub_lifecycle.ps1
+          .\tests\developer_b\validate_prospecting.ps1
+          .\tests\developer_b\validate_ecology_danger.ps1
           .\tests\developer_b\validate_exploration_journal.ps1
           .\tests\developer_b\validate_exploration_rewards.ps1
 
@@ -51,12 +53,17 @@ jobs:
       - name: Re-run adjacent exploration regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/exploration_journal_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/exploration_milestone_reward_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/runtime_stability_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scripts = @(
+            'res://tests/qa/prospecting_regression.gd',
+            'res://tests/qa/ecology_danger_regression.gd',
+            'res://tests/qa/exploration_journal_regression.gd',
+            'res://tests/qa/exploration_milestone_reward_regression.gd',
+            'res://tests/qa/runtime_stability_regression.gd'
+          )
+          foreach ($script in $scripts) {
+            godot --headless --path . --script $script
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
   real-feature-lifecycle-desktop:
     name: Real reward notice, claim, menu, reload and failed-start acceptance
@@ -93,5 +100,43 @@ jobs:
           path: |
             build/service-hub-feature-lifecycle-*.png
             build/service-hub-feature-lifecycle-*.log
+          if-no-files-found: error
+          retention-days: 14
+
+  real-exploration-runtime-desktop:
+    name: Real immediate danger, recovery, scan, unbind and reload acceptance
+    needs: feature-lifecycle-regression
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production exploration runtime lifecycle
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/exploration_runtime_lifecycle_desktop_acceptance.gd' `
+            -OutputPath 'build\exploration-runtime-lifecycle-desktop.png' `
+            -TimeoutMilliseconds 135000
+
+      - name: Upload exploration runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exploration-runtime-lifecycle-desktop-${{ github.run_number }}
+          path: |
+            build/exploration-runtime-lifecycle-*.png
+            build/exploration-runtime-lifecycle-*.log
           if-no-files-found: error
           retention-days: 14
