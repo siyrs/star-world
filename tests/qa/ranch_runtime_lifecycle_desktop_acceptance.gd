@@ -59,7 +59,13 @@ func _run() -> void:
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
 	await physics_frame
-	var positions: Array[Vector3] = arena.get("chicken_positions", [])
+	var positions: Array[Vector3] = []
+	var raw_positions: Variant = arena.get("chicken_positions", [])
+	if raw_positions is Array:
+		for raw_position: Variant in raw_positions:
+			if raw_position is Vector3:
+				var position: Vector3 = raw_position
+				positions.append(position)
 	var chickens: Array[Node3D] = []
 	for position: Vector3 in positions:
 		var raw_chicken: Variant = spawner.call("spawn_creature", "chicken", position)
