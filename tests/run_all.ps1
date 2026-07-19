@@ -28,6 +28,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_ecology_danger.ps1"
 & "$PSScriptRoot\developer_b\validate_hostile_attacks.ps1"
+& "$PSScriptRoot\developer_b\validate_abyss_elite.ps1"
 & "$PSScriptRoot\developer_b\validate_exploration_journal.ps1"
 & "$PSScriptRoot\developer_b\validate_exploration_rewards.ps1"
 & "$PSScriptRoot\developer_b\validate_map_signature_prospecting.ps1"
@@ -73,6 +74,7 @@ Invoke-GodotTest 'res://tests/qa/tool_harvest_regression.gd'
 Invoke-GodotTest 'res://tests/qa/equipment_combat_regression.gd'
 Invoke-GodotTest 'res://tests/qa/combat_cadence_regression.gd'
 Invoke-GodotTest 'res://tests/qa/hostile_attack_windup_regression.gd'
+Invoke-GodotTest 'res://tests/qa/abyss_elite_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/irrigation_multicrop_regression.gd'
 Invoke-GodotTest 'res://tests/qa/fertilizer_regression.gd'
@@ -93,4 +95,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: hostile attack windups + feature lifecycle composition + map signatures + atomic rewards + ecology + runtime checks'
+Write-Host 'PASS: abyss elite ecology + hostile windups + feature lifecycle + map growth + atomic transactions + runtime checks'

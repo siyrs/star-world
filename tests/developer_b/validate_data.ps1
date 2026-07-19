@@ -21,7 +21,7 @@ if ($crops.Count -lt 3) { throw "Expected >=3 crop definitions, got $($crops.Cou
 if ($equipmentSlots.Count -ne 5) { throw "Expected 5 equipment slots, got $($equipmentSlots.Count)" }
 if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
 $creatureCount = @($creatures.PSObject.Properties).Count
-if ($creatureCount -ne 4) { throw "Expected 4 creatures, got $creatureCount" }
+if ($creatureCount -ne 5) { throw "Expected 5 creatures, got $creatureCount" }
 
 $slotAllowed = @{}
 $slotOrders = @{}
@@ -122,7 +122,7 @@ foreach ($rule in $harvestRules) {
       throw "Invalid $field '$toolType' for $($rule.block_id)"
     }
   }
-  if ($null -ne $rule.minimum_power -and [int]$rule.minimum_power -lt 0) { throw "Invalid minimum power for $($rule.block_id)" }
+  if ($null -ne $rule.minimum_power -and [int]$rule.minimum_power -lt 0) { throw "Invalid minimum_power for $($rule.block_id)" }
   if ($null -ne $rule.drop_count -and [int]$rule.drop_count -lt 0) { throw "Invalid drop count for $($rule.block_id)" }
   if (-not [string]::IsNullOrWhiteSpace([string]$rule.drop_item) -and -not $ids.ContainsKey($rule.drop_item)) {
     throw "Unknown harvest drop $($rule.drop_item) for $($rule.block_id)"

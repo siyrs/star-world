@@ -91,6 +91,18 @@ func refresh_now() -> Dictionary:
 				float(config.get("hostile_radius", 18.0))
 			)
 		)
+	var hostile_pressure := float(hostile_count)
+	if creature_spawner != null and creature_spawner.has_method("get_nearby_hostile_pressure"):
+		hostile_pressure = maxf(
+			float(hostile_count),
+			float(
+				creature_spawner.call(
+					"get_nearby_hostile_pressure",
+					player.global_position,
+					float(config.get("hostile_radius", 18.0))
+				)
+			)
+		)
 	var ecology: Dictionary = {}
 	if creature_spawner != null and creature_spawner.has_method("get_ecology_snapshot"):
 		var raw_ecology: Variant = creature_spawner.call("get_ecology_snapshot")
@@ -103,6 +115,7 @@ func refresh_now() -> Dictionary:
 		"player_y": center.y,
 		"phase": phase,
 		"hostile_count": hostile_count,
+		"hostile_pressure": hostile_pressure,
 		"lava_samples": int(sample.get("lava_samples", 0)),
 		"air_samples": int(sample.get("air_samples", 0)),
 		"total_samples": int(sample.get("total_samples", 0)),
@@ -161,6 +174,10 @@ func _meaningfully_changed(previous: Dictionary, current: Dictionary) -> bool:
 	return (
 		str(previous.get("tier_id", "")) != str(current.get("tier_id", ""))
 		or int(previous.get("hostile_count", 0)) != int(current.get("hostile_count", 0))
+		or absf(
+			float(previous.get("hostile_pressure", 0.0))
+			- float(current.get("hostile_pressure", 0.0))
+		) >= 0.5
 		or str(previous.get("phase", "")) != str(current.get("phase", ""))
 		or absf(float(previous.get("score", 0)) - float(current.get("score", 0))) >= 5.0
 	)

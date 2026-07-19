@@ -75,7 +75,7 @@ func set_active(value: bool) -> void:
 
 
 func clear_creatures() -> void:
-	for child in get_children():
+	for child: Node in get_children():
 		_dispose_child(child, false)
 	_publish_ecology_if_changed(true)
 
@@ -84,7 +84,7 @@ func maintain_population() -> int:
 	if player == null or not is_instance_valid(player):
 		return 0
 	var removed := 0
-	for creature in PopulationPolicyScript.collect_out_of_range(self, player, despawn_radius):
+	for creature: Node3D in PopulationPolicyScript.collect_out_of_range(self, player, despawn_radius):
 		_dispose_child(creature, true)
 		removed += 1
 	if removed > 0:
@@ -105,7 +105,7 @@ func _process(delta: float) -> void:
 		return
 	_spawn_timer = maxf(0.25, spawn_interval)
 	var passive_count := _count_group(&"animals")
-	var hostile_count := _count_group(&"zombie")
+	var hostile_count := _count_group(&"hostile")
 	var phase := _current_phase()
 	max_animals = maxi(0, int(_ecology_profile.get("passive_cap", max_animals)))
 	max_zombies = EcologyPolicyScript.hostile_cap(_ecology_profile, phase)
@@ -115,7 +115,8 @@ func _process(delta: float) -> void:
 		passive_count,
 		hostile_count,
 		_rng.randf(),
-		_rng.randf()
+		_rng.randf(),
+		_selection_context()
 	)
 	if not species_id.is_empty():
 		spawn_creature(species_id)
@@ -129,7 +130,10 @@ func spawn_creature(species_id: String, fixed_position: Variant = null):
 		fixed_position if fixed_position is Vector3 else _choose_position()
 	)
 	var creature = _factory.create(
-		species_id, spawn_position, player if species_id == "zombie" else null, inventory_service
+		species_id,
+		spawn_position,
+		player if _factory.is_hostile_species(species_id) else null,
+		inventory_service
 	)
 	if creature == null:
 		return null
@@ -143,12 +147,28 @@ func spawn_creature(species_id: String, fixed_position: Variant = null):
 func get_nearby_hostile_count(position: Vector3, radius: float) -> int:
 	var radius_squared := maxf(0.0, radius) * maxf(0.0, radius)
 	var count := 0
-	for child in get_children():
-		if child is not Node3D or not child.is_in_group("zombie"):
+	for child: Node in get_children():
+		if child is not Node3D or not child.is_in_group("hostile"):
 			continue
 		if child.global_position.distance_squared_to(position) <= radius_squared:
 			count += 1
 	return count
+
+
+func get_nearby_hostile_pressure(position: Vector3, radius: float) -> float:
+	var radius_squared := maxf(0.0, radius) * maxf(0.0, radius)
+	var pressure := 0.0
+	for child: Node in get_children():
+		if child is not Node3D or not child.is_in_group("hostile"):
+			continue
+		if child.global_position.distance_squared_to(position) > radius_squared:
+			continue
+		pressure += clampf(float(_property_value(child, "danger_weight", 1.0)), 0.5, 6.0)
+	return pressure
+
+
+func get_species_count(species_id: String) -> int:
+	return int(_species_counts().get(species_id, 0))
 
 
 func get_ecology_snapshot() -> Dictionary:
@@ -156,7 +176,8 @@ func get_ecology_snapshot() -> Dictionary:
 		_ecology_profile,
 		_current_phase(),
 		_count_group(&"animals"),
-		_count_group(&"zombie")
+		_count_group(&"hostile"),
+		_selection_context()
 	)
 
 
@@ -185,6 +206,26 @@ func _current_phase() -> String:
 	return "day"
 
 
+func _selection_context() -> Dictionary:
+	return {
+		"player_y": player.global_position.y if player != null and is_instance_valid(player) else 32.0,
+		"species_counts": _species_counts(),
+		"elite_count": _count_group(&"elite"),
+	}
+
+
+func _species_counts() -> Dictionary:
+	var result: Dictionary = {}
+	for child: Node in get_children():
+		if not child.is_in_group("creatures"):
+			continue
+		var species_id := str(_property_value(child, "species_id", ""))
+		if species_id.is_empty():
+			continue
+		result[species_id] = int(result.get(species_id, 0)) + 1
+	return result
+
+
 func _count_group(group_name: StringName) -> int:
 	return PopulationPolicyScript.count_group(self, group_name)
 
@@ -205,3 +246,10 @@ func _dispose_child(child: Node, emit_event: bool) -> void:
 	if emit_event and child is Node3D and child.is_in_group("creatures"):
 		creature_despawned.emit(child)
 	child.queue_free()
+
+
+func _property_value(target: Object, property_name: String, fallback: Variant) -> Variant:
+	for property: Dictionary in target.get_property_list():
+		if str(property.get("name", "")) == property_name:
+			return target.get(property_name)
+	return fallback

@@ -41,21 +41,27 @@ func _entity_prompt(
 		)
 		if custom_result is Dictionary and not custom_result.is_empty():
 			return custom_result.duplicate(true)
-	var subtitle := "生物"
+	var elite := bool(focus.get("elite", false))
+	var subtitle := "精英敌对生物" if elite else "生物"
 	if focus.has("health") and focus.has("max_health"):
-		subtitle = "生命 %.0f / %.0f" % [
-			float(focus.get("health", 0.0)), float(focus.get("max_health", 0.0))
+		subtitle = "%s生命 %.0f / %.0f" % [
+			"精英 · " if elite else "",
+			float(focus.get("health", 0.0)),
+			float(focus.get("max_health", 0.0))
 		]
 	var primary := "[鼠标左键] 攻击"
 	var secondary := ""
-	var tone := "warning"
+	var tone := "error" if elite else "warning"
 	var raw_attack: Variant = focus.get("hostile_attack", {})
 	if raw_attack is Dictionary:
 		var attack: Dictionary = raw_attack
 		var attack_state := str(attack.get("state", "idle"))
 		if attack_state == "windup":
 			var remaining := maxf(0.0, float(attack.get("windup_remaining", 0.0)))
-			subtitle = "正在蓄力 · %.1f 秒后攻击；后退或击退可打断" % remaining
+			subtitle = "%s · %.1f 秒后攻击；后退或击退可打断" % [
+				"精英重击蓄力" if elite else "正在蓄力",
+				remaining
+			]
 			primary = "[鼠标左键] 攻击并打断"
 			secondary = "离开红色预警圈可躲避"
 			tone = "error"
@@ -63,7 +69,7 @@ func _entity_prompt(
 			subtitle += " · 攻击恢复中"
 	return {
 		"visible": true,
-		"title": str(focus.get("display_name", "生物")),
+		"title": "%s%s" % ["精英 · " if elite else "", str(focus.get("display_name", "生物"))],
 		"subtitle": subtitle,
 		"primary": primary,
 		"secondary": secondary,
