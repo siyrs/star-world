@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Resolve-Path "$PSScriptRoot\..\.."
+$husbandryHubPath = Join-Path $root 'src\ui\husbandry_progression_service_hub.gd'
 $ranchHubPath = Join-Path $root 'src\ui\ranch_progression_service_hub.gd'
 $explorationHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
 $participantPath = Join-Path $root 'src\husbandry\ranch_runtime_participant.gd'
@@ -9,6 +10,7 @@ $attractionPath = Join-Path $root 'src\husbandry\animal_attraction_service.gd'
 $productPath = Join-Path $root 'src\husbandry\animal_product_service.gd'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 
+$husbandryHubText = Get-Content -Raw -Encoding UTF8 $husbandryHubPath
 $ranchHubText = Get-Content -Raw -Encoding UTF8 $ranchHubPath
 $explorationHubText = Get-Content -Raw -Encoding UTF8 $explorationHubPath
 $participantText = Get-Content -Raw -Encoding UTF8 $participantPath
@@ -17,33 +19,30 @@ $attractionText = Get-Content -Raw -Encoding UTF8 $attractionPath
 $productText = Get-Content -Raw -Encoding UTF8 $productPath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
 
+if ($husbandryHubText -notmatch 'service_hub_feature_coordinator\.gd') {
+  throw 'Husbandry composition root must own the shared feature lifecycle coordinator'
+}
 if ($ranchHubText -notmatch 'extends\s+"res://src/ui/husbandry_progression_service_hub\.gd"') {
   throw 'Ranch hub must preserve the husbandry inheritance entry point'
-}
-if ($ranchHubText -notmatch 'service_hub_feature_coordinator\.gd') {
-  throw 'Ranch hub must own the shared feature lifecycle coordinator'
 }
 if ($ranchHubText -notmatch 'ranch_runtime_participant\.gd' -or $ranchHubText -notmatch 'ranch_runtime') {
   throw 'Ranch hub must register the ranch runtime participant'
 }
-foreach ($field in @('animal_attraction_service','animal_product_service','feature_lifecycle','ranch_runtime_participant')) {
+foreach ($field in @('animal_attraction_service','animal_product_service','ranch_runtime_participant')) {
   if ($ranchHubText -notmatch "var\s+$field\s*:\s*Node") { throw "Ranch hub removed public field: $field" }
 }
-foreach ($ownedScript in @('AttractionServiceScript','ProductServiceScript','ProductStateMigrationScript')) {
+foreach ($ownedScript in @('FeatureCoordinatorScript','AttractionServiceScript','ProductServiceScript','ProductStateMigrationScript')) {
   if ($ranchHubText -match "const\s+$ownedScript") { throw "Ranch inheritance layer still directly owns runtime implementation: $ownedScript" }
 }
-foreach ($method in @('_begin_world','attach_game','activate_gameplay','save_current','handle_world_start_failed','return_to_menu','get_character_snapshot','_exit_tree','_register_feature_participant')) {
-  if ($ranchHubText -notmatch "func\s+$method\s*\(") { throw "Ranch composition root is missing lifecycle forwarding method: $method" }
-}
-if ($ranchHubText -notmatch 'normalize_world_state') {
-  throw 'Ranch composition root must normalize participant world state before begin_world'
+foreach ($legacyLifecycle in @('_begin_world','attach_game','activate_gameplay','save_current','handle_world_start_failed','return_to_menu','get_character_snapshot','_exit_tree','_register_feature_participant')) {
+  if ($ranchHubText -match "func\s+$legacyLifecycle\s*\(") { throw "Ranch hub must remain a thin registration layer: $legacyLifecycle" }
 }
 
 if ($explorationHubText -notmatch 'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"') {
   throw 'Exploration hub must preserve the ranch inheritance entry point'
 }
 if ($explorationHubText -match 'service_hub_feature_coordinator\.gd') {
-  throw 'Exploration hub must reuse the coordinator inherited from the ranch composition root'
+  throw 'Exploration hub must reuse the coordinator inherited through husbandry and ranch'
 }
 foreach ($legacyLifecycle in @('_begin_world','attach_game','activate_gameplay','save_current','handle_world_start_failed','return_to_menu','_exit_tree')) {
   if ($explorationHubText -match "func\s+$legacyLifecycle\s*\(") { throw "Exploration hub still duplicates shared lifecycle forwarding: $legacyLifecycle" }
@@ -51,6 +50,9 @@ foreach ($legacyLifecycle in @('_begin_world','attach_game','activate_gameplay',
 
 foreach ($method in @('get_dependencies','install','normalize_world_state','begin_world','attach_game','activate','save_into','snapshot_into','clear','shutdown','get_lifecycle_snapshot','get_attraction_service','get_product_service')) {
   if ($participantText -notmatch "func\s+$method\s*\(") { throw "Ranch runtime participant is missing method: $method" }
+}
+if ($participantText -notmatch 'return\s+\[&"husbandry_runtime"\]') {
+  throw 'Ranch runtime must explicitly depend on husbandry runtime'
 }
 foreach ($servicePath in @('animal_attraction_service\.gd','animal_product_service\.gd','animal_product_state_migration\.gd','ranch_notification_policy\.gd')) {
   if ($participantText -notmatch $servicePath) { throw "Ranch runtime participant must own dependency: $servicePath" }
@@ -94,4 +96,4 @@ if ($runAllText -notmatch 'ranch_runtime_lifecycle_regression\.gd') {
   throw 'Full regression entry point must include the ranch runtime lifecycle regression'
 }
 
-Write-Host 'PASS ranch_lifecycle participant=ranch_runtime batch_types=3 public_fields=4'
+Write-Host 'PASS ranch_lifecycle participant=ranch_runtime dependency=husbandry_runtime batch_types=3 public_fields=3'

@@ -38,6 +38,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_rest.ps1"
 & "$PSScriptRoot\developer_b\validate_repair.ps1"
 & "$PSScriptRoot\developer_b\validate_husbandry.ps1"
+& "$PSScriptRoot\developer_b\validate_husbandry_lifecycle.ps1"
 & "$PSScriptRoot\developer_b\validate_ranch.ps1"
 & "$PSScriptRoot\developer_b\validate_ranch_lifecycle.ps1"
 
@@ -64,6 +65,7 @@ Invoke-GodotTest 'res://tests/qa/exploration_journal_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
 Invoke-GodotTest 'res://tests/qa/map_signature_prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/service_hub_feature_lifecycle_regression.gd'
+Invoke-GodotTest 'res://tests/qa/husbandry_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ranch_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/glass_pane_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
@@ -97,4 +99,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: ranch lifecycle + exploration composition + abyss elite ecology + atomic transactions + runtime checks'
+Write-Host 'PASS: husbandry + ranch + exploration lifecycle composition, bounded feedback, atomic persistence and runtime checks'

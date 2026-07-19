@@ -14,6 +14,10 @@ func setup(p_service: Node, p_product_service: Node = null) -> void:
 	_connect_services()
 
 
+func is_ready() -> bool:
+	return service != null and is_instance_valid(service)
+
+
 func set_product_service(p_product_service: Node) -> void:
 	_disconnect_product_service()
 	product_service = p_product_service
@@ -44,8 +48,14 @@ func get_entity_prompt(focus: Dictionary, selected_item_id: String) -> Dictionar
 	return result
 
 
-func _exit_tree() -> void:
+func shutdown() -> void:
 	_disconnect_services()
+	service = null
+	product_service = null
+
+
+func _exit_tree() -> void:
+	shutdown()
 
 
 func _on_state_changed(entity_id: int) -> void:
@@ -54,13 +64,17 @@ func _on_state_changed(entity_id: int) -> void:
 
 func _connect_services() -> void:
 	if service != null and service.has_signal("state_changed"):
-		service.connect("state_changed", Callable(self, "_on_state_changed"))
+		var service_callback := Callable(self, "_on_state_changed")
+		if not service.is_connected("state_changed", service_callback):
+			service.connect("state_changed", service_callback)
 	_connect_product_service()
 
 
 func _connect_product_service() -> void:
 	if product_service != null and product_service.has_signal("state_changed"):
-		product_service.connect("state_changed", Callable(self, "_on_state_changed"))
+		var callback := Callable(self, "_on_state_changed")
+		if not product_service.is_connected("state_changed", callback):
+			product_service.connect("state_changed", callback)
 
 
 func _disconnect_services() -> void:
