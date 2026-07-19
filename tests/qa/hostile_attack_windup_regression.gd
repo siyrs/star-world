@@ -100,7 +100,7 @@ func _test_factory_and_state_machine() -> void:
 		host.queue_free()
 		await process_frame
 		return
-	var zombie: Node3D = creature_variant
+	var zombie = creature_variant
 	host.add_child(zombie)
 	await process_frame
 	zombie.set_physics_process(false)
@@ -114,20 +114,27 @@ func _test_factory_and_state_machine() -> void:
 	_check(telegraph is MeshInstance3D, "hostile creature creates a non-colliding visual telegraph")
 	_check(not _tree_has_collision_object(telegraph), "attack telegraph cannot affect physics or ray targeting")
 
-	var started := 0
-	var cancelled := 0
-	var landed := 0
-	var cancel_reason := ""
-	zombie.attack_windup_started.connect(
-		func(_target: Node, _snapshot: Dictionary) -> void: started += 1
+	var events := {
+		"started": 0,
+		"cancelled": 0,
+		"landed": 0,
+		"cancel_reason": "",
+	}
+	zombie.connect(
+		"attack_windup_started",
+		func(_target: Node, _snapshot: Dictionary) -> void:
+			events["started"] = int(events["started"]) + 1
 	)
-	zombie.attack_windup_cancelled.connect(
+	zombie.connect(
+		"attack_windup_cancelled",
 		func(reason: String, _snapshot: Dictionary) -> void:
-			cancelled += 1
-			cancel_reason = reason
+			events["cancelled"] = int(events["cancelled"]) + 1
+			events["cancel_reason"] = reason
 	)
-	zombie.attack_landed.connect(
-		func(_target: Node, _damage: float) -> void: landed += 1
+	zombie.connect(
+		"attack_landed",
+		func(_target: Node, _damage: float) -> void:
+			events["landed"] = int(events["landed"]) + 1
 	)
 
 	_check(bool(zombie.call("_begin_attack_windup")), "hostile begins a windup instead of dealing instant damage")
@@ -140,7 +147,7 @@ func _test_factory_and_state_machine() -> void:
 	target.global_position = Vector3(0.0, 2.0, 3.0)
 	zombie.call("_advance_attack_windup", 0.1)
 	snapshot = zombie.call("get_hostile_attack_snapshot")
-	_check(cancelled == 1 and cancel_reason == "target_evaded", "moving out of the warning radius cancels the attack")
+	_check(int(events["cancelled"]) == 1 and str(events["cancel_reason"]) == "target_evaded", "moving out of the warning radius cancels the attack")
 	_check(str(snapshot.get("state", "")) == "cooldown", "cancelled attack enters a bounded recovery")
 	_check(not bool(snapshot.get("telegraph_visible", true)), "cancelled attack immediately hides the telegraph")
 	_check(target.damage_events == 0, "successful dodge prevents all damage")
@@ -151,7 +158,7 @@ func _test_factory_and_state_machine() -> void:
 	_check(bool(zombie.call("_begin_attack_windup")), "attack can begin again after cancel recovery")
 	zombie.call("_advance_attack_windup", 0.81)
 	snapshot = zombie.call("get_hostile_attack_snapshot")
-	_check(landed == 1 and target.damage_events == 1, "completed windup commits exactly one damage event")
+	_check(int(events["landed"]) == 1 and target.damage_events == 1, "completed windup commits exactly one damage event")
 	_check(is_equal_approx(target.health, 19.0), "committed attack uses the production zombie damage")
 	_check(target.last_source == "zombie", "committed attack preserves the stable damage source")
 	_check(str(snapshot.get("state", "")) == "cooldown", "successful attack enters data-driven cooldown")
@@ -175,7 +182,7 @@ func _test_factory_and_state_machine() -> void:
 	_check(is_equal_approx(float(zombie.get("health")), creature_health_before - 2.0), "interrupting hit still applies its own damage")
 	_check(str(snapshot.get("last_cancel_reason", "")) == "interrupted", "combat interruption records a stable reason")
 	_check(target.damage_events == 1, "interrupted windup cannot leak an additional player hit")
-	_check(started == 3 and cancelled == 2 and landed == 1, "windup lifecycle signals fire exactly once per transition")
+	_check(int(events["started"]) == 3 and int(events["cancelled"]) == 2 and int(events["landed"]) == 1, "windup lifecycle signals fire exactly once per transition")
 
 	host.queue_free()
 	await process_frame
