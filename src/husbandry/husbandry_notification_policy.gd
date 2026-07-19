@@ -14,7 +14,8 @@ static func lifecycle_batch(events: Array[Dictionary]) -> Dictionary:
 		var kind := str(event.get("kind", ""))
 		if kind not in ["newborn", "grown"]:
 			continue
-		var result: Dictionary = event.get("result", {})
+		var raw_result: Variant = event.get("result", {})
+		var result: Dictionary = raw_result if raw_result is Dictionary else {}
 		var count := maxi(1, int(event.get("count", 1)))
 		var display_name := _display_name(result, kind)
 		var target: Dictionary = newborn_counts if kind == "newborn" else grown_counts
@@ -66,8 +67,8 @@ static func _format_counts(counts: Dictionary) -> String:
 	names.sort()
 	var visible: Array[String] = []
 	var limit := mini(MAX_VISIBLE_TYPES, names.size())
-	for index in limit:
-		var name := names[index]
+	for index in range(limit):
+		var name: String = names[index]
 		visible.append("%s ×%d" % [name, int(counts.get(name, 0))])
 	if names.size() > limit:
 		visible.append("等 %d 类" % (names.size() - limit))
