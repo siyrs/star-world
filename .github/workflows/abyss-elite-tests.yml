@@ -14,8 +14,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  abyss-elite-static:
+    name: Creature, conditional ecology, attack and drop contracts
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate creature catalog
+        shell: pwsh
+        run: .\tests\developer_b\validate_data.ps1
+
+      - name: Validate conditional ecology and danger
+        shell: pwsh
+        run: .\tests\developer_b\validate_ecology_danger.ps1
+
+      - name: Validate hostile attacks
+        shell: pwsh
+        run: .\tests\developer_b\validate_hostile_attacks.ps1
+
+      - name: Validate abyss elite progression
+        shell: pwsh
+        run: .\tests\developer_b\validate_abyss_elite.ps1
+
   abyss-elite-regression:
-    name: Conditional ecology, heavy attack, danger and drop regression
+    name: Heavy attack, danger and drop domain regression
+    needs: abyss-elite-static
     runs-on: windows-latest
     timeout-minutes: 18
     steps:
@@ -34,14 +59,6 @@ jobs:
         run: |
           godot --headless --path . --editor --quit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Validate creature, ecology, elite and hostile attack contracts
-        shell: pwsh
-        run: |
-          .\tests\developer_b\validate_data.ps1
-          .\tests\developer_b\validate_ecology_danger.ps1
-          .\tests\developer_b\validate_hostile_attacks.ps1
-          .\tests\developer_b\validate_abyss_elite.ps1
 
       - name: Run abyss elite domain regression
         shell: pwsh
