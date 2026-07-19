@@ -27,14 +27,22 @@ func _ready() -> void:
 	set_process(false)
 
 
-func setup(p_inventory: Node, p_spawner: Node) -> void:
+func setup(p_inventory: Node, p_spawner: Node) -> bool:
 	_disconnect_inventory()
 	inventory = p_inventory
 	spawner = p_spawner
-	registry.ensure_loaded()
-	husbandry_registry.ensure_loaded()
+	var attraction_loaded := registry.ensure_loaded()
+	var husbandry_loaded := husbandry_registry.ensure_loaded()
 	if inventory != null and inventory.has_signal("selected_slot_changed"):
 		inventory.connect("selected_slot_changed", Callable(self, "_on_selected_slot_changed"))
+	return (
+		attraction_loaded
+		and husbandry_loaded
+		and inventory != null
+		and is_instance_valid(inventory)
+		and spawner != null
+		and is_instance_valid(spawner)
+	)
 
 
 func attach_player(p_player: Node3D) -> void:
@@ -62,6 +70,13 @@ func clear() -> void:
 	deactivate()
 	player = null
 	_following_ids.clear()
+
+
+func shutdown() -> void:
+	clear()
+	_disconnect_inventory()
+	inventory = null
+	spawner = null
 
 
 func get_snapshot() -> Dictionary:
@@ -167,5 +182,4 @@ func _disconnect_inventory() -> void:
 
 
 func _exit_tree() -> void:
-	_disconnect_inventory()
-	_clear_all_attractions()
+	shutdown()
