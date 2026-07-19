@@ -24,21 +24,48 @@ jobs:
         with:
           show-progress: false
 
+      - name: Prepare static diagnostics
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force build | Out-Null
+
       - name: Validate conditional ecology and danger
         shell: pwsh
-        run: .\tests\developer_b\validate_ecology_danger.ps1
+        run: |
+          try {
+            .\tests\developer_b\validate_ecology_danger.ps1 *>&1 |
+              Tee-Object -FilePath build\abyss-elite-static.log -Append
+          } catch {
+            $_ | Format-List * -Force | Out-String |
+              Tee-Object -FilePath build\abyss-elite-static.log -Append
+            throw
+          }
 
       - name: Validate creature catalog
         shell: pwsh
-        run: .\tests\developer_b\validate_data.ps1
+        run: |
+          .\tests\developer_b\validate_data.ps1 *>&1 |
+            Tee-Object -FilePath build\abyss-elite-static.log -Append
 
       - name: Validate hostile attacks
         shell: pwsh
-        run: .\tests\developer_b\validate_hostile_attacks.ps1
+        run: |
+          .\tests\developer_b\validate_hostile_attacks.ps1 *>&1 |
+            Tee-Object -FilePath build\abyss-elite-static.log -Append
 
       - name: Validate abyss elite progression
         shell: pwsh
-        run: .\tests\developer_b\validate_abyss_elite.ps1
+        run: |
+          .\tests\developer_b\validate_abyss_elite.ps1 *>&1 |
+            Tee-Object -FilePath build\abyss-elite-static.log -Append
+
+      - name: Upload static contract diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abyss-elite-static-${{ github.run_number }}
+          path: build/abyss-elite-static.log
+          if-no-files-found: error
+          retention-days: 14
 
   abyss-elite-regression:
     name: Heavy attack, danger and drop domain regression
