@@ -98,11 +98,18 @@ func _run() -> void:
 		_save_image(image)
 
 	# Drive the real movement input backwards until the player exits the warning ring.
+	# The short cancel recovery may already have elapsed on a slow renderer, so the
+	# durable cancellation reason is the acceptance contract rather than a single
+	# transient cooldown frame.
 	await _hold_key(KEY_S, 28)
-	var cancelled := await _wait_attack_state(zombie, "cooldown")
 	var cancelled_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
-	_check(cancelled, "real backward movement cancels the hostile windup")
-	_check(str(cancelled_snapshot.get("last_cancel_reason", "")) == "target_evaded", "dodge cancellation exposes a stable reason")
+	var cancel_reason := str(cancelled_snapshot.get("last_cancel_reason", ""))
+	var post_dodge_state := str(cancelled_snapshot.get("state", ""))
+	_check(
+		cancel_reason == "target_evaded" and post_dodge_state != "windup",
+		"real backward movement cancels the hostile windup"
+	)
+	_check(cancel_reason == "target_evaded", "dodge cancellation exposes a stable reason")
 	_check(not bool(cancelled_snapshot.get("telegraph_visible", true)), "successful dodge hides the warning ring")
 	_check(is_equal_approx(float(hub.survival.health), health_before_dodge), "successful real dodge prevents all player damage")
 	_check(player.global_position.distance_to(zombie.global_position) > float(cancelled_snapshot.get("attack_range", 0.0)), "real WASD movement leaves the committed hit range")
