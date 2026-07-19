@@ -25,9 +25,10 @@ func _run() -> void:
 		await process_frame
 	var hub: Node = game.service_hub
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
+	var husbandry: Node = hub.get("husbandry_runtime_participant") if hub != null else null
 	var runtime: Node = hub.get("exploration_runtime_participant") if hub != null else null
-	_check(hub != null and coordinator != null and runtime != null, "production game mounts the exploration runtime participant")
-	if hub == null or coordinator == null or runtime == null:
+	_check(hub != null and coordinator != null and husbandry != null and runtime != null, "production game mounts husbandry and exploration runtime participants")
+	if hub == null or coordinator == null or husbandry == null or runtime == null:
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -44,10 +45,15 @@ func _run() -> void:
 	var player: CharacterBody3D = game.player
 	var prospecting: Node = hub.get("prospecting_service")
 	var danger: Node = hub.get("exploration_danger_service")
+	var husbandry_interaction: Node = hub.get("husbandry_interaction")
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(prospecting != null and danger != null, "legacy exploration runtime service ports remain available")
 	_check(hub.get_node_or_null("ProspectingService") == prospecting, "prospecting preserves its production node path")
 	_check(hub.get_node_or_null("ExplorationDangerService") == danger, "danger preserves its production node path")
+	_check(
+		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],
+		"production dependency graph preserves ranch after husbandry"
+	)
 	_check(
 		coordinator.call("get_participant_dependencies", &"exploration_journal_rewards") == ["exploration_runtime"],
 		"production dependency graph orders journal after exploration runtime"
@@ -58,6 +64,7 @@ func _run() -> void:
 	var lifecycle_before: Dictionary = runtime.call("get_lifecycle_snapshot")
 	_check(int(lifecycle_before.get("bound_player_id", 0)) == player.get_instance_id(), "runtime participant binds prospecting to the production player")
 	_check(bool(lifecycle_before.get("active", false)), "runtime participant activates with gameplay")
+	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", 0)) == player.get_instance_id(), "husbandry participant remains bound during exploration gameplay")
 
 	var transitions: Array[String] = []
 	var refresh_triggers: Array[String] = []
@@ -128,9 +135,11 @@ func _run() -> void:
 	for _frame in 6:
 		await process_frame
 	var runtime_after_menu: Dictionary = runtime.call("get_lifecycle_snapshot")
-	_check(int(runtime_after_menu.get("bound_player_id", -1)) == 0, "return-to-menu removes the old player binding")
+	_check(int(runtime_after_menu.get("bound_player_id", -1)) == 0, "return-to-menu removes the exploration player binding")
+	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "return-to-menu also removes the husbandry player binding")
 	if old_player != null and is_instance_valid(old_player):
 		_check(old_player.get("prospecting_service") == null, "old production player no longer holds the prospecting service")
+		_check(old_player.get("entity_interaction_service") == null, "old production player no longer holds the husbandry interaction service")
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 0, "return-to-menu clears runtime prospecting state")
 	_check((danger.call("get_snapshot") as Dictionary).is_empty(), "return-to-menu clears runtime danger state")
 
@@ -140,9 +149,11 @@ func _run() -> void:
 	await physics_frame
 	player = game.player
 	_check(player != null and player.get("prospecting_service") == prospecting, "full reload rebinds the same production prospecting port")
+	_check(player != null and player.get("entity_interaction_service") == husbandry_interaction, "full reload also rebinds the husbandry interaction port")
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 1, "full reload restores the saved exploration record")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 3, "production diagnostics expose ranch, runtime and journal participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 4, "production diagnostics expose all four participants")
+	_check(character_snapshot.has("husbandry"), "production character diagnostics include the husbandry participant field")
 	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "production character diagnostics include the ranch participant fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "production character diagnostics retain legacy runtime fields")
 
@@ -150,7 +161,8 @@ func _run() -> void:
 	for _frame in 4:
 		await process_frame
 	_check(hub.current_world_id.is_empty(), "real failed-start path resets the hub identity")
-	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the current player binding")
+	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the exploration player binding")
+	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the husbandry player binding")
 	await _finish(game, hub)
 
 
