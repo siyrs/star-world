@@ -58,7 +58,7 @@ $abyss = $profiles | Where-Object { $_.id -eq 'abyss_world' }
 if ([int]$abyss.hostile_cap_day -lt 1) { throw 'Abyss must keep daytime hostile pressure' }
 $brute = @($abyss.hostile_species | Where-Object { $_.id -eq 'abyss_brute' })[0]
 if ($null -eq $brute) { throw 'Abyss ecology must include the abyss brute' }
-if ([int]$brute.cap -ne 1) { throw 'Ass brute cap must remain exactly one' }
+if ([int]$brute.cap -ne 1) { throw 'Abyss brute cap must remain exactly one' }
 if ([int]$brute.weight -ge [int](@($abyss.hostile_species | Where-Object { $_.id -eq 'zombie' })[0].weight)) { throw 'Abyss brute must remain rarer than normal zombies' }
 if ([string]$brute.condition_mode -ne 'any' -or 'night' -notin @($brute.phase_ids) -or [int]$brute.max_player_y -gt 19) {
   throw 'Abyss brute must require night or deep-layer eligibility'
