@@ -27,10 +27,13 @@ class FakeEcologySpawner:
 	extends Node
 	var danger_base := 8
 	var hostile_count := 0
+	var hostile_pressure := 0.0
 	func get_ecology_snapshot() -> Dictionary:
 		return {"danger_base":danger_base, "profile_id":"fake"}
 	func get_nearby_hostile_count(_position: Vector3, _radius: float) -> int:
 		return hostile_count
+	func get_nearby_hostile_pressure(_position: Vector3, _radius: float) -> float:
+		return maxf(float(hostile_count), hostile_pressure)
 
 
 class FakeWorld:
@@ -92,6 +95,7 @@ func _run() -> void:
 
 func _test_ecology_registry_and_policy() -> void:
 	var registry = EcologyRegistryScript.new()
+	_check(registry.schema_version == 2, "production ecology uses conditional schema version 2")
 	_check(registry.get_validation_errors().is_empty(), "production ecology registry has no validation errors")
 	_check(
 		registry.get_profile_ids() == ["abyss_world", "desert_ruins", "frozen_wastes", "sky_islands", "star_continent"],
@@ -110,7 +114,7 @@ func _test_ecology_registry_and_policy() -> void:
 	)
 	_check(
 		EcologyPolicyScript.choose_species(abyss, "day", 0, 0, 0.1, 0.0) == "zombie",
-		"abyss daytime ecology can select hostile species"
+		"abyss daytime surface ecology can select normal hostile species"
 	)
 	_check(
 		EcologyPolicyScript.choose_species(star, "night", 12, 0, 0.99, 0.0) == "zombie",
@@ -123,6 +127,43 @@ func _test_ecology_registry_and_policy() -> void:
 	_check(
 		EcologyPolicyScript.weighted_species(sky.get("passive_species", []), 0.2) == "chicken",
 		"sky islands strongly prefer chickens"
+	)
+	var abyss_hostiles: Array = abyss.get("hostile_species", [])
+	_check(
+		EcologyPolicyScript.weighted_species(
+			abyss_hostiles,
+			0.99,
+			"night",
+			{"player_y":35.0, "species_counts":{}}
+		) == "abyss_brute",
+		"night enables the rare abyss elite"
+	)
+	_check(
+		EcologyPolicyScript.weighted_species(
+			abyss_hostiles,
+			0.99,
+			"day",
+			{"player_y":35.0, "species_counts":{}}
+		) == "zombie",
+		"surface daytime excludes the elite"
+	)
+	_check(
+		EcologyPolicyScript.weighted_species(
+			abyss_hostiles,
+			0.99,
+			"day",
+			{"player_y":15.0, "species_counts":{}}
+		) == "abyss_brute",
+		"deep abyss enables the elite outside night"
+	)
+	_check(
+		EcologyPolicyScript.weighted_species(
+			abyss_hostiles,
+			0.99,
+			"night",
+			{"player_y":15.0, "species_counts":{"abyss_brute":1}}
+		) == "zombie",
+		"elite species cap prevents duplicate brutes"
 	)
 
 
@@ -143,14 +184,15 @@ func _test_production_spawner_contract() -> void:
 	day_night.phase = "night"
 	_check(int(spawner.get_ecology_snapshot().get("hostile_cap", 0)) == 5, "production spawner updates cap with phase")
 	var nearby := Node3D.new()
-	nearby.add_to_group("zombie")
+	nearby.add_to_group("hostile")
 	spawner.add_child(nearby)
 	nearby.global_position = Vector3(2, 0, 0)
 	var distant := Node3D.new()
-	distant.add_to_group("zombie")
+	distant.add_to_group("hostile")
 	spawner.add_child(distant)
 	distant.global_position = Vector3(40, 0, 0)
-	_check(spawner.get_nearby_hostile_count(Vector3.ZERO, 18.0) == 1, "nearby hostile query respects radius")
+	_check(spawner.get_nearby_hostile_count(Vector3.ZERO, 18.0) == 1, "nearby hostile query respects radius and generic hostile identity")
+	_check(is_equal_approx(spawner.get_nearby_hostile_pressure(Vector3.ZERO, 18.0), 1.0), "normal hostile pressure defaults to one")
 	spawner.clear_creatures()
 	spawner.queue_free()
 	player.queue_free()
@@ -174,6 +216,16 @@ func _test_danger_policy() -> void:
 	_check(int(severe.get("score", 0)) == 100, "danger score is clamped to 100")
 	_check((severe.get("reasons", []) as Array).has("夜晚"), "danger reasons explain night pressure")
 	_check((severe.get("reasons", []) as Array).has("附近岩浆"), "danger reasons explain lava pressure")
+	var normal_hostile := DangerPolicyScript.assess(
+		{"map_id":"star_continent", "map_base":8, "player_y":42, "phase":"day", "hostile_count":1, "hostile_pressure":1.0, "lava_samples":0, "air_samples":0, "total_samples":125},
+		config
+	)
+	var elite_hostile := DangerPolicyScript.assess(
+		{"map_id":"star_continent", "map_base":8, "player_y":42, "phase":"day", "hostile_count":1, "hostile_pressure":2.0, "lava_samples":0, "air_samples":0, "total_samples":125},
+		config
+	)
+	_check(int(elite_hostile.get("score", 0)) > int(normal_hostile.get("score", 0)), "elite hostile pressure raises danger without pretending there are two bodies")
+	_check((elite_hostile.get("reasons", []) as Array).has("附近精英敌对生物"), "danger reason explains elite pressure")
 
 
 func _test_danger_service_budget() -> void:
@@ -182,6 +234,7 @@ func _test_danger_service_budget() -> void:
 	var spawner := FakeEcologySpawner.new()
 	spawner.danger_base = 36
 	spawner.hostile_count = 2
+	spawner.hostile_pressure = 3.0
 	var world := FakeWorld.new()
 	world.profile_id = "abyss_world"
 	world.mode = "danger"
@@ -199,8 +252,10 @@ func _test_danger_service_budget() -> void:
 	var snapshot: Dictionary = service.refresh_now()
 	_check(int(snapshot.get("sample_count", 0)) <= 125, "danger service never exceeds the hard sample budget")
 	_check(str(snapshot.get("tier_id", "")) in ["dangerous", "severe"], "danger service detects the hostile abyss environment")
+	_check(is_equal_approx(float(snapshot.get("hostile_pressure", 0.0)), 3.0), "danger service consumes weighted hostile pressure")
 	_check(not snapshot.has("position") and not snapshot.has("coordinates"), "danger snapshot does not expose exact environment coordinates")
 	spawner.hostile_count = 0
+	spawner.hostile_pressure = 0.0
 	spawner.danger_base = 8
 	day_night.phase = "day"
 	world.profile_id = "star_continent"
@@ -245,7 +300,7 @@ func _test_prospecting_danger_persistence() -> void:
 	_check(records.size() == 1 and str(records[0].get("danger_label", "")) == "危险", "stored discovery retains danger label")
 	var migrated := ProspectingMigrationScript.normalize_exploration_state({
 		"version":1,
-		"records":[{"record_key":"0,0:deep","chunk":[0,0],"depth_band_id":"deep","depth_label":"深层","density_id":"normal","density_label":"普通"}],
+		"records":[{"record_key":"0,0:deep", "chunk":[0,0], "depth_band_id":"deep", "depth_label":"深层", "density_id":"normal", "density_label":"普通"}],
 	})
 	_check(int(migrated.get("version", 0)) == 2, "version 1 exploration state migrates to version 2")
 	var migrated_records: Array = migrated.get("records", [])
