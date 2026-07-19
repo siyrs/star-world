@@ -6,11 +6,27 @@ func _ready() -> void:
 	species_id = "zombie"
 	display_name = "僵尸"
 	hostile = true
-	detection_range = 18.0
-	attack_range = 1.65
 	collision_size = Vector3(0.75, 1.8, 0.65)
 	if not _configured:
-		apply_profile({"name":"僵尸", "max_health":20, "speed":2.1, "damage":3, "drops":{"rotten_flesh":[0,2]}})
+		apply_profile({
+			"name":"僵尸",
+			"max_health":20,
+			"speed":2.1,
+			"damage":1,
+			"drops":{"rotten_flesh":[0,2]},
+			"hostile_attack":{
+				"species_id":"zombie",
+				"source_id":"zombie",
+				"detection_range":18.0,
+				"attack_range":1.65,
+				"windup_seconds":0.8,
+				"cooldown_seconds":5.0,
+				"cancel_range_multiplier":1.35,
+				"cancel_recovery_seconds":0.6,
+				"target_leash_multiplier":1.4,
+				"telegraph_radius_multiplier":1.05,
+			}
+		})
 	super._ready()
 	add_to_group("hostile")
 
