@@ -1,42 +1,51 @@
 class_name HusbandryProgressionServiceHub
 extends "res://src/ui/repair_progression_service_hub.gd"
 
-const HusbandryServiceScript = preload(
-	"res://src/husbandry/animal_husbandry_service.gd"
+const FeatureCoordinatorScript = preload(
+	"res://src/core/service_hub_feature_coordinator.gd"
 )
-const HusbandryInteractionScript = preload(
-	"res://src/husbandry/husbandry_interaction_adapter.gd"
+const HusbandryRuntimeParticipantScript = preload(
+	"res://src/husbandry/husbandry_runtime_participant.gd"
 )
+const HUSBANDRY_RUNTIME_FEATURE := &"husbandry_runtime"
 
 var husbandry_service: Node
 var husbandry_interaction: Node
+var feature_lifecycle: Node
+var husbandry_runtime_participant: Node
 
 
 func _ready() -> void:
 	super._ready()
-	husbandry_service = _add_service(
-		HusbandryServiceScript.new(), "AnimalHusbandryService"
+	feature_lifecycle = _add_service(
+		FeatureCoordinatorScript.new(), "FeatureLifecycle"
 	)
-	husbandry_service.call("setup", inventory.registry, inventory, creature_spawner)
-	husbandry_interaction = _add_service(
-		HusbandryInteractionScript.new(), "HusbandryInteraction"
+	feature_lifecycle.call("setup", self)
+	husbandry_runtime_participant = _register_feature_participant(
+		HUSBANDRY_RUNTIME_FEATURE,
+		HusbandryRuntimeParticipantScript.new(),
+		"husbandry runtime"
 	)
-	husbandry_interaction.call("setup", husbandry_service)
-	player_experience.call(
-		"setup",
-		inventory,
-		game_ui,
-		block_interaction,
-		furnace_service,
-		husbandry_interaction
-	)
-	_connect_husbandry_feedback()
+	if husbandry_runtime_participant != null:
+		husbandry_service = husbandry_runtime_participant.call(
+			"get_husbandry_service"
+		) as Node
+		husbandry_interaction = husbandry_runtime_participant.call(
+			"get_interaction_service"
+		) as Node
 
 
 func _begin_world(state: Dictionary) -> void:
-	if husbandry_service != null:
-		husbandry_service.call("deserialize", state.get("husbandry", {}))
-	super._begin_world(state)
+	var migrated_state := state.duplicate(true)
+	if feature_lifecycle != null and feature_lifecycle.has_method("normalize_world_state"):
+		var raw_migrated: Variant = feature_lifecycle.call(
+			"normalize_world_state", state
+		)
+		if raw_migrated is Dictionary:
+			migrated_state = raw_migrated
+	if feature_lifecycle != null:
+		feature_lifecycle.call("begin_world", migrated_state)
+	super._begin_world(migrated_state)
 
 
 func attach_game(
@@ -47,103 +56,62 @@ func attach_game(
 	ground_resolver: Callable = Callable()
 ) -> void:
 	super.attach_game(world, player, sun, environment, ground_resolver)
-	if husbandry_service != null:
-		husbandry_service.call("attach_world", world, player)
-	if player != null and player.has_method("bind_entity_interaction_service"):
-		player.call("bind_entity_interaction_service", husbandry_interaction)
+	if feature_lifecycle != null:
+		feature_lifecycle.call(
+			"attach_game", world, player, sun, environment, ground_resolver
+		)
 
 
 func activate_gameplay() -> void:
 	super.activate_gameplay()
-	if husbandry_service != null:
-		husbandry_service.call("activate")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("activate")
 
 
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
-	if husbandry_service != null:
-		current_state["husbandry"] = husbandry_service.call("serialize")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("save_into", current_state)
 	return super.save_current(world_state, player_state)
 
 
 func handle_world_start_failed(reason: String) -> void:
-	if husbandry_service != null:
-		husbandry_service.call("clear")
+	if feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"world_start_failed")
 	super.handle_world_start_failed(reason)
 
 
 func return_to_menu() -> void:
 	super.return_to_menu()
-	if current_world_id.is_empty() and husbandry_service != null:
-		husbandry_service.call("clear")
+	if current_world_id.is_empty() and feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"return_to_menu")
 
 
 func get_character_snapshot() -> Dictionary:
 	var snapshot: Dictionary = super.get_character_snapshot()
-	snapshot["husbandry"] = (
-		husbandry_service.call("get_snapshot") if husbandry_service != null else {}
-	)
+	if feature_lifecycle != null:
+		feature_lifecycle.call("snapshot_into", snapshot)
+		snapshot["feature_lifecycle"] = feature_lifecycle.call("get_snapshot")
 	return snapshot
 
 
 func _exit_tree() -> void:
-	if husbandry_service != null:
-		husbandry_service.call("clear")
+	if feature_lifecycle != null and feature_lifecycle.has_method("shutdown"):
+		feature_lifecycle.call("shutdown")
 	super._exit_tree()
 
 
-func _connect_husbandry_feedback() -> void:
-	if husbandry_service == null:
-		return
-	husbandry_service.connect("animal_fed", Callable(self, "_on_animal_fed"))
-	husbandry_service.connect("animal_ready", Callable(self, "_on_animal_ready"))
-	husbandry_service.connect("baby_born", Callable(self, "_on_baby_born"))
-	husbandry_service.connect("animal_grew", Callable(self, "_on_animal_grew"))
-	husbandry_service.connect(
-		"interaction_rejected", Callable(self, "_on_husbandry_rejected")
+func _register_feature_participant(
+	participant_id: StringName, participant: Node, label: String
+) -> Node:
+	if feature_lifecycle == null:
+		return null
+	var registration: Dictionary = feature_lifecycle.call(
+		"register_participant", participant_id, participant
 	)
-
-
-func _on_animal_fed(result: Dictionary) -> void:
-	_publish_husbandry_result(result, "success", 2.0)
-	if audio_service != null and audio_service.has_method("play_pickup"):
-		audio_service.call("play_pickup")
-
-
-func _on_animal_ready(result: Dictionary) -> void:
-	_publish_husbandry_result(result, "success", 2.4)
-	if audio_service != null and audio_service.has_method("play_pickup"):
-		audio_service.call("play_pickup")
-
-
-func _on_baby_born(result: Dictionary) -> void:
-	_publish_husbandry_result(result, "success", 3.2)
-	if audio_service != null and audio_service.has_method("play_craft"):
-		audio_service.call("play_craft")
-
-
-func _on_animal_grew(result: Dictionary) -> void:
-	_publish_husbandry_result(result, "info", 2.4)
-
-
-func _on_husbandry_rejected(reason: String, context: Dictionary) -> void:
-	var message := str(context.get("message", "暂时无法进行该动物交互"))
-	_publish_character_message(
-		message,
-		"warning",
-		"husbandry_rejected:%s:%s" % [reason, str(context.get("species_id", "animal"))],
-		2.5
+	if bool(registration.get("success", false)):
+		return registration.get("participant") as Node
+	push_error(
+		"Unable to install %s lifecycle participant: %s"
+		% [label, str(registration.get("reason", "unknown"))]
 	)
-
-
-func _publish_husbandry_result(
-	result: Dictionary, severity: String, duration: float
-) -> void:
-	_publish_character_message(
-		str(result.get("message", "动物状态已更新")),
-		severity,
-		"husbandry:%s:%s" % [
-			str(result.get("action", "update")),
-			str(result.get("husbandry_id", result.get("species_id", "animal"))),
-		],
-		duration
-	)
+	return null
