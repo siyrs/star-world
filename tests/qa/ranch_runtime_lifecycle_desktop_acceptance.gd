@@ -162,7 +162,6 @@ func _run() -> void:
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
 	_check((loaded.get("animal_products", {}).get("records", {}) as Dictionary).size() >= 3, "saved world preserves all managed product timers")
 	var eggs_before_reload := int(hub.inventory.count_item("egg"))
-	var old_player: Node = player
 	hub.return_to_menu()
 	for _frame in 8:
 		await process_frame
@@ -170,7 +169,7 @@ func _run() -> void:
 	_check(int(lifecycle.get("bound_player_id", -1)) == 0, "return-to-menu releases the ranch player reference")
 	_check(not bool((attraction.call("get_snapshot") as Dictionary).get("active", true)), "return-to-menu deactivates attraction processing")
 	_check(not bool((products.call("get_snapshot") as Dictionary).get("active", true)), "return-to-menu deactivates product processing")
-	_check(old_player == null or not is_instance_valid(old_player) or old_player.get_parent() == null, "old gameplay player leaves the active scene")
+	_check(attraction.get("player") == null and products.get("player") == null, "return-to-menu releases both ranch service player references")
 
 	game.begin_world_state(loaded)
 	for _frame in 12:
