@@ -3,6 +3,7 @@ extends RefCounted
 
 const DEFAULT_DATA_PATH := "res://data/creature_ecology.json"
 const CreatureFactoryScript = preload("res://src/entity/creature_factory.gd")
+const PHASE_IDS: Array[String] = ["day", "dawn", "dusk", "night"]
 
 var schema_version := 0
 var default_profile_id := "star_continent"
@@ -37,13 +38,13 @@ func load_from_file(path: String = DEFAULT_DATA_PATH) -> bool:
 		_record_error("Creature ecology profiles must be an array")
 		return false
 	schema_version = int(root_data.get("schema_version", 0))
-	if schema_version != 1:
+	if schema_version not in [1, 2]:
 		_record_error("Unsupported creature ecology schema_version: %d" % schema_version)
 	default_profile_id = str(root_data.get("default_profile", "star_continent")).strip_edges()
 	var known_species: Dictionary = {}
 	for raw_species_id: Variant in CreatureFactoryScript.SCRIPTS.keys():
 		known_species[str(raw_species_id)] = true
-	for raw_profile in raw_profiles:
+	for raw_profile: Variant in raw_profiles:
 		if raw_profile is not Dictionary:
 			_record_error("Creature ecology profile entry must be an object")
 			continue
@@ -132,12 +133,13 @@ func _normalize_species(
 		_record_error("%s species must be an array: %s" % [category, profile_id])
 		return result
 	var seen: Dictionary = {}
-	for raw_entry in raw_entries:
+	for raw_entry: Variant in raw_entries:
 		if raw_entry is not Dictionary:
 			_record_error("%s species entry must be an object: %s" % [category, profile_id])
 			continue
-		var species_id := str(raw_entry.get("id", "")).strip_edges()
-		var weight := int(raw_entry.get("weight", 0))
+		var entry: Dictionary = raw_entry
+		var species_id := str(entry.get("id", "")).strip_edges()
+		var weight := int(entry.get("weight", 0))
 		if not known_species.has(species_id):
 			_record_error("Unknown %s species '%s' in %s" % [category, species_id, profile_id])
 			continue
@@ -147,13 +149,45 @@ func _normalize_species(
 		if weight <= 0:
 			_record_error("Species weight must be positive for %s in %s" % [species_id, profile_id])
 			continue
+		var cap := clampi(int(entry.get("cap", 0)), 0, 32)
+		var condition_mode := str(entry.get("condition_mode", "all")).strip_edges()
+		if condition_mode not in ["all", "any"]:
+			_record_error("Unknown ecology condition mode '%s' for %s in %s" % [condition_mode, species_id, profile_id])
+			continue
+		var phase_ids: Array[String] = []
+		var raw_phase_ids: Variant = entry.get("phase_ids", [])
+		if raw_phase_ids is not Array:
+			_record_error("Ecology phase_ids must be an array for %s in %s" % [species_id, profile_id])
+			continue
+		for raw_phase_id: Variant in raw_phase_ids:
+			var phase_id := str(raw_phase_id).strip_edges()
+			if phase_id not in PHASE_IDS:
+				_record_error("Unknown ecology phase '%s' for %s in %s" % [phase_id, species_id, profile_id])
+				continue
+			if phase_id not in phase_ids:
+				phase_ids.append(phase_id)
+		var normalized := {
+			"id": species_id,
+			"weight": weight,
+			"cap": cap,
+			"condition_mode": condition_mode,
+			"phase_ids": phase_ids,
+		}
+		if entry.has("min_player_y"):
+			normalized["min_player_y"] = clampi(int(entry.get("min_player_y", 0)), -64, 128)
+		if entry.has("max_player_y"):
+			normalized["max_player_y"] = clampi(int(entry.get("max_player_y", 63)), -64, 128)
+		if normalized.has("min_player_y") and normalized.has("max_player_y"):
+			if int(normalized["max_player_y"]) < int(normalized["min_player_y"]):
+				_record_error("Invalid player height condition for %s in %s" % [species_id, profile_id])
+				continue
 		seen[species_id] = true
-		result.append({"id":species_id, "weight":weight})
+		result.append(normalized)
 	return result
 
 
 func _install_fallback() -> void:
-	schema_version = 1
+	schema_version = 2
 	default_profile_id = "star_continent"
 	_profiles = {
 		"star_continent": {
@@ -165,8 +199,14 @@ func _install_fallback() -> void:
 			"hostile_cap_day":0,
 			"hostile_cap_night":2,
 			"hostile_chance":{"day":0.0,"dawn":0.05,"dusk":0.25,"night":0.65},
-			"passive_species":[{"id":"chicken","weight":1},{"id":"cow","weight":1},{"id":"pig","weight":1}],
-			"hostile_species":[{"id":"zombie","weight":1}],
+			"passive_species":[
+				{"id":"chicken","weight":1,"cap":0,"condition_mode":"all","phase_ids":[]},
+				{"id":"cow","weight":1,"cap":0,"condition_mode":"all","phase_ids":[]},
+				{"id":"pig","weight":1,"cap":0,"condition_mode":"all","phase_ids":[]},
+			],
+			"hostile_species":[
+				{"id":"zombie","weight":1,"cap":0,"condition_mode":"all","phase_ids":[]}
+			],
 		}
 	}
 
