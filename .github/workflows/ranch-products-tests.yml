@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   ranch-domain:
-    name: Ranch data and domain regression
+    name: Ranch data, lifecycle and batching regression
     runs-on: windows-latest
-    timeout-minutes: 18
+    timeout-minutes: 22
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,9 +35,12 @@ jobs:
           godot --headless --path . --editor --quit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate ranch registries
+      - name: Validate ranch registries and lifecycle
         shell: pwsh
-        run: .\tests\developer_b\validate_ranch.ps1
+        run: |
+          .\tests\developer_b\validate_ranch.ps1
+          .\tests\developer_b\validate_ranch_lifecycle.ps1
+          .\tests\developer_b\validate_service_hub_lifecycle.ps1
 
       - name: Ranch attraction and product regression
         shell: pwsh
@@ -45,11 +48,19 @@ jobs:
           godot --headless --path . --script res://tests/qa/ranch_products_regression.gd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Ranch lifecycle and notification batching regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/ranch_runtime_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   ranch-desktop:
     name: Real ranch products desktop acceptance
     needs: ranch-domain
     runs-on: windows-latest
-    timeout-minutes: 18
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,5 +89,43 @@ jobs:
           name: ranch-products-desktop-acceptance-${{ github.run_number }}
           path: |
             build/ranch-products-desktop-acceptance.*
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 14
+
+  ranch-lifecycle-desktop:
+    name: Real batched yield, cleanup and reload acceptance
+    needs: ranch-domain
+    runs-on: windows-latest
+    timeout-minutes: 26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production ranch lifecycle and batched yield
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/ranch_runtime_lifecycle_desktop_acceptance.gd' `
+            -OutputPath 'build\ranch-runtime-lifecycle-desktop.png' `
+            -TimeoutMilliseconds 150000
+
+      - name: Upload ranch lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ranch-runtime-lifecycle-${{ github.run_number }}
+          path: |
+            build/ranch-runtime-lifecycle-*.png
+            build/ranch-runtime-lifecycle-*.log
+          if-no-files-found: error
           retention-days: 14
