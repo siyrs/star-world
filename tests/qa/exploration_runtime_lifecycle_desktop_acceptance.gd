@@ -142,7 +142,8 @@ func _run() -> void:
 	_check(player != null and player.get("prospecting_service") == prospecting, "full reload rebinds the same production prospecting port")
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 1, "full reload restores the saved exploration record")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 2, "production diagnostics expose runtime and journal participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 3, "production diagnostics expose ranch, runtime and journal participants")
+	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "production character diagnostics include the ranch participant fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "production character diagnostics retain legacy runtime fields")
 
 	game.call("_abort_world_start", "qa_exploration_runtime_failure")
