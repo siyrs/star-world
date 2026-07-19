@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "species_id": "zombie",
+      "source_id": "zombie",
+      "detection_range": 18.0,
+      "attack_range": 1.65,
+      "windup_seconds": 0.8,
+      "cooldown_seconds": 5.0,
+      "cancel_range_multiplier": 1.35,
+      "cancel_recovery_seconds": 0.6,
+      "target_leash_multiplier": 1.4,
+      "telegraph_radius_multiplier": 1.05
+    }
+  ]
+}

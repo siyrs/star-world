@@ -88,6 +88,10 @@ func _entity_focus(collider: Node) -> Dictionary:
 	if health_value != null and maximum_value != null:
 		result["health"] = float(health_value)
 		result["max_health"] = float(maximum_value)
+	if collider.has_method("get_hostile_attack_snapshot"):
+		var raw_attack: Variant = collider.call("get_hostile_attack_snapshot")
+		if raw_attack is Dictionary and not raw_attack.is_empty():
+			result["hostile_attack"] = raw_attack.duplicate(true)
 	return result
 
 

@@ -18,6 +18,7 @@
 - 小麦、胡萝卜和马铃薯，多阶段生长、灌溉、堆肥、有界离线成长、成熟收获和自动补种。
 - 主手和四类防具槽；数据驱动属性、防御减伤、攻击冷却、击退、硬直和装备耐久。
 - 鸡、牛、猪和僵尸：地图权重、昼夜生成、漫游/追击、伤害、死亡、繁殖、幼崽成长、饲料吸引和持久产物。
+- 僵尸近战拥有数据驱动 0.8 秒前摇、红色非碰撞预警圈、后退躲避、击退/硬直打断和五秒恢复；进入范围不再瞬时扣血。
 - 36 格背包和 9 格快捷栏，支持堆叠、交换、快速装备、metadata、序列化和原子多物品事务。
 - 随身与工作台合成都使用原子背包事务；失败不会先扣原料或公开中间状态。
 - 熔炉持续加工和离线恢复、27 格箱子、非空拆除保护、修理台、床和安全重生点。
@@ -51,6 +52,7 @@
 - [地图资源分布合同](docs/RESOURCE_DISTRIBUTION.md)
 - [粗粒度探矿合同](docs/PROSPECTING_SYSTEM.md)
 - [地图生态与危险反馈合同](docs/CREATURE_ECOLOGY_DANGER.md)
+- [敌对攻击前摇与躲避合同](docs/HOSTILE_ATTACK_WINDUP.md)
 - [探索日志与里程碑合同](docs/EXPLORATION_JOURNAL.md)
 - [探索里程碑奖励与背包事务合同](docs/EXPLORATION_MILESTONE_REWARDS.md)
 - [地图印记与校准探矿合同](docs/MAP_SIGNATURE_PROSPECTING.md)
@@ -73,6 +75,7 @@
 | 视角 | 鼠标移动 |
 | 采集方块 | 瞄准后按住鼠标左键 |
 | 攻击生物 | 瞄准后单击鼠标左键 |
+| 躲避敌对近战 | 红色预警圈出现后后退、冲刺，或攻击将敌人打入硬直 |
 | 工作台、熔炉、箱子、修理台 | 瞄准后鼠标右键 |
 | 使用探矿仪 | 手持任一探矿仪后鼠标右键 |
 | 开垦、播种、收获 | 手持对应物品并鼠标右键 |
@@ -87,6 +90,28 @@
 | 快速保存 | `F5` |
 
 右键优先处理农业、工作台、机器和容器，然后才尝试探矿、放置或食用。`J` 日志使用独立输入上下文：打开时释放鼠标并阻断移动、攻击、采集、探矿和放置，但不会暂停世界模拟；再次按 `J` 或 `Esc` 后恢复游戏输入。
+
+## 敌对攻击与躲避
+
+僵尸进入近战范围后不会立即造成伤害，而是进入约 0.8 秒前摇：
+
+```text
+进入范围
+→ 红色预警圈
+→ 面向玩家并停止移动
+→ 玩家后退/冲刺躲避，或攻击打断
+→ 仍在命中范围才扣血
+→ 五秒冷却
+```
+
+瞄准蓄力中的僵尸时，上下文提示会显示剩余时间，并说明：
+
+```text
+[鼠标左键] 攻击并打断
+离开红色预警圈可躲避
+```
+
+玩家离开取消范围时，攻击以 `target_evaded` 结束且不会造成伤害；敌人被击退或进入硬直时以 `interrupted` 结束。红色预警圈只有视觉网格，没有碰撞，也不会阻挡攻击射线。
 
 ## 地图印记与校准探矿
 
@@ -137,7 +162,7 @@ Windows 默认位置：
 %APPDATA%\Godot\app_userdata\星的世界\worlds\<world-id>\world.json
 ```
 
-存档包含地图和 Seed、稀疏方块修改、玩家、背包和 metadata、装备与属性、农业、动物、容器、机器、生存、昼夜、重生点、引导、探索记录和已领取奖励。地图材料和校准仪是普通物品，直接随背包保存；扫描工具诊断和生命周期诊断不会扩大探索存档白名单。
+存档包含地图和 Seed、稀疏方块修改、玩家、背包和 metadata、装备与属性、农业、动物、容器、机器、生存、昼夜、重生点、引导、探索记录和已领取奖励。地图材料和校准仪是普通物品，直接随背包保存；扫描工具诊断、生命周期诊断和敌对攻击前摇都是瞬时状态，不会扩大存档白名单。
 
 写入先落到临时文件，旧主文件保留为备份；正式文件损坏时会尝试恢复有效临时文件或上一版本。
 
@@ -147,11 +172,14 @@ Windows 默认位置：
 # 一键运行静态合同和全部 Godot 回归
 powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\godot.exe
 
+# 敌对攻击档案、伤害冷却和后备一致性合同
+powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_hostile_attacks.ps1
+
+# 前摇、躲避、命中和打断领域回归
+godot --headless --path . --script res://tests/qa/hostile_attack_windup_regression.gd
+
 # ServiceHub 参与者、顺序、兼容字段和提示基线合同
 powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_service_hub_lifecycle.ps1
-
-# 生命周期组合领域回归
-godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
 
 # 地图印记、材料、配方和校准仪跨目录合同
 powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_map_signature_prospecting.ps1
@@ -163,11 +191,11 @@ powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smok
 
 CI 包括：
 
-1. 数据、目录、目标可达性、生命周期、奖励和原子事务静态合同；
+1. 数据、目录、目标可达性、生命周期、敌对攻击时序、奖励和原子事务静态合同；
 2. 全量 Runtime 与领域回归；
-3. 真实桌面输入、机器、采集、农业、探索、单次奖励提示、领取、返回菜单、重载和失败启动；
+3. 真实桌面输入、机器、采集、农业、探索、敌对预警、WASD 躲避、命中、领取、返回菜单和重载；
 4. 实际 Windows Release 导出、启动、画面和退出资源检查。
 
 ## 当前边界
 
-当前版本定位为可持续扩展的单人核心。水和岩浆仍为静态体素；部分建筑交互仍为简化规则。ServiceHub 当前只完成日志/奖励的第一批参与者迁移，探矿与危险、牧场和农业仍在继承层中。下一阶段重点是继续迁移探矿/危险生命周期，并推进敌对攻击前摇、少量精英生态、共享 Machine Base、UI 扩展注册和 GitHub Actions reusable workflow。多人和大型商业内容库不在当前阶段范围内。
+当前版本定位为可持续扩展的单人核心。水和岩浆仍为静态体素；部分建筑交互仍为简化规则。ServiceHub 当前只完成日志/奖励的第一批参与者迁移，探矿与危险、牧场和农业仍在继承层中。敌对近战已经具备通用前摇，但当前只有僵尸使用该能力；远程、多段和精英攻击尚未引入。下一阶段重点是少量地图精英生态、探矿/危险生命周期迁移、共享 Machine Base、建筑连接形状和 GitHub Actions reusable workflow。多人和大型商业内容库不在当前阶段范围内。

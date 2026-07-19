@@ -46,13 +46,28 @@ func _entity_prompt(
 		subtitle = "生命 %.0f / %.0f" % [
 			float(focus.get("health", 0.0)), float(focus.get("max_health", 0.0))
 		]
+	var primary := "[鼠标左键] 攻击"
+	var secondary := ""
+	var tone := "warning"
+	var raw_attack: Variant = focus.get("hostile_attack", {})
+	if raw_attack is Dictionary:
+		var attack: Dictionary = raw_attack
+		var attack_state := str(attack.get("state", "idle"))
+		if attack_state == "windup":
+			var remaining := maxf(0.0, float(attack.get("windup_remaining", 0.0)))
+			subtitle = "正在蓄力 · %.1f 秒后攻击；后退或击退可打断" % remaining
+			primary = "[鼠标左键] 攻击并打断"
+			secondary = "离开红色预警圈可躲避"
+			tone = "error"
+		elif attack_state == "cooldown" and bool(attack.get("enabled", false)):
+			subtitle += " · 攻击恢复中"
 	return {
 		"visible": true,
 		"title": str(focus.get("display_name", "生物")),
 		"subtitle": subtitle,
-		"primary": "[鼠标左键] 攻击",
-		"secondary": "",
-		"tone": "warning",
+		"primary": primary,
+		"secondary": secondary,
+		"tone": tone,
 	}
 
 
