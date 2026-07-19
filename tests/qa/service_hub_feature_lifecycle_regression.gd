@@ -33,6 +33,14 @@ class FakeParticipant:
 		events.append("%s:install" % participant_id)
 		return true
 
+	func normalize_world_state(state: Dictionary) -> Dictionary:
+		var normalized := state.duplicate(true)
+		var order: Array = normalized.get("normalization_order", [])
+		order.append(participant_id)
+		normalized["normalization_order"] = order
+		events.append("%s:normalize" % participant_id)
+		return normalized
+
 	func begin_world(state: Dictionary) -> void:
 		events.append("%s:begin:%s" % [participant_id, state.get("marker", "")])
 
@@ -158,7 +166,14 @@ func _test_coordinator_contract() -> void:
 	_check(str(duplicate.get("reason", "")) == "duplicate_participant", "duplicate lifecycle ids are rejected")
 	var invalid: Dictionary = coordinator.register_participant(&"invalid", InvalidParticipant.new())
 	_check(str(invalid.get("reason", "")) == "participant_contract", "participants missing lifecycle methods are rejected")
-	coordinator.begin_world({"marker":"world-a"})
+	var normalized: Dictionary = coordinator.normalize_world_state(
+		{"marker":"world-a", "normalization_order":[]}
+	)
+	_check(
+		(normalized.get("normalization_order", []) as Array) == ["first", "second"],
+		"world-state normalization follows dependency registration order"
+	)
+	coordinator.begin_world(normalized)
 	coordinator.attach_game(null, null)
 	coordinator.activate()
 	var payload: Dictionary = {}
@@ -172,6 +187,9 @@ func _test_coordinator_contract() -> void:
 	coordinator.shutdown()
 	_check(payload.get("first", "") == "saved" and payload.get("second", "") == "saved", "participants contribute to one shared save payload")
 	_check(snapshot.get("first", "") == "snapshot" and snapshot.get("second", "") == "snapshot", "participants contribute to one shared diagnostics snapshot")
+	var normalize_first := events.find("first:normalize")
+	var normalize_second := events.find("second:normalize")
+	_check(normalize_first >= 0 and normalize_second > normalize_first, "normalizers execute in dependency order")
 	var begin_first := events.find("first:begin:world-a")
 	var begin_second := events.find("second:begin:world-a")
 	_check(begin_first >= 0 and begin_second > begin_first, "begin lifecycle follows dependency order")
@@ -185,6 +203,7 @@ func _test_coordinator_contract() -> void:
 		(lifecycle_snapshot.get("participant_dependencies", {}) as Dictionary).get("second", []) == ["first"],
 		"coordinator snapshot preserves the dependency graph"
 	)
+	_check(int(lifecycle_snapshot.get("phase_counts", {}).get("normalize_world_state", 0)) == 1, "coordinator diagnoses the normalization phase")
 	_check((lifecycle_snapshot.get("phase_history", []) as Array).size() <= 48, "lifecycle phase history remains bounded")
 	host.queue_free()
 
@@ -195,24 +214,31 @@ func _test_production_exploration_composition() -> void:
 	for _frame in 3:
 		await process_frame
 	var coordinator: Node = hub.get("feature_lifecycle")
+	var ranch_participant: Node = hub.get("ranch_runtime_participant")
 	var runtime_participant: Node = hub.get("exploration_runtime_participant")
 	var journal_participant: Node = hub.get("exploration_journal_reward_participant")
+	var attraction: Node = hub.get("animal_attraction_service")
+	var products: Node = hub.get("animal_product_service")
 	var journal: Node = hub.get("exploration_journal_service")
 	var rewards: Node = hub.get("exploration_reward_service")
 	var prospecting: Node = hub.get("prospecting_service")
 	var danger: Node = hub.get("exploration_danger_service")
 	_check(
 		coordinator != null
+		and coordinator.has_participant(&"ranch_runtime")
 		and coordinator.has_participant(&"exploration_runtime")
 		and coordinator.has_participant(&"exploration_journal_rewards"),
-		"production hub registers both exploration participants"
+		"production hub registers ranch and both exploration participants"
 	)
-	_check(runtime_participant != null and journal_participant != null, "production hub exposes both participants for diagnostics")
-	_check(journal != null and rewards != null and prospecting != null and danger != null, "legacy public exploration service fields remain available")
+	_check(ranch_participant != null and runtime_participant != null and journal_participant != null, "production hub exposes all participants for diagnostics")
+	_check(attraction != null and products != null and journal != null and rewards != null and prospecting != null and danger != null, "legacy public service fields remain available")
+	_check(hub.get_node_or_null("AnimalAttractionService") == attraction, "animal attraction keeps its production node path")
+	_check(hub.get_node_or_null("AnimalProductService") == products, "animal products keep their production node path")
 	_check(hub.get_node_or_null("ProspectingService") == prospecting, "prospecting keeps its production node path")
 	_check(hub.get_node_or_null("ExplorationDangerService") == danger, "danger keeps its production node path")
 	_check(hub.get_node_or_null("ExplorationJournalService") == journal, "journal keeps its production node path")
 	_check(hub.get_node_or_null("ExplorationMilestoneRewardService") == rewards, "reward keeps its production node path")
+	_check(hub.husbandry_interaction.get("product_service") == products, "husbandry prompts consume participant-owned product state")
 	_check(
 		coordinator.get_participant_dependencies(&"exploration_journal_rewards") == ["exploration_runtime"],
 		"journal/reward explicitly depends on exploration runtime"
@@ -227,7 +253,8 @@ func _test_production_exploration_composition() -> void:
 	_check(not world_id.is_empty(), "production save service creates a lifecycle test world")
 	hub.call("_begin_world", state)
 	var lifecycle_after_begin: Dictionary = coordinator.call("get_snapshot")
-	_check(int(lifecycle_after_begin.get("phase_counts", {}).get("begin_world", 0)) == 1, "world begin reaches both registered participants once")
+	_check(int(lifecycle_after_begin.get("phase_counts", {}).get("normalize_world_state", 0)) == 1, "production begin runs one ordered normalization phase")
+	_check(int(lifecycle_after_begin.get("phase_counts", {}).get("begin_world", 0)) == 1, "world begin reaches all registered participants once")
 	_check(str(rewards.call("get_snapshot").get("profile_id", "")) == "star_continent", "dependent participant sees the runtime-restored active map")
 
 	var fake_world := FakeWorld.new()
@@ -249,6 +276,8 @@ func _test_production_exploration_composition() -> void:
 	coordinator.call("activate")
 	_check(fake_player.prospecting_service == prospecting, "runtime participant binds the production prospecting service to the player")
 	_check(bool(danger.get("active")), "runtime participant activates production danger assessment")
+	var ranch_snapshot: Dictionary = ranch_participant.call("get_lifecycle_snapshot")
+	_check(int(ranch_snapshot.get("bound_player_id", 0)) == fake_player.get_instance_id(), "ranch participant binds the active player")
 	hub.day_night.set_time(21.0)
 	await process_frame
 	_check("phase_changed" in refresh_triggers, "phase changes refresh danger immediately")
@@ -280,8 +309,9 @@ func _test_production_exploration_composition() -> void:
 	hub.inventory.clear()
 	var claim: Dictionary = rewards.call("claim", "first_discovery")
 	_check(bool(claim.get("success", false)), "dependent reward service still commits the production inventory transaction")
-	_check(bool(hub.call("save_current")), "both participants write into one production save transaction")
+	_check(bool(hub.call("save_current")), "all participants write into one production save transaction")
 	var loaded: Dictionary = hub.save_service.load_world(world_id)
+	_check(loaded.has("animal_products"), "ranch participant persists the animal product domain")
 	_check((loaded.get("exploration", {}).get("records", []) as Array).size() == 1, "runtime participant persists exploration records")
 	_check("first_discovery" in (loaded.get("exploration_rewards", {}).get("claimed", []) as Array), "dependent participant persists claimed rewards")
 	var announcement_count_before_reload := int(journal_participant.call("get_lifecycle_snapshot").get("announcement_count", 0))
@@ -292,9 +322,11 @@ func _test_production_exploration_composition() -> void:
 	_check((danger.call("get_snapshot") as Dictionary).is_empty(), "return-to-menu clears composed danger state")
 	_check((journal.call("get_snapshot") as Dictionary).is_empty(), "return-to-menu clears dependent journal state")
 	_check((rewards.call("get_snapshot") as Dictionary).is_empty(), "return-to-menu clears dependent reward state")
+	ranch_snapshot = ranch_participant.call("get_lifecycle_snapshot")
+	_check(int(ranch_snapshot.get("bound_player_id", -1)) == 0, "return-to-menu clears the ranch player reference")
 	var lifecycle_after_menu: Dictionary = coordinator.call("get_snapshot")
 	var history: Array = lifecycle_after_menu.get("phase_history", [])
-	_check(not history.is_empty() and str(history.back()).contains("exploration_journal_rewards,exploration_runtime"), "clear history records reverse dependency order")
+	_check(not history.is_empty() and str(history.back()).contains("exploration_journal_rewards,exploration_runtime,ranch_runtime"), "clear history records full reverse dependency order")
 
 	hub.call("_begin_world", loaded)
 	coordinator.call("attach_game", fake_world, fake_player)
@@ -304,15 +336,18 @@ func _test_production_exploration_composition() -> void:
 	_check(int(journal_participant.call("get_lifecycle_snapshot").get("announcement_count", 0)) == announcement_count_before_reload, "world reload establishes a baseline without duplicate reward notices")
 	_check(fake_player.prospecting_service == prospecting, "world reload rebinds prospecting through the runtime participant")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
+	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant contributes legacy ranch diagnostics")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "runtime participant contributes legacy exploration diagnostics")
 	_check(character_snapshot.has("exploration_journal") and character_snapshot.has("exploration_rewards"), "dependent participant contributes legacy journal diagnostics")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 2, "character diagnostics expose both lifecycle participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 3, "character diagnostics expose all lifecycle participants")
 
 	hub.call("handle_world_start_failed", "qa_simulated_failure")
 	_check(hub.current_world_id.is_empty(), "world-start failure resets the production hub identity")
 	_check(fake_player.prospecting_service == null, "world-start failure unbinds prospecting from the old player")
 	_check((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0) == 0 and (danger.call("get_snapshot") as Dictionary).is_empty(), "world-start failure clears runtime exploration state")
 	_check((journal.call("get_snapshot") as Dictionary).is_empty() and (rewards.call("get_snapshot") as Dictionary).is_empty(), "world-start failure clears dependent exploration state")
+	ranch_snapshot = ranch_participant.call("get_lifecycle_snapshot")
+	_check(int(ranch_snapshot.get("bound_player_id", -1)) == 0, "world-start failure clears ranch runtime references")
 	if not world_id.is_empty():
 		hub.save_service.delete_world(world_id)
 	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
