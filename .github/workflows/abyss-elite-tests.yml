@@ -1,0 +1,101 @@
+name: Abyss elite ecology quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: abyss-elite-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  abyss-elite-regression:
+    name: Conditional ecology, heavy attack, danger and drop regression
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate creature, ecology, elite and hostile attack contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_data.ps1
+          .\tests\developer_b\validate_ecology_danger.ps1
+          .\tests\developer_b\validate_hostile_attacks.ps1
+          .\tests\developer_b\validate_abyss_elite.ps1
+
+      - name: Run abyss elite domain regression
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/abyss_elite_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Re-run adjacent ecology, windup and combat regressions
+        shell: pwsh
+        run: |
+          $scripts = @(
+            'res://tests/qa/ecology_danger_regression.gd',
+            'res://tests/qa/hostile_attack_windup_regression.gd',
+            'res://tests/qa/combat_cadence_regression.gd',
+            'res://tests/qa/physics_interaction_regression.gd'
+          )
+          foreach ($script in $scripts) {
+            godot --headless --path . --script $script
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+  real-abyss-elite-desktop:
+    name: Real elite warning, dodge, heavy hit, defeat, pickup and reload
+    needs: abyss-elite-regression
+    runs-on: windows-latest
+    timeout-minutes: 26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise the production abyss elite journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/abyss_elite_desktop_acceptance.gd' `
+            -OutputPath 'build\abyss-elite-desktop-acceptance.png' `
+            -TimeoutMilliseconds 150000
+
+      - name: Upload abyss elite evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abyss-elite-desktop-${{ github.run_number }}
+          path: |
+            build/abyss-elite-desktop-acceptance.*
+          if-no-files-found: error
+          retention-days: 14
