@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "default_profile": "star_continent",
   "profiles": [
     {
@@ -79,7 +79,17 @@
         {"id": "pig", "weight": 2},
         {"id": "chicken", "weight": 1}
       ],
-      "hostile_species": [{"id": "zombie", "weight": 1}]
+      "hostile_species": [
+        {"id": "zombie", "weight": 9},
+        {
+          "id": "abyss_brute",
+          "weight": 1,
+          "cap": 1,
+          "condition_mode": "any",
+          "phase_ids": ["night"],
+          "max_player_y": 19
+        }
+      ]
     }
   ]
 }
