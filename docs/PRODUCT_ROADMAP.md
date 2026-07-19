@@ -2,7 +2,7 @@
 
 ## 产品定位
 
-《星的世界》是长期可扩展的单人沙盒生存建造游戏基础，而不是只展示地形的体素 Demo。
+《星的世界》是长期可扩展的单人沙盒生存建造游戏基础，而不是只展示体素地形的 Demo。
 
 核心原则：
 
@@ -51,7 +51,8 @@ Game Runtime
 │  ├─ Husbandry / Breeding
 │  ├─ Feed Attraction
 │  ├─ Persistent Products
-│  └─ Batched Ranch Feedback
+│  ├─ Batched Ranch Feedback
+│  └─ Batched Husbandry Lifecycle Feedback
 │
 ├─ Harvest / Interaction / Machine Domain
 │  ├─ Tool Capability / Hardness
@@ -116,7 +117,7 @@ Game Runtime
 - 玩家攻击冷却、击退、硬直、命中反馈和耐久事务；
 - 修理失败回滚和 metadata 保留。
 
-### 5. 农业与牧场生产链
+### 5. 农业、畜牧与牧场生产链
 
 - 干燥/湿润耕地、水源和水桶浇灌；
 - 小麦、胡萝卜、马铃薯多阶段成长；
@@ -127,7 +128,11 @@ Game Runtime
 - 鸡蛋到熟鸡蛋的食物加工链；
 - 高数量对象共享调度；
 - 多动物同周期产物合并为一条摘要和一次音效；
-- 动物开始跟随和停止跟随具有有界反馈。
+- 动物开始跟随和停止跟随具有有界反馈；
+- 多对动物同帧繁殖合并为一条出生摘要；
+- 多只幼崽同帧成年合并为一条成长摘要；
+- 出生/成长待表现事件硬上限为 64；
+- 畜牧存档使用独立字段白名单迁移。
 
 ### 6. 地图资源、生态与危险
 
@@ -178,7 +183,7 @@ Game Runtime
 - 背包满时保持待领取；
 - 重试和重复领取幂等；
 - 合成服务复用同一事务入口；
-- 新世界显式探索与奖励 schema。
+- 新世界显式探索与奖励 Schema。
 
 见 [EXPLORATION_MILESTONE_REWARDS.md](EXPLORATION_MILESTONE_REWARDS.md)。
 
@@ -200,7 +205,7 @@ Game Runtime
 - [HOSTILE_ATTACK_WINDUP.md](HOSTILE_ATTACK_WINDUP.md)
 - [ABYSS_ELITE_ECOLOGY.md](ABYSS_ELITE_ECOLOGY.md)
 
-### 10. ServiceHub 生命周期组合化 · 三个参与者
+### 10. ServiceHub 生命周期组合化 · 四个参与者
 
 生产入口和继承路径保持：
 
@@ -218,6 +223,9 @@ Gameplay
 
 ```text
 ServiceHubFeatureCoordinator
+├─ husbandry_runtime
+│  ├─ AnimalHusbandryService
+│  └─ HusbandryInteractionAdapter
 ├─ ranch_runtime
 │  ├─ AnimalAttractionService
 │  └─ AnimalProductService
@@ -227,6 +235,13 @@ ServiceHubFeatureCoordinator
 └─ exploration_journal_rewards
    ├─ ExplorationJournalService
    └─ ExplorationMilestoneRewardService
+```
+
+显式依赖：
+
+```text
+ranch_runtime → husbandry_runtime
+exploration_journal_rewards → exploration_runtime
 ```
 
 已完成：
@@ -240,52 +255,54 @@ ServiceHubFeatureCoordinator
 - 48 条有界阶段诊断；
 - 共享保存 Payload；
 - 共享角色 Snapshot；
-- 公共字段和节点路径兼容；
-- 旧玩家显式解绑；
+- 八个公共字段和节点路径兼容；
+- 探矿和实体交互旧玩家端口显式解绑；
+- 受管动物长期死亡回调显式解除；
 - 返回菜单、失败启动和退出清理；
 - 真实输入、保存、菜单、重载和发行验收。
 
 相关合同：
 
 - [SERVICE_HUB_FEATURE_LIFECYCLE.md](SERVICE_HUB_FEATURE_LIFECYCLE.md)
-- [EXPLORATION_RUNTIME_LIFECYCLE.md](EXPLORATION_RUNTIME_LIFECYCLE.md)
+- [HUSBANDRY_RUNTIME_LIFECYCLE.md](HUSBANDRY_RUNTIME_LIFECYCLE.md)
 - [RANCH_RUNTIME_LIFECYCLE.md](RANCH_RUNTIME_LIFECYCLE.md)
+- [EXPLORATION_RUNTIME_LIFECYCLE.md](EXPLORATION_RUNTIME_LIFECYCLE.md)
 
 ## 下一阶段重点
 
-### 1. Husbandry 核心生命周期参与者
+### 1. 多敌对事件合并与危险刷新预算
 
-`AnimalHusbandryService` 和 `HusbandryInteractionAdapter` 仍由继承层管理。
-
-下一步：
+增加第二只地图精英之前，先优化和验证：
 
 ```text
-husbandry_runtime
-→ ranch_runtime depends on husbandry_runtime
-→ 保留实体交互端口
-→ 保留 husbandry.version = 1
-→ 保存前同步真实动物位置与生命
-→ 返回菜单和失败启动显式解绑玩家
+同帧 phase/ecology 事件
+→ 原因集合去重
+→ 每帧最多一次即时危险评估
+→ 保留原始事件数与实际刷新数诊断
 ```
 
-约束：
+验收必须覆盖：
 
-- 不把繁殖规则塞进 Coordinator；
-- 不改变喂养、繁殖和幼崽数值；
-- 不改变 managed animal ID；
-- 迁移前后存档逐字段一致。
-
-### 2. 多敌对事件合并与预算
-
-增加第二只精英前，先优化和验证：
-
-- 同一帧多个 `ecology_changed` 合并为一次危险刷新；
-- 刷新原因聚合；
-- 每帧即时刷新硬上限；
-- 三到五只敌对同时前摇的视觉可读性；
-- 预警圈重叠与焦点优先级；
+- 三到五只敌对同帧生成；
+- 多只敌对同帧死亡和卸载；
+- 125 环境样本硬上限；
+- 预警圈重叠和焦点提示优先级；
 - 多死亡和多掉落拾取；
 - 长时间生成、上限、卸载和重建 soak。
+
+### 2. 下一张地图精英
+
+在多敌对预算稳定后，第二只精英仍必须满足：
+
+```text
+地图限定
+→ 明确条件与独立上限
+→ 可观察攻击差异
+→ 真实躲避或反制
+→ 有用途掉落
+```
+
+不得只提高生命、速度和伤害，也不立即增加 Boss、复杂状态效果或大型行为树。
 
 ### 3. Machine Base 与自动化接口
 
@@ -314,6 +331,8 @@ husbandry_runtime
 ### 5. 质量平台与规模压测
 
 - 提取 GitHub Actions reusable workflow；
+- 24 只受管动物长期模拟；
+- 同步繁殖、成长和产物压力用例；
 - 大型农场和牧场压测；
 - 大量方向化建筑区块重建压测；
 - 探索日志、奖励和物品规模的存档体积报告；
@@ -325,8 +344,8 @@ husbandry_runtime
 
 ```text
 P0  输入、保存、世界可见性、发行稳定性          持续守护
-P1  Husbandry 核心生命周期参与者                 当前架构里程碑
-P1  多敌对事件合并与视觉/CPU 预算                 下一玩家与性能里程碑
+P1  多敌对事件合并与危险刷新预算                 当前架构/性能里程碑
+P1  多敌对可读性与下一张地图精英                 下一玩家里程碑
 P2  Machine Base 与自动化接口                   复用成熟机器能力
 P2  建筑交互与连接形状                          提升建造表达
 P3  CI 组合化、规模压测和更多内容                在合同稳定后推进
@@ -356,13 +375,15 @@ P3  CI 组合化、规模压测和更多内容                在合同稳定后
 18. 运行提示必须去重且有界；
 19. 同步批量领域事件不得线性放大 Toast 和音效；
 20. 世界状态迁移按参与者顺序执行并进入诊断；
-21. 敌对攻击必须有可观察前摇、稳定取消原因和真实躲避路径；
-22. 纯视觉攻击提示不得拥有碰撞或改变伤害判定；
-23. 生物攻击冷却不得与玩家伤害保护形成静默丢弃；
-24. 新物种必须通过脚本/数据目录双向校验；
-25. 精英必须有低频条件、独立上限、可读权衡和有用途掉落；
-26. 敌对数量与威胁权重不得混为同一指标；
-27. 新分支必须基于最新 `master`，不得回退并行改动。
+21. 玩家能力端口必须在菜单、失败和 Shutdown 时显式解绑；
+22. 对外部实体建立的长期信号必须在领域清理前主动断开；
+23. 敌对攻击必须有可观察前摇、稳定取消原因和真实躲避路径；
+24. 纯视觉攻击提示不得拥有碰撞或改变伤害判定；
+25. 生物攻击冷却不得与玩家伤害保护形成静默丢弃；
+26. 新物种必须通过脚本/数据目录双向校验；
+27. 精英必须有低频条件、独立上限、可读权衡和有用途掉落；
+28. 敌对数量与威胁权重不得混为同一指标；
+29. 新分支必须基于最新 `master`，不得回退并行改动。
 
 每个里程碑必须具备：
 
