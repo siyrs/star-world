@@ -30,23 +30,28 @@ Game Runtime
 │  ├─ Movement / Survival
 │  ├─ Inventory Transactions
 │  ├─ Equipment / Attributes
-│  └─ Combat
+│  └─ Combat Cadence
+│
+├─ Creature & Ecology Domain
+│  ├─ Creature Factory
+│  ├─ Ecology Profiles
+│  ├─ Population Budgets
+│  ├─ Live Danger Assessment
+│  ├─ Hostile Attack Profiles
+│  └─ Dodgeable Windup State Machine
+│
+├─ Exploration Domain
+│  ├─ Bounded / Calibrated Prospecting
+│  ├─ Persistent Discovery Records
+│  ├─ Exploration Journal
+│  ├─ Profile-aware Milestones
+│  └─ Atomic Milestone Rewards
 │
 ├─ Harvest Domain
 │  ├─ Tool Capability
 │  ├─ Block Hardness
 │  ├─ Harvest Policy
 │  └─ Durability / Repair
-│
-├─ Exploration & Ecology Domain
-│  ├─ Resource Profiles
-│  ├─ Creature Ecology Profiles
-│  ├─ Live Danger Assessment
-│  ├─ Bounded / Calibrated Prospecting
-│  ├─ Persistent Discovery Records
-│  ├─ Exploration Journal
-│  ├─ Profile-aware Milestones
-│  └─ Atomic Milestone Rewards
 │
 ├─ Agriculture & Ranch Domain
 │  ├─ Crop / Soil / Fertilizer
@@ -105,7 +110,7 @@ Game Runtime
 - Design Token 与 1024×576 布局门禁；
 - 纯展示层鼠标透传、不修改业务状态。
 
-### 4. 工具、装备与战斗
+### 4. 工具、装备与玩家战斗
 
 - 镐、斧、铲、锄和剑；
 - 木、石、铁、金、钻石能力层级；
@@ -113,7 +118,7 @@ Game Runtime
 - 按住采集和背包满保护；
 - 主手与四类防具槽；
 - 属性聚合、防御减伤和速度修正；
-- 攻击冷却、击退、硬直、命中反馈和耐久事务；
+- 玩家攻击冷却、击退、硬直、命中反馈和耐久事务；
 - 修理失败回滚和 metadata 保留。
 
 ### 5. 农业与牧场
@@ -178,7 +183,7 @@ Game Runtime
 
 ### 9. ServiceHub 生命周期组合化 · 第一阶段
 
-生产 Hub 目前仍保留兼容继承入口：
+生产 Hub 仍保留兼容继承入口：
 
 ```text
 Gameplay
@@ -216,11 +221,72 @@ ServiceHubFeatureCoordinator
 
 见 [SERVICE_HUB_FEATURE_LIFECYCLE.md](SERVICE_HUB_FEATURE_LIFECYCLE.md)。
 
+### 10. 敌对攻击前摇与可躲避战斗
+
+旧敌对近战已从瞬时扣血升级为通用前摇事务：
+
+```text
+idle
+→ windup
+→ cooldown
+```
+
+已完成：
+
+- 独立 `hostile_attacks.json`；
+- `HostileAttackRegistry` 数据校验；
+- `HostileAttackPolicy` 纯状态规则；
+- Factory 组合普通生物和敌对攻击档案；
+- 0.8 秒僵尸前摇；
+- 红色、发光、脉冲、无碰撞预警圈；
+- 前摇期间零早期伤害；
+- 后退离开范围返回 `target_evaded`；
+- 击退或硬直返回 `interrupted`；
+- 前摇结束时重新验证真实攻击范围；
+- 成功攻击进入五秒冷却；
+- 焦点提示剩余时间、打断和躲避方法；
+- 攻击冷却与玩家重复伤害冷却跨领域校验；
+- 生产与后备僵尸伤害统一为 1；
+- 瞬时攻击状态不写入存档；
+- 真实 WASD 躲避、命中和发行验收。
+
+见 [HOSTILE_ATTACK_WINDUP.md](HOSTILE_ATTACK_WINDUP.md)。
+
 ## 下一阶段重点
 
-### 1. 探矿与危险生命周期参与者
+### 1. 少量地图精英生态
 
-在第一批合同稳定后，下一批迁移真实世界依赖较强的探索服务：
+前摇合同稳定后，再增加少量高信号敌对变体：
+
+```text
+地图生态权重
+→ 精英出现条件
+→ 可读前摇和范围
+→ 可躲避攻击
+→ 有用途掉落
+→ 地图成长路线
+```
+
+建议第一批只实现一个深渊精英僵尸：
+
+- 夜间或深层低概率出现；
+- 更长前摇；
+- 更大但清晰的预警范围；
+- 单次重击，而不是简单提高攻击频率；
+- 可被玩家击退或硬直打断；
+- 掉落进入现有深渊材料或装备路线；
+- 不立即增加 Boss、复杂状态效果和行为树。
+
+约束：
+
+- 每张地图最多一到两个轻量精英；
+- 每种攻击必须有数据档案和真实躲避验收；
+- 不用隐藏伤害或瞬时命中制造难度；
+- 普通僵尸的当前节奏保持兼容。
+
+### 2. 探矿与危险生命周期参与者
+
+在日志/奖励参与者稳定后，迁移真实世界依赖较强的探索服务：
 
 ```text
 map profile
@@ -238,27 +304,7 @@ map profile
 - 错误地图校准不进入冷却；
 - 世界启动失败不得留下玩家或世界引用；
 - 迁移前后探索存档逐字段一致；
-- 不把 Coordinator 下移到基础 Hub，直到至少两个参与者通过完整发行验收。
-
-### 2. 敌对攻击前摇与少量精英生态
-
-当前普通敌对生物进入攻击范围后会立即造成伤害。下一条玩家闭环：
-
-```text
-进入攻击范围
-→ 锁定方向
-→ 可见/可听前摇
-→ 玩家可后退、击退或打断
-→ 目标仍有效才命中
-→ 明确死亡原因
-```
-
-随后再增加少量地图精英：
-
-- 每张地图最多一个轻量变体；
-- 数据驱动生命、速度、前摇、伤害和掉落；
-- 精英材料必须进入地图成长路线；
-- 不立即引入 Boss、复杂状态效果或行为树。
+- 不把领域规则塞进 Coordinator。
 
 ### 3. Machine Base 与自动化接口
 
@@ -289,6 +335,7 @@ map profile
 - 提取 GitHub Actions reusable workflow；
 - 大型农场和牧场压测；
 - 大量方向化建筑区块重建压测；
+- 多敌对生物同时前摇的视觉和 CPU 预算；
 - 探索日志、奖励和物品规模的存档体积报告；
 - 90+ 物品与配方 UI 滚动性能；
 - 多小时运行 soak；
@@ -298,8 +345,8 @@ map profile
 
 ```text
 P0  输入、保存、世界可见性、发行稳定性          持续守护
+P1  少量地图精英与可读攻击模式                  当前玩家里程碑
 P1  探矿与危险参与者迁移                        当前架构里程碑
-P1  敌对攻击前摇与可躲避战斗                    下一玩家闭环
 P2  Machine Base 与自动化接口                   复用成熟机器能力
 P2  建筑交互与连接形状                          提升建造表达
 P3  CI 组合化、规模压测和更多内容                在合同稳定后推进
@@ -327,7 +374,10 @@ P3  CI 组合化、规模压测和更多内容                在合同稳定后
 16. 多物品业务必须使用原子背包事务；
 17. Feature clear/shutdown 使用逆依赖顺序；
 18. 运行提示必须去重且有界；
-19. 新分支必须基于最新 `master`，不得回退并行改动。
+19. 敌对攻击必须有可观察前摇、稳定取消原因和真实躲避路径；
+20. 纯视觉攻击提示不得拥有碰撞或改变伤害判定；
+21. 生物攻击冷却不得与玩家伤害保护形成静默丢弃；
+22. 新分支必须基于最新 `master`，不得回退并行改动。
 
 每个里程碑必须具备：
 
