@@ -51,11 +51,18 @@ func _test_registry_and_policy() -> void:
 	var registry = AttackRegistryScript.new()
 	_check(registry.schema_version == 1, "hostile attack schema version is stable")
 	_check(registry.get_validation_errors().is_empty(), "production hostile attack data has no validation errors")
-	_check(registry.get_profile_ids() == ["zombie"], "only the production hostile species owns an attack profile")
+	_check(
+		registry.get_profile_ids() == ["abyss_brute", "zombie"],
+		"both production hostile species own explicit attack profiles"
+	)
 	var zombie: Dictionary = registry.get_profile("zombie")
+	var brute: Dictionary = registry.get_profile("abyss_brute")
 	_check(is_equal_approx(float(zombie.get("windup_seconds", 0.0)), 0.8), "zombie exposes a readable windup")
 	_check(float(zombie.get("cooldown_seconds", 0.0)) >= 4.5, "zombie cadence does not outrun the player hostile-damage cooldown")
 	_check(float(zombie.get("detection_range", 0.0)) > float(zombie.get("attack_range", 99.0)), "detection range exceeds the committed attack range")
+	_check(float(brute.get("windup_seconds", 0.0)) > float(zombie.get("windup_seconds", 0.0)), "abyss elite heavy attack has a longer readable windup")
+	_check(float(brute.get("cooldown_seconds", 0.0)) > float(zombie.get("cooldown_seconds", 0.0)), "abyss elite recovers more slowly after its heavy strike")
+	_check(float(brute.get("attack_range", 0.0)) > float(zombie.get("attack_range", 0.0)), "abyss elite owns a larger visible warning zone")
 	_check(
 		AttackPolicyScript.can_begin(1.65, 1.65, 0.0, 0.0),
 		"windup can begin at the inclusive attack boundary"
@@ -93,7 +100,9 @@ func _test_factory_and_state_machine() -> void:
 	host.add_child(target)
 	target.global_position = Vector3(0.0, 2.0, 1.3)
 	var factory = CreatureFactoryScript.new()
+	_check(factory.get_validation_errors().is_empty(), "CreatureFactory script/profile catalog has no drift")
 	_check(factory.get_hostile_attack_validation_errors().is_empty(), "CreatureFactory composes valid hostile attack data")
+	_check(factory.get_species_ids() == ["abyss_brute", "chicken", "cow", "pig", "zombie"], "factory exposes all five production species")
 	var creature_variant: Variant = factory.create("zombie", Vector3(0.0, 2.0, 0.0), target, null)
 	_check(creature_variant is Node3D, "factory creates the production zombie")
 	if creature_variant is not Node3D:
