@@ -21,14 +21,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate creature catalog
-        shell: pwsh
-        run: .\tests\developer_b\validate_data.ps1
+        with:
+          show-progress: false
 
       - name: Validate conditional ecology and danger
         shell: pwsh
         run: .\tests\developer_b\validate_ecology_danger.ps1
+
+      - name: Validate creature catalog
+        shell: pwsh
+        run: .\tests\developer_b\validate_data.ps1
 
       - name: Validate hostile attacks
         shell: pwsh
