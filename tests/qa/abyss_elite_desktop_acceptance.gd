@@ -164,6 +164,7 @@ func _run() -> void:
 	brute.set("target", player)
 	brute.set("health", 7.0)
 	player.global_position = player_start
+	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
 	await _aim_at(player, brute.global_position + Vector3(0.0, 1.45, 0.0))
 	_check(await _wait_attack_state(brute, "windup"), "elite starts a final windup for real interruption")
@@ -175,7 +176,14 @@ func _run() -> void:
 	_check(_cancel_reason == "interrupted", "real player attack interrupts the elite windup")
 	_check(int(_death_drops.get("abyss_cinder", 0)) == 1, "real elite death produces exactly one useful abyss cinder")
 	_check(int(_death_drops.get("rotten_flesh", 0)) >= 1, "elite death retains the normal hostile material route")
-	_check(await _wait_for_item_count(hub.inventory, "abyss_cinder", 1), "real pickup collection transfers the elite material into inventory")
+	_check(_has_pickup_item("abyss_cinder"), "production death creates a real abyss cinder pickup")
+	var collected_cinder := await _walk_forward_until_item(
+		hub.inventory,
+		"abyss_cinder",
+		1,
+		72
+	)
+	_check(collected_cinder, "real W movement crosses the pickup and transfers the elite material")
 	_check(hub.inventory.count_item("abyss_cinder") == 1, "elite material is collected exactly once")
 	_check(bool(player.get("input_enabled")), "elite combat never disables player input")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "elite combat never releases the gameplay mouse")
@@ -219,12 +227,38 @@ func _wait_for_health_below(survival: Node, previous: float) -> bool:
 	return false
 
 
-func _wait_for_item_count(inventory: Node, item_id: String, expected: int) -> bool:
-	for _frame in MAX_WAIT_FRAMES:
-		if int(inventory.call("count_item", item_id)) >= expected:
-			return true
+func _walk_forward_until_item(
+	inventory: Node,
+	item_id: String,
+	expected: int,
+	max_physics_frames: int
+) -> bool:
+	var press := InputEventKey.new()
+	press.keycode = KEY_W
+	press.physical_keycode = KEY_W
+	press.pressed = true
+	root.push_input(press)
+	var collected := false
+	for _frame in maxi(1, max_physics_frames):
 		await physics_frame
 		await process_frame
+		if int(inventory.call("count_item", item_id)) >= expected:
+			collected = true
+			break
+	var release := InputEventKey.new()
+	release.keycode = KEY_W
+	release.physical_keycode = KEY_W
+	release.pressed = false
+	root.push_input(release)
+	await physics_frame
+	await process_frame
+	return collected
+
+
+func _has_pickup_item(item_id: String) -> bool:
+	for pickup: Node in root.get_tree().get_nodes_in_group("pickups"):
+		if str(pickup.get("item_id")) == item_id and int(pickup.get("item_count")) > 0:
+			return true
 	return false
 
 
