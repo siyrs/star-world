@@ -17,7 +17,7 @@ jobs:
   feature-lifecycle-regression:
     name: Dependencies, normalization, persistence and reverse cleanup
     runs-on: windows-latest
-    timeout-minutes: 28
+    timeout-minutes: 32
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,10 +35,12 @@ jobs:
           godot --headless --path . --editor --quit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate lifecycle, ranch and exploration contracts
+      - name: Validate lifecycle, husbandry, ranch and exploration contracts
         shell: pwsh
         run: |
           .\tests\developer_b\validate_service_hub_lifecycle.ps1
+          .\tests\developer_b\validate_husbandry.ps1
+          .\tests\developer_b\validate_husbandry_lifecycle.ps1
           .\tests\developer_b\validate_ranch.ps1
           .\tests\developer_b\validate_ranch_lifecycle.ps1
           .\tests\developer_b\validate_prospecting.ps1
@@ -49,15 +51,21 @@ jobs:
       - name: Run lifecycle composition regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/ranch_runtime_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scripts = @(
+            'res://tests/qa/service_hub_feature_lifecycle_regression.gd',
+            'res://tests/qa/husbandry_runtime_lifecycle_regression.gd',
+            'res://tests/qa/ranch_runtime_lifecycle_regression.gd'
+          )
+          foreach ($script in $scripts) {
+            godot --headless --path . --script $script
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
-      - name: Re-run adjacent ranch and exploration regressions
+      - name: Re-run adjacent husbandry, ranch and exploration regressions
         shell: pwsh
         run: |
           $scripts = @(
+            'res://tests/qa/husbandry_regression.gd',
             'res://tests/qa/ranch_products_regression.gd',
             'res://tests/qa/prospecting_regression.gd',
             'res://tests/qa/ecology_danger_regression.gd',
@@ -74,7 +82,7 @@ jobs:
     name: Real reward notice, claim, menu, reload and failed-start acceptance
     needs: feature-lifecycle-regression
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 32
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,7 +103,7 @@ jobs:
             -ProjectRoot . `
             -ScriptPath 'res://tests/qa/service_hub_feature_lifecycle_desktop_acceptance.gd' `
             -OutputPath 'build\service-hub-feature-lifecycle-desktop.png' `
-            -TimeoutMilliseconds 135000
+            -TimeoutMilliseconds 145000
 
       - name: Upload feature lifecycle evidence
         if: always()
@@ -112,7 +120,7 @@ jobs:
     name: Real immediate danger, recovery, scan, unbind and reload acceptance
     needs: feature-lifecycle-regression
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 32
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -133,7 +141,7 @@ jobs:
             -ProjectRoot . `
             -ScriptPath 'res://tests/qa/exploration_runtime_lifecycle_desktop_acceptance.gd' `
             -OutputPath 'build\exploration-runtime-lifecycle-desktop.png' `
-            -TimeoutMilliseconds 135000
+            -TimeoutMilliseconds 145000
 
       - name: Upload exploration runtime evidence
         if: always()
