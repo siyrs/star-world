@@ -38,7 +38,7 @@ var _product_flush_scheduled := false
 
 
 func get_dependencies() -> Array[StringName]:
-	return []
+	return [&"husbandry_runtime"]
 
 
 func install(p_hub: Node) -> bool:
