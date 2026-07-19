@@ -26,10 +26,11 @@ func _run() -> void:
 		await process_frame
 	var hub: Node = game.service_hub
 	var coordinator: Node = hub.get("feature_lifecycle")
+	var ranch: Node = hub.get("ranch_runtime_participant")
 	var runtime: Node = hub.get("exploration_runtime_participant")
 	var participant: Node = hub.get("exploration_journal_reward_participant")
-	_check(hub != null and coordinator != null and runtime != null and participant != null, "production game mounts both feature lifecycle participants")
-	if hub == null or coordinator == null or runtime == null or participant == null:
+	_check(hub != null and coordinator != null and ranch != null and runtime != null and participant != null, "production game mounts all three feature lifecycle participants")
+	if hub == null or coordinator == null or ranch == null or runtime == null or participant == null:
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -45,18 +46,24 @@ func _run() -> void:
 	await physics_frame
 	var player: CharacterBody3D = game.player
 	var inventory: Node = hub.inventory
+	var attraction: Node = hub.get("animal_attraction_service")
+	var products: Node = hub.get("animal_product_service")
 	var prospecting: Node = hub.get("prospecting_service")
 	var danger: Node = hub.get("exploration_danger_service")
 	var rewards: Node = hub.get("exploration_reward_service")
 	var journal: Node = hub.get("exploration_journal_service")
 	var game_ui: Node = hub.game_ui
 	_check(player != null and bool(player.get("input_enabled")), "production player starts after participant begin and activate phases")
-	_check(prospecting != null and danger != null and rewards != null and journal != null, "legacy exploration service ports remain mounted")
+	_check(attraction != null and products != null and prospecting != null and danger != null and rewards != null and journal != null, "legacy ranch and exploration service ports remain mounted")
 	_check(
 		coordinator.call("get_participant_dependencies", &"exploration_journal_rewards") == ["exploration_runtime"],
 		"production lifecycle exposes the journal dependency"
 	)
-	if player == null or prospecting == null or danger == null or rewards == null or journal == null:
+	_check(
+		coordinator.call("get_participant_dependencies", &"ranch_runtime").is_empty(),
+		"production lifecycle exposes the independent ranch runtime"
+	)
+	if player == null or attraction == null or products == null or prospecting == null or danger == null or rewards == null or journal == null:
 		await _finish(game, hub)
 		return
 
@@ -97,8 +104,9 @@ func _run() -> void:
 	await _tap_key(KEY_J)
 	_check(int(game_ui.call("get_active_overlay")) == 0, "second J closes the composed journal")
 
-	_check(bool(hub.save_current()), "both participant states join the production save transaction")
+	_check(bool(hub.save_current()), "all participant states join the production save transaction")
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
+	_check(loaded.has("animal_products"), "saved world contains the ranch participant domain")
 	_check((loaded.get("exploration", {}).get("records", []) as Array).size() == 1, "saved world contains the runtime exploration record")
 	_check("first_discovery" in (loaded.get("exploration_rewards", {}).get("claimed", []) as Array), "saved world contains the claimed dependent state")
 	var announcement_count_before_reload := int(participant.call("get_lifecycle_snapshot").get("announcement_count", 0))
@@ -109,6 +117,7 @@ func _run() -> void:
 	_check((journal.call("get_snapshot") as Dictionary).is_empty(), "real return-to-menu clears participant journal state")
 	_check((rewards.call("get_snapshot") as Dictionary).is_empty(), "real return-to-menu clears participant reward state")
 	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the runtime player binding")
+	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the ranch player binding")
 	if old_player != null and is_instance_valid(old_player):
 		_check(old_player.get("prospecting_service") == null, "old player no longer retains the runtime prospecting port")
 	var lifecycle_after_menu: Dictionary = coordinator.call("get_snapshot")
@@ -126,13 +135,15 @@ func _run() -> void:
 	_check(inventory.count_item("torch") == 4 and inventory.count_item("apple") == 2, "full reload does not duplicate reward items")
 	_check(int(participant.call("get_lifecycle_snapshot").get("announcement_count", 0)) == announcement_count_before_reload, "reload baseline prevents duplicate reward availability messages")
 	_check(player != null and player.get("prospecting_service") == prospecting, "reload rebinds the runtime prospecting service")
+	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", 0)) == player.get_instance_id(), "reload rebinds the ranch runtime to the current player")
 	await _tap_key(KEY_J)
 	for _frame in 3:
 		await process_frame
 	panel = game_ui.call("get_exploration_journal_panel") as Control
 	_check(panel != null and str(panel.call("get_reward_status", "first_discovery")) == "claimed", "reloaded production journal renders the participant reward as claimed")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 2, "production diagnostics expose both composed participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 3, "production diagnostics expose all three composed participants")
+	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "runtime participant preserves legacy diagnostics fields")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
@@ -147,7 +158,8 @@ func _run() -> void:
 	_check(hub.current_world_id.is_empty(), "real world-start failure signal resets the hub identity")
 	_check((journal.call("get_snapshot") as Dictionary).is_empty() and (rewards.call("get_snapshot") as Dictionary).is_empty(), "real world-start failure clears dependent services")
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 0 and (danger.call("get_snapshot") as Dictionary).is_empty(), "real world-start failure clears runtime services")
-	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the current player binding")
+	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the exploration player binding")
+	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the ranch player binding")
 	await _finish(game, hub)
 
 
