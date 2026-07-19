@@ -19,6 +19,7 @@ const MAX_PHASE_HISTORY := 48
 var hub: Node
 var _participants: Array[Node] = []
 var _participants_by_id: Dictionary = {}
+var _dependencies_by_id: Dictionary = {}
 var _phase_counts: Dictionary = {}
 var _phase_history: Array[String] = []
 var _shutdown := false
@@ -45,6 +46,18 @@ func register_participant(participant_id: StringName, participant: Node) -> Dict
 				"participant_contract",
 				{"participant_id": normalized_id, "missing_method": method_name}
 			)
+	var dependencies := _dependency_ids(participant)
+	for dependency_id: String in dependencies:
+		if dependency_id == normalized_id:
+			return _failure(
+				"participant_dependency_cycle",
+				{"participant_id": normalized_id, "dependency_id": dependency_id}
+			)
+		if not _participants_by_id.has(dependency_id):
+			return _failure(
+				"participant_dependency_missing",
+				{"participant_id": normalized_id, "dependency_id": dependency_id}
+			)
 	participant.name = "Feature_%s" % normalized_id
 	add_child(participant)
 	var installed := bool(participant.call("install", hub))
@@ -54,12 +67,14 @@ func register_participant(participant_id: StringName, participant: Node) -> Dict
 		return _failure("participant_install_failed", {"participant_id": normalized_id})
 	_participants.append(participant)
 	_participants_by_id[normalized_id] = participant
+	_dependencies_by_id[normalized_id] = dependencies.duplicate()
 	_record_phase("install", [normalized_id])
 	participant_registered.emit(StringName(normalized_id), participant)
 	return {
 		"success": true,
 		"participant_id": normalized_id,
 		"participant": participant,
+		"dependencies": dependencies.duplicate(),
 	}
 
 
@@ -70,6 +85,17 @@ func has_participant(participant_id: StringName) -> bool:
 func get_participant(participant_id: StringName) -> Node:
 	var raw_participant: Variant = _participants_by_id.get(str(participant_id))
 	return raw_participant as Node if raw_participant is Node and is_instance_valid(raw_participant) else null
+
+
+func get_participant_dependencies(participant_id: StringName) -> Array[String]:
+	var result: Array[String] = []
+	var raw_dependencies: Variant = _dependencies_by_id.get(str(participant_id), [])
+	if raw_dependencies is Array:
+		for raw_id: Variant in raw_dependencies:
+			var dependency_id := str(raw_id).strip_edges()
+			if not dependency_id.is_empty():
+				result.append(dependency_id)
+	return result
 
 
 func begin_world(state: Dictionary) -> void:
@@ -124,7 +150,11 @@ func get_snapshot() -> Dictionary:
 		ids.append(str(raw_id))
 	ids.sort()
 	var participant_snapshots: Dictionary = {}
+	var dependency_snapshot: Dictionary = {}
 	for participant_id: String in ids:
+		dependency_snapshot[participant_id] = get_participant_dependencies(
+			StringName(participant_id)
+		)
 		var participant := get_participant(StringName(participant_id))
 		if participant != null and participant.has_method("get_lifecycle_snapshot"):
 			var raw_snapshot: Variant = participant.call("get_lifecycle_snapshot")
@@ -134,11 +164,27 @@ func get_snapshot() -> Dictionary:
 	return {
 		"participant_count": ids.size(),
 		"participant_ids": ids,
+		"participant_dependencies": dependency_snapshot,
 		"phase_counts": _phase_counts.duplicate(true),
 		"phase_history": _phase_history.duplicate(),
 		"participants": participant_snapshots,
 		"shutdown": _shutdown,
 	}
+
+
+func _dependency_ids(participant: Node) -> Array[String]:
+	var result: Array[String] = []
+	if participant == null or not participant.has_method("get_dependencies"):
+		return result
+	var raw_dependencies: Variant = participant.call("get_dependencies")
+	if raw_dependencies is not Array:
+		return result
+	for raw_id: Variant in raw_dependencies:
+		var dependency_id := str(raw_id).strip_edges()
+		if dependency_id.is_empty() or dependency_id in result:
+			continue
+		result.append(dependency_id)
+	return result
 
 
 func _invoke_forward(method_name: String, arguments: Array) -> Array[String]:
