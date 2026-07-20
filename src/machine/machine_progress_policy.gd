@@ -30,9 +30,9 @@ static func queued_jobs(
 ) -> int:
 	var required_input := maxi(1, input_per_job)
 	var produced_per_job := maxi(1, output_count)
-	var input_jobs := maxi(0, input_count) / required_input
+	var input_jobs := floori(float(maxi(0, input_count)) / float(required_input))
 	var free_output := maxi(0, maximum_output_count - maxi(0, current_output_count))
-	var output_jobs := free_output / produced_per_job
+	var output_jobs := floori(float(free_output) / float(produced_per_job))
 	return maxi(0, mini(input_jobs, output_jobs))
 
 
