@@ -162,7 +162,7 @@ func _test_batch_policy() -> void:
 		batch.get("triggers", []) == ["threat_changed", "ecology_changed", "phase_changed"],
 		"trigger order prioritizes immediate attacks before ecology and phase"
 	)
-	_check(str(batch.get("trigger_key", "")) == "threat_changed+ecology_changed+phase_changed", "batch exposes a stable compatibility trigger key")
+	_check(str(batch.get("trigger_key", "")) == "threat_changed+ecology_changed+phase_changed", "batch exposes a stable aggregate trigger key")
 
 
 func _test_runtime_event_coalescing() -> void:
@@ -175,9 +175,15 @@ func _test_runtime_event_coalescing() -> void:
 	participant.set("danger_service", danger)
 	participant.set("_active", true)
 	var batches: Array[Dictionary] = []
+	var compatibility_triggers: Array[String] = []
 	participant.connect(
 		"danger_refresh_batch_completed",
 		func(summary: Dictionary) -> void: batches.append(summary.duplicate(true))
+	)
+	participant.connect(
+		"immediate_danger_refreshed",
+		func(trigger: String, _snapshot: Dictionary) -> void:
+			compatibility_triggers.append(trigger)
 	)
 	participant.call("_on_phase_changed", "night")
 	for _index in 4:
@@ -193,6 +199,11 @@ func _test_runtime_event_coalescing() -> void:
 		_check(int(first.get("event_count", 0)) == 10, "refresh batch preserves all ten events")
 		_check(int(first.get("coalesced_event_count", 0)) == 9, "refresh batch diagnoses nine avoided assessments")
 		_check(bool(first.get("environment_reused", false)), "event refresh uses the cached environment path")
+	_check(
+		compatibility_triggers
+		== ["threat_changed", "ecology_changed", "phase_changed"],
+		"legacy refresh listeners receive every unique reason with one shared assessment"
+	)
 	var lifecycle: Dictionary = participant.call("get_lifecycle_snapshot")
 	_check(int(lifecycle.get("immediate_event_count", 0)) == 10, "runtime diagnostics count raw immediate events")
 	_check(int(lifecycle.get("immediate_refresh_count", 0)) == 1, "runtime diagnostics separate actual assessments")
@@ -203,7 +214,7 @@ func _test_runtime_event_coalescing() -> void:
 	await process_frame
 	lifecycle = participant.call("get_lifecycle_snapshot")
 	_check(danger.refresh_count == 2, "seventy more events still perform one additional assessment")
-	_check(int(lifecycle.get("dropped_danger_event_count", 0)) == 6, "pending event hard cap drops only excess presentation events")
+	_check(int(lifecycle.get("dropped_danger_event_count", 0)) == 6, "pending event hard cap drops only excess diagnostic events")
 	_check(int(lifecycle.get("max_events_in_refresh_batch", 0)) == 64, "pending batch is hard-capped at sixty-four events")
 	participant.call("queue_danger_refresh", "ecology_changed")
 	participant.call("clear", &"qa_clear")
@@ -233,6 +244,9 @@ func _test_spawner_windup_summary() -> void:
 		)
 		spawner.add_child(hostile)
 		hostile.global_position = Vector3(float(index), 0.0, 0.0)
+	var pickup := Node3D.new()
+	pickup.name = "PreservedPickup"
+	spawner.add_child(pickup)
 	var summary: Dictionary = spawner.get_nearby_hostile_windup_summary(
 		Vector3.ZERO, 18.0
 	)
@@ -241,7 +255,15 @@ func _test_spawner_windup_summary() -> void:
 	_check(is_equal_approx(float(summary.get("soonest_impact_seconds", -1.0)), 0.25), "spawner reports the soonest incoming impact")
 	_check(int((summary.get("source_counts", {}) as Dictionary).get("zombie", 0)) == 2, "spawner aggregates attack sources without coordinates")
 	_check(not summary.has("positions") and not summary.has("coordinates"), "windup summary never exposes exact attacker coordinates")
+	_check(int(summary.get("visited_nodes", 0)) == 5, "windup query budget counts hostile candidates instead of unrelated pickups")
 	_check(int(summary.get("visited_nodes", 0)) <= 64, "windup query obeys the hostile node scan cap")
+	spawner.clear_creature_population()
+	await process_frame
+	_check(is_instance_valid(pickup) and pickup.get_parent() == spawner, "runtime population clearing preserves physical pickups")
+	_check(spawner.get_nearby_hostile_count(Vector3.ZERO, 18.0) == 0, "runtime population clearing removes every hostile")
+	spawner.clear_creatures()
+	await process_frame
+	_check(not is_instance_valid(pickup) or pickup.get_parent() == null, "full world cleanup removes old-world pickups")
 	spawner.queue_free()
 	await process_frame
 	await process_frame
@@ -266,7 +288,8 @@ func _test_danger_sample_reuse() -> void:
 	var reads_after_first := world.block_reads
 	_check(reads_after_first > 0 and reads_after_first <= 125, "first assessment performs one bounded environment scan")
 	_check(int(first.get("windup_count", 0)) == 3, "danger snapshot includes aggregate incoming attacks")
-	_check(str(first.get("windup_urgency_label", "")).contains("最快 0.3 秒"), "danger snapshot communicates the soonest attack")
+	_check(is_equal_approx(float(first.get("soonest_impact_seconds", -1.0)), 0.35), "danger snapshot preserves the structured soonest impact")
+	_check(str(first.get("windup_urgency_label", "")).contains("最快"), "danger snapshot creates a player-readable urgency label")
 	var second: Dictionary = service.refresh_for_events()
 	_check(world.block_reads == reads_after_first, "event refresh reuses the environment sample in the same player block")
 	var diagnostics: Dictionary = service.get_diagnostics()
