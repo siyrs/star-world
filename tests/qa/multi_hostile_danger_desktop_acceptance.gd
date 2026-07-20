@@ -190,10 +190,14 @@ func _run() -> void:
 	_check(int(danger.call("get_snapshot").get("windup_count", -1)) == 0, "danger snapshot clears incoming attacks after interruption")
 	_check(not bool(hud.call("is_danger_warning_visible")), "HUD clears the aggregate warning after all attacks stop")
 
+	hub.inventory.clear()
 	var refresh_before_mixed := int(
 		lifecycle_after_cancel.get("immediate_refresh_count", 0)
 	)
 	hub.day_night.set_time(21.0)
+	for index in 3:
+		hostiles[index].set("drops", {"rotten_flesh":1})
+		hostiles[index].call("die")
 	spawner.call("clear_creatures")
 	for _frame in 4:
 		await process_frame
@@ -201,7 +205,7 @@ func _run() -> void:
 	_check(
 		int(lifecycle_after_mixed.get("immediate_refresh_count", 0))
 		== refresh_before_mixed + 1,
-		"same-frame phase, threat and ecology changes still perform one assessment"
+		"same-frame phase, deaths, unloads and ecology changes perform one assessment"
 	)
 	var last_triggers: Array = lifecycle_after_mixed.get("last_refresh_triggers", [])
 	_check(
@@ -211,6 +215,15 @@ func _run() -> void:
 		"mixed refresh diagnostics preserve every unique trigger"
 	)
 	_check(int(danger.call("get_snapshot").get("hostile_count", -1)) == 0, "mixed batch observes the fully cleared hostile population")
+	var pickups := _find_pickups(spawner, "rotten_flesh")
+	var collected_before_move := int(hub.inventory.count_item("rotten_flesh"))
+	_check(pickups.size() + collected_before_move == 3, "three simultaneous deaths preserve every real pickup through creature clearing")
+	for pickup: Node3D in pickups:
+		if is_instance_valid(pickup):
+			pickup.global_position = player.global_position + Vector3(0.0, 0.7, 0.0)
+			await physics_frame
+			await process_frame
+	_check(hub.inventory.count_item("rotten_flesh") == 3, "physical collection transfers all three preserved drops")
 
 	_check(bool(hub.save_current()), "multi-hostile runtime keeps the production save transaction healthy")
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
@@ -220,6 +233,7 @@ func _run() -> void:
 		and not loaded.has("danger_runtime"),
 		"transient batching and windup telemetry never enter the world save"
 	)
+	var drops_before_reload := int(hub.inventory.count_item("rotten_flesh"))
 	hub.return_to_menu()
 	for _frame in 8:
 		await process_frame
@@ -230,6 +244,7 @@ func _run() -> void:
 		await process_frame
 	await physics_frame
 	_check(not bool(hub.game_ui.hud.call("is_danger_warning_visible")), "full reload does not restore transient incoming attacks")
+	_check(hub.inventory.count_item("rotten_flesh") == drops_before_reload, "full reload restores preserved enemy drops exactly once")
 	await _finish(game, hub)
 
 
@@ -253,6 +268,14 @@ func _build_flat_arena(world: Node, player: Node3D) -> Dictionary:
 			float(origin.z) + 0.5
 		),
 	}
+
+
+func _find_pickups(spawner: Node, item_id: String) -> Array[Node3D]:
+	var result: Array[Node3D] = []
+	for child: Node in spawner.get_children():
+		if child is Node3D and str(child.get("item_id")) == item_id:
+			result.append(child as Node3D)
+	return result
 
 
 func _save_image(image: Image) -> void:
