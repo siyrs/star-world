@@ -30,6 +30,16 @@ static func assess(context: Dictionary, config: Dictionary) -> Dictionary:
 		reasons.append("附近精英敌对生物")
 	elif hostile_count > 0:
 		reasons.append("附近敌对生物 ×%d" % hostile_count)
+	var windup_count := maxi(0, int(context.get("windup_count", 0)))
+	var elite_windup_count := clampi(
+		int(context.get("elite_windup_count", 0)), 0, windup_count
+	)
+	var soonest_impact_seconds := float(context.get("soonest_impact_seconds", -1.0))
+	if not is_finite(soonest_impact_seconds) or soonest_impact_seconds < 0.0:
+		soonest_impact_seconds = -1.0
+	var urgency_label := _windup_label(
+		windup_count, elite_windup_count, soonest_impact_seconds
+	)
 	var lava_samples := maxi(0, int(context.get("lava_samples", 0)))
 	var lava_score := mini(
 		clampi(int(config.get("lava_score_cap", 20)), 0, 60),
@@ -47,8 +57,11 @@ static func assess(context: Dictionary, config: Dictionary) -> Dictionary:
 	score = clampi(score, 0, 100)
 	var tier := _resolve_tier(score, config)
 	var message := "危险等级：%s" % str(tier.get("label", "未知"))
+	if not urgency_label.is_empty():
+		message += " · %s" % urgency_label
 	if not reasons.is_empty():
 		message += " · %s" % "、".join(reasons.slice(0, 3))
+	var raw_source_counts: Variant = context.get("windup_source_counts", {})
 	return {
 		"score": score,
 		"tier_id": str(tier.get("id", "safe")),
@@ -60,11 +73,35 @@ static func assess(context: Dictionary, config: Dictionary) -> Dictionary:
 		"player_y": int(context.get("player_y", 0)),
 		"hostile_count": hostile_count,
 		"hostile_pressure": hostile_pressure,
+		"windup_count": windup_count,
+		"elite_windup_count": elite_windup_count,
+		"windup_pressure": maxf(0.0, float(context.get("windup_pressure", 0.0))),
+		"soonest_impact_seconds": soonest_impact_seconds,
+		"windup_urgency_label": urgency_label,
+		"windup_source_counts": (
+			raw_source_counts.duplicate(true) if raw_source_counts is Dictionary else {}
+		),
+		"windup_scanned_nodes": maxi(0, int(context.get("windup_scanned_nodes", 0))),
+		"windup_query_cap": maxi(0, int(context.get("windup_query_cap", 0))),
+		"windup_scan_cap_reached": bool(context.get("windup_scan_cap_reached", false)),
 		"lava_samples": lava_samples,
 		"air_ratio": air_ratio,
 		"sample_count": total_samples,
 		"map_id": str(context.get("map_id", "star_continent")),
 	}
+
+
+static func _windup_label(
+	windup_count: int, elite_windup_count: int, soonest_impact_seconds: float
+) -> String:
+	if windup_count <= 0:
+		return ""
+	var label := "来袭攻击 ×%d" % windup_count
+	if elite_windup_count > 0:
+		label += "（精英 ×%d）" % elite_windup_count
+	if soonest_impact_seconds >= 0.0:
+		label += " · 最快 %.1f 秒" % soonest_impact_seconds
+	return label
 
 
 static func _depth_score(player_y: int, config: Dictionary) -> Dictionary:
