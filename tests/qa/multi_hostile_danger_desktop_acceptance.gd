@@ -229,12 +229,29 @@ func _run() -> void:
 	var after_menu: Dictionary = runtime.call("get_lifecycle_snapshot")
 	_check(int(after_menu.get("pending_danger_event_count", -1)) == 0, "return-to-menu clears pending danger events")
 	game.begin_world_state(loaded)
-	for _frame in 12:
-		await process_frame
-	await physics_frame
-	_check(not bool(hub.game_ui.hud.call("is_danger_warning_visible")), "full reload does not restore transient incoming attacks")
-	_check(hub.inventory.count_item("rotten_flesh") == drops_before_reload, "full reload restores preserved enemy drops exactly once")
+	var reload_ready := await _wait_for_world_ready(game, hub, 180)
+	_check(reload_ready, "full reload reaches a bounded production-ready state")
+	if reload_ready:
+		_check(not bool(hub.game_ui.hud.call("is_danger_warning_visible")), "full reload does not restore transient incoming attacks")
+		_check(hub.inventory.count_item("rotten_flesh") == drops_before_reload, "full reload restores preserved enemy drops exactly once")
 	await _finish(game, hub)
+
+
+func _wait_for_world_ready(game: Node, hub: Node, max_frames: int) -> bool:
+	for _frame in max_frames:
+		await process_frame
+		if game == null or hub == null or not is_instance_valid(game) or not is_instance_valid(hub):
+			return false
+		var reloaded_world: Node = game.get("world") as Node
+		var reloaded_player: Node = game.get("player") as Node
+		if reloaded_world == null or reloaded_player == null:
+			continue
+		if not bool(reloaded_world.get("is_started")):
+			continue
+		if str(hub.get("current_world_id")) != _world_id:
+			continue
+		return true
+	return false
 
 
 func _build_flat_arena(world: Node, player: Node3D) -> Dictionary:
