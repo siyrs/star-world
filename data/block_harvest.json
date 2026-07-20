@@ -32,6 +32,7 @@
     {"block_id":"gold_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":3,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.20},
     {"block_id":"diamond_ore","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":3,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.20},
     {"block_id":"furnace","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
+    {"block_id":"stonecutter","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
     {"block_id":"repair_station","preferred_tool":"pickaxe","required_tool":"pickaxe","minimum_power":1,"drop_requires_tool":true,"wrong_tool_speed_multiplier":0.35},
     {"block_id":"wood","preferred_tool":"axe","wrong_tool_speed_multiplier":0.45},
     {"block_id":"planks","preferred_tool":"axe","wrong_tool_speed_multiplier":0.50},

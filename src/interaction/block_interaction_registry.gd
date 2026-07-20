@@ -18,6 +18,12 @@ const INTERACTIONS := {
 		"machine_type": "furnace",
 		"label": "熔炉",
 	},
+	"stonecutter":
+	{
+		"action": ACTION_MACHINE,
+		"machine_type": "stonecutter",
+		"label": "石材切割机",
+	},
 	"chest":
 	{
 		"action": ACTION_CONTAINER,

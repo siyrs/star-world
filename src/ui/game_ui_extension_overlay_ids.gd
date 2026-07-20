@@ -4,7 +4,8 @@ extends RefCounted
 # Base GameUI owns 0..6. Feature-specific panels must use this shared extension range.
 const REPAIR := 7
 const EXPLORATION_JOURNAL := 8
-const ALL: Array[int] = [REPAIR, EXPLORATION_JOURNAL]
+const STONECUTTER := 9
+const ALL: Array[int] = [REPAIR, EXPLORATION_JOURNAL, STONECUTTER]
 
 
 static func has_unique_ids() -> bool:

@@ -6,11 +6,15 @@ signal machine_batch_announced(summary: Dictionary)
 const SchedulerScript = preload("res://src/machine/machine_runtime_scheduler.gd")
 const StateMigrationScript = preload("res://src/machine/machine_state_migration.gd")
 const CompletionPolicyScript = preload("res://src/machine/machine_completion_policy.gd")
+const StonecutterServiceScript = preload("res://src/machine/stonecutter_service.gd")
+const InteractionRouterScript = preload("res://src/machine/machine_interaction_router.gd")
 const MAX_PENDING_COMPLETIONS := 128
 
 var hub: Node
 var scheduler: Node
 var furnace_service: Node
+var stonecutter_service: Node
+var interaction_router: Node
 var _installed := false
 var _active := false
 var _shutdown := false
@@ -34,28 +38,105 @@ func install(p_hub: Node) -> bool:
 		return false
 	hub = p_hub
 	furnace_service = hub.get("furnace_service") as Node
+	var inventory: Node = hub.get("inventory") as Node
+	var item_registry: Variant = inventory.get("registry") if inventory != null else null
 	if (
 		furnace_service == null
 		or not furnace_service.has_method("advance_machine_runtime")
 		or not furnace_service.has_method("get_runtime_snapshot")
+		or item_registry == null
 		or not hub.has_method("_add_service")
 	):
 		return false
+	stonecutter_service = hub.call(
+		"_add_service",
+		StonecutterServiceScript.new(),
+		"StonecutterService"
+	) as Node
+	if (
+		stonecutter_service == null
+		or not bool(stonecutter_service.call("setup", item_registry))
+	):
+		_dispose_service(stonecutter_service)
+		stonecutter_service = null
+		return false
 	scheduler = hub.call("_add_service", SchedulerScript.new(), "MachineRuntime") as Node
 	if scheduler == null:
+		_dispose_service(stonecutter_service)
+		stonecutter_service = null
 		return false
-	var registration: Dictionary = scheduler.call(
-		"register_domain", &"furnace", furnace_service
-	)
-	if not bool(registration.get("success", false)):
+	for registration_data: Dictionary in [
+		{"id": &"furnace", "service": furnace_service},
+		{"id": &"stonecutter", "service": stonecutter_service},
+	]:
+		var registration: Dictionary = scheduler.call(
+			"register_domain",
+			registration_data.get("id", &""),
+			registration_data.get("service") as Node
+		)
+		if not bool(registration.get("success", false)):
+			scheduler.call("shutdown")
+			_dispose_service(scheduler)
+			_dispose_service(stonecutter_service)
+			scheduler = null
+			stonecutter_service = null
+			return false
+	interaction_router = hub.call(
+		"_add_service",
+		InteractionRouterScript.new(),
+		"MachineInteractionRouter"
+	) as Node
+	if interaction_router == null:
+		scheduler.call("shutdown")
 		_dispose_service(scheduler)
+		_dispose_service(stonecutter_service)
 		scheduler = null
+		stonecutter_service = null
 		return false
-	if furnace_service.has_signal("item_smelted"):
-		var callback := Callable(self, "_on_item_smelted")
-		if not furnace_service.is_connected("item_smelted", callback):
-			furnace_service.connect("item_smelted", callback)
+	var furnace_registration: Dictionary = interaction_router.call(
+		"register_machine_type",
+		&"furnace",
+		furnace_service,
+		&"open_furnace",
+		["input", "fuel", "output"],
+		"熔炉",
+		"熔炉中仍有物品，请先清空三个槽位后再拆除"
+	)
+	var stonecutter_registration: Dictionary = interaction_router.call(
+		"register_machine_type",
+		&"stonecutter",
+		stonecutter_service,
+		&"open_stonecutter",
+		["input", "output"],
+		"石材切割机",
+		"石材切割机中仍有物品，请先清空原料与产出槽后再拆除"
+	)
+	if (
+		not bool(furnace_registration.get("success", false))
+		or not bool(stonecutter_registration.get("success", false))
+	):
+		interaction_router.call("shutdown")
+		_dispose_service(interaction_router)
+		scheduler.call("shutdown")
+		_dispose_service(scheduler)
+		_dispose_service(stonecutter_service)
+		interaction_router = null
+		scheduler = null
+		stonecutter_service = null
+		return false
+	_connect_completion_signal(
+		furnace_service,
+		"item_smelted",
+		Callable(self, "_on_item_smelted")
+	)
+	_connect_completion_signal(
+		stonecutter_service,
+		"item_processed",
+		Callable(self, "_on_item_processed")
+	)
 	hub.set("machine_runtime", scheduler)
+	hub.set("stonecutter_service", stonecutter_service)
+	hub.set("machine_interaction_router", interaction_router)
 	_installed = true
 	_shutdown = false
 	return true
@@ -70,11 +151,13 @@ func begin_world(state: Dictionary) -> void:
 	_reset_completion_batch()
 	if scheduler != null and scheduler.has_method("deactivate"):
 		scheduler.call("deactivate")
-	if furnace_service != null:
-		if furnace_service.has_method("clear"):
-			furnace_service.call("clear")
-		var machine_state: Dictionary = state.get("machines", {})
-		furnace_service.call("deserialize", machine_state)
+	var machine_state: Dictionary = state.get("machines", {})
+	for service: Node in [furnace_service, stonecutter_service]:
+		if service == null or not is_instance_valid(service):
+			continue
+		if service.has_method("clear"):
+			service.call("clear")
+		service.call("deserialize", machine_state)
 
 
 func attach_game(
@@ -96,19 +179,62 @@ func activate() -> void:
 
 
 func save_into(payload: Dictionary) -> void:
-	if furnace_service != null and furnace_service.has_method("serialize"):
-		payload["machines"] = furnace_service.call("serialize")
+	var furnace_state: Dictionary = (
+		furnace_service.call("serialize")
+		if furnace_service != null and furnace_service.has_method("serialize")
+		else {}
+	)
+	var stonecutter_state: Dictionary = (
+		stonecutter_service.call("serialize")
+		if stonecutter_service != null and stonecutter_service.has_method("serialize")
+		else {}
+	)
+	payload["machines"] = {
+		"version": StateMigrationScript.VERSION,
+		"saved_at_unix": maxi(
+			int(furnace_state.get("saved_at_unix", 0)),
+			int(stonecutter_state.get("saved_at_unix", 0))
+		),
+		"furnaces": furnace_state.get("furnaces", {}).duplicate(true),
+		"stonecutters": stonecutter_state.get("stonecutters", {}).duplicate(true),
+	}
 
 
 func snapshot_into(snapshot: Dictionary) -> void:
-	snapshot["machines"] = (
+	var furnace_snapshot: Dictionary = (
 		furnace_service.call("get_runtime_snapshot")
 		if furnace_service != null and furnace_service.has_method("get_runtime_snapshot")
 		else {}
 	)
+	var stonecutter_snapshot: Dictionary = (
+		stonecutter_service.call("get_runtime_snapshot")
+		if stonecutter_service != null and stonecutter_service.has_method("get_runtime_snapshot")
+		else {}
+	)
+	var machine_snapshot := furnace_snapshot.duplicate(true)
+	machine_snapshot["machine_count"] = (
+		maxi(0, int(furnace_snapshot.get("machine_count", 0)))
+		+ maxi(0, int(stonecutter_snapshot.get("machine_count", 0)))
+	)
+	machine_snapshot["furnace_machine_count"] = maxi(
+		0, int(furnace_snapshot.get("machine_count", 0))
+	)
+	machine_snapshot["stonecutter_machine_count"] = maxi(
+		0, int(stonecutter_snapshot.get("machine_count", 0))
+	)
+	machine_snapshot["domains"] = {
+		"furnace": furnace_snapshot.duplicate(true),
+		"stonecutter": stonecutter_snapshot.duplicate(true),
+	}
+	snapshot["machines"] = machine_snapshot
 	snapshot["machine_runtime"] = (
 		scheduler.call("get_snapshot")
 		if scheduler != null and scheduler.has_method("get_snapshot")
+		else {}
+	)
+	snapshot["machine_interactions"] = (
+		interaction_router.call("get_snapshot")
+		if interaction_router != null and interaction_router.has_method("get_snapshot")
 		else {}
 	)
 
@@ -118,8 +244,9 @@ func clear(_reason: StringName = &"clear") -> void:
 	_reset_completion_batch()
 	if scheduler != null and scheduler.has_method("deactivate"):
 		scheduler.call("deactivate")
-	if furnace_service != null and furnace_service.has_method("clear"):
-		furnace_service.call("clear")
+	for service: Node in [stonecutter_service, furnace_service]:
+		if service != null and is_instance_valid(service) and service.has_method("clear"):
+			service.call("clear")
 
 
 func shutdown() -> void:
@@ -127,15 +254,21 @@ func shutdown() -> void:
 		return
 	_shutdown = true
 	clear(&"shutdown")
-	if furnace_service != null and is_instance_valid(furnace_service):
-		var callback := Callable(self, "_on_item_smelted")
-		if (
-			furnace_service.has_signal("item_smelted")
-			and furnace_service.is_connected("item_smelted", callback)
-		):
-			furnace_service.disconnect("item_smelted", callback)
-		if furnace_service.has_method("shutdown"):
-			furnace_service.call("shutdown")
+	_disconnect_completion_signal(
+		furnace_service,
+		"item_smelted",
+		Callable(self, "_on_item_smelted")
+	)
+	_disconnect_completion_signal(
+		stonecutter_service,
+		"item_processed",
+		Callable(self, "_on_item_processed")
+	)
+	if interaction_router != null and interaction_router.has_method("shutdown"):
+		interaction_router.call("shutdown")
+	for service: Node in [stonecutter_service, furnace_service]:
+		if service != null and is_instance_valid(service) and service.has_method("shutdown"):
+			service.call("shutdown")
 	if scheduler != null and scheduler.has_method("shutdown"):
 		scheduler.call("shutdown")
 
@@ -148,6 +281,14 @@ func get_furnace_service() -> Node:
 	return furnace_service
 
 
+func get_stonecutter_service() -> Node:
+	return stonecutter_service
+
+
+func get_interaction_router() -> Node:
+	return interaction_router
+
+
 func get_lifecycle_snapshot() -> Dictionary:
 	return {
 		"installed": _installed,
@@ -155,6 +296,17 @@ func get_lifecycle_snapshot() -> Dictionary:
 		"shutdown": _shutdown,
 		"scheduler_ready": scheduler != null and is_instance_valid(scheduler),
 		"furnace_ready": furnace_service != null and is_instance_valid(furnace_service),
+		"stonecutter_ready": (
+			stonecutter_service != null and is_instance_valid(stonecutter_service)
+		),
+		"interaction_router_ready": (
+			interaction_router != null and is_instance_valid(interaction_router)
+		),
+		"registered_domain_count": (
+			int(scheduler.call("get_snapshot").get("domain_count", 0))
+			if scheduler != null and scheduler.has_method("get_snapshot")
+			else 0
+		),
 		"pending_completion_count": _pending_completions.size(),
 		"completion_flush_scheduled": _completion_flush_scheduled,
 		"dropped_completion_events": _dropped_completion_events,
@@ -168,12 +320,26 @@ func get_lifecycle_snapshot() -> Dictionary:
 
 
 func _on_item_smelted(machine_id: String, recipe_id: String, output: Dictionary) -> void:
+	_queue_completion("furnace", machine_id, recipe_id, output)
+
+
+func _on_item_processed(machine_id: String, recipe_id: String, output: Dictionary) -> void:
+	_queue_completion("stonecutter", machine_id, recipe_id, output)
+
+
+func _queue_completion(
+	machine_type: String,
+	machine_id: String,
+	recipe_id: String,
+	output: Dictionary
+) -> void:
 	if not _active:
 		return
 	if _pending_completions.size() >= MAX_PENDING_COMPLETIONS:
 		_dropped_completion_events += 1
 		return
 	_pending_completions.append({
+		"machine_type": machine_type,
 		"machine_id": machine_id,
 		"recipe_id": recipe_id,
 		"output": output.duplicate(true),
@@ -201,7 +367,8 @@ func _flush_completion_batch() -> void:
 	_completed_job_count += maxi(0, int(summary.get("completed_jobs", 0)))
 	_completed_item_count += maxi(0, int(summary.get("item_total", 0)))
 	_max_completions_in_batch = maxi(
-		_max_completions_in_batch, int(summary.get("completed_jobs", 0))
+		_max_completions_in_batch,
+		int(summary.get("completed_jobs", 0))
 	)
 	summary["batch_index"] = _completion_batch_count
 	summary["dropped_event_count"] = _dropped_completion_events
@@ -225,10 +392,33 @@ func _reset_completion_batch() -> void:
 
 
 func _publish_message(
-	message: String, severity: String, dedupe_key: String, duration: float
+	message: String,
+	severity: String,
+	dedupe_key: String,
+	duration: float
 ) -> void:
 	if hub != null and hub.has_method("_publish_character_message"):
 		hub.call("_publish_character_message", message, severity, dedupe_key, duration)
+
+
+func _connect_completion_signal(service: Node, signal_name: String, callback: Callable) -> void:
+	if (
+		service != null
+		and is_instance_valid(service)
+		and service.has_signal(signal_name)
+		and not service.is_connected(signal_name, callback)
+	):
+		service.connect(signal_name, callback)
+
+
+func _disconnect_completion_signal(service: Node, signal_name: String, callback: Callable) -> void:
+	if (
+		service != null
+		and is_instance_valid(service)
+		and service.has_signal(signal_name)
+		and service.is_connected(signal_name, callback)
+	):
+		service.disconnect(signal_name, callback)
 
 
 func _dispose_service(service: Node) -> void:

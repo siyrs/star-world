@@ -5,20 +5,34 @@ signal interaction_opened(action: StringName, block_position: Vector3i, block_id
 signal interaction_rejected(reason: String, block_position: Vector3i, block_id: String)
 
 const Registry = preload("res://src/interaction/block_interaction_registry.gd")
-const MACHINE_SLOTS := ["input", "fuel", "output"]
 
 var game_ui
 var container_storage
 var inventory
+var machine_access
+# Compatibility alias retained for direct tests and older adapters.
 var furnace_service
 var _extensions: Array[Node] = []
 
 
-func setup(p_game_ui, p_container_storage, p_inventory, p_furnace_service = null) -> void:
+func setup(p_game_ui, p_container_storage, p_inventory, p_machine_access = null) -> void:
 	game_ui = p_game_ui
 	container_storage = p_container_storage
 	inventory = p_inventory
-	furnace_service = p_furnace_service
+	set_machine_access(p_machine_access)
+
+
+func set_machine_access(p_machine_access) -> void:
+	machine_access = p_machine_access
+	furnace_service = null
+	if machine_access == null:
+		return
+	if machine_access.has_method("get_machine_service"):
+		furnace_service = machine_access.call(
+			"get_machine_service", &"furnace"
+		) as Node
+	else:
+		furnace_service = machine_access
 
 
 func register_extension(extension: Node) -> bool:
@@ -45,31 +59,34 @@ func detach() -> void:
 	game_ui = null
 	container_storage = null
 	inventory = null
+	machine_access = null
 	furnace_service = null
 
 
 func interact(world, block_position: Vector3i, block_id: String) -> bool:
 	var extension_result := _try_extensions(world, block_position, block_id)
 	if bool(extension_result.get("handled", false)):
-		var action := StringName(extension_result.get("action", "extension"))
+		var extension_action := StringName(extension_result.get("action", "extension"))
 		var succeeded := bool(extension_result.get("success", false))
 		var message := str(extension_result.get("message", "")).strip_edges()
 		if succeeded:
-			interaction_opened.emit(action, block_position, block_id)
+			interaction_opened.emit(extension_action, block_position, block_id)
 			if not message.is_empty():
 				_show_message(
 					message,
 					str(extension_result.get("severity", "success")),
-					"interaction:%s:%s" % [action, block_id]
+					"interaction:%s:%s" % [extension_action, block_id]
 				)
 		else:
-			var reason := str(extension_result.get("reason", "extension_rejected"))
-			_reject(reason, block_position, block_id)
+			var extension_reason := str(
+				extension_result.get("reason", "extension_rejected")
+			)
+			_reject(extension_reason, block_position, block_id)
 			if not message.is_empty():
 				_show_message(
 					message,
 					str(extension_result.get("severity", "warning")),
-					"interaction_rejected:%s:%s" % [reason, block_id]
+					"interaction_rejected:%s:%s" % [extension_reason, block_id]
 				)
 		return true
 	var definition := Registry.get_interaction(block_id)
@@ -92,28 +109,34 @@ func interact(world, block_position: Vector3i, block_id: String) -> bool:
 				return false
 			if not bool(
 				game_ui.call(
-					"open_container", container_id, str(definition.get("label", block_id))
+					"open_container",
+					container_id,
+					str(definition.get("label", block_id))
 				)
 			):
 				container_storage.close_container()
 				_reject("container_ui_failed", block_position, block_id)
 				return false
 		Registry.ACTION_MACHINE:
-			if furnace_service == null:
-				_reject("machine_service_missing", block_position, block_id)
-				return false
-			var machine_type := str(definition.get("machine_type", block_id))
-			var machine_id := get_machine_id(world, block_position, machine_type)
-			if not furnace_service.ensure_machine(machine_id):
-				_reject("machine_open_failed", block_position, block_id)
-				return false
-			if not bool(
-				game_ui.call(
-					"open_furnace", machine_id, str(definition.get("label", block_id))
+			var machine_type := StringName(
+				str(definition.get("machine_type", block_id))
+			)
+			var machine_id := get_machine_id(
+				world,
+				block_position,
+				str(machine_type)
+			)
+			var open_result := _open_machine(
+				machine_type,
+				machine_id,
+				str(definition.get("label", block_id))
+			)
+			if not bool(open_result.get("success", false)):
+				_reject(
+					str(open_result.get("reason", "machine_open_failed")),
+					block_position,
+					block_id
 				)
-			):
-				furnace_service.close_machine()
-				_reject("machine_ui_failed", block_position, block_id)
 				return false
 		_:
 			return false
@@ -123,7 +146,7 @@ func interact(world, block_position: Vector3i, block_id: String) -> bool:
 
 func can_break_block(world, block_position: Vector3i, block_id: String) -> bool:
 	_prune_extensions()
-	for extension in _extensions:
+	for extension: Node in _extensions:
 		if extension.has_method("can_break_block") and not bool(
 			extension.call("can_break_block", world, block_position, block_id)
 		):
@@ -139,15 +162,27 @@ func can_break_block(world, block_position: Vector3i, block_id: String) -> bool:
 		_reject("container_not_empty", block_position, block_id)
 		return false
 	if Registry.is_machine(block_id):
-		if furnace_service == null:
-			_show_message("熔炉服务暂不可用，为保护内容已阻止拆除")
-			_reject("machine_service_missing", block_position, block_id)
-			return false
-		var machine_id := get_machine_id(world, block_position, block_id)
-		if _machine_slots_are_empty(machine_id):
+		var definition := Registry.get_interaction(block_id)
+		var machine_type := StringName(
+			str(definition.get("machine_type", block_id))
+		)
+		var machine_id := get_machine_id(
+			world,
+			block_position,
+			str(machine_type)
+		)
+		var removal := _can_remove_machine(machine_type, machine_id)
+		if bool(removal.get("allowed", false)):
 			return true
-		_show_message("熔炉中仍有物品，请先清空三个槽位后再拆除")
-		_reject("machine_not_empty", block_position, block_id)
+		var message := str(removal.get("message", "")).strip_edges()
+		if message.is_empty():
+			message = "机器中仍有物品，请先清空后再拆除"
+		_show_message(message)
+		_reject(
+			str(removal.get("reason", "machine_not_empty")),
+			block_position,
+			block_id
+		)
 		return false
 	return true
 
@@ -156,22 +191,36 @@ func on_block_removed(world, block_position: Vector3i, block_id: String) -> void
 	if Registry.is_container(block_id) and container_storage != null:
 		var container_id := get_container_id(world, block_position, block_id)
 		container_storage.remove_container(container_id, true)
-	elif Registry.is_machine(block_id) and furnace_service != null:
-		var machine_id := get_machine_id(world, block_position, block_id)
-		# Empty furnaces may be dismantled even if a consumed fuel item left residual
-		# heat. Removing the block intentionally discards that transient heat only.
-		furnace_service.remove_machine(machine_id, false)
+	elif Registry.is_machine(block_id):
+		var definition := Registry.get_interaction(block_id)
+		var machine_type := StringName(
+			str(definition.get("machine_type", block_id))
+		)
+		var machine_id := get_machine_id(
+			world,
+			block_position,
+			str(machine_type)
+		)
+		_remove_machine(machine_type, machine_id)
 	_prune_extensions()
-	for extension in _extensions:
+	for extension: Node in _extensions:
 		if extension.has_method("on_block_removed"):
 			extension.call("on_block_removed", world, block_position, block_id)
 
 
-func get_container_id(world, block_position: Vector3i, block_id: String = "chest") -> String:
+func get_container_id(
+	world,
+	block_position: Vector3i,
+	block_id: String = "chest"
+) -> String:
 	return _stable_position_id(world, block_position, block_id)
 
 
-func get_machine_id(world, block_position: Vector3i, machine_type: String = "furnace") -> String:
+func get_machine_id(
+	world,
+	block_position: Vector3i,
+	machine_type: String = "furnace"
+) -> String:
 	return _stable_position_id(world, block_position, machine_type)
 
 
@@ -181,12 +230,17 @@ func get_interaction_hint(block_id: String) -> String:
 
 
 # Context-aware contract used by the current experience layer.
-func get_interaction_hint_for_item(block_id: String, selected_item_id: String = "") -> String:
+func get_interaction_hint_for_item(
+	block_id: String,
+	selected_item_id: String = ""
+) -> String:
 	_prune_extensions()
-	for extension in _extensions:
+	for extension: Node in _extensions:
 		if not extension.has_method("get_interaction_hint"):
 			continue
-		var hint := str(extension.call("get_interaction_hint", block_id, selected_item_id))
+		var hint := str(
+			extension.call("get_interaction_hint", block_id, selected_item_id)
+		)
 		if not hint.is_empty():
 			return hint
 	var definition := Registry.get_interaction(block_id)
@@ -195,13 +249,105 @@ func get_interaction_hint_for_item(block_id: String, selected_item_id: String = 
 	return "右键打开%s" % str(definition.get("label", block_id))
 
 
-func _try_extensions(world, block_position: Vector3i, block_id: String) -> Dictionary:
+func _open_machine(
+	machine_type: StringName,
+	machine_id: String,
+	label: String
+) -> Dictionary:
+	if machine_access == null:
+		return {"success": false, "reason": "machine_service_missing"}
+	if machine_access.has_method("open_machine_type"):
+		var raw_result: Variant = machine_access.call(
+			"open_machine_type",
+			machine_type,
+			machine_id,
+			label
+		)
+		return raw_result if raw_result is Dictionary else {
+			"success": false,
+			"reason": "machine_open_failed",
+		}
+	# Legacy direct-furnace setup remains supported for isolated tests and mods.
+	if str(machine_type) != "furnace":
+		return {"success": false, "reason": "unknown_machine_type"}
+	if not machine_access.has_method("ensure_machine"):
+		return {"success": false, "reason": "machine_service_missing"}
+	if not bool(machine_access.call("ensure_machine", machine_id)):
+		return {"success": false, "reason": "machine_open_failed"}
+	if game_ui == null or not game_ui.has_method("open_furnace"):
+		return {"success": false, "reason": "machine_ui_missing"}
+	if not bool(game_ui.call("open_furnace", machine_id, label)):
+		if machine_access.has_method("close_machine"):
+			machine_access.call("close_machine")
+		return {"success": false, "reason": "machine_ui_failed"}
+	return {"success": true, "machine_id": machine_id}
+
+
+func _can_remove_machine(
+	machine_type: StringName,
+	machine_id: String
+) -> Dictionary:
+	if machine_access == null:
+		return {
+			"allowed": false,
+			"reason": "machine_service_missing",
+			"message": "机器服务暂不可用，为保护内容已阻止拆除",
+		}
+	if machine_access.has_method("can_remove_machine_type"):
+		var raw_result: Variant = machine_access.call(
+			"can_remove_machine_type",
+			machine_type,
+			machine_id
+		)
+		if raw_result is Dictionary:
+			return raw_result
+	if str(machine_type) == "furnace" and machine_access.has_method("can_remove_machine"):
+		var allowed := bool(machine_access.call("can_remove_machine", machine_id))
+		return {
+			"allowed": allowed,
+			"reason": "" if allowed else "machine_not_empty",
+			"message": (
+				""
+				if allowed
+				else "熔炉中仍有物品，请先清空三个槽位后再拆除"
+			),
+		}
+	return {
+		"allowed": false,
+		"reason": "machine_service_missing",
+		"message": "机器服务暂不可用，为保护内容已阻止拆除",
+	}
+
+
+func _remove_machine(machine_type: StringName, machine_id: String) -> void:
+	if machine_access == null:
+		return
+	if machine_access.has_method("remove_machine_type"):
+		machine_access.call(
+			"remove_machine_type",
+			machine_type,
+			machine_id,
+			false
+		)
+	elif str(machine_type) == "furnace" and machine_access.has_method("remove_machine"):
+		machine_access.call("remove_machine", machine_id, false)
+
+
+func _try_extensions(
+	world,
+	block_position: Vector3i,
+	block_id: String
+) -> Dictionary:
 	_prune_extensions()
-	for extension in _extensions:
+	for extension: Node in _extensions:
 		if not extension.has_method("try_interact"):
 			continue
-		var raw_result = extension.call(
-			"try_interact", world, inventory, block_position, block_id
+		var raw_result: Variant = extension.call(
+			"try_interact",
+			world,
+			inventory,
+			block_position,
+			block_id
 		)
 		if raw_result is Dictionary and bool(raw_result.get("handled", false)):
 			return raw_result.duplicate(true)
@@ -214,18 +360,16 @@ func _prune_extensions() -> void:
 			_extensions.remove_at(index)
 
 
-func _machine_slots_are_empty(machine_id: String) -> bool:
-	if furnace_service == null or not furnace_service.has_machine(machine_id):
-		return true
-	for slot_name in MACHINE_SLOTS:
-		var slot: Dictionary = furnace_service.get_slot(machine_id, slot_name)
-		if not slot.is_empty() and int(slot.get("count", 0)) > 0:
-			return false
-	return true
-
-
-func _stable_position_id(world, block_position: Vector3i, prefix: String) -> String:
-	var position_key := "%d,%d,%d" % [block_position.x, block_position.y, block_position.z]
+func _stable_position_id(
+	world,
+	block_position: Vector3i,
+	prefix: String
+) -> String:
+	var position_key := "%d,%d,%d" % [
+		block_position.x,
+		block_position.y,
+		block_position.z,
+	]
 	if world != null and world.has_method("block_key"):
 		position_key = str(world.call("block_key", block_position))
 	return "%s@%s" % [prefix, position_key]

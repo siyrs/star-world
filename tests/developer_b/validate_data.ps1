@@ -1,22 +1,31 @@
 $ErrorActionPreference = 'Stop'
-$items = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\items.json" | ConvertFrom-Json).items
-$recipes = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\recipes.json" | ConvertFrom-Json).recipes
-$furnaceRecipes = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\furnace_recipes.json" | ConvertFrom-Json).recipes
-$fuels = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\fuels.json" | ConvertFrom-Json).fuels
-$harvestRules = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\block_harvest.json" | ConvertFrom-Json).rules
-$cropData = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\crops.json" | ConvertFrom-Json
+$root = Resolve-Path "$PSScriptRoot\..\.."
+$items = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\items.json') | ConvertFrom-Json).items
+$recipes = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\recipes.json') | ConvertFrom-Json).recipes
+$furnaceRecipes = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\furnace_recipes.json') | ConvertFrom-Json).recipes
+$stonecutterRecipes = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\stonecutter_recipes.json') | ConvertFrom-Json).recipes
+$fuels = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\fuels.json') | ConvertFrom-Json).fuels
+$harvestRules = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\block_harvest.json') | ConvertFrom-Json).rules
+$cropData = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\crops.json') | ConvertFrom-Json
 $crops = @($cropData.crops)
-$soilData = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\soil_moisture.json" | ConvertFrom-Json
-$equipmentData = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\equipment.json" | ConvertFrom-Json
+$soilData = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\soil_moisture.json') | ConvertFrom-Json
+$equipmentData = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\equipment.json') | ConvertFrom-Json
 $equipmentSlots = @($equipmentData.slots)
-$maps = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\map_profiles.json" | ConvertFrom-Json).maps
-$creatures = (Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\..\data\creatures.json" | ConvertFrom-Json).creatures
+$maps = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\map_profiles.json') | ConvertFrom-Json).maps
+$creatures = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\creatures.json') | ConvertFrom-Json).creatures
+$blockRegistryText = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'src\block\block_registry.gd')
+$blockListMatch = [regex]::Match($blockRegistryText, '(?s)const BLOCK_IDS := \[(.*?)\]')
+if (-not $blockListMatch.Success) { throw 'Unable to parse production BlockRegistry.BLOCK_IDS' }
+$knownBlocks = @([regex]::Matches($blockListMatch.Groups[1].Value, '"([^"]+)"') | ForEach-Object {
+  $_.Groups[1].Value
+})
 
-if ($items.Count -lt 86) { throw "Expected >=86 items, got $($items.Count)" }
-if ($recipes.Count -lt 58) { throw "Expected >=58 crafting recipes, got $($recipes.Count)" }
+if ($items.Count -lt 87) { throw "Expected >=87 items, got $($items.Count)" }
+if ($recipes.Count -lt 59) { throw "Expected >=59 crafting recipes, got $($recipes.Count)" }
 if ($furnaceRecipes.Count -lt 8) { throw "Expected >=8 furnace recipes, got $($furnaceRecipes.Count)" }
+if ($stonecutterRecipes.Count -ne 3) { throw "Expected 3 stonecutter recipes, got $($stonecutterRecipes.Count)" }
 if ($fuels.Count -lt 2) { throw "Expected >=2 fuels, got $($fuels.Count)" }
-if ($harvestRules.Count -lt 43) { throw "Expected >=43 harvest rules, got $($harvestRules.Count)" }
+if ($harvestRules.Count -lt 44) { throw "Expected >=44 harvest rules, got $($harvestRules.Count)" }
 if ($crops.Count -lt 3) { throw "Expected >=3 crop definitions, got $($crops.Count)" }
 if ($equipmentSlots.Count -ne 5) { throw "Expected 5 equipment slots, got $($equipmentSlots.Count)" }
 if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
@@ -81,12 +90,12 @@ foreach ($item in $items) {
 }
 if ($armorCount -lt 8) { throw "Expected >=8 armor items, got $armorCount" }
 if ($equippableCount -lt 13) { throw "Expected >=13 equippable items, got $equippableCount" }
-foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','repair_station','glass_pane','prospecting_kit','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
-  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool/rest/repair/exploration item: $requiredItem" }
+foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','repair_station','glass_pane','stonecutter','prospecting_kit','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe')) {
+  if (-not $ids.ContainsKey($requiredItem)) { throw "Missing agriculture/tool/rest/repair/machine/exploration item: $requiredItem" }
 }
 
 foreach ($recipe in $recipes) {
-  if ($recipe.station -eq 'furnace') { throw "Furnace recipe leaked into crafting registry: $($recipe.id)" }
+  if ($recipe.station -in @('furnace','stonecutter')) { throw "Machine recipe leaked into crafting registry: $($recipe.id)" }
   foreach ($ingredient in $recipe.ingredients.PSObject.Properties.Name) {
     if (-not $ids.ContainsKey($ingredient)) { throw "Unknown ingredient $ingredient in $($recipe.id)" }
   }
@@ -97,25 +106,30 @@ foreach ($recipe in $furnaceRecipes) {
   if (-not $ids.ContainsKey($recipe.output.id)) { throw "Unknown furnace output $($recipe.output.id) in $($recipe.id)" }
   if ([double]$recipe.duration_seconds -le 0) { throw "Invalid furnace duration in $($recipe.id)" }
 }
+$stonecutterInputs = @{}
+foreach ($recipe in $stonecutterRecipes) {
+  if (-not $ids.ContainsKey($recipe.input.id)) { throw "Unknown stonecutter input $($recipe.input.id) in $($recipe.id)" }
+  if (-not $ids.ContainsKey($recipe.output.id)) { throw "Unknown stonecutter output $($recipe.output.id) in $($recipe.id)" }
+  if ([double]$recipe.duration_seconds -le 0) { throw "Invalid stonecutter duration in $($recipe.id)" }
+  $inputId = [string]$recipe.input.id
+  if ($stonecutterInputs.ContainsKey($inputId)) { throw "Ambiguous stonecutter input: $inputId" }
+  $stonecutterInputs[$inputId] = $true
+}
 foreach ($fuel in $fuels) {
   if (-not $ids.ContainsKey($fuel.id)) { throw "Unknown fuel item $($fuel.id)" }
   if ([double]$fuel.burn_seconds -le 0) { throw "Invalid fuel duration for $($fuel.id)" }
 }
 
-$knownBlocks = @(
-  'air','grass','dirt','stone','cobblestone','sand','snow','wood','leaves','water','lava',
-  'planks','stone_bricks','glass','glass_pane','glass_pane_ns','stone_slab','oak_stairs','coal_ore','iron_ore','gold_ore',
-  'diamond_ore','crafting_table','furnace','chest','oak_door','oak_fence','oak_bed','repair_station','ladder','torch','wool','ice','bedrock',
-  'farmland','wheat_stage_0','wheat_stage_1','wheat_stage_2','wheat_stage_3','farmland_wet',
-  'carrot_stage_0','carrot_stage_1','carrot_stage_2','carrot_stage_3',
-  'potato_stage_0','potato_stage_1','potato_stage_2','potato_stage_3',
-  'oak_stairs_east','oak_stairs_north','oak_stairs_west'
-)
+$blockSet = @{}
+foreach ($blockId in $knownBlocks) {
+  if ($blockSet.ContainsKey($blockId)) { throw "Duplicate production block id: $blockId" }
+  $blockSet[$blockId] = $true
+}
 $harvestIds = @{}
 foreach ($rule in $harvestRules) {
   if ($harvestIds.ContainsKey($rule.block_id)) { throw "Duplicate harvest rule: $($rule.block_id)" }
   $harvestIds[$rule.block_id] = $true
-  if ($rule.block_id -notin $knownBlocks) { throw "Unknown harvest block: $($rule.block_id)" }
+  if (-not $blockSet.ContainsKey([string]$rule.block_id)) { throw "Unknown harvest block: $($rule.block_id)" }
   foreach ($field in @('preferred_tool', 'required_tool')) {
     $toolType = [string]$rule.$field
     if (-not [string]::IsNullOrWhiteSpace($toolType) -and $toolType -notin @('pickaxe', 'axe', 'shovel', 'hoe')) {
@@ -151,7 +165,7 @@ foreach ($crop in $crops) {
   if ($stageBlocks.Count -lt 2) { throw "Crop requires at least two stages: $cropId" }
   if ($stageSeconds.Count -ne $stageBlocks.Count - 1) { throw "Crop stage duration mismatch: $cropId" }
   foreach ($stageBlock in $stageBlocks) {
-    if ($stageBlock -notin $knownBlocks) { throw "Unknown crop stage block $stageBlock for $cropId" }
+    if (-not $blockSet.ContainsKey([string]$stageBlock)) { throw "Unknown crop stage block $stageBlock for $cropId" }
     if ($cropStageBlocks.ContainsKey($stageBlock)) { throw "Crop stage block reused: $stageBlock" }
     $cropStageBlocks[$stageBlock] = $cropId
   }
@@ -172,11 +186,11 @@ foreach ($requiredCrop in @('wheat','carrot','potato')) {
 foreach ($requiredField in @('dry_block','wet_block','water_blocks','horizontal_radius','vertical_radius','manual_hydration_seconds','dry_growth_multiplier','wet_growth_multiplier','refresh_interval_seconds','max_refresh_per_tick')) {
   if ($null -eq $soilData.$requiredField) { throw "Missing soil moisture field: $requiredField" }
 }
-if ([string]$soilData.dry_block -notin $knownBlocks) { throw "Unknown dry soil block: $($soilData.dry_block)" }
-if ([string]$soilData.wet_block -notin $knownBlocks) { throw "Unknown wet soil block: $($soilData.wet_block)" }
+if (-not $blockSet.ContainsKey([string]$soilData.dry_block)) { throw "Unknown dry soil block: $($soilData.dry_block)" }
+if (-not $blockSet.ContainsKey([string]$soilData.wet_block)) { throw "Unknown wet soil block: $($soilData.wet_block)" }
 if ([string]$soilData.dry_block -eq [string]$soilData.wet_block) { throw 'Dry and wet soil blocks must differ' }
 foreach ($waterBlock in @($soilData.water_blocks)) {
-  if ($waterBlock -notin $knownBlocks) { throw "Unknown irrigation water block: $waterBlock" }
+  if (-not $blockSet.ContainsKey([string]$waterBlock)) { throw "Unknown irrigation water block: $waterBlock" }
 }
 if ([int]$soilData.horizontal_radius -lt 1 -or [int]$soilData.horizontal_radius -gt 8) { throw 'Invalid irrigation horizontal radius' }
 if ([int]$soilData.vertical_radius -lt 0 -or [int]$soilData.vertical_radius -gt 3) { throw 'Invalid irrigation vertical radius' }
@@ -185,4 +199,4 @@ if ([double]$soilData.dry_growth_multiplier -lt 0 -or [double]$soilData.dry_grow
 if ([double]$soilData.wet_growth_multiplier -le 0) { throw 'Invalid wet growth multiplier' }
 if ([int]$soilData.max_refresh_per_tick -lt 1) { throw 'Invalid soil refresh budget' }
 
-Write-Host "PASS items=$($items.Count) tools=$toolCount armor=$armorCount equippable=$equippableCount equipment_slots=$($equipmentSlots.Count) crafting=$($recipes.Count) furnace=$($furnaceRecipes.Count) fuels=$($fuels.Count) harvest=$($harvestRules.Count) crops=$($crops.Count) soil_radius=$($soilData.horizontal_radius) maps=$($maps.Count) creatures=$creatureCount"
+Write-Host "PASS items=$($items.Count) tools=$toolCount armor=$armorCount equippable=$equippableCount equipment_slots=$($equipmentSlots.Count) crafting=$($recipes.Count) furnace=$($furnaceRecipes.Count) stonecutter=$($stonecutterRecipes.Count) fuels=$($fuels.Count) blocks=$($knownBlocks.Count) harvest=$($harvestRules.Count) crops=$($crops.Count) soil_radius=$($soilData.horizontal_radius) maps=$($maps.Count) creatures=$creatureCount"
