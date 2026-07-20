@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "default_duration_seconds": 3.0,
+  "recipes": [
+    {
+      "id": "cut_cobblestone_bricks",
+      "name": "切制石砖",
+      "input": {"id": "cobblestone", "count": 1},
+      "output": {"id": "stone_bricks", "count": 1},
+      "duration_seconds": 3.0
+    },
+    {
+      "id": "cut_stone_slabs",
+      "name": "切制石台阶",
+      "input": {"id": "stone", "count": 1},
+      "output": {"id": "stone_slab", "count": 2},
+      "duration_seconds": 2.5
+    },
+    {
+      "id": "cut_stone_brick_slabs",
+      "name": "石砖切片",
+      "input": {"id": "stone_bricks", "count": 1},
+      "output": {"id": "stone_slab", "count": 2},
+      "duration_seconds": 2.0
+    }
+  ]
+}
