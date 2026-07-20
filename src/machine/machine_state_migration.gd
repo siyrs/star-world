@@ -21,36 +21,54 @@ static func normalize_machine_state(raw_state: Variant) -> Dictionary:
 		"version": VERSION,
 		"saved_at_unix": now,
 		"furnaces": {},
+		"stonecutters": {},
 	}
 	if raw_state is not Dictionary:
 		return result
 	var state: Dictionary = raw_state
 	result["saved_at_unix"] = maxi(0, int(state.get("saved_at_unix", now)))
 	var raw_furnaces: Variant = state.get("furnaces", state.get("machines", {}))
-	if raw_furnaces is not Dictionary:
+	var furnaces := _normalize_domain(raw_furnaces, "furnace", MAX_MACHINE_COUNT)
+	result["furnaces"] = furnaces
+	var remaining_capacity := maxi(0, MAX_MACHINE_COUNT - furnaces.size())
+	result["stonecutters"] = _normalize_domain(
+		state.get("stonecutters", {}),
+		"stonecutter",
+		remaining_capacity
+	)
+	return result
+
+
+static func _normalize_domain(
+	raw_domain: Variant,
+	machine_type: String,
+	capacity: int
+) -> Dictionary:
+	var result: Dictionary = {}
+	if raw_domain is not Dictionary or capacity <= 0:
 		return result
 	var ids: Array[String] = []
-	for raw_id: Variant in raw_furnaces.keys():
+	for raw_id: Variant in raw_domain.keys():
 		var machine_id := str(raw_id).strip_edges()
 		if _is_valid_machine_id(machine_id):
 			ids.append(machine_id)
 	ids.sort()
-	var furnaces: Dictionary = {}
 	for machine_id: String in ids:
-		if furnaces.size() >= MAX_MACHINE_COUNT:
+		if result.size() >= capacity:
 			break
-		var raw_furnace: Variant = raw_furnaces.get(machine_id, {})
-		if raw_furnace is not Dictionary:
+		var raw_machine: Variant = raw_domain.get(machine_id, {})
+		if raw_machine is not Dictionary:
 			continue
-		furnaces[machine_id] = _normalize_furnace_state(raw_furnace)
-	result["furnaces"] = furnaces
+		match machine_type:
+			"furnace":
+				result[machine_id] = _normalize_furnace_state(raw_machine)
+			"stonecutter":
+				result[machine_id] = _normalize_stonecutter_state(raw_machine)
 	return result
 
 
 static func _normalize_furnace_state(raw_state: Dictionary) -> Dictionary:
-	var recipe_id := str(raw_state.get("active_recipe_id", "")).strip_edges()
-	if recipe_id.length() > MAX_RECIPE_ID_LENGTH or "\n" in recipe_id or "\r" in recipe_id:
-		recipe_id = ""
+	var recipe_id := _normalize_recipe_id(raw_state.get("active_recipe_id", ""))
 	var burn_remaining := _bounded_seconds(raw_state.get("burn_remaining_seconds", 0.0))
 	return {
 		"type": "furnace",
@@ -65,6 +83,31 @@ static func _normalize_furnace_state(raw_state: Dictionary) -> Dictionary:
 			_bounded_seconds(raw_state.get("burn_total_seconds", burn_remaining))
 		),
 	}
+
+
+static func _normalize_stonecutter_state(raw_state: Dictionary) -> Dictionary:
+	return {
+		"type": "stonecutter",
+		"input": _normalize_slot(raw_state.get("input", {})),
+		"output": _normalize_slot(raw_state.get("output", {})),
+		"active_recipe_id": _normalize_recipe_id(
+			raw_state.get("active_recipe_id", "")
+		),
+		"progress_seconds": _bounded_seconds(
+			raw_state.get("progress_seconds", 0.0)
+		),
+	}
+
+
+static func _normalize_recipe_id(raw_value: Variant) -> String:
+	var recipe_id := str(raw_value).strip_edges()
+	if (
+		recipe_id.length() > MAX_RECIPE_ID_LENGTH
+		or "\n" in recipe_id
+		or "\r" in recipe_id
+	):
+		return ""
+	return recipe_id
 
 
 static func _normalize_slot(raw_slot: Variant) -> Dictionary:
