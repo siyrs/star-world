@@ -78,8 +78,11 @@ func set_active(value: bool) -> void:
 
 
 func clear_creatures() -> void:
+	# ItemPickup nodes share this parent with creatures.  Only clear actual
+	# creatures so a simultaneous population reset cannot erase earned drops.
 	for child: Node in get_children():
-		_dispose_child(child, false)
+		if child.is_in_group("creatures"):
+			_dispose_child(child, false)
 	_publish_ecology_if_changed(true)
 
 
@@ -152,9 +155,10 @@ func get_nearby_hostile_count(position: Vector3, radius: float) -> int:
 	var radius_squared := maxf(0.0, radius) * maxf(0.0, radius)
 	var count := 0
 	for child: Node in get_children():
-		if child is not Node3D or not child.is_in_group("hostile"):
+		if not _is_live_hostile(child):
 			continue
-		if child.global_position.distance_squared_to(position) <= radius_squared:
+		var hostile: Node3D = child
+		if hostile.global_position.distance_squared_to(position) <= radius_squared:
 			count += 1
 	return count
 
@@ -163,11 +167,12 @@ func get_nearby_hostile_pressure(position: Vector3, radius: float) -> float:
 	var radius_squared := maxf(0.0, radius) * maxf(0.0, radius)
 	var pressure := 0.0
 	for child: Node in get_children():
-		if child is not Node3D or not child.is_in_group("hostile"):
+		if not _is_live_hostile(child):
 			continue
-		if child.global_position.distance_squared_to(position) > radius_squared:
+		var hostile: Node3D = child
+		if hostile.global_position.distance_squared_to(position) > radius_squared:
 			continue
-		pressure += clampf(float(_property_value(child, "danger_weight", 1.0)), 0.5, 6.0)
+		pressure += clampf(float(_property_value(hostile, "danger_weight", 1.0)), 0.5, 6.0)
 	return pressure
 
 
@@ -187,28 +192,29 @@ func get_nearby_hostile_windup_summary(position: Vector3, radius: float) -> Dict
 		if visited_nodes > MAX_HOSTILE_QUERY_NODES:
 			scan_cap_reached = true
 			break
-		if child is not Node3D or not child.is_in_group("hostile"):
+		if not _is_live_hostile(child):
 			continue
-		if child.global_position.distance_squared_to(position) > radius_squared:
+		var hostile: Node3D = child
+		if hostile.global_position.distance_squared_to(position) > radius_squared:
 			continue
 		hostile_nodes += 1
-		if not child.has_method("get_hostile_attack_snapshot"):
+		if not hostile.has_method("get_hostile_attack_snapshot"):
 			continue
-		var raw_attack: Variant = child.call("get_hostile_attack_snapshot")
+		var raw_attack: Variant = hostile.call("get_hostile_attack_snapshot")
 		if raw_attack is not Dictionary:
 			continue
 		var attack: Dictionary = raw_attack
 		if str(attack.get("state", "")) != "windup":
 			continue
 		active_windups += 1
-		if child.is_in_group("elite"):
+		if hostile.is_in_group("elite"):
 			elite_windups += 1
-		windup_pressure += clampf(float(_property_value(child, "danger_weight", 1.0)), 0.5, 6.0)
+		windup_pressure += clampf(float(_property_value(hostile, "danger_weight", 1.0)), 0.5, 6.0)
 		soonest_impact = minf(
 			soonest_impact,
 			maxf(0.0, float(attack.get("windup_remaining", 0.0)))
 		)
-		var source_id := str(attack.get("source_id", _property_value(child, "species_id", "hostile"))).strip_edges()
+		var source_id := str(attack.get("source_id", _property_value(hostile, "species_id", "hostile"))).strip_edges()
 		if source_id.is_empty():
 			source_id = "hostile"
 		source_counts[source_id] = int(source_counts.get(source_id, 0)) + 1
@@ -275,7 +281,7 @@ func _selection_context() -> Dictionary:
 func _species_counts() -> Dictionary:
 	var result: Dictionary = {}
 	for child: Node in get_children():
-		if not child.is_in_group("creatures"):
+		if not child.is_in_group("creatures") or child.is_queued_for_deletion():
 			continue
 		var species_id := str(_property_value(child, "species_id", ""))
 		if species_id.is_empty():
@@ -285,6 +291,12 @@ func _species_counts() -> Dictionary:
 
 
 func _count_group(group_name: StringName) -> int:
+	if group_name == &"hostile":
+		var live_count := 0
+		for child: Node in get_children():
+			if _is_live_hostile(child):
+				live_count += 1
+		return live_count
 	return PopulationPolicyScript.count_group(self, group_name)
 
 
@@ -303,6 +315,10 @@ func _connect_creature_runtime_signals(creature: Node) -> void:
 		var attack_callback := Callable(self, "_on_creature_attack_state_changed").bind(creature)
 		if not creature.is_connected("attack_state_changed", attack_callback):
 			creature.connect("attack_state_changed", attack_callback)
+	if creature.has_signal("died"):
+		var died_callback := Callable(self, "_on_creature_died_for_threat").bind(creature)
+		if not creature.is_connected("died", died_callback):
+			creature.connect("died", died_callback)
 	var exit_callback := Callable(self, "_on_creature_tree_exiting").bind(creature)
 	if not creature.is_connected("tree_exiting", exit_callback):
 		creature.connect("tree_exiting", exit_callback)
@@ -315,6 +331,10 @@ func _disconnect_creature_runtime_signals(creature: Node) -> void:
 		var attack_callback := Callable(self, "_on_creature_attack_state_changed").bind(creature)
 		if creature.is_connected("attack_state_changed", attack_callback):
 			creature.disconnect("attack_state_changed", attack_callback)
+	if creature.has_signal("died"):
+		var died_callback := Callable(self, "_on_creature_died_for_threat").bind(creature)
+		if creature.is_connected("died", died_callback):
+			creature.disconnect("died", died_callback)
 	var exit_callback := Callable(self, "_on_creature_tree_exiting").bind(creature)
 	if creature.is_connected("tree_exiting", exit_callback):
 		creature.disconnect("tree_exiting", exit_callback)
@@ -328,13 +348,26 @@ func _on_creature_attack_state_changed(attack: Dictionary, creature: Node) -> vo
 	threat_changed.emit(summary)
 
 
+func _on_creature_died_for_threat(
+	species_id: String,
+	drops: Dictionary,
+	_world_position: Vector3,
+	_creature: Node
+) -> void:
+	threat_changed.emit({
+		"event":"creature_died",
+		"species_id":species_id,
+		"drop_types":drops.size(),
+	})
+	_publish_ecology_if_changed(true)
+
+
 func _on_creature_tree_exiting(creature: Node) -> void:
-	var event := {
-		"event":"creature_exiting",
-		"species_id":str(_property_value(creature, "species_id", "creature")),
-		"hostile":creature.is_in_group("hostile") if creature != null else false,
-	}
-	threat_changed.emit(event)
+	if creature != null and creature.is_in_group("hostile"):
+		threat_changed.emit({
+			"event":"creature_exiting",
+			"species_id":str(_property_value(creature, "species_id", "hostile")),
+		})
 	_schedule_exit_publish()
 
 
@@ -377,6 +410,18 @@ func _dispose_child(child: Node, emit_event: bool) -> void:
 	if emit_event and child is Node3D and child.is_in_group("creatures"):
 		creature_despawned.emit(child)
 	child.queue_free()
+
+
+func _is_live_hostile(child: Node) -> bool:
+	if (
+		child is not Node3D
+		or not child.is_in_group("hostile")
+		or child.is_queued_for_deletion()
+	):
+		return false
+	if child.has_method("is_combat_target_available"):
+		return bool(child.call("is_combat_target_available"))
+	return true
 
 
 func _property_value(target: Object, property_name: String, fallback: Variant) -> Variant:
