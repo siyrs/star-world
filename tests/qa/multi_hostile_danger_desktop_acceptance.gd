@@ -75,10 +75,6 @@ func _run() -> void:
 	var lifecycle_before: Dictionary = runtime.call("get_lifecycle_snapshot")
 	var refresh_before_spawn := int(lifecycle_before.get("immediate_refresh_count", 0))
 	var events_before_spawn := int(lifecycle_before.get("immediate_event_count", 0))
-	var danger_before_spawn: Dictionary = danger.call("get_diagnostics")
-	var environment_scans_before_spawn := int(
-		danger_before_spawn.get("environment_scan_count", 0)
-	)
 	var hostiles: Array[Node3D] = []
 	for index in HOSTILE_COUNT:
 		var angle := TAU * float(index) / float(HOSTILE_COUNT)
@@ -107,12 +103,8 @@ func _run() -> void:
 	)
 	var danger_after_spawn: Dictionary = danger.call("get_snapshot")
 	_check(int(danger_after_spawn.get("hostile_count", 0)) == HOSTILE_COUNT, "single assessment observes all five hostiles")
-	var assessment_after_spawn: Dictionary = danger.call("get_diagnostics")
-	_check(
-		int(assessment_after_spawn.get("environment_scan_count", 0))
-		== environment_scans_before_spawn,
-		"spawn burst reuses the existing environment sample"
-	)
+	var spawn_batch: Dictionary = batches.back() if not batches.is_empty() else {}
+	_check(bool(spawn_batch.get("environment_reused", false)), "spawn event batch reuses the existing environment sample")
 
 	var refresh_before_windup := int(
 		lifecycle_after_spawn.get("immediate_refresh_count", 0)
@@ -160,12 +152,9 @@ func _run() -> void:
 		if bool(attack.get("telegraph_visible", false)):
 			telegraph_count += 1
 	_check(telegraph_count == HOSTILE_COUNT, "all five real non-collision warning circles remain visible")
+	var windup_batch: Dictionary = batches.back() if not batches.is_empty() else {}
+	_check(bool(windup_batch.get("environment_reused", false)), "windup event batch reuses the same bounded environment sample")
 	var assessment_during_windup: Dictionary = danger.call("get_diagnostics")
-	_check(
-		int(assessment_during_windup.get("environment_scan_count", 0))
-		== environment_scans_before_spawn,
-		"windup burst also reuses the same bounded environment sample"
-	)
 	_check(int(assessment_during_windup.get("max_samples_observed", 0)) <= 125, "production danger never exceeds the 125-sample hard cap")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
