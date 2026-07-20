@@ -7,13 +7,14 @@ $progressPath = Join-Path $root 'src\machine\machine_progress_policy.gd'
 $migrationPath = Join-Path $root 'src\machine\machine_state_migration.gd'
 $completionPath = Join-Path $root 'src\machine\machine_completion_policy.gd'
 $furnacePath = Join-Path $root 'src\machine\furnace_service.gd'
+$furnacePanelPath = Join-Path $root 'src\ui\furnace_panel.gd'
 $gameplayHubPath = Join-Path $root 'src\ui\service_hub.gd'
 $savePath = Join-Path $root 'src\save\save_service.gd'
 $recipePath = Join-Path $root 'data\furnace_recipes.json'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $workflowPath = Join-Path $root '.github\workflows\machine-base-tests.yml'
 
-foreach ($path in @($schedulerPath,$participantPath,$progressPath,$migrationPath,$completionPath,$furnacePath)) {
+foreach ($path in @($schedulerPath,$participantPath,$progressPath,$migrationPath,$completionPath,$furnacePath,$furnacePanelPath)) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Machine Base file is missing: $path" }
 }
 if (-not (Test-Path -LiteralPath $workflowPath)) { throw 'Machine Base workflow is missing' }
@@ -24,6 +25,7 @@ $progressText = Get-Content -Raw -Encoding UTF8 $progressPath
 $migrationText = Get-Content -Raw -Encoding UTF8 $migrationPath
 $completionText = Get-Content -Raw -Encoding UTF8 $completionPath
 $furnaceText = Get-Content -Raw -Encoding UTF8 $furnacePath
+$furnacePanelText = Get-Content -Raw -Encoding UTF8 $furnacePanelPath
 $gameplayHubText = Get-Content -Raw -Encoding UTF8 $gameplayHubPath
 $saveText = Get-Content -Raw -Encoding UTF8 $savePath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
@@ -75,6 +77,12 @@ foreach ($field in @('queued_jobs','queued_output_count','estimated_total_second
 if ($furnaceText -notmatch 'MAX_SIMULATION_ITERATIONS\s*:=\s*512') {
   throw 'Furnace elapsed simulation must retain its iteration hard cap'
 }
+if ($furnacePanelText -notmatch 'get_recipe_text' -or $furnacePanelText -notmatch '队列 %d' -or $furnacePanelText -notmatch '全部 %.1f 秒') {
+  throw 'Furnace panel must expose queue count and whole-batch ETA to players'
+}
+if ($furnacePanelText -notmatch '共享调度推进') {
+  throw 'Furnace panel must explain shared background processing'
+}
 
 if ($gameplayHubText -notmatch 'machine_runtime_participant\.gd' -or $gameplayHubText -notmatch 'MACHINE_RUNTIME_FEATURE') {
   throw 'Gameplay root must install the Machine Runtime participant before higher domains'
@@ -96,4 +104,4 @@ foreach ($script in @('machine_base_regression\.gd','machine_base_desktop_accept
   if ($runAllText -notmatch $script -and $workflowText -notmatch $script) { throw "Machine Base acceptance is not permanently wired: $script" }
 }
 
-Write-Host 'PASS machine_base domains=16 machines=4096 completion_batch=128 visible_types=3 furnace_recipes=9 schema=1'
+Write-Host 'PASS machine_base domains=16 machines=4096 completion_batch=128 visible_types=3 furnace_recipes=9 schema=1 ui_eta=1'
