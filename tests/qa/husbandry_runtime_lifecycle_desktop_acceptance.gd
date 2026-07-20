@@ -26,8 +26,12 @@ func _run() -> void:
 	var hub: Node = game.service_hub
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
 	var participant: Node = hub.get("husbandry_runtime_participant") if hub != null else null
-	_check(hub != null and coordinator != null and participant != null, "production game mounts the husbandry lifecycle participant")
-	if hub == null or coordinator == null or participant == null:
+	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
+	_check(
+		hub != null and coordinator != null and participant != null and machine_runtime != null,
+		"production game mounts husbandry and Machine Base lifecycle services"
+	)
+	if hub == null or coordinator == null or participant == null or machine_runtime == null:
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -49,7 +53,11 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production world starts before husbandry lifecycle acceptance")
 	_check(service != null and interaction != null, "participant-owned husbandry ports remain available")
-	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 4, "production coordinator exposes four lifecycle participants")
+	_check(
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 5,
+		"production coordinator exposes five lifecycle participants"
+	)
+	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base is the lifecycle root participant")
 	_check(
 		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],
 		"production dependency graph orders ranch after husbandry"
@@ -142,6 +150,7 @@ func _run() -> void:
 		await process_frame
 	lifecycle_snapshot = participant.call("get_lifecycle_snapshot")
 	_check(int(lifecycle_snapshot.get("bound_player_id", -1)) == 0, "return-to-menu releases the husbandry player reference")
+	_check(not bool(machine_runtime.call("is_active")), "return-to-menu also stops shared machine processing")
 	if old_player != null and is_instance_valid(old_player):
 		_check(old_player.get("entity_interaction_service") == null, "old player no longer retains the husbandry interaction port")
 	_check((service.call("get_snapshot") as Dictionary).get("managed_animals", -1) == 0, "return-to-menu clears husbandry runtime records")
@@ -156,8 +165,10 @@ func _run() -> void:
 	_check(player.get("entity_interaction_service") == interaction, "full reload restores the same husbandry interaction port")
 	_check(service.get_managed_count() == 6, "full reload restores managed animals exactly once")
 	_check(lifecycle_batches.size() == 2, "world reload does not replay birth or growth notifications")
+	_check(bool(machine_runtime.call("is_active")), "full reload reactivates Machine Base")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("husbandry") and character_snapshot.has("animal_products"), "production diagnostics preserve husbandry and ranch fields")
+	_check(character_snapshot.has("machine_runtime"), "production diagnostics preserve Machine Base state")
 
 	game.call("_abort_world_start", "qa_husbandry_lifecycle_failure")
 	for _frame in 4:
@@ -165,6 +176,7 @@ func _run() -> void:
 	lifecycle_snapshot = participant.call("get_lifecycle_snapshot")
 	_check(int(lifecycle_snapshot.get("bound_player_id", -1)) == 0, "failed-start cleanup removes the current husbandry binding")
 	_check(hub.current_world_id.is_empty(), "failed-start cleanup resets the production world identity")
+	_check(not bool(machine_runtime.call("is_active")), "failed-start cleanup stops Machine Base")
 	await _finish(game, hub)
 
 
@@ -173,19 +185,11 @@ func _build_flat_arena(world: Node, player: Node3D) -> Dictionary:
 	var floor_y := clampi(origin.y - 1, 2, 59)
 	for x_offset in range(-8, 9):
 		for z_offset in range(-7, 3):
-			var floor_position := Vector3i(
-				origin.x + x_offset, floor_y, origin.z + z_offset
-			)
+			var floor_position := Vector3i(origin.x + x_offset, floor_y, origin.z + z_offset)
 			world.call("set_block", floor_position, "stone")
 			for y_offset in range(1, 5):
-				world.call(
-					"set_block", floor_position + Vector3i(0, y_offset, 0), "air"
-				)
-	var base := Vector3(
-		float(origin.x) + 0.5,
-		float(floor_y) + 1.05,
-		float(origin.z) + 0.5
-	)
+				world.call("set_block", floor_position + Vector3i(0, y_offset, 0), "air")
+	var base := Vector3(float(origin.x) + 0.5, float(floor_y) + 1.05, float(origin.z) + 0.5)
 	return {
 		"player_position": base,
 		"cow_positions": [

@@ -34,7 +34,7 @@ func _run() -> void:
 		print("QA FURNACE MACHINE PASS | checks=%d" % checks)
 		quit(0)
 	else:
-		for failure in failures:
+		for failure: String in failures:
 			push_error("QA FURNACE MACHINE FAILURE: %s" % failure)
 		print("QA FURNACE MACHINE FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 		quit(1)
@@ -49,7 +49,7 @@ func _test_processing_and_transfer_contract() -> void:
 	host.add_child(furnace)
 	await process_frame
 	furnace.setup(inventory.registry)
-	_check(furnace.recipes.recipe_count() == 7, "seven dedicated furnace recipes load")
+	_check(furnace.recipes.recipe_count() == 9, "nine dedicated furnace recipes load")
 	_check(furnace.fuels.fuel_count() >= 4, "multiple fuels load through a dedicated registry")
 	var machine_id := "furnace@4,20,-3"
 	_check(furnace.open_machine(machine_id), "a furnace machine opens by stable world id")
@@ -181,7 +181,7 @@ func _test_world_interaction_and_ui() -> void:
 	var furnace = FurnaceScript.new()
 	var game_ui = GameUIScript.new()
 	var interactions = InteractionScript.new()
-	for service in [inventory, crafting, survival, storage, furnace, game_ui, interactions]:
+	for service: Node in [inventory, crafting, survival, storage, furnace, game_ui, interactions]:
 		host.add_child(service)
 	await process_frame
 	crafting.setup(inventory)
@@ -190,7 +190,7 @@ func _test_world_interaction_and_ui() -> void:
 	game_ui.setup(inventory, crafting, survival, null, null, null, storage, furnace)
 	interactions.setup(game_ui, storage, inventory, furnace)
 	var contexts: Array[StringName] = []
-	game_ui.input_context_requested.connect(func(context: StringName): contexts.append(context))
+	game_ui.input_context_requested.connect(func(context: StringName) -> void: contexts.append(context))
 	game_ui.begin_gameplay()
 	var world := FakeWorld.new()
 	var position := Vector3i(7, 21, -2)
@@ -244,6 +244,7 @@ func _test_service_hub_save_transaction() -> void:
 	await process_frame
 	await process_frame
 	_check(hub.get_node_or_null("FurnaceService") != null, "service hub mounts the furnace domain")
+	_check(hub.get_node_or_null("MachineRuntime") != null, "service hub mounts the shared machine scheduler")
 	var state: Dictionary = hub.save_service.create_world(
 		"qa-furnace-%d" % Time.get_ticks_msec(), "star_continent", 424242
 	)

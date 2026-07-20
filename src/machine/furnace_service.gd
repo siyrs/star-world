@@ -14,6 +14,8 @@ signal machine_removed(machine_id: String)
 
 const RecipeRegistryScript = preload("res://src/machine/furnace_recipe_registry.gd")
 const FuelRegistryScript = preload("res://src/machine/fuel_registry.gd")
+const ProgressPolicyScript = preload("res://src/machine/machine_progress_policy.gd")
+const StateMigrationScript = preload("res://src/machine/machine_state_migration.gd")
 
 const SERIAL_VERSION := 1
 const MACHINE_TYPE := "furnace"
@@ -32,39 +34,120 @@ var fuels = FuelRegistryScript.new()
 var _machines: Dictionary = {}
 var _active_machine_id := ""
 var _snapshot_accumulator := 0.0
+var _external_scheduler := false
+var _shutdown := false
+var _runtime_tick_count := 0
+var _total_changed_machine_count := 0
+var _simulation_iteration_limit_hits := 0
+var _last_runtime_summary: Dictionary = {}
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
-	set_process(true)
+	set_process(not _external_scheduler)
 
 
-func setup(p_item_registry) -> void:
+func setup(p_item_registry) -> bool:
 	item_registry = p_item_registry
 	if recipes.recipe_count() <= 0:
 		recipes.load_from_file()
 	if fuels.fuel_count() <= 0:
 		fuels.load_from_file()
+	return item_registry != null and recipes.recipe_count() > 0 and fuels.fuel_count() > 0
+
+
+func is_ready() -> bool:
+	return item_registry != null and recipes.recipe_count() > 0 and fuels.fuel_count() > 0
+
+
+func set_external_scheduler(value: bool) -> void:
+	_external_scheduler = value
+	set_process(not _external_scheduler and not _shutdown)
+
+
+func is_externally_scheduled() -> bool:
+	return _external_scheduler
 
 
 func _process(delta: float) -> void:
-	if delta <= 0.0 or _machines.is_empty():
+	if _external_scheduler or _shutdown:
 		return
-	advance_time(delta, true)
-	_snapshot_accumulator += delta
-	if _snapshot_accumulator < SNAPSHOT_INTERVAL_SECONDS:
-		return
-	_snapshot_accumulator = 0.0
-	if not _active_machine_id.is_empty() and _machines.has(_active_machine_id):
-		machine_changed.emit(
-			_active_machine_id, get_machine_snapshot(_active_machine_id)
-		)
+	advance_machine_runtime(delta, true)
+
+
+func advance_machine_runtime(seconds: float, emit_events: bool = true) -> Dictionary:
+	var elapsed := ProgressPolicyScript.normalize_elapsed(seconds, float(MAX_OFFLINE_SECONDS))
+	if elapsed <= 0.0:
+		return _last_runtime_summary.duplicate(true)
+	var changed_ids := advance_time(elapsed, emit_events)
+	_snapshot_accumulator += elapsed
+	var active_snapshot_emitted := false
+	if _snapshot_accumulator >= SNAPSHOT_INTERVAL_SECONDS:
+		_snapshot_accumulator = 0.0
+		if not _active_machine_id.is_empty() and _machines.has(_active_machine_id):
+			machine_changed.emit(
+				_active_machine_id, get_machine_snapshot(_active_machine_id)
+			)
+			active_snapshot_emitted = true
+	_runtime_tick_count += 1
+	_total_changed_machine_count += changed_ids.size()
+	_last_runtime_summary = {
+		"machine_type": MACHINE_TYPE,
+		"elapsed_seconds": elapsed,
+		"machine_count": _machines.size(),
+		"changed_machine_count": changed_ids.size(),
+		"changed_machine_ids": changed_ids.duplicate(),
+		"active_snapshot_emitted": active_snapshot_emitted,
+		"runtime_tick_count": _runtime_tick_count,
+	}
+	return _last_runtime_summary.duplicate(true)
+
+
+func get_runtime_snapshot() -> Dictionary:
+	var processing_count := 0
+	var blocked_count := 0
+	var ready_count := 0
+	for raw_id: Variant in _machines.keys():
+		var machine_id := str(raw_id)
+		var state: Dictionary = _machines.get(machine_id, {})
+		var recipe := _resolve_recipe(state)
+		if recipe.is_empty():
+			continue
+		if not _can_accept_output(state, recipe):
+			blocked_count += 1
+		elif float(state.get("burn_remaining_seconds", 0.0)) > EPSILON:
+			processing_count += 1
+		else:
+			ready_count += 1
+	return {
+		"machine_type": MACHINE_TYPE,
+		"machine_count": _machines.size(),
+		"active_machine_id": _active_machine_id,
+		"externally_scheduled": _external_scheduler,
+		"processing_count": processing_count,
+		"blocked_count": blocked_count,
+		"ready_count": ready_count,
+		"runtime_tick_count": _runtime_tick_count,
+		"total_changed_machine_count": _total_changed_machine_count,
+		"simulation_iteration_limit_hits": _simulation_iteration_limit_hits,
+		"last_runtime_summary": _last_runtime_summary.duplicate(true),
+	}
 
 
 func clear() -> void:
 	_machines.clear()
 	_snapshot_accumulator = 0.0
+	_last_runtime_summary.clear()
 	_set_active_machine("")
+
+
+func shutdown() -> void:
+	if _shutdown:
+		return
+	_shutdown = true
+	set_process(false)
+	clear()
+	item_registry = null
 
 
 func ensure_machine(machine_id: String) -> bool:
@@ -77,6 +160,14 @@ func ensure_machine(machine_id: String) -> bool:
 
 func has_machine(machine_id: String) -> bool:
 	return _machines.has(machine_id)
+
+
+func get_machine_ids() -> Array[String]:
+	var result: Array[String] = []
+	for raw_id: Variant in _machines.keys():
+		result.append(str(raw_id))
+	result.sort()
+	return result
 
 
 func open_machine(machine_id: String) -> bool:
@@ -102,12 +193,26 @@ func get_machine_snapshot(machine_id: String = "") -> Dictionary:
 	var state: Dictionary = _machines[resolved_id].duplicate(true)
 	var recipe := _resolve_recipe(state)
 	var duration := maxf(0.1, float(recipe.get("duration_seconds", 1.0)))
+	var progress := maxf(0.0, float(state.get("progress_seconds", 0.0)))
 	var burn_total := maxf(0.0, float(state.get("burn_total_seconds", 0.0)))
+	var queued_jobs := _queued_jobs(state, recipe)
 	state["machine_id"] = resolved_id
 	state["active"] = resolved_id == _active_machine_id
 	state["recipe"] = recipe
 	state["progress_ratio"] = (
-		clampf(float(state.get("progress_seconds", 0.0)) / duration, 0.0, 1.0)
+		ProgressPolicyScript.progress_ratio(progress, duration)
+		if not recipe.is_empty()
+		else 0.0
+	)
+	state["remaining_seconds"] = (
+		ProgressPolicyScript.remaining_seconds(progress, duration)
+		if not recipe.is_empty() and queued_jobs > 0
+		else 0.0
+	)
+	state["queued_jobs"] = queued_jobs
+	state["queued_output_count"] = _queued_output_count(recipe, queued_jobs)
+	state["estimated_total_seconds"] = (
+		ProgressPolicyScript.estimated_total_seconds(progress, duration, queued_jobs)
 		if not recipe.is_empty()
 		else 0.0
 	)
@@ -118,6 +223,7 @@ func get_machine_snapshot(machine_id: String = "") -> Dictionary:
 	)
 	state["status"] = _status_for_state(state, recipe)
 	state["can_remove"] = can_remove_machine(resolved_id)
+	state["runtime_managed"] = _external_scheduler
 	return state
 
 
@@ -214,7 +320,7 @@ func can_remove_machine(machine_id: String) -> bool:
 	if not _machines.has(machine_id):
 		return true
 	var state: Dictionary = _machines[machine_id]
-	for slot_name in VALID_SLOTS:
+	for slot_name: String in VALID_SLOTS:
 		var slot: Dictionary = state.get(slot_name, {})
 		if not slot.is_empty() and int(slot.get("count", 0)) > 0:
 			return false
@@ -238,11 +344,10 @@ func remove_machine(machine_id: String, require_empty: bool = true) -> bool:
 
 func advance_time(seconds: float, emit_events: bool = true) -> Array[String]:
 	var changed_ids: Array[String] = []
-	var elapsed := maxf(0.0, seconds)
+	var elapsed := ProgressPolicyScript.normalize_elapsed(seconds, float(MAX_OFFLINE_SECONDS))
 	if elapsed <= EPSILON:
 		return changed_ids
-	for raw_id in _machines.keys():
-		var machine_id := str(raw_id)
+	for machine_id: String in get_machine_ids():
 		var state: Dictionary = _machines[machine_id]
 		if _advance_machine(machine_id, state, elapsed, emit_events):
 			_machines[machine_id] = state
@@ -252,8 +357,8 @@ func advance_time(seconds: float, emit_events: bool = true) -> Array[String]:
 
 func serialize() -> Dictionary:
 	var saved_machines: Dictionary = {}
-	for machine_id in _machines:
-		saved_machines[str(machine_id)] = _machines[machine_id].duplicate(true)
+	for machine_id: String in get_machine_ids():
+		saved_machines[machine_id] = _machines[machine_id].duplicate(true)
 	return {
 		"version": SERIAL_VERSION,
 		"saved_at_unix": int(Time.get_unix_time_from_system()),
@@ -263,17 +368,18 @@ func serialize() -> Dictionary:
 
 func deserialize(data: Dictionary) -> bool:
 	clear()
-	var raw_machines = data.get("furnaces", data.get("machines", {}))
+	var normalized := StateMigrationScript.normalize_machine_state(data)
+	var raw_machines: Variant = normalized.get("furnaces", {})
 	if raw_machines is not Dictionary:
 		return false
-	for raw_id in raw_machines:
+	for raw_id: Variant in raw_machines.keys():
 		var machine_id := str(raw_id)
-		var raw_state = raw_machines[raw_id]
+		var raw_state: Variant = raw_machines.get(raw_id, {})
 		if not _is_valid_machine_id(machine_id) or raw_state is not Dictionary:
 			continue
 		_machines[machine_id] = _normalize_machine_state(raw_state)
 	var now := int(Time.get_unix_time_from_system())
-	var saved_at := int(data.get("saved_at_unix", now))
+	var saved_at := int(normalized.get("saved_at_unix", now))
 	var offline_seconds := clampi(now - saved_at, 0, MAX_OFFLINE_SECONDS)
 	if offline_seconds > 0:
 		advance_time(float(offline_seconds), false)
@@ -332,6 +438,8 @@ func _advance_machine(
 				item_smelted.emit(machine_id, recipe_id, output.duplicate(true))
 		if burn_remaining <= EPSILON:
 			state["burn_remaining_seconds"] = 0.0
+	if remaining > EPSILON and iterations >= MAX_SIMULATION_ITERATIONS:
+		_simulation_iteration_limit_hits += 1
 	return changed
 
 
@@ -405,6 +513,33 @@ func _can_accept_output(state: Dictionary, recipe: Dictionary) -> bool:
 	)
 
 
+func _queued_jobs(state: Dictionary, recipe: Dictionary) -> int:
+	if item_registry == null or recipe.is_empty():
+		return 0
+	var input_definition: Dictionary = recipe.get("input", {})
+	var output_definition: Dictionary = recipe.get("output", {})
+	var output_id := str(output_definition.get("id", ""))
+	if output_id.is_empty() or not item_registry.has_item(output_id):
+		return 0
+	var input_slot: Dictionary = state.get(SLOT_INPUT, {})
+	var output_slot: Dictionary = state.get(SLOT_OUTPUT, {})
+	return ProgressPolicyScript.queued_jobs(
+		int(input_slot.get("count", 0)),
+		maxi(1, int(input_definition.get("count", 1))),
+		maxi(1, int(output_definition.get("count", 1))),
+		int(output_slot.get("count", 0)),
+		int(item_registry.get_max_stack(output_id))
+	)
+
+
+func _queued_output_count(recipe: Dictionary, queued_jobs: int) -> int:
+	if recipe.is_empty():
+		return 0
+	return ProgressPolicyScript.queued_output_count(
+		queued_jobs, maxi(1, int(recipe.get("output", {}).get("count", 1)))
+	)
+
+
 func _reset_recipe_if_needed(state: Dictionary) -> void:
 	var recipe := _resolve_recipe(state)
 	var recipe_id := str(recipe.get("id", ""))
@@ -420,10 +555,7 @@ func _slot_capacity(slot: Dictionary, item_id: String, metadata: Dictionary) -> 
 	var max_stack := int(item_registry.get_max_stack(item_id))
 	if slot.is_empty():
 		return max_stack
-	if (
-		str(slot.get("item_id", "")) != item_id
-		or slot.get("metadata", {}) != metadata
-	):
+	if str(slot.get("item_id", "")) != item_id or slot.get("metadata", {}) != metadata:
 		return 0
 	return maxi(0, max_stack - int(slot.get("count", 0)))
 
@@ -469,15 +601,20 @@ func _new_machine_state() -> Dictionary:
 
 func _normalize_machine_state(raw_state: Dictionary) -> Dictionary:
 	var result := _new_machine_state()
-	for slot_name in VALID_SLOTS:
+	for slot_name: String in VALID_SLOTS:
 		result[slot_name] = _normalize_slot(raw_state.get(slot_name, {}))
 	result["active_recipe_id"] = str(raw_state.get("active_recipe_id", ""))
-	result["progress_seconds"] = maxf(0.0, float(raw_state.get("progress_seconds", 0.0)))
-	result["burn_remaining_seconds"] = maxf(
-		0.0, float(raw_state.get("burn_remaining_seconds", 0.0))
+	result["progress_seconds"] = ProgressPolicyScript.normalize_elapsed(
+		float(raw_state.get("progress_seconds", 0.0)), float(MAX_OFFLINE_SECONDS)
+	)
+	result["burn_remaining_seconds"] = ProgressPolicyScript.normalize_elapsed(
+		float(raw_state.get("burn_remaining_seconds", 0.0)), float(MAX_OFFLINE_SECONDS)
 	)
 	result["burn_total_seconds"] = maxf(
-		result["burn_remaining_seconds"], float(raw_state.get("burn_total_seconds", 0.0))
+		result["burn_remaining_seconds"],
+		ProgressPolicyScript.normalize_elapsed(
+			float(raw_state.get("burn_total_seconds", 0.0)), float(MAX_OFFLINE_SECONDS)
+		)
 	)
 	_reset_recipe_if_needed(result)
 	return result
@@ -490,10 +627,14 @@ func _normalize_slot(raw_slot: Variant) -> Dictionary:
 	var count := int(raw_slot.get("count", 0))
 	if item_id.is_empty() or count <= 0 or not item_registry.has_item(item_id):
 		return {}
+	var metadata: Dictionary = {}
+	var raw_metadata: Variant = raw_slot.get("metadata", {})
+	if raw_metadata is Dictionary:
+		metadata = raw_metadata.duplicate(true)
 	return {
 		"item_id": item_id,
 		"count": mini(count, int(item_registry.get_max_stack(item_id))),
-		"metadata": raw_slot.get("metadata", {}).duplicate(true),
+		"metadata": metadata,
 	}
 
 

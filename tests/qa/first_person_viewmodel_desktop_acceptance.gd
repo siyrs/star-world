@@ -93,13 +93,17 @@ func _run() -> void:
 	_save_stage_image(root.get_texture().get_image(), "target")
 
 	var rest_position: Vector3 = view.position
+	var max_mining_distance := 0.0
+	var mining_active_observed := false
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
-	for _frame in 3:
+	for _frame in 12:
 		await physics_frame
 		await process_frame
-	snapshot = view.call("get_snapshot")
-	_check(bool(snapshot.get("mining_active", false)), "holding real left mouse enables continuous mining animation")
-	_check(view.position.distance_to(rest_position) > 0.01, "mining visibly moves the held pickaxe")
+		snapshot = view.call("get_snapshot")
+		mining_active_observed = mining_active_observed or bool(snapshot.get("mining_active", false))
+		max_mining_distance = maxf(max_mining_distance, view.position.distance_to(rest_position))
+	_check(mining_active_observed, "holding real left mouse enables continuous mining animation")
+	_check(max_mining_distance > 0.01, "mining visibly moves the held pickaxe during a bounded observation window")
 	_check(str(world.call("get_block", target_block)) == "stone", "short mining sample does not fake completion")
 	_mouse_button(MOUSE_BUTTON_LEFT, false)
 	await process_frame

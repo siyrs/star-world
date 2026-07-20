@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $scenePath = Join-Path $root 'scenes\ui\service_hub.tscn'
+$gameplayHubPath = Join-Path $root 'src\ui\service_hub.gd'
 $husbandryHubPath = Join-Path $root 'src\ui\husbandry_progression_service_hub.gd'
 $ranchHubPath = Join-Path $root 'src\ui\ranch_progression_service_hub.gd'
 $participantPath = Join-Path $root 'src\husbandry\husbandry_runtime_participant.gd'
@@ -14,6 +15,7 @@ $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $workflowPath = Join-Path $root '.github\workflows\husbandry-tests.yml'
 
 $sceneText = Get-Content -Raw -Encoding UTF8 $scenePath
+$gameplayHubText = Get-Content -Raw -Encoding UTF8 $gameplayHubPath
 $husbandryHubText = Get-Content -Raw -Encoding UTF8 $husbandryHubPath
 $ranchHubText = Get-Content -Raw -Encoding UTF8 $ranchHubPath
 $participantText = Get-Content -Raw -Encoding UTF8 $participantPath
@@ -28,29 +30,35 @@ $workflowText = Get-Content -Raw -Encoding UTF8 $workflowPath
 if ($sceneText -notmatch 'exploration_progression_service_hub\.gd') {
   throw 'Production service_hub scene must retain the current exploration entry point'
 }
+if ($gameplayHubText -notmatch 'service_hub_feature_coordinator\.gd') {
+  throw 'Gameplay hub must own the shared feature lifecycle coordinator'
+}
 if ($husbandryHubText -notmatch 'extends\s+"res://src/ui/repair_progression_service_hub\.gd"') {
   throw 'Husbandry hub must retain the compatible repair inheritance entry point'
 }
-if ($husbandryHubText -notmatch 'service_hub_feature_coordinator\.gd') {
-  throw 'Husbandry hub must own the shared feature lifecycle coordinator'
+if ($husbandryHubText -match 'service_hub_feature_coordinator\.gd') {
+  throw 'Husbandry hub must reuse the Gameplay lifecycle coordinator'
 }
 if ($husbandryHubText -notmatch 'husbandry_runtime_participant\.gd' -or $husbandryHubText -notmatch 'HUSBANDRY_RUNTIME_FEATURE') {
   throw 'Husbandry hub must register the husbandry runtime participant'
 }
-foreach ($field in @('husbandry_service','husbandry_interaction','feature_lifecycle','husbandry_runtime_participant')) {
+foreach ($field in @('husbandry_service','husbandry_interaction','husbandry_runtime_participant')) {
   if ($husbandryHubText -notmatch "var\s+$field\s*:\s*Node") {
     throw "Husbandry hub removed public lifecycle field: $field"
   }
 }
-foreach ($legacyOwner in @('HusbandryServiceScript','HusbandryInteractionScript','_connect_husbandry_feedback','_on_baby_born','_on_animal_grew')) {
+foreach ($legacyOwner in @('HusbandryServiceScript','HusbandryInteractionScript','FeatureCoordinatorScript','_connect_husbandry_feedback','_on_baby_born','_on_animal_grew')) {
   if ($husbandryHubText -match $legacyOwner) {
     throw "Husbandry inheritance layer still owns runtime responsibility: $legacyOwner"
   }
 }
-foreach ($method in @('_begin_world','attach_game','activate_gameplay','save_current','handle_world_start_failed','return_to_menu','get_character_snapshot','_exit_tree')) {
-  if ($husbandryHubText -notmatch "func\s+$method\s*\(") {
-    throw "Husbandry composition root is missing lifecycle forwarding: $method"
+foreach ($legacyLifecycle in @('_begin_world','attach_game','activate_gameplay','save_current','handle_world_start_failed','return_to_menu','_exit_tree','_register_feature_participant')) {
+  if ($husbandryHubText -match "func\s+$legacyLifecycle\s*\(") {
+    throw "Husbandry hub must remain a thin participant registration layer: $legacyLifecycle"
   }
+}
+if ($husbandryHubText -notmatch 'func\s+get_character_snapshot\s*\(') {
+  throw 'Husbandry hub must preserve the production character diagnostics extension point'
 }
 
 if ($ranchHubText -notmatch 'extends\s+"res://src/ui/husbandry_progression_service_hub\.gd"') {
@@ -111,4 +119,4 @@ foreach ($testPath in @('husbandry_runtime_lifecycle_regression\.gd','husbandry_
   }
 }
 
-Write-Host 'PASS husbandry_lifecycle participant=husbandry_runtime dependency=ranch->husbandry batch_limit=64 visible_types=3'
+Write-Host 'PASS husbandry_lifecycle root=gameplay participant=husbandry_runtime dependency=ranch->husbandry batch_limit=64 visible_types=3'

@@ -66,6 +66,10 @@ func get_active_machine_id() -> String:
 	return _active_machine_id
 
 
+func get_recipe_text() -> String:
+	return _recipe_label.text if _recipe_label != null else ""
+
+
 func refresh() -> void:
 	if _status == null:
 		return
@@ -83,11 +87,17 @@ func refresh() -> void:
 	_progress.value = float(snapshot.get("progress_ratio", 0.0))
 	_fuel.value = float(snapshot.get("fuel_ratio", 0.0))
 	var recipe: Dictionary = snapshot.get("recipe", {})
-	_recipe_label.text = (
-		"当前配方：%s" % str(recipe.get("name", ""))
-		if not recipe.is_empty()
-		else "当前配方：等待原料"
-	)
+	if recipe.is_empty():
+		_recipe_label.text = "当前配方：等待原料"
+	else:
+		var queued_jobs := maxi(0, int(snapshot.get("queued_jobs", 0)))
+		var remaining := maxf(0.0, float(snapshot.get("remaining_seconds", 0.0)))
+		var total_remaining := maxf(
+			remaining, float(snapshot.get("estimated_total_seconds", remaining))
+		)
+		_recipe_label.text = "当前配方：%s · 队列 %d · 下一份 %.1f 秒 · 全部 %.1f 秒" % [
+			str(recipe.get("name", "")), queued_jobs, remaining, total_remaining
+		]
 	_status.text = str(snapshot.get("status", "等待操作"))
 
 
@@ -118,7 +128,7 @@ func _build_ui() -> void:
 	close_button.pressed.connect(func() -> void: panel_closed.emit())
 	header.add_child(close_button)
 	var description := Label.new()
-	description.text = "关闭界面后继续加工；世界暂停时机器同步停止。"
+	description.text = "多台机器由共享调度推进；关闭界面后继续加工，世界暂停时同步停止。"
 	description.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	description.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(description)
@@ -142,11 +152,12 @@ func _build_ui() -> void:
 	_input_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_INPUT))
 	machine_row.add_child(_input_button)
 	var process_column := VBoxContainer.new()
-	process_column.custom_minimum_size = Vector2(240, 96)
+	process_column.custom_minimum_size = Vector2(300, 96)
 	process_column.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	machine_row.add_child(process_column)
 	_recipe_label = Label.new()
 	_recipe_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_recipe_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_recipe_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	process_column.add_child(_recipe_label)
 	var progress_caption := Label.new()

@@ -21,6 +21,13 @@ const InputContextScript = preload("res://src/input/input_context_service.gd")
 const SimulationPauseScript = preload("res://src/core/simulation_pause_service.gd")
 const BlockInteractionScript = preload("res://src/interaction/block_interaction_service.gd")
 const PlayerExperienceScript = preload("res://src/experience/player_experience_coordinator.gd")
+const FeatureCoordinatorScript = preload(
+	"res://src/core/service_hub_feature_coordinator.gd"
+)
+const MachineRuntimeParticipantScript = preload(
+	"res://src/machine/machine_runtime_participant.gd"
+)
+const MACHINE_RUNTIME_FEATURE := &"machine_runtime"
 const DEFAULT_SETTINGS := {
 	"mouse_sensitivity": 0.18,
 	"render_distance": 3,
@@ -53,6 +60,9 @@ var input_context
 var simulation_pause
 var block_interaction
 var player_experience
+var feature_lifecycle: Node
+var machine_runtime_participant: Node
+var machine_runtime: Node
 var main_menu
 var game_ui
 var current_state: Dictionary = {}
@@ -83,12 +93,20 @@ func _ready() -> void:
 	creature_spawner = _add_service(SpawnerScript.new(), "CreatureSpawner")
 	block_interaction = _add_service(BlockInteractionScript.new(), "BlockInteraction")
 	player_experience = _add_service(PlayerExperienceScript.new(), "PlayerExperience")
+	feature_lifecycle = _add_service(
+		FeatureCoordinatorScript.new(), "FeatureLifecycle"
+	)
+	feature_lifecycle.call("setup", self)
+	machine_runtime_participant = _register_feature_participant(
+		MACHINE_RUNTIME_FEATURE,
+		MachineRuntimeParticipantScript.new(),
+		"machine runtime"
+	)
+	if machine_runtime_participant != null:
+		machine_runtime = machine_runtime_participant.call("get_scheduler") as Node
 	var creature_callback := Callable(self, "_on_creature_spawned")
 	if not creature_spawner.creature_spawned.is_connected(creature_callback):
 		creature_spawner.creature_spawned.connect(creature_callback)
-	var smelt_callback := Callable(self, "_on_item_smelted")
-	if not furnace_service.item_smelted.is_connected(smelt_callback):
-		furnace_service.item_smelted.connect(smelt_callback)
 	crafting.setup(inventory)
 	current_settings = save_service.load_settings(DEFAULT_SETTINGS)
 	current_settings["render_distance"] = clampi(
@@ -132,7 +150,31 @@ func _add_service(service: Node, service_name: String) -> Node:
 	return service
 
 
+func _register_feature_participant(
+	participant_id: StringName, participant: Node, label: String
+) -> Node:
+	if feature_lifecycle == null:
+		return null
+	var registration: Dictionary = feature_lifecycle.call(
+		"register_participant", participant_id, participant
+	)
+	if bool(registration.get("success", false)):
+		return registration.get("participant") as Node
+	push_error(
+		"Unable to install %s lifecycle participant: %s"
+		% [label, str(registration.get("reason", "unknown"))]
+	)
+	return null
+
+
 func _begin_world(state: Dictionary) -> void:
+	var migrated_state := state.duplicate(true)
+	if feature_lifecycle != null and feature_lifecycle.has_method("normalize_world_state"):
+		var raw_migrated: Variant = feature_lifecycle.call(
+			"normalize_world_state", state
+		)
+		if raw_migrated is Dictionary:
+			migrated_state = raw_migrated
 	simulation_pause.reset()
 	input_context.set_context(InputContextScript.CONTEXT_LOADING)
 	input_context.unbind_player()
@@ -144,7 +186,9 @@ func _begin_world(state: Dictionary) -> void:
 		main_menu.call("show_loading", "正在准备世界和渲染资源…")
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
-	current_state = state.duplicate(true)
+	current_state = migrated_state.duplicate(true)
+	if feature_lifecycle != null:
+		feature_lifecycle.call("begin_world", current_state)
 	player_experience.prepare_world(current_state.get("experience", {}))
 	player_experience.apply_settings(current_settings)
 	var metadata: Dictionary = current_state.get("metadata", {})
@@ -156,7 +200,6 @@ func _begin_world(state: Dictionary) -> void:
 	else:
 		inventory.deserialize(inventory_data)
 	container_storage.deserialize(current_state.get("containers", {}))
-	furnace_service.deserialize(current_state.get("machines", {}))
 	crafting.set_station("hand")
 	survival.deserialize(current_state.get("survival", {}))
 	survival.set_map_profile(str(metadata.get("map_id", "star_continent")))
@@ -180,14 +223,19 @@ func activate_gameplay() -> void:
 	else:
 		input_context.set_context(InputContextScript.CONTEXT_GAMEPLAY)
 	player_experience.begin_gameplay()
+	if feature_lifecycle != null:
+		feature_lifecycle.call("activate")
 
 
 func handle_world_start_failed(reason: String) -> void:
+	if feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"world_start_failed")
+	elif furnace_service != null:
+		furnace_service.clear()
 	simulation_pause.reset()
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	container_storage.clear()
-	furnace_service.clear()
 	audio_service.stop_ambient()
 	player_experience.end_gameplay()
 	player_experience.detach_player()
@@ -248,6 +296,10 @@ func attach_game(
 		elif player.has_method("set_inventory_service"):
 			player.call("set_inventory_service", inventory)
 	_apply_settings(current_settings)
+	if feature_lifecycle != null:
+		feature_lifecycle.call(
+			"attach_game", world, player, sun, environment, ground_resolver
+		)
 
 
 func _on_input_context_requested(context: StringName) -> void:
@@ -312,7 +364,7 @@ func _apply_settings(settings: Dictionary) -> void:
 
 
 func _set_property_if_present(target: Object, property_name: String, value: Variant) -> bool:
-	for property in target.get_property_list():
+	for property: Dictionary in target.get_property_list():
 		if str(property.get("name", "")) == property_name:
 			target.set(property_name, value)
 			return true
@@ -325,10 +377,13 @@ func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -
 	var payload: Dictionary = current_state.duplicate(true)
 	payload["inventory"] = inventory.serialize()
 	payload["containers"] = container_storage.serialize()
-	payload["machines"] = furnace_service.serialize()
 	payload["survival"] = survival.serialize()
 	payload["day_night"] = day_night.serialize()
 	payload["experience"] = player_experience.serialize()
+	if feature_lifecycle != null:
+		feature_lifecycle.call("save_into", payload)
+	elif furnace_service != null:
+		payload["machines"] = furnace_service.serialize()
 	if not world_state.is_empty():
 		payload["world"] = world_state.duplicate(true)
 	elif world_node != null:
@@ -355,6 +410,10 @@ func return_to_menu() -> void:
 			game_ui.call("show_save_result", false)
 		return
 	simulation_pause.reset()
+	if feature_lifecycle != null:
+		feature_lifecycle.call("clear", &"return_to_menu")
+	elif furnace_service != null:
+		furnace_service.clear()
 	creature_spawner.set_active(false)
 	creature_spawner.clear_creatures()
 	audio_service.stop_ambient()
@@ -365,7 +424,6 @@ func return_to_menu() -> void:
 	input_context.set_context(InputContextScript.CONTEXT_MENU)
 	input_context.unbind_player(player_node)
 	container_storage.clear()
-	furnace_service.clear()
 	world_node = null
 	player_node = null
 	current_state.clear()
@@ -375,13 +433,29 @@ func return_to_menu() -> void:
 	return_to_menu_requested.emit()
 
 
+func get_character_snapshot() -> Dictionary:
+	var snapshot: Dictionary = {}
+	if feature_lifecycle != null:
+		feature_lifecycle.call("snapshot_into", snapshot)
+		snapshot["feature_lifecycle"] = feature_lifecycle.call("get_snapshot")
+	return snapshot
+
+
+func _exit_tree() -> void:
+	if feature_lifecycle != null and feature_lifecycle.has_method("shutdown"):
+		feature_lifecycle.call("shutdown")
+	var creature_callback := Callable(self, "_on_creature_spawned")
+	if (
+		creature_spawner != null
+		and is_instance_valid(creature_spawner)
+		and creature_spawner.has_signal("creature_spawned")
+		and creature_spawner.is_connected("creature_spawned", creature_callback)
+	):
+		creature_spawner.disconnect("creature_spawned", creature_callback)
+
+
 func _on_creature_spawned(creature: Node3D) -> void:
 	audio_bridge.connect_creature(creature)
-
-
-func _on_item_smelted(_machine_id: String, _recipe_id: String, _output: Dictionary) -> void:
-	if audio_service != null and audio_service.has_method("play_craft"):
-		audio_service.call("play_craft")
 
 
 func _player_state(player: Node3D) -> Dictionary:
