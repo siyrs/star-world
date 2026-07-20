@@ -5,6 +5,10 @@ const ToolServiceScript = preload("res://src/tools/tool_service.gd")
 const HarvestServiceScript = preload("res://src/harvest/block_harvest_service.gd")
 const HarvestOverlayScript = preload("res://src/ui/harvest_progress_overlay.gd")
 
+# Compatibility ports are declared on the first inherited layer so the base
+# MachineRuntimeParticipant can publish them during GameplayServiceHub._ready.
+var stonecutter_service: Node
+var machine_interaction_router: Node
 var tool_service: Node
 var block_harvest_service: Node
 var harvest_progress_overlay: Control
