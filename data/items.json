@@ -17,6 +17,7 @@
     {"id":"oak_stairs","name":"木楼梯","category":"block","max_stack":64,"block_id":"oak_stairs","color":"#B5834E"},
     {"id":"crafting_table","name":"工作台","category":"block","max_stack":64,"block_id":"crafting_table","color":"#9A6333"},
     {"id":"furnace","name":"熔炉","category":"block","max_stack":64,"block_id":"furnace","color":"#55595D"},
+    {"id":"stonecutter","name":"石材切割机","category":"block","max_stack":64,"block_id":"stonecutter","color":"#6F777C"},
     {"id":"chest","name":"箱子","category":"block","max_stack":64,"block_id":"chest","color":"#A66B2C"},
     {"id":"oak_door","name":"木门","category":"block","max_stack":64,"block_id":"oak_door","color":"#9B6331"},
     {"id":"oak_fence","name":"木栅栏","category":"block","max_stack":64,"block_id":"oak_fence","color":"#A87540"},
