@@ -2,8 +2,8 @@ class_name MachineGameUI
 extends "res://src/ui/repair_game_ui.gd"
 
 const StonecutterPanelScript = preload("res://src/ui/stonecutter_panel.gd")
-const FeatureOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
-const STONECUTTER_OVERLAY := FeatureOverlayIds.STONECUTTER
+const MachineOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
+const STONECUTTER_OVERLAY := MachineOverlayIds.STONECUTTER
 
 var stonecutter_panel: Control
 var stonecutter_service: Node
