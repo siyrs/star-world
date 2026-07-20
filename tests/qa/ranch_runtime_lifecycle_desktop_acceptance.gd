@@ -27,14 +27,16 @@ func _run() -> void:
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
 	var husbandry_participant: Node = hub.get("husbandry_runtime_participant") if hub != null else null
 	var participant: Node = hub.get("ranch_runtime_participant") if hub != null else null
+	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
 	_check(
 		hub != null
 		and coordinator != null
 		and husbandry_participant != null
-		and participant != null,
-		"production game mounts husbandry and ranch lifecycle participants"
+		and participant != null
+		and machine_runtime != null,
+		"production game mounts machine, husbandry and ranch lifecycle services"
 	)
-	if hub == null or coordinator == null or husbandry_participant == null or participant == null:
+	if hub == null or coordinator == null or husbandry_participant == null or participant == null or machine_runtime == null:
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -58,7 +60,8 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production voxel world starts before ranch lifecycle tests")
 	_check(husbandry != null and interaction != null and attraction != null and products != null, "participant-owned husbandry and ranch services keep their public ports")
-	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 4, "production coordinator exposes all four participants")
+	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 5, "production coordinator exposes all five participants")
+	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root")
 	_check(
 		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],
 		"production ranch lifecycle declares its husbandry dependency"
@@ -112,9 +115,7 @@ func _run() -> void:
 	hub.inventory.select_slot(0)
 	var husbandry_ids: Array[String] = []
 	for chicken: Node3D in chickens:
-		var raw_interaction: Variant = husbandry.call(
-			"interact_entity", chicken, hub.inventory
-		)
+		var raw_interaction: Variant = husbandry.call("interact_entity", chicken, hub.inventory)
 		var interaction_result: Dictionary = raw_interaction if raw_interaction is Dictionary else {}
 		_check(bool(interaction_result.get("success", false)), "production husbandry transaction manages a chicken")
 		var husbandry_id := str(chicken.get_meta("husbandry_id", ""))
@@ -185,6 +186,7 @@ func _run() -> void:
 	_check(int(lifecycle.get("bound_player_id", -1)) == 0, "return-to-menu releases the ranch player reference")
 	var husbandry_lifecycle: Dictionary = husbandry_participant.call("get_lifecycle_snapshot")
 	_check(int(husbandry_lifecycle.get("bound_player_id", -1)) == 0, "return-to-menu releases the husbandry player reference")
+	_check(not bool(machine_runtime.call("is_active")), "return-to-menu stops shared machine processing")
 	_check(not bool((attraction.call("get_snapshot") as Dictionary).get("active", true)), "return-to-menu deactivates attraction processing")
 	_check(not bool((products.call("get_snapshot") as Dictionary).get("active", true)), "return-to-menu deactivates product processing")
 	_check(attraction.get("player") == null and products.get("player") == null, "return-to-menu releases both ranch service player references")
@@ -204,6 +206,9 @@ func _run() -> void:
 	_check(hub.inventory.count_item("egg") == eggs_before_reload, "full reload restores the collected yield exactly once")
 	_check(int((products.call("get_snapshot") as Dictionary).get("tracked_animals", 0)) >= 3, "full reload restores product timers for managed chickens")
 	_check(interaction.get("product_service") == products, "reload keeps the product read model connected to prompts")
+	_check(bool(machine_runtime.call("is_active")), "full reload reactivates Machine Base")
+	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
+	_check(character_snapshot.has("machine_runtime"), "ranch journey preserves Machine Base diagnostics")
 
 	game.call("_abort_world_start", "qa_ranch_runtime_failure")
 	for _frame in 4:
@@ -213,6 +218,7 @@ func _run() -> void:
 	husbandry_lifecycle = husbandry_participant.call("get_lifecycle_snapshot")
 	_check(int(husbandry_lifecycle.get("bound_player_id", -1)) == 0, "world-start failure clears husbandry runtime references")
 	_check(hub.current_world_id.is_empty(), "world-start failure resets the production world identity")
+	_check(not bool(machine_runtime.call("is_active")), "world-start failure stops Machine Base")
 	await _finish(game, hub)
 
 
@@ -221,19 +227,11 @@ func _build_flat_arena(world: Node, player: Node3D) -> Dictionary:
 	var floor_y := clampi(origin.y - 1, 2, 59)
 	for x_offset in range(-10, 11):
 		for z_offset in range(-7, 3):
-			var floor_position := Vector3i(
-				origin.x + x_offset, floor_y, origin.z + z_offset
-			)
+			var floor_position := Vector3i(origin.x + x_offset, floor_y, origin.z + z_offset)
 			world.call("set_block", floor_position, "stone")
 			for y_offset in range(1, 5):
-				world.call(
-					"set_block", floor_position + Vector3i(0, y_offset, 0), "air"
-				)
-	var base := Vector3(
-		float(origin.x) + 0.5,
-		float(floor_y) + 1.05,
-		float(origin.z) + 0.5
-	)
+				world.call("set_block", floor_position + Vector3i(0, y_offset, 0), "air")
+	var base := Vector3(float(origin.x) + 0.5, float(floor_y) + 1.05, float(origin.z) + 0.5)
 	return {
 		"player_position": base,
 		"chicken_positions": [
