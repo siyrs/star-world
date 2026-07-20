@@ -157,8 +157,8 @@ func get_nearby_hostile_count(position: Vector3, radius: float) -> int:
 	for child: Node in get_children():
 		if not _is_live_hostile(child):
 			continue
-		var hostile: Node3D = child
-		if hostile.global_position.distance_squared_to(position) <= radius_squared:
+		var hostile := child as Node3D
+		if hostile != null and hostile.global_position.distance_squared_to(position) <= radius_squared:
 			count += 1
 	return count
 
@@ -169,8 +169,8 @@ func get_nearby_hostile_pressure(position: Vector3, radius: float) -> float:
 	for child: Node in get_children():
 		if not _is_live_hostile(child):
 			continue
-		var hostile: Node3D = child
-		if hostile.global_position.distance_squared_to(position) > radius_squared:
+		var hostile := child as Node3D
+		if hostile == null or hostile.global_position.distance_squared_to(position) > radius_squared:
 			continue
 		pressure += clampf(float(_property_value(hostile, "danger_weight", 1.0)), 0.5, 6.0)
 	return pressure
@@ -194,8 +194,8 @@ func get_nearby_hostile_windup_summary(position: Vector3, radius: float) -> Dict
 			break
 		if not _is_live_hostile(child):
 			continue
-		var hostile: Node3D = child
-		if hostile.global_position.distance_squared_to(position) > radius_squared:
+		var hostile := child as Node3D
+		if hostile == null or hostile.global_position.distance_squared_to(position) > radius_squared:
 			continue
 		hostile_nodes += 1
 		if not hostile.has_method("get_hostile_attack_snapshot"):
