@@ -79,8 +79,11 @@ foreach ($contract in @('get_nearby_hostile_windup_summary','attack_state_change
 if ($spawnerText -match 'windup_positions|attacker_positions|coordinates') {
   throw 'Windup telemetry must not expose attacker coordinates'
 }
-if ($spawnerText -notmatch 'func\s+clear_creatures[\s\S]{0,360}is_in_group\("creatures"\)') {
-  throw 'Creature clearing must filter actual creatures instead of deleting ItemPickup children'
+if ($spawnerText -notmatch 'func\s+clear_creature_population[\s\S]{0,420}is_in_group\("creatures"\)') {
+  throw 'Drop-safe population clearing must filter actual creatures instead of deleting ItemPickup children'
+}
+if ($spawnerText -notmatch 'func\s+clear_creatures\s*\(') {
+  throw 'Full world-lifecycle cleanup must retain its compatible clear_creatures entry point'
 }
 if ($spawnerText -notmatch '_is_live_hostile') {
   throw 'Danger queries must exclude defeated hostiles before their death tween exits the tree'
@@ -103,4 +106,4 @@ foreach ($script in @('multi_hostile_danger_batch_regression\.gd','multi_hostile
   if ($workflowText -notmatch $script) { throw "Multi-hostile workflow is missing test: $script" }
 }
 
-Write-Host 'PASS multi_hostile_danger pending=64 triggers=3 sample_budget=125 hostile_query=64 drops=preserved'
+Write-Host 'PASS multi_hostile_danger pending=64 triggers=3 sample_budget=125 hostile_query=64 drops=preserved lifecycle=full-clear'
