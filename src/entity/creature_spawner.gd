@@ -196,6 +196,8 @@ func get_nearby_hostile_windup_summary(position: Vector3, radius: float) -> Dict
 	var source_counts: Dictionary = {}
 	var scan_cap_reached := false
 	for child: Node in get_children():
+		if child is not Node3D or not child.is_in_group("hostile"):
+			continue
 		visited_nodes += 1
 		if visited_nodes > MAX_HOSTILE_QUERY_NODES:
 			scan_cap_reached = true
@@ -371,7 +373,7 @@ func _on_creature_died_for_threat(
 
 
 func _on_creature_tree_exiting(creature: Node) -> void:
-	if creature != null and creature.is_in_group("hostile"):
+	if _is_live_hostile(creature):
 		threat_changed.emit({
 			"event":"creature_exiting",
 			"species_id":str(_property_value(creature, "species_id", "hostile")),
@@ -391,7 +393,6 @@ func _flush_exit_publish() -> void:
 	if not is_inside_tree():
 		return
 	_publish_ecology_if_changed(true)
-	threat_changed.emit(_current_threat_summary())
 
 
 func _current_threat_summary() -> Dictionary:
