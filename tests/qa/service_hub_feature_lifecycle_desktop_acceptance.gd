@@ -26,26 +26,32 @@ func _run() -> void:
 		await process_frame
 	var hub: Node = game.service_hub
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
+	var machine: Node = hub.get("machine_runtime_participant") if hub != null else null
 	var husbandry: Node = hub.get("husbandry_runtime_participant") if hub != null else null
 	var ranch: Node = hub.get("ranch_runtime_participant") if hub != null else null
 	var runtime: Node = hub.get("exploration_runtime_participant") if hub != null else null
 	var participant: Node = hub.get("exploration_journal_reward_participant") if hub != null else null
+	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
 	_check(
 		hub != null
 		and coordinator != null
+		and machine != null
 		and husbandry != null
 		and ranch != null
 		and runtime != null
-		and participant != null,
-		"production game mounts all four feature lifecycle participants"
+		and participant != null
+		and machine_runtime != null,
+		"production game mounts all five feature lifecycle participants"
 	)
 	if (
 		hub == null
 		or coordinator == null
+		or machine == null
 		or husbandry == null
 		or ranch == null
 		or runtime == null
 		or participant == null
+		or machine_runtime == null
 	):
 		await _finish(game, hub)
 		return
@@ -83,6 +89,7 @@ func _run() -> void:
 		and journal != null,
 		"legacy husbandry, ranch and exploration service ports remain mounted"
 	)
+	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base is registered as the lifecycle root")
 	_check(
 		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],
 		"production lifecycle exposes the ranch-to-husbandry dependency"
@@ -91,6 +98,7 @@ func _run() -> void:
 		coordinator.call("get_participant_dependencies", &"exploration_journal_rewards") == ["exploration_runtime"],
 		"production lifecycle exposes the journal dependency"
 	)
+	_check(bool(machine_runtime.call("is_active")), "production world activation starts Machine Base")
 	if (
 		player == null
 		or husbandry_service == null
@@ -144,6 +152,7 @@ func _run() -> void:
 
 	_check(bool(hub.save_current()), "all participant states join the production save transaction")
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
+	_check(loaded.has("machines") and loaded.get("machines", {}).has("furnaces"), "saved world contains the Machine Base domain")
 	_check(loaded.has("husbandry"), "saved world contains the husbandry participant domain")
 	_check(loaded.has("animal_products"), "saved world contains the ranch participant domain")
 	_check((loaded.get("exploration", {}).get("records", []) as Array).size() == 1, "saved world contains the runtime exploration record")
@@ -158,6 +167,7 @@ func _run() -> void:
 	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the exploration player binding")
 	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the ranch player binding")
 	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the husbandry player binding")
+	_check(not bool(machine_runtime.call("is_active")), "real return-to-menu stops the Machine Base scheduler")
 	if old_player != null and is_instance_valid(old_player):
 		_check(old_player.get("prospecting_service") == null, "old player no longer retains the runtime prospecting port")
 		_check(old_player.get("entity_interaction_service") == null, "old player no longer retains the husbandry interaction port")
@@ -167,7 +177,7 @@ func _run() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
+			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,machine_runtime"
 		),
 		"desktop cleanup records the complete reverse dependency order"
 	)
@@ -187,13 +197,15 @@ func _run() -> void:
 	_check(player != null and player.get("entity_interaction_service") == husbandry_interaction, "reload rebinds the husbandry interaction service")
 	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", 0)) == player.get_instance_id(), "reload rebinds the ranch runtime to the current player")
 	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", 0)) == player.get_instance_id(), "reload rebinds the husbandry runtime to the current player")
+	_check(bool(machine_runtime.call("is_active")), "reload reactivates the shared Machine Base scheduler")
 	await _tap_key(KEY_J)
 	for _frame in 3:
 		await process_frame
 	panel = game_ui.call("get_exploration_journal_panel") as Control
 	_check(panel != null and str(panel.call("get_reward_status", "first_discovery")) == "claimed", "reloaded production journal renders the participant reward as claimed")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 4, "production diagnostics expose all four composed participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 5, "production diagnostics expose all five composed participants")
+	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "Machine Base participant preserves its diagnostics fields")
 	_check(character_snapshot.has("husbandry"), "husbandry participant preserves its legacy diagnostics field")
 	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "runtime participant preserves legacy diagnostics fields")
@@ -213,6 +225,7 @@ func _run() -> void:
 	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the exploration player binding")
 	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the ranch player binding")
 	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the husbandry player binding")
+	_check(not bool(machine_runtime.call("is_active")), "failed-start cleanup stops Machine Base")
 	await _finish(game, hub)
 
 
