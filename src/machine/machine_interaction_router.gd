@@ -32,7 +32,7 @@ func register_machine_type(
 	machine_type: StringName,
 	service: Node,
 	open_ui_method: StringName,
-	slot_names: Array[String],
+	slot_names: Array,
 	label: String,
 	not_empty_message: String
 ) -> Dictionary:
@@ -56,8 +56,8 @@ func register_machine_type(
 	if str(open_ui_method).strip_edges().is_empty():
 		return _reject_registration(normalized_type, "invalid_ui_method")
 	var normalized_slots: Array[String] = []
-	for raw_slot: String in slot_names:
-		var slot_name := raw_slot.strip_edges()
+	for raw_slot: Variant in slot_names:
+		var slot_name := str(raw_slot).strip_edges()
 		if slot_name.is_empty() or slot_name in normalized_slots:
 			continue
 		normalized_slots.append(slot_name)
