@@ -73,11 +73,17 @@ if ($spawnerText -notmatch 'signal\s+threat_changed') {
 if ($spawnerText -notmatch 'MAX_HOSTILE_QUERY_NODES\s*:=\s*64') {
   throw 'Hostile windup query must remain bounded to 64 visited nodes'
 }
-foreach ($contract in @('get_nearby_hostile_windup_summary','attack_state_changed','tree_exiting','soonest_impact_seconds','elite_windup_count')) {
-  if ($spawnerText -notmatch $contract) { throw "Spawner windup telemetry is missing: $contract" }
+foreach ($contract in @('get_nearby_hostile_windup_summary','attack_state_changed','tree_exiting','creature_died','soonest_impact_seconds','elite_windup_count')) {
+  if ($spawnerText -notmatch $contract) { throw "Spawner windup and death telemetry is missing: $contract" }
 }
 if ($spawnerText -match 'windup_positions|attacker_positions|coordinates') {
   throw 'Windup telemetry must not expose attacker coordinates'
+}
+if ($spawnerText -notmatch 'func\s+clear_creatures[\s\S]{0,360}is_in_group\("creatures"\)') {
+  throw 'Creature clearing must filter actual creatures instead of deleting ItemPickup children'
+}
+if ($spawnerText -notmatch '_is_live_hostile') {
+  throw 'Danger queries must exclude defeated hostiles before their death tween exits the tree'
 }
 
 foreach ($field in @('windup_count','elite_windup_count','soonest_impact_seconds','windup_urgency_label')) {
@@ -97,4 +103,4 @@ foreach ($script in @('multi_hostile_danger_batch_regression\.gd','multi_hostile
   if ($workflowText -notmatch $script) { throw "Multi-hostile workflow is missing test: $script" }
 }
 
-Write-Host 'PASS multi_hostile_danger pending=64 triggers=3 sample_budget=125 hostile_query=64'
+Write-Host 'PASS multi_hostile_danger pending=64 triggers=3 sample_budget=125 hostile_query=64 drops=preserved'
