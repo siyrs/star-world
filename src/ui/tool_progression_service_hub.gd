@@ -61,6 +61,7 @@ func return_to_menu() -> void:
 
 func _exit_tree() -> void:
 	_clear_harvest_state()
+	super._exit_tree()
 
 
 func _clear_harvest_state() -> void:
