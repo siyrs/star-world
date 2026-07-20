@@ -25,3 +25,11 @@ func _ready() -> void:
 		husbandry_interaction = husbandry_runtime_participant.call(
 			"get_interaction_service"
 		) as Node
+
+
+func get_character_snapshot() -> Dictionary:
+	var snapshot: Dictionary = super.get_character_snapshot()
+	if feature_lifecycle != null:
+		feature_lifecycle.call("snapshot_into", snapshot)
+		snapshot["feature_lifecycle"] = feature_lifecycle.call("get_snapshot")
+	return snapshot
