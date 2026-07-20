@@ -15,6 +15,7 @@ var _status_panel: PanelContainer
 var _danger_panel: PanelContainer
 var _danger_label: Label
 var _danger_detail: Label
+var _danger_warning: Label
 var _hotbar_panel: PanelContainer
 var _item_panel: PanelContainer
 var _health_bar: ProgressBar
@@ -113,6 +114,14 @@ func get_danger_panel() -> Control:
 	return _danger_panel
 
 
+func get_danger_warning_text() -> String:
+	return _danger_warning.text if _danger_warning != null else ""
+
+
+func is_danger_warning_visible() -> bool:
+	return _danger_warning != null and _danger_warning.visible
+
+
 func _build_status_panel() -> void:
 	_status_panel = PanelContainer.new()
 	_status_panel.position = Vector2(18, 18)
@@ -170,8 +179,8 @@ func _build_danger_panel() -> void:
 	_danger_panel.offset_left = -322.0
 	_danger_panel.offset_right = -18.0
 	_danger_panel.offset_top = 18.0
-	_danger_panel.offset_bottom = 96.0
-	_danger_panel.custom_minimum_size = Vector2(304, 78)
+	_danger_panel.offset_bottom = 122.0
+	_danger_panel.custom_minimum_size = Vector2(304, 104)
 	add_child(_danger_panel)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 3)
@@ -184,6 +193,12 @@ func _build_danger_panel() -> void:
 	_danger_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_danger_detail.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	content.add_child(_danger_detail)
+	_danger_warning = Label.new()
+	_danger_warning.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_danger_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_danger_warning.modulate = Color("#FF8A72")
+	_danger_warning.visible = false
+	content.add_child(_danger_warning)
 	_danger_panel.visible = false
 
 
@@ -270,6 +285,9 @@ func _on_danger_changed(snapshot: Dictionary) -> void:
 		return
 	if snapshot.is_empty():
 		_danger_panel.visible = false
+		if _danger_warning != null:
+			_danger_warning.visible = false
+			_danger_warning.text = ""
 		return
 	var tone := str(snapshot.get("tone", "info"))
 	var color := _danger_color(tone)
@@ -289,7 +307,23 @@ func _on_danger_changed(snapshot: Dictionary) -> void:
 			if not reason.is_empty() and reasons.size() < 3:
 				reasons.append(reason)
 	_danger_detail.text = " · ".join(reasons) if not reasons.is_empty() else "当前环境相对稳定"
+	_update_incoming_attack_warning(snapshot)
 	_danger_panel.visible = true
+
+
+func _update_incoming_attack_warning(snapshot: Dictionary) -> void:
+	if _danger_warning == null:
+		return
+	var windup_count := maxi(0, int(snapshot.get("windup_count", 0)))
+	if windup_count <= 0:
+		_danger_warning.text = ""
+		_danger_warning.visible = false
+		return
+	var urgency := str(snapshot.get("windup_urgency_label", "")).strip_edges()
+	if urgency.is_empty():
+		urgency = "来袭攻击 ×%d" % windup_count
+	_danger_warning.text = "⚠ %s" % urgency
+	_danger_warning.visible = true
 
 
 func _danger_color(tone: String) -> String:

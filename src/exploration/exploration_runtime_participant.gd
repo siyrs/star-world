@@ -3,6 +3,7 @@ extends Node
 
 signal danger_transition_announced(kind: String, snapshot: Dictionary)
 signal immediate_danger_refreshed(trigger: String, snapshot: Dictionary)
+signal danger_refresh_batch_completed(summary: Dictionary)
 
 const ProspectingServiceScript = preload("res://src/exploration/prospecting_service.gd")
 const ProspectingStateMigrationScript = preload(
@@ -11,6 +12,10 @@ const ProspectingStateMigrationScript = preload(
 const DangerServiceScript = preload(
 	"res://src/exploration/exploration_danger_service.gd"
 )
+const DangerRefreshBatchPolicyScript = preload(
+	"res://src/exploration/danger_refresh_batch_policy.gd"
+)
+const MAX_PENDING_DANGER_EVENTS := 64
 
 var hub: Node
 var prospecting_service: Node
@@ -25,7 +30,17 @@ var _scan_success_count := 0
 var _scan_rejection_count := 0
 var _danger_announcement_count := 0
 var _danger_recovery_count := 0
+var _immediate_event_count := 0
 var _immediate_refresh_count := 0
+var _coalesced_danger_event_count := 0
+var _dropped_danger_event_count := 0
+var _max_events_in_refresh_batch := 0
+var _pending_danger_trigger_counts: Dictionary = {}
+var _pending_danger_event_count := 0
+var _pending_danger_dropped_count := 0
+var _danger_refresh_flush_scheduled := false
+var _last_refresh_triggers: Array[String] = []
+var _last_refresh_summary: Dictionary = {}
 
 
 func get_dependencies() -> Array[StringName]:
@@ -80,6 +95,9 @@ func begin_world(state: Dictionary) -> void:
 	_active = false
 	_last_announced_danger_tier = ""
 	_last_refresh_trigger = ""
+	_last_refresh_triggers.clear()
+	_last_refresh_summary.clear()
+	_reset_pending_danger_batch()
 	_unbind_player()
 	if danger_service != null and danger_service.has_method("clear"):
 		danger_service.call("clear")
@@ -138,6 +156,9 @@ func clear(_reason: StringName = &"clear") -> void:
 	_active = false
 	_last_announced_danger_tier = ""
 	_last_refresh_trigger = ""
+	_last_refresh_triggers.clear()
+	_last_refresh_summary.clear()
+	_reset_pending_danger_batch()
 	_unbind_player()
 	if danger_service != null and danger_service.has_method("clear"):
 		danger_service.call("clear")
@@ -178,12 +199,47 @@ func get_lifecycle_snapshot() -> Dictionary:
 		),
 		"last_danger_tier": _last_announced_danger_tier,
 		"last_refresh_trigger": _last_refresh_trigger,
+		"last_refresh_triggers": _last_refresh_triggers.duplicate(),
+		"last_refresh_summary": _last_refresh_summary.duplicate(true),
 		"scan_success_count": _scan_success_count,
 		"scan_rejection_count": _scan_rejection_count,
 		"danger_announcement_count": _danger_announcement_count,
 		"danger_recovery_count": _danger_recovery_count,
+		"immediate_event_count": _immediate_event_count,
 		"immediate_refresh_count": _immediate_refresh_count,
+		"coalesced_danger_event_count": _coalesced_danger_event_count,
+		"dropped_danger_event_count": _dropped_danger_event_count,
+		"max_events_in_refresh_batch": _max_events_in_refresh_batch,
+		"pending_danger_event_count": _pending_danger_event_count,
+		"pending_trigger_count": _pending_danger_trigger_counts.size(),
+		"danger_refresh_flush_scheduled": _danger_refresh_flush_scheduled,
 	}
+
+
+func queue_danger_refresh(trigger: String) -> bool:
+	if not _active or danger_service == null or not is_instance_valid(danger_service):
+		return false
+	_immediate_event_count += 1
+	if _pending_danger_event_count >= MAX_PENDING_DANGER_EVENTS:
+		_pending_danger_dropped_count += 1
+		_dropped_danger_event_count += 1
+		return false
+	var normalized_trigger := trigger.strip_edges()
+	if normalized_trigger.is_empty():
+		normalized_trigger = "manual"
+	_pending_danger_event_count += 1
+	_pending_danger_trigger_counts[normalized_trigger] = int(
+		_pending_danger_trigger_counts.get(normalized_trigger, 0)
+	) + 1
+	if not _danger_refresh_flush_scheduled:
+		_danger_refresh_flush_scheduled = true
+		call_deferred("_flush_danger_refresh_batch")
+	return true
+
+
+func flush_pending_danger_refresh() -> Dictionary:
+	_flush_danger_refresh_batch()
+	return _last_refresh_summary.duplicate(true)
 
 
 func _connect_runtime_signals() -> void:
@@ -204,6 +260,9 @@ func _connect_runtime_signals() -> void:
 	_connect_if_needed(
 		creature_spawner, "ecology_changed", Callable(self, "_on_ecology_changed")
 	)
+	_connect_if_needed(
+		creature_spawner, "threat_changed", Callable(self, "_on_threat_changed")
+	)
 
 
 func _disconnect_runtime_signals() -> void:
@@ -223,6 +282,9 @@ func _disconnect_runtime_signals() -> void:
 	var creature_spawner: Node = hub.get("creature_spawner") as Node if hub != null and is_instance_valid(hub) else null
 	_disconnect_if_needed(
 		creature_spawner, "ecology_changed", Callable(self, "_on_ecology_changed")
+	)
+	_disconnect_if_needed(
+		creature_spawner, "threat_changed", Callable(self, "_on_threat_changed")
 	)
 
 
@@ -307,21 +369,86 @@ func _on_danger_changed(snapshot: Dictionary) -> void:
 
 
 func _on_phase_changed(_phase: String) -> void:
-	_refresh_danger_immediately("phase_changed")
+	queue_danger_refresh("phase_changed")
 
 
 func _on_ecology_changed(_snapshot: Dictionary) -> void:
-	_refresh_danger_immediately("ecology_changed")
+	queue_danger_refresh("ecology_changed")
+
+
+func _on_threat_changed(_snapshot: Dictionary) -> void:
+	queue_danger_refresh("threat_changed")
 
 
 func _refresh_danger_immediately(trigger: String) -> void:
-	if not _active or danger_service == null or not danger_service.has_method("refresh_now"):
+	queue_danger_refresh(trigger)
+
+
+func _flush_danger_refresh_batch() -> void:
+	_danger_refresh_flush_scheduled = false
+	if _pending_danger_event_count <= 0:
+		_pending_danger_trigger_counts.clear()
+		_pending_danger_dropped_count = 0
 		return
-	_immediate_refresh_count += 1
-	_last_refresh_trigger = trigger
-	var raw_snapshot: Variant = danger_service.call("refresh_now")
+	var trigger_counts := _pending_danger_trigger_counts.duplicate(true)
+	var event_count := _pending_danger_event_count
+	var dropped_count := _pending_danger_dropped_count
+	_pending_danger_trigger_counts.clear()
+	_pending_danger_event_count = 0
+	_pending_danger_dropped_count = 0
+	if not _active or danger_service == null or not is_instance_valid(danger_service):
+		return
+	var summary: Dictionary = DangerRefreshBatchPolicyScript.build(
+		trigger_counts, event_count, dropped_count
+	)
+	var raw_snapshot: Variant
+	if danger_service.has_method("refresh_for_events"):
+		raw_snapshot = danger_service.call("refresh_for_events")
+	elif danger_service.has_method("refresh_now"):
+		raw_snapshot = danger_service.call("refresh_now")
+	else:
+		return
 	var snapshot: Dictionary = raw_snapshot if raw_snapshot is Dictionary else {}
-	immediate_danger_refreshed.emit(trigger, snapshot.duplicate(true))
+	_immediate_refresh_count += 1
+	_coalesced_danger_event_count += int(summary.get("coalesced_event_count", 0))
+	_max_events_in_refresh_batch = maxi(
+		_max_events_in_refresh_batch, int(summary.get("event_count", 0))
+	)
+	var raw_triggers: Variant = summary.get("triggers", [])
+	_last_refresh_triggers.clear()
+	if raw_triggers is Array:
+		for raw_trigger: Variant in raw_triggers:
+			_last_refresh_triggers.append(str(raw_trigger))
+	_last_refresh_trigger = str(summary.get("trigger_key", "manual"))
+	summary["refresh_index"] = _immediate_refresh_count
+	summary["snapshot"] = snapshot.duplicate(true)
+	var assessment: Dictionary = (
+		snapshot.get("assessment", {})
+		if snapshot.get("assessment", {}) is Dictionary
+		else {}
+	)
+	summary["environment_reused"] = bool(
+		assessment.get("last_reused_environment", false)
+	)
+	_last_refresh_summary = summary.duplicate(true)
+	_last_refresh_summary.erase("snapshot")
+	# Preserve the original signal contract for existing listeners. Each
+	# unique reason is announced with the same single-assessment snapshot.
+	var compatibility_triggers := _last_refresh_triggers.duplicate()
+	if compatibility_triggers.is_empty():
+		compatibility_triggers.append("manual")
+	for compatibility_trigger: String in compatibility_triggers:
+		immediate_danger_refreshed.emit(
+			compatibility_trigger, snapshot.duplicate(true)
+		)
+	danger_refresh_batch_completed.emit(summary.duplicate(true))
+
+
+func _reset_pending_danger_batch() -> void:
+	_pending_danger_trigger_counts.clear()
+	_pending_danger_event_count = 0
+	_pending_danger_dropped_count = 0
+	_danger_refresh_flush_scheduled = false
 
 
 func _unbind_player() -> void:

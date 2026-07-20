@@ -14,6 +14,17 @@ var player: Node3D
 var active := false
 var _snapshot: Dictionary = {}
 var _remaining := 0.0
+var _cached_sample: Dictionary = {}
+var _cached_sample_center := Vector3i.ZERO
+var _has_cached_sample := false
+var _assessment_count := 0
+var _environment_scan_count := 0
+var _environment_reuse_count := 0
+var _environment_sample_total := 0
+var _max_samples_observed := 0
+var _last_sample_count := 0
+var _last_budget_exhausted := false
+var _last_reused_environment := false
 
 
 func _ready() -> void:
@@ -31,6 +42,8 @@ func attach_world(p_world: Node, p_player: Node3D) -> void:
 	player = p_player
 	_snapshot.clear()
 	_remaining = 0.0
+	_reset_environment_cache()
+	_reset_diagnostics()
 	if active:
 		refresh_now()
 
@@ -53,6 +66,8 @@ func clear() -> void:
 	world = null
 	player = null
 	_snapshot.clear()
+	_reset_environment_cache()
+	_reset_diagnostics()
 
 
 func _process(delta: float) -> void:
@@ -67,6 +82,14 @@ func _process(delta: float) -> void:
 
 
 func refresh_now() -> Dictionary:
+	return _refresh(false)
+
+
+func refresh_for_events() -> Dictionary:
+	return _refresh(true)
+
+
+func _refresh(reuse_environment: bool) -> Dictionary:
 	if (
 		world == null
 		or player == null
@@ -78,7 +101,30 @@ func refresh_now() -> Dictionary:
 		return _snapshot.duplicate(true)
 	var config := registry.get_config()
 	var center: Vector3i = world.call("world_to_block", player.global_position)
-	var sample := _sample_environment(center, config)
+	var can_reuse := (
+		reuse_environment
+		and _has_cached_sample
+		and center == _cached_sample_center
+		and not _cached_sample.is_empty()
+	)
+	var sample: Dictionary
+	if can_reuse:
+		sample = _cached_sample.duplicate(true)
+		_environment_reuse_count += 1
+	else:
+		sample = _sample_environment(center, config)
+		_cached_sample = sample.duplicate(true)
+		_cached_sample_center = center
+		_has_cached_sample = true
+		_environment_scan_count += 1
+		_environment_sample_total += int(sample.get("total_samples", 0))
+		_max_samples_observed = maxi(
+			_max_samples_observed, int(sample.get("total_samples", 0))
+		)
+	_assessment_count += 1
+	_last_sample_count = int(sample.get("total_samples", 0))
+	_last_budget_exhausted = bool(sample.get("budget_exhausted", false))
+	_last_reused_environment = can_reuse
 	var phase := "day"
 	if day_night != null and day_night.has_method("get_phase"):
 		phase = str(day_night.call("get_phase"))
@@ -103,6 +149,18 @@ func refresh_now() -> Dictionary:
 				)
 			)
 		)
+	var windup_summary: Dictionary = {}
+	if (
+		creature_spawner != null
+		and creature_spawner.has_method("get_nearby_hostile_windup_summary")
+	):
+		var raw_windup: Variant = creature_spawner.call(
+			"get_nearby_hostile_windup_summary",
+			player.global_position,
+			float(config.get("hostile_radius", 18.0))
+		)
+		if raw_windup is Dictionary:
+			windup_summary = raw_windup
 	var ecology: Dictionary = {}
 	if creature_spawner != null and creature_spawner.has_method("get_ecology_snapshot"):
 		var raw_ecology: Variant = creature_spawner.call("get_ecology_snapshot")
@@ -116,6 +174,20 @@ func refresh_now() -> Dictionary:
 		"phase": phase,
 		"hostile_count": hostile_count,
 		"hostile_pressure": hostile_pressure,
+		"windup_count": int(windup_summary.get("active_windup_count", 0)),
+		"elite_windup_count": int(windup_summary.get("elite_windup_count", 0)),
+		"windup_pressure": float(windup_summary.get("windup_pressure", 0.0)),
+		"soonest_impact_seconds": float(
+			windup_summary.get("soonest_impact_seconds", -1.0)
+		),
+		"windup_source_counts": (
+			windup_summary.get("source_counts", {}).duplicate(true)
+			if windup_summary.get("source_counts", {}) is Dictionary
+			else {}
+		),
+		"windup_scanned_nodes": int(windup_summary.get("visited_nodes", 0)),
+		"windup_query_cap": int(windup_summary.get("query_node_cap", 0)),
+		"windup_scan_cap_reached": bool(windup_summary.get("scan_cap_reached", false)),
 		"lava_samples": int(sample.get("lava_samples", 0)),
 		"air_samples": int(sample.get("air_samples", 0)),
 		"total_samples": int(sample.get("total_samples", 0)),
@@ -123,6 +195,7 @@ func refresh_now() -> Dictionary:
 	var next_snapshot := PolicyScript.assess(context, config)
 	next_snapshot["updated_at_msec"] = Time.get_ticks_msec()
 	next_snapshot["ecology"] = ecology.duplicate(true)
+	next_snapshot["assessment"] = get_diagnostics()
 	var changed := _snapshot.is_empty() or _meaningfully_changed(_snapshot, next_snapshot)
 	_snapshot = next_snapshot.duplicate(true)
 	if changed:
@@ -132,6 +205,21 @@ func refresh_now() -> Dictionary:
 
 func get_snapshot() -> Dictionary:
 	return _snapshot.duplicate(true)
+
+
+func get_diagnostics() -> Dictionary:
+	var config := registry.get_config()
+	return {
+		"assessment_count": _assessment_count,
+		"environment_scan_count": _environment_scan_count,
+		"environment_reuse_count": _environment_reuse_count,
+		"environment_sample_total": _environment_sample_total,
+		"max_samples_observed": _max_samples_observed,
+		"last_sample_count": _last_sample_count,
+		"sample_budget": maxi(1, int(config.get("max_samples", 125))),
+		"last_budget_exhausted": _last_budget_exhausted,
+		"last_reused_environment": _last_reused_environment,
+	}
 
 
 func _sample_environment(center: Vector3i, config: Dictionary) -> Dictionary:
@@ -178,6 +266,35 @@ func _meaningfully_changed(previous: Dictionary, current: Dictionary) -> bool:
 			float(previous.get("hostile_pressure", 0.0))
 			- float(current.get("hostile_pressure", 0.0))
 		) >= 0.5
+		or int(previous.get("windup_count", 0)) != int(current.get("windup_count", 0))
+		or int(previous.get("elite_windup_count", 0))
+		!= int(current.get("elite_windup_count", 0))
+		or _impact_changed(previous, current)
 		or str(previous.get("phase", "")) != str(current.get("phase", ""))
 		or absf(float(previous.get("score", 0)) - float(current.get("score", 0))) >= 5.0
 	)
+
+
+func _impact_changed(previous: Dictionary, current: Dictionary) -> bool:
+	var previous_value := float(previous.get("soonest_impact_seconds", -1.0))
+	var current_value := float(current.get("soonest_impact_seconds", -1.0))
+	if previous_value < 0.0 or current_value < 0.0:
+		return (previous_value < 0.0) != (current_value < 0.0)
+	return absf(previous_value - current_value) >= 0.2
+
+
+func _reset_environment_cache() -> void:
+	_cached_sample.clear()
+	_cached_sample_center = Vector3i.ZERO
+	_has_cached_sample = false
+
+
+func _reset_diagnostics() -> void:
+	_assessment_count = 0
+	_environment_scan_count = 0
+	_environment_reuse_count = 0
+	_environment_sample_total = 0
+	_max_samples_observed = 0
+	_last_sample_count = 0
+	_last_budget_exhausted = false
+	_last_reused_environment = false

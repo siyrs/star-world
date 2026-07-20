@@ -37,14 +37,16 @@ Game Runtime
 │  ├─ Population / Per-species Budgets
 │  ├─ Weighted Live Danger
 │  ├─ Hostile Attack Profiles
-│  └─ Dodgeable Windup State Machine
+│  ├─ Dodgeable Windup State Machine
+│  └─ Batched Threat Invalidation
 │
 ├─ Exploration Domain
 │  ├─ Bounded / Calibrated Prospecting
 │  ├─ Persistent Discovery Records
 │  ├─ Exploration Journal
 │  ├─ Profile-aware Milestones
-│  └─ Atomic Milestone Rewards
+│  ├─ Atomic Milestone Rewards
+│  └─ Cached / Batched Danger Assessment
 │
 ├─ Agriculture & Ranch Domain
 │  ├─ Crop / Soil / Fertilizer
@@ -144,14 +146,21 @@ Game Runtime
 - 地图、深度、昼夜、敌对、岩浆和洞穴组成危险分；
 - HUD 风险反馈与 125 样本硬预算；
 - 普通敌对数量和精英危险权重分离；
-- 昼夜和生态变化触发即时危险刷新；
-- 危险解除后提供玩家反馈。
+- 危险解除后提供玩家反馈；
+- 昼夜、生态和威胁事件按帧合并；
+- 同一玩家方块内事件评估复用环境样本；
+- 原始事件、实际评估、避免评估和缓存复用进入诊断；
+- 多敌对前摇聚合显示数量、精英数量和最快命中时间；
+- 生物死亡和离树即时使危险状态失效；
+- 生物清场不会删除死亡后生成的物理掉落。
 
 相关合同：
 
 - [RESOURCE_DISTRIBUTION.md](RESOURCE_DISTRIBUTION.md)
 - [CREATURE_ECOLOGY_DANGER.md](CREATURE_ECOLOGY_DANGER.md)
+- [HOSTILE_ATTACK_WINDUP.md](HOSTILE_ATTACK_WINDUP.md)
 - [ABYSS_ELITE_ECOLOGY.md](ABYSS_ELITE_ECOLOGY.md)
+- [MULTI_HOSTILE_DANGER_BATCHING.md](MULTI_HOSTILE_DANGER_BATCHING.md)
 
 ### 7. 探矿、日志与地图成长
 
@@ -268,27 +277,61 @@ exploration_journal_rewards → exploration_runtime
 - [RANCH_RUNTIME_LIFECYCLE.md](RANCH_RUNTIME_LIFECYCLE.md)
 - [EXPLORATION_RUNTIME_LIFECYCLE.md](EXPLORATION_RUNTIME_LIFECYCLE.md)
 
-## 下一阶段重点
+### 11. 多敌对危险事件合并与全局攻击提示
 
-### 1. 多敌对事件合并与危险刷新预算
-
-增加第二只地图精英之前，先优化和验证：
+已完成：
 
 ```text
-同帧 phase/ecology 事件
-→ 原因集合去重
-→ 每帧最多一次即时危险评估
-→ 保留原始事件数与实际刷新数诊断
+phase_changed / ecology_changed / threat_changed
+→ 同帧原因集合和原始次数
+→ 每批最多 64 个事件
+→ 每帧最多一次危险评估
+→ 同方块环境缓存
+→ 125 样本物理扫描硬上限
 ```
 
-验收必须覆盖：
+生产验收覆盖：
 
-- 三到五只敌对同帧生成；
-- 多只敌对同帧死亡和卸载；
-- 125 环境样本硬上限；
-- 预警圈重叠和焦点提示优先级；
+- 五只敌对同帧生成；
+- 五只敌对同帧进入前摇；
+- 五个实体红色预警圈；
+- 一条全局“来袭攻击 ×5 · 最快命中时间”提示；
+- 五只敌对同步取消；
+- 同帧昼夜变化、三只死亡、两只卸载和生态变化；
+- 三个真实物理掉落不被清场删除；
+- 物理拾取、保存和完整重载。
+
+见 [MULTI_HOSTILE_DANGER_BATCHING.md](MULTI_HOSTILE_DANGER_BATCHING.md)。
+
+## 下一阶段重点
+
+### 1. 多敌对焦点优先级与长期压力
+
+全局 HUD 已能显示攻击数量和最快命中时间。下一步优化中心上下文提示和长期运行：
+
+```text
+当前瞄准的蓄力精英
+→ 当前瞄准的普通蓄力敌人
+→ 最近即将命中的敌人摘要
+→ 普通目标信息
+```
+
+约束：
+
+- 不自动移动准星；
+- 不自动选择攻击目标；
+- 不暴露敌人坐标；
+- 不为每个敌人创建新的全局 UI；
+- 64 节点威胁查询和 125 环境样本上限保持不变。
+
+压力验收：
+
+- 多轮五敌对生成、前摇、取消、死亡和重建；
+- 多红圈重叠截图；
 - 多死亡和多掉落拾取；
-- 长时间生成、上限、卸载和重建 soak。
+- Event/Assessment 比率报告；
+- 长时间危险缓存命中率；
+- ObjectDB、节点和信号退出检查。
 
 ### 2. 下一张地图精英
 
@@ -302,7 +345,7 @@ exploration_journal_rewards → exploration_runtime
 → 有用途掉落
 ```
 
-不得只提高生命、速度和伤害，也不立即增加 Boss、复杂状态效果或大型行为树。
+建议优先极寒冰原或荒漠遗迹。不得只提高生命、速度和伤害，也不立即增加 Boss、复杂状态效果或大型行为树。
 
 ### 3. Machine Base 与自动化接口
 
@@ -344,8 +387,8 @@ exploration_journal_rewards → exploration_runtime
 
 ```text
 P0  输入、保存、世界可见性、发行稳定性          持续守护
-P1  多敌对事件合并与危险刷新预算                 当前架构/性能里程碑
-P1  多敌对可读性与下一张地图精英                 下一玩家里程碑
+P1  多敌对焦点优先级与长期压力                   当前玩家/性能里程碑
+P1  下一张地图精英                              下一内容里程碑
 P2  Machine Base 与自动化接口                   复用成熟机器能力
 P2  建筑交互与连接形状                          提升建造表达
 P3  CI 组合化、规模压测和更多内容                在合同稳定后推进
@@ -377,13 +420,19 @@ P3  CI 组合化、规模压测和更多内容                在合同稳定后
 20. 世界状态迁移按参与者顺序执行并进入诊断；
 21. 玩家能力端口必须在菜单、失败和 Shutdown 时显式解绑；
 22. 对外部实体建立的长期信号必须在领域清理前主动断开；
-23. 敌对攻击必须有可观察前摇、稳定取消原因和真实躲避路径；
-24. 纯视觉攻击提示不得拥有碰撞或改变伤害判定；
-25. 生物攻击冷却不得与玩家伤害保护形成静默丢弃；
-26. 新物种必须通过脚本/数据目录双向校验；
-27. 精英必须有低频条件、独立上限、可读权衡和有用途掉落；
-28. 敌对数量与威胁权重不得混为同一指标；
-29. 新分支必须基于最新 `master`，不得回退并行改动。
+23. 同帧高成本失效事件必须先合并，再执行实际评估；
+24. 原始事件数、实际评估数、合并数和丢弃数必须分别诊断；
+25. 环境缓存只能在明确不变的空间键内复用，并由周期评估重新验证；
+26. 物理扫描的单次预算和同帧执行次数必须同时受限；
+27. 敌对攻击必须有可观察前摇、稳定取消原因和真实躲避路径；
+28. 纯视觉攻击提示不得拥有碰撞或改变伤害判定；
+29. 全局攻击提示不得泄漏攻击者坐标或自动选择目标；
+30. 生物攻击冷却不得与玩家伤害保护形成静默丢弃；
+31. 新物种必须通过脚本/数据目录双向校验；
+32. 精英必须有低频条件、独立上限、可读权衡和有用途掉落；
+33. 敌对数量与威胁权重不得混为同一指标；
+34. 生物清场不得删除已经生成的物理掉落；
+35. 新分支必须基于最新 `master`，不得回退并行改动。
 
 每个里程碑必须具备：
 
