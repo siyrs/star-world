@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_resource_distribution.ps1"
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_ecology_danger.ps1"
+& "$PSScriptRoot\developer_b\validate_multi_hostile_danger.ps1"
 & "$PSScriptRoot\developer_b\validate_hostile_attacks.ps1"
 & "$PSScriptRoot\developer_b\validate_abyss_elite.ps1"
 & "$PSScriptRoot\developer_b\validate_exploration_journal.ps1"
@@ -61,6 +62,7 @@ Invoke-GodotTest 'res://tests/qa/inventory_transaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/resource_distribution_regression.gd'
 Invoke-GodotTest 'res://tests/qa/prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ecology_danger_regression.gd'
+Invoke-GodotTest 'res://tests/qa/multi_hostile_danger_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_journal_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
 Invoke-GodotTest 'res://tests/qa/map_signature_prospecting_regression.gd'
@@ -99,4 +101,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: husbandry + ranch + exploration lifecycle composition, bounded feedback, atomic persistence and runtime checks'
+Write-Host 'PASS: multi-hostile danger batching + lifecycle composition + bounded feedback + release-safe runtime checks'
