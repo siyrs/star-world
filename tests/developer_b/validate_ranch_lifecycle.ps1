@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Resolve-Path "$PSScriptRoot\..\.."
+$gameplayHubPath = Join-Path $root 'src\ui\service_hub.gd'
 $husbandryHubPath = Join-Path $root 'src\ui\husbandry_progression_service_hub.gd'
 $ranchHubPath = Join-Path $root 'src\ui\ranch_progression_service_hub.gd'
 $explorationHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
@@ -10,6 +11,7 @@ $attractionPath = Join-Path $root 'src\husbandry\animal_attraction_service.gd'
 $productPath = Join-Path $root 'src\husbandry\animal_product_service.gd'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 
+$gameplayHubText = Get-Content -Raw -Encoding UTF8 $gameplayHubPath
 $husbandryHubText = Get-Content -Raw -Encoding UTF8 $husbandryHubPath
 $ranchHubText = Get-Content -Raw -Encoding UTF8 $ranchHubPath
 $explorationHubText = Get-Content -Raw -Encoding UTF8 $explorationHubPath
@@ -19,8 +21,11 @@ $attractionText = Get-Content -Raw -Encoding UTF8 $attractionPath
 $productText = Get-Content -Raw -Encoding UTF8 $productPath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
 
-if ($husbandryHubText -notmatch 'service_hub_feature_coordinator\.gd') {
-  throw 'Husbandry composition root must own the shared feature lifecycle coordinator'
+if ($gameplayHubText -notmatch 'service_hub_feature_coordinator\.gd') {
+  throw 'Gameplay composition root must own the shared feature lifecycle coordinator'
+}
+if ($husbandryHubText -match 'service_hub_feature_coordinator\.gd') {
+  throw 'Husbandry hub must reuse the Gameplay coordinator'
 }
 if ($ranchHubText -notmatch 'extends\s+"res://src/ui/husbandry_progression_service_hub\.gd"') {
   throw 'Ranch hub must preserve the husbandry inheritance entry point'
@@ -42,7 +47,7 @@ if ($explorationHubText -notmatch 'extends\s+"res://src/ui/ranch_progression_ser
   throw 'Exploration hub must preserve the ranch inheritance entry point'
 }
 if ($explorationHubText -match 'service_hub_feature_coordinator\.gd') {
-  throw 'Exploration hub must reuse the coordinator inherited through husbandry and ranch'
+  throw 'Exploration hub must reuse the coordinator inherited from Gameplay'
 }
 foreach ($legacyLifecycle in @('_begin_world','attach_game','activate_gameplay','save_current','handle_world_start_failed','return_to_menu','_exit_tree')) {
   if ($explorationHubText -match "func\s+$legacyLifecycle\s*\(") { throw "Exploration hub still duplicates shared lifecycle forwarding: $legacyLifecycle" }
@@ -96,4 +101,4 @@ if ($runAllText -notmatch 'ranch_runtime_lifecycle_regression\.gd') {
   throw 'Full regression entry point must include the ranch runtime lifecycle regression'
 }
 
-Write-Host 'PASS ranch_lifecycle participant=ranch_runtime dependency=husbandry_runtime batch_types=3 public_fields=3'
+Write-Host 'PASS ranch_lifecycle root=gameplay participant=ranch_runtime dependency=husbandry_runtime batch_types=3 public_fields=3'
