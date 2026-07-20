@@ -78,10 +78,10 @@ master@fa58daec78a603351e6d1da9e4ac5ff9d08032c6
 旧路径：
 
 ```text
-phase_changed   → refresh_now
- ecology_changed → refresh_now
- ecology_changed → refresh_now
- ecology_changed → refresh_now
+phase_changed    → refresh_now
+ecology_changed → refresh_now
+ecology_changed → refresh_now
+ecology_changed → refresh_now
 ```
 
 每个 `refresh_now()` 最多读取 125 个方块。五只同步生成和五只同步进入攻击状态，可能让同一玩家位置被重复评估十次。
@@ -110,7 +110,7 @@ max_events_in_refresh_batch
 
 红色实体预警圈适合精确判断单个敌人，但当敌人在玩家身后或多个红圈重叠时，玩家无法迅速理解总攻击数量和最紧迫的一次命中时间。
 
-处置：Spawner 聚合最多 64 个节点中的活跃敌对前摇；危险 Snapshot 和 HUD 显示：
+处置：Spawner 聚合最多 64 个敌对节点中的活跃前摇；危险 Snapshot 和 HUD 显示：
 
 ```text
 来袭攻击 ×N
@@ -134,11 +134,24 @@ tree_exiting
 
 已死亡实体通过 `is_combat_target_available()` 立即从危险查询中排除。
 
-#### 7. `clear_creatures()` 会误删物理掉落
+#### 7. 种群清理和世界清理混用同一入口
 
-Spawner 同时承载生物和 `ItemPickup`。旧实现遍历全部子节点并清理，因此“敌人死亡并生成掉落”和“同帧清场”组合可能把掉落一起删除。
+Spawner 同时承载生物和 `ItemPickup`。跨世界清理必须删除旧生物和旧掉落，但运行中的种群重置若调用同一入口，会把刚由敌人死亡生成、尚未被玩家拾取的掉落一起删除。
 
-处置：`clear_creatures()` 现在只清理 `creatures` 组。真实测试会让三只敌人同帧死亡、两只卸载，然后检查三个物理掉落仍存在、可拾取、可保存和可恢复。
+处置：明确拆分两种语义：
+
+```text
+clear_creatures()
+→ 完整世界生命周期清理
+→ 删除生物与全部旧世界瞬时子节点
+
+clear_creature_population()
+→ 运行时种群清理
+→ 只删除 creatures 组
+→ 保留已经生成的 ItemPickup
+```
+
+真实测试会让三只敌人同帧死亡、两只敌人由运行时种群清理卸载，然后检查三个物理掉落仍存在、可拾取、可保存和可恢复；返回菜单和进入新世界仍使用完整清理，防止旧世界掉落泄漏。
 
 ### P1 · 下一阶段建议
 
@@ -203,10 +216,10 @@ strict import
 - 同方块环境样本缓存；
 - 评估/扫描/复用诊断；
 - Spawner 攻击、死亡和离树威胁事件；
-- 64 节点前摇聚合；
+- 64 敌对节点前摇聚合；
 - 全局来袭攻击 HUD；
 - 已死亡敌对立即过滤；
-- `clear_creatures()` 物理掉落保护；
+- 完整世界清理与掉落安全种群清理双入口；
 - 静态预算合同；
 - 领域回归；
 - 五敌对真实桌面验收；
@@ -228,10 +241,11 @@ strict import
 9. 五个实体红圈与一条全局提示同时存在；
 10. 五只同步取消后提示清除；
 11. 同帧昼夜、三死亡、两卸载和生态变化只评估一次；
-12. 三个真实掉落不被清场删除并可物理拾取；
-13. 保存与完整重载不恢复瞬时前摇；
-14. 全量 Runtime 无回归；
-15. 全部既有真实桌面流程无回归；
-16. Windows Release 实际导出并启动；
-17. 日志无脚本解析错误、ObjectDB 泄漏或资源泄漏；
-18. 分支基于最新 `master`，behind 为 0。
+12. 三个真实掉落不被运行时种群清理删除并可物理拾取；
+13. 跨世界完整清理不会保留旧世界掉落；
+14. 保存与完整重载不恢复瞬时前摇；
+15. 全量 Runtime 无回归；
+16. 全部既有真实桌面流程无回归；
+17. Windows Release 实际导出并启动；
+18. 日志无脚本解析错误、ObjectDB 泄漏或资源泄漏；
+19. 分支基于最新 `master`，behind 为 0。
