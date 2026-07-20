@@ -100,7 +100,8 @@ func _run() -> void:
 	var cutter_before: Dictionary = cutter.call("get_machine_snapshot", machine_id)
 	_check(int(cutter_before.get("input", {}).get("count", 0)) == 2, "real pointer input transfers both stone items")
 	_check(int(cutter_before.get("queued_jobs", 0)) == 2, "stonecutter exposes two queued jobs")
-	_check(is_equal_approx(float(cutter_before.get("estimated_total_seconds", 0.0)), 5.0), "stonecutter exposes five-second total ETA")
+	var live_eta := float(cutter_before.get("estimated_total_seconds", 0.0))
+	_check(live_eta > 4.0 and live_eta <= 5.0, "live stonecutter ETA reflects a two-job queue after bounded scheduler progress")
 
 	var furnace_id := "furnace@desktop-cross-domain"
 	_check(bool(furnace.call("ensure_machine", furnace_id)), "production furnace registers beside the stonecutter")
