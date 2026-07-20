@@ -140,18 +140,28 @@ func open_machine_type(
 
 
 func can_remove_machine_type(machine_type: StringName, machine_id: String) -> Dictionary:
-	var service := get_machine_service(machine_type)
+	var entry: Dictionary = _entries.get(machine_type, {})
+	var service: Node = entry.get("service") as Node
 	if service == null or not is_instance_valid(service):
 		return {
 			"allowed": false,
 			"reason": "machine_service_missing",
 			"message": "机器服务暂不可用，为保护内容已阻止拆除",
 		}
-	var allowed := bool(service.call("can_remove_machine", machine_id))
+	# Registered slots are the persistent player-owned contents. Runtime heat,
+	# animation and other transient state may be discarded with an empty machine.
+	for slot_name: String in get_slot_names(machine_type):
+		var raw_slot: Variant = service.call("get_slot", machine_id, slot_name)
+		if raw_slot is Dictionary and int(raw_slot.get("count", 0)) > 0:
+			return {
+				"allowed": false,
+				"reason": "machine_not_empty",
+				"message": get_not_empty_message(machine_type),
+			}
 	return {
-		"allowed": allowed,
-		"reason": "" if allowed else "machine_not_empty",
-		"message": "" if allowed else get_not_empty_message(machine_type),
+		"allowed": true,
+		"reason": "",
+		"message": "",
 	}
 
 
