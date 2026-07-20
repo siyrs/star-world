@@ -432,9 +432,15 @@ func _flush_danger_refresh_batch() -> void:
 	)
 	_last_refresh_summary = summary.duplicate(true)
 	_last_refresh_summary.erase("snapshot")
-	immediate_danger_refreshed.emit(
-		_last_refresh_trigger, snapshot.duplicate(true)
-	)
+	# Preserve the original signal contract for existing listeners. Each
+	# unique reason is announced with the same single-assessment snapshot.
+	var compatibility_triggers := _last_refresh_triggers.duplicate()
+	if compatibility_triggers.is_empty():
+		compatibility_triggers.append("manual")
+	for compatibility_trigger: String in compatibility_triggers:
+		immediate_danger_refreshed.emit(
+			compatibility_trigger, snapshot.duplicate(true)
+		)
 	danger_refresh_batch_completed.emit(summary.duplicate(true))
 
 
