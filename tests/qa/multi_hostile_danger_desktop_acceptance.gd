@@ -198,7 +198,7 @@ func _run() -> void:
 	for index in 3:
 		hostiles[index].set("drops", {"rotten_flesh":1})
 		hostiles[index].call("die")
-	spawner.call("clear_creatures")
+	spawner.call("clear_creature_population")
 	for _frame in 4:
 		await process_frame
 	var lifecycle_after_mixed: Dictionary = runtime.call("get_lifecycle_snapshot")
@@ -217,7 +217,7 @@ func _run() -> void:
 	_check(int(danger.call("get_snapshot").get("hostile_count", -1)) == 0, "mixed batch observes the fully cleared hostile population")
 	var pickups := _find_pickups(spawner, "rotten_flesh")
 	var collected_before_move := int(hub.inventory.count_item("rotten_flesh"))
-	_check(pickups.size() + collected_before_move == 3, "three simultaneous deaths preserve every real pickup through creature clearing")
+	_check(pickups.size() + collected_before_move == 3, "three simultaneous deaths preserve every real pickup through population clearing")
 	for pickup: Node3D in pickups:
 		if is_instance_valid(pickup):
 			pickup.global_position = player.global_position + Vector3(0.0, 0.7, 0.0)
