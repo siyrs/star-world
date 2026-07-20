@@ -78,8 +78,16 @@ func set_active(value: bool) -> void:
 
 
 func clear_creatures() -> void:
-	# ItemPickup nodes share this parent with creatures.  Only clear actual
-	# creatures so a simultaneous population reset cannot erase earned drops.
+	# Full world-lifecycle cleanup: creatures and transient pickups from the old
+	# world must both leave before a new world or menu becomes active.
+	for child: Node in get_children():
+		_dispose_child(child, false)
+	_publish_ecology_if_changed(true)
+
+
+func clear_creature_population() -> void:
+	# Runtime population cleanup intentionally preserves ItemPickup children so
+	# drops earned immediately before a population reset remain collectable.
 	for child: Node in get_children():
 		if child.is_in_group("creatures"):
 			_dispose_child(child, false)
