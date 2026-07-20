@@ -75,7 +75,7 @@ const DEFINITIONS := {
 	"oak_stairs_west": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":3, "visual_parent":"oak_stairs"},
 	"glass_pane": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "rotation_quarters":0, "visual_parent":"glass"},
 	"glass_pane_ns": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "rotation_quarters":1, "visual_parent":"glass"},
-	"stonecutter": {"name":"石材切割机", "color":"#6F777C", "solid":true, "transparent":false, "collectible":true, "item_id":"stonecutter", "hardness":3.0}
+	"stonecutter": {"name":"石材切割机", "color":"#6F777C", "solid":true, "transparent":false, "collectible":true, "item_id":"stonecutter", "hardness":3.0, "visual_parent":"repair_station"}
 }
 
 
