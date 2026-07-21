@@ -1,4 +1,3 @@
-class_name StarWorldUpdateService
 extends Node
 
 signal update_available(release: Dictionary)
@@ -16,12 +15,6 @@ const DownloaderScript = preload("res://src/update/resumable_http_downloader.gd"
 
 const UPDATE_DIRECTORY := "user://updates"
 const HELPER_RESOURCE_PATH := "res://src/update/windows_update_helper.ps1"
-const API_HEADERS := PackedStringArray([
-	"Accept: application/vnd.github+json",
-	"X-GitHub-Api-Version: 2022-11-28",
-	"User-Agent: StarWorldUpdater/1",
-	"Cache-Control: no-cache",
-])
 const MAX_METADATA_BYTES := 1024 * 1024
 
 var current_version := AppVersion.CURRENT_VERSION
@@ -47,6 +40,15 @@ var _last_error := ""
 var _check_count := 0
 var _download_start_count := 0
 var _install_launch_count := 0
+
+
+static func _release_api_headers() -> PackedStringArray:
+	return PackedStringArray([
+		"Accept: application/vnd.github+json",
+		"X-GitHub-Api-Version: 2022-11-28",
+		"User-Agent: StarWorldUpdater/1",
+		"Cache-Control: no-cache",
+	])
 
 
 func _ready() -> void:
@@ -88,7 +90,7 @@ func check_for_updates(force: bool = true) -> bool:
 	_set_state(&"checking", "正在检查 GitHub Release…")
 	var error := _release_request.request(
 		release_api_url,
-		API_HEADERS,
+		_release_api_headers(),
 		HTTPClient.METHOD_GET
 	)
 	if error != OK:
