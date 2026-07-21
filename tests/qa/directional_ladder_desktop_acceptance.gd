@@ -197,8 +197,6 @@ func _run() -> void:
 	_set_key(KEY_S, false)
 	_check(descended, "holding real S descends the production ladder")
 
-	# Let the descent velocity settle while remaining attached before exercising
-	# the edge-triggered jump input.
 	for _frame in LADDER_SETTLE_FRAMES:
 		await physics_frame
 		if absf(player.velocity.y) < 0.05:
@@ -227,8 +225,6 @@ func _run() -> void:
 		"jump pushes the player outward from the backing wall",
 	)
 
-	# Save from a known non-ladder location so reloading tests lifecycle reset,
-	# not an immediate legitimate contact at the saved spawn point.
 	player.global_position = gallery_position
 	player.call("reset_motion")
 	for _frame in 6:
@@ -343,7 +339,9 @@ func _set_key(keycode: Key, pressed: bool) -> void:
 	event.keycode = keycode
 	event.physical_keycode = keycode
 	event.pressed = pressed
-	root.push_input(event)
+	# Feed the event through Input so action pressed/just-pressed semantics match
+	# a real operating-system key event before the next physics frame.
+	Input.parse_input_event(event)
 
 
 func _focus_hits(focus: Dictionary, expected: Vector3i) -> bool:
