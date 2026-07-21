@@ -47,7 +47,7 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(bool(scheduler.call("is_active")), "world activation starts the shared machine scheduler")
 	_check(bool(furnace.call("is_externally_scheduled")) and not furnace.is_processing(), "production furnace has no duplicate private process loop")
-	_check(int(hub.feature_lifecycle.call("get_snapshot").get("participant_count", 0)) == 5, "production composition exposes five lifecycle participants")
+	_check(int(hub.feature_lifecycle.call("get_snapshot").get("participant_count", 0)) == 6, "production composition exposes six lifecycle participants")
 
 	var first_id := "furnace@desktop-one"
 	var second_id := "furnace@desktop-two"
