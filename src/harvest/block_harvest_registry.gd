@@ -41,6 +41,12 @@ func get_profile(block_id: String) -> Dictionary:
 		return {}
 	var definition := BlockRegistryScript.get_definition(block_id)
 	var rule: Dictionary = _rules.get(block_id, {})
+	if rule.is_empty():
+		var parent_id := str(
+			definition.get("harvest_parent", definition.get("visual_parent", ""))
+		)
+		if not parent_id.is_empty():
+			rule = _rules.get(parent_id, {})
 	var hardness := float(definition.get("hardness", 0.0))
 	var default_breakable := (
 		block_id != BlockRegistryScript.AIR
