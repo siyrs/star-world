@@ -16,15 +16,21 @@ const COMPLETION_EPSILON := 0.0001
 
 var tool_service: Node
 var interaction_service: Node
+var structure_service: Node
 var registry = RegistryScript.new()
 var policy = PolicyScript.new()
 var _active: Dictionary = {}
 var _last_rejection_key := ""
 
 
-func setup(p_tool_service: Node, p_interaction_service: Node = null) -> void:
+func setup(
+	p_tool_service: Node,
+	p_interaction_service: Node = null,
+	p_structure_service: Node = null
+) -> void:
 	tool_service = p_tool_service
 	interaction_service = p_interaction_service
+	structure_service = p_structure_service
 
 
 func clear() -> void:
@@ -138,7 +144,15 @@ func _commit(
 		return _reject_once("inventory_full", block_position, block_id, _active)
 	if not world.has_method("remove_block"):
 		return _reject_once("world_missing_contract", block_position, block_id, _active)
-	var removed_block := str(world.call("remove_block", block_position))
+	var removal := _remove_world_block(world, block_position, block_id)
+	if not bool(removal.get("success", false)):
+		return _reject_once(
+			str(removal.get("reason", "remove_failed")),
+			block_position,
+			block_id,
+			_active
+		)
+	var removed_block := str(removal.get("removed_block", block_id))
 	if removed_block == BlockRegistryScript.AIR:
 		return _reject_once("remove_failed", block_position, block_id, _active)
 	if interaction_service != null and interaction_service.has_method("on_block_removed"):
@@ -159,6 +173,7 @@ func _commit(
 	result["status"] = "completed"
 	result["block_id"] = removed_block
 	result["position"] = [block_position.x, block_position.y, block_position.z]
+	result["removed_positions"] = removal.get("removed_positions", [])
 	result["drop_granted"] = drop_granted
 	result["drop_item"] = drop_item if drop_granted else ""
 	result["drop_count"] = drop_count if drop_granted else 0
@@ -168,6 +183,29 @@ func _commit(
 	harvest_progress_changed.emit({})
 	harvest_completed.emit(result.duplicate(true))
 	return result
+
+
+func _remove_world_block(
+	world: Node,
+	block_position: Vector3i,
+	block_id: String
+) -> Dictionary:
+	if structure_service != null and structure_service.has_method("remove_block_structure"):
+		var raw_result: Variant = structure_service.call(
+			"remove_block_structure", world, block_position, block_id
+		)
+		if raw_result is Dictionary:
+			var result: Dictionary = raw_result
+			if bool(result.get("handled", false)):
+				return result.duplicate(true)
+	var removed_block := str(world.call("remove_block", block_position))
+	return {
+		"handled":false,
+		"success":removed_block != BlockRegistryScript.AIR,
+		"reason":"" if removed_block != BlockRegistryScript.AIR else "remove_failed",
+		"removed_block":removed_block,
+		"removed_positions":[[block_position.x, block_position.y, block_position.z]],
+	}
 
 
 func _interaction_allows_break(world: Node, block_position: Vector3i, block_id: String) -> bool:
