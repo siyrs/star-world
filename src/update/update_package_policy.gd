@@ -63,6 +63,15 @@ static func validate_manifest(
 		required.append({"path": path, "sha256": digest, "size": size})
 	if AppVersion.EXECUTABLE_NAME not in seen or "StarWorld.pck" not in seen:
 		return _failure("required_payload_missing")
+	if not archive_files.is_empty():
+		for raw_archive_path: String in archive_files:
+			var archive_path := raw_archive_path.replace("\\", "/").strip_edges()
+			if archive_path.is_empty() or archive_path.ends_with("/"):
+				continue
+			if archive_path == AppVersion.UPDATE_MANIFEST_NAME:
+				continue
+			if not seen.has(archive_path):
+				return _failure("manifest_unlisted_file")
 	return {
 		"success": true,
 		"version": version,
