@@ -26,6 +26,33 @@ function Resolve-CSharpCompiler {
     throw 'A Windows C# compiler is required for the real relaunch acceptance fixture.'
 }
 
+function Wait-ForProcessExit([int]$ProcessId, [int]$TimeoutSeconds = 10) {
+    if ($ProcessId -le 0) { return }
+    $deadline = [DateTime]::UtcNow.AddSeconds([Math]::Max(1, $TimeoutSeconds))
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if ($null -eq (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) { return }
+        Start-Sleep -Milliseconds 100
+    }
+    Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
+}
+
+function Remove-TreeWithRetry([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $lastError = $null
+    foreach ($attempt in 1..20) {
+        try {
+            Remove-Item -Recurse -Force -LiteralPath $Path -ErrorAction Stop
+            return
+        }
+        catch {
+            $lastError = $_
+            Start-Sleep -Milliseconds 150
+        }
+    }
+    if ($null -ne $lastError) { throw $lastError }
+}
+
 function Build-FakeApp([string]$Path, [bool]$Acknowledge) {
     $ackCode = if ($Acknowledge) {
 @'
@@ -70,7 +97,7 @@ $ackCode
 }
 
 function Build-Package([string]$Directory, [string]$ZipPath, [bool]$Acknowledge) {
-    if (Test-Path $Directory) { Remove-Item -Recurse -Force $Directory }
+    if (Test-Path $Directory) { Remove-TreeWithRetry $Directory }
     New-Item -ItemType Directory -Force -Path $Directory | Out-Null
     $exe = Join-Path $Directory 'StarWorld.exe'
     $pck = Join-Path $Directory 'StarWorld.pck'
@@ -117,8 +144,9 @@ try {
     if (-not (Test-Path $install\relaunch-marker.txt)) { throw 'Updated executable was not automatically relaunched' }
     if ((Get-Content -Raw $install\relaunch-marker.txt).Trim() -ne '1.1.0') { throw 'Relaunched app did not receive target version' }
     if (Get-ChildItem -LiteralPath $testRoot -Directory -Filter '.starworld-backup-*') { throw 'Successful update left a backup directory' }
+    Wait-ForProcessExit -ProcessId ([int]$success.launched_pid) -TimeoutSeconds 10
 
-    Remove-Item -Recurse -Force $install
+    Remove-TreeWithRetry $install
     New-Item -ItemType Directory -Force -Path $install | Out-Null
     'rollback-executable' | Set-Content -LiteralPath (Join-Path $install 'StarWorld.exe') -Encoding ASCII
     'rollback-pck' | Set-Content -LiteralPath (Join-Path $install 'StarWorld.pck') -Encoding ASCII
@@ -143,5 +171,5 @@ try {
     Write-Host 'PASS windows_update_helper swap=1 relaunch=1 ack=1 rollback=1'
 }
 finally {
-    if (Test-Path $testRoot) { Remove-Item -Recurse -Force $testRoot }
+    if (Test-Path $testRoot) { Remove-TreeWithRetry $testRoot }
 }
