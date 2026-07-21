@@ -74,6 +74,16 @@ func install(p_hub: Node) -> bool:
 	return true
 
 
+func begin_world(state: Dictionary) -> void:
+	_reset_maturity_counters()
+	super.begin_world(state)
+
+
+func clear(reason: StringName = &"clear") -> void:
+	super.clear(reason)
+	_reset_maturity_counters()
+
+
 func get_lifecycle_snapshot() -> Dictionary:
 	var result: Dictionary = super.get_lifecycle_snapshot()
 	result["pending_maturity_events"] = _pending_maturity_total
@@ -171,3 +181,13 @@ func _reset_maturity_batch() -> void:
 	_pending_maturity_total = 0
 	_pending_unclassified_maturity_count = 0
 	_pending_dropped_position_samples = 0
+
+
+func _reset_maturity_counters() -> void:
+	_reset_maturity_batch()
+	_maturity_batch_count = 0
+	_matured_crop_total = 0
+	_maturity_audio_count = 0
+	_dropped_maturity_events = 0
+	_dropped_maturity_position_samples = 0
+	_last_maturity_summary.clear()
