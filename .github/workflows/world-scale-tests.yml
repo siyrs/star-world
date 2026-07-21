@@ -17,7 +17,7 @@ jobs:
   world-mutation-regression:
     name: Rebuild batching, limits, diagnostics and adjacent domain regression
     runs-on: windows-latest
-    timeout-minutes: 36
+    timeout-minutes: 32
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,11 +58,6 @@ jobs:
         shell: pwsh
         run: |
           .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/adaptive_streaming_regression.gd -- --disable-update-check'
-
-      - name: Re-run runtime soak regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_soak_regression.gd -- --disable-update-check'
 
   world-scale-desktop:
     name: Real 3000-mutation build, visualization, save, load and playable reload
