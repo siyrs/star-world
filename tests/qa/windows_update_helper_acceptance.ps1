@@ -13,13 +13,26 @@ function Get-Sha256([string]$Path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
 }
 
+function Resolve-CSharpCompiler {
+    $candidates = @(
+        (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
+        (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    $command = Get-Command csc.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command) { return $command.Source }
+    throw 'A Windows C# compiler is required for the real relaunch acceptance fixture.'
+}
+
 function Build-FakeApp([string]$Path, [bool]$Acknowledge) {
     $ackCode = if ($Acknowledge) {
 @'
             if (!String.IsNullOrEmpty(ack)) {
                 File.WriteAllText(ack, "{\"ok\":true,\"version\":\"" + version + "\"}");
             }
-            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "relaunch-marker.txt"), version);
+            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "relaunch-marker.txt"), version);
             Thread.Sleep(500);
             return 0;
 '@
@@ -28,11 +41,12 @@ function Build-FakeApp([string]$Path, [bool]$Acknowledge) {
             return 0;
 '@
     }
+    $className = 'FakeStarWorld_' + [Guid]::NewGuid().ToString('N')
     $source = @"
 using System;
 using System.IO;
 using System.Threading;
-public static class FakeStarWorld {
+public static class $className {
     public static int Main(string[] args) {
         string ack = "";
         string version = "";
@@ -44,7 +58,15 @@ $ackCode
     }
 }
 "@
-    Add-Type -TypeDefinition $source -OutputAssembly $Path -OutputType ConsoleApplication
+    $sourcePath = "$Path.cs"
+    $source | Set-Content -LiteralPath $sourcePath -Encoding UTF8
+    $compiler = Resolve-CSharpCompiler
+    & $compiler '/nologo' '/target:exe' ("/out:$Path") $sourcePath
+    $exitCode = $LASTEXITCODE
+    Remove-Item -Force -LiteralPath $sourcePath -ErrorAction SilentlyContinue
+    if ($exitCode -ne 0 -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "C# fixture compilation failed with exit $exitCode"
+    }
 }
 
 function Build-Package([string]$Directory, [string]$ZipPath, [bool]$Acknowledge) {
