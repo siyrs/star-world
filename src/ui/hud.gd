@@ -6,6 +6,7 @@ const CrosshairScript = preload("res://src/ui/world_crosshair.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
+const HudIcons = preload("res://src/ui/hud_icon_factory.gd")
 
 var inventory
 var survival
@@ -18,8 +19,8 @@ var _danger_detail: Label
 var _danger_warning: Label
 var _hotbar_panel: PanelContainer
 var _item_panel: PanelContainer
-var _health_bar: ProgressBar
-var _hunger_bar: ProgressBar
+var _health_icons: Array = []
+var _hunger_icons: Array = []
 var _health_label: Label
 var _hunger_label: Label
 var _time_label: Label
@@ -151,25 +152,11 @@ func _build_status_panel() -> void:
 	_health_label = Label.new()
 	_health_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	content.add_child(_health_label)
-	_health_bar = ProgressBar.new()
-	_health_bar.show_percentage = false
-	_health_bar.custom_minimum_size.y = 12.0
-	_health_bar.add_theme_stylebox_override(
-		"fill",
-		Tokens.panel_style(Tokens.COLOR_HEALTH, Tokens.COLOR_HEALTH, 0, Tokens.RADIUS_SM, 1.0)
-	)
-	content.add_child(_health_bar)
+	_health_icons = _build_icon_row(content)
 	_hunger_label = Label.new()
 	_hunger_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	content.add_child(_hunger_label)
-	_hunger_bar = ProgressBar.new()
-	_hunger_bar.show_percentage = false
-	_hunger_bar.custom_minimum_size.y = 12.0
-	_hunger_bar.add_theme_stylebox_override(
-		"fill",
-		Tokens.panel_style(Tokens.COLOR_HUNGER, Tokens.COLOR_HUNGER, 0, Tokens.RADIUS_SM, 1.0)
-	)
-	content.add_child(_hunger_bar)
+	_hunger_icons = _build_icon_row(content)
 
 
 func _build_danger_panel() -> void:
@@ -264,15 +251,38 @@ func _build_fallback_message() -> void:
 	add_child(_message_label)
 
 
+func _build_icon_row(parent: Control) -> Array:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 1)
+	parent.add_child(row)
+	var icons: Array = []
+	for i in 10:
+		var rect := TextureRect.new()
+		rect.custom_minimum_size = Vector2(18, 18)
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(rect)
+		icons.append(rect)
+	return icons
+
+
+func _update_icon_row(icons: Array, current: float, maximum: float, kind: String) -> void:
+	if icons.is_empty():
+		return
+	var units := clampi(int(round(current)), 0, int(round(maximum)))
+	for i in icons.size():
+		var points: int = clampi(units - i * 2, 0, 2)
+		var suffix := "full" if points == 2 else ("half" if points == 1 else "empty")
+		icons[i].texture = HudIcons.texture("%s_%s" % [kind, suffix])
+
+
 func _on_health_changed(current: float, maximum: float) -> void:
-	_health_bar.max_value = maximum
-	_health_bar.value = current
+	_update_icon_row(_health_icons, current, maximum, "heart")
 	_health_label.text = "生命   %d / %d" % [ceili(current), ceili(maximum)]
 
 
 func _on_hunger_changed(current: float, maximum: float) -> void:
-	_hunger_bar.max_value = maximum
-	_hunger_bar.value = current
+	_update_icon_row(_hunger_icons, current, maximum, "drumstick")
 	_hunger_label.text = "饥饿   %d / %d" % [ceili(current), ceili(maximum)]
 
 

@@ -171,13 +171,17 @@ static func _paint_noise(image: Image, palette: Array[Color], density: float, se
 	image.fill(_pick(palette, 1))
 	for y in range(image.get_height()):
 		for x in range(image.get_width()):
-			var noise := _hash01(x, y, seed)
+			# Coarse 2x2-cell variation reads as texture from a distance,
+			# while 1px grain keeps close-up surfaces from feeling flat.
+			var cell_noise := _hash01(x >> 1, y >> 1, seed)
+			var grain := _hash01(x, y, seed ^ 0x5F3A)
+			var noise := clampf(cell_noise * 0.75 + grain * 0.25, 0.0, 1.0)
 			var color_index := 1
-			if noise < density * 0.34:
+			if noise < density * 0.42:
 				color_index = 0
-			elif noise > 1.0 - density * 0.28:
+			elif noise > 1.0 - density * 0.34:
 				color_index = 2
-			elif noise > 0.48 and noise < 0.48 + density * 0.12:
+			elif grain > 0.86 and density >= 0.3:
 				color_index = 3
 			image.set_pixel(x, y, _pick(palette, color_index))
 
@@ -257,12 +261,13 @@ static func _paint_leaves(image: Image, palette: Array[Color], seed: int) -> voi
 	for y in range(image.get_height()):
 		for x in range(image.get_width()):
 			var noise := _hash01(x, y, seed)
-			if noise < 0.16 and x not in [0, 15] and y not in [0, 15]:
+			# Generous holes give the canopy a readable silhouette.
+			if noise < 0.34 and x not in [0, 15] and y not in [0, 15]:
 				continue
 			var index := 1
-			if noise < 0.38:
+			if noise < 0.52:
 				index = 0
-			elif noise > 0.78:
+			elif noise > 0.82:
 				index = 2
 			elif (x + y) % 7 == 0:
 				index = 3

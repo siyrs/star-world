@@ -27,6 +27,7 @@ const ContainerPanelScript = preload("res://src/ui/container_panel.gd")
 const ExplorationJournalPanelScript = preload("res://src/ui/exploration_journal_panel.gd")
 const ExtensionOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const PanelAnimator = preload("res://src/ui/ui_panel_animator.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
 const EXPLORATION_JOURNAL_OVERLAY := ExtensionOverlayIds.EXPLORATION_JOURNAL
@@ -117,6 +118,8 @@ func setup(
 	experience_coordinator = p_experience_coordinator
 	hud.setup(inventory, survival, day_night)
 	guidance_overlay.setup(experience_coordinator)
+	if guidance_overlay.has_method("attach_crosshair") and hud.has_method("get_crosshair"):
+		guidance_overlay.call("attach_crosshair", hud.call("get_crosshair"))
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
 	furnace_panel.setup(inventory, furnace_service)
@@ -350,20 +353,20 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	_hide_all_overlays()
 	match _overlay:
 		Overlay.INVENTORY:
-			inventory_panel.visible = true
+			PanelAnimator.open(inventory_panel)
 		Overlay.CRAFTING:
-			crafting_panel.visible = true
+			PanelAnimator.open(crafting_panel)
 		Overlay.FURNACE:
-			furnace_panel.visible = true
+			PanelAnimator.open(furnace_panel)
 		Overlay.CONTAINER:
-			container_panel.visible = true
+			PanelAnimator.open(container_panel)
 		Overlay.PAUSE:
-			_pause_panel.visible = true
+			PanelAnimator.open(_pause_panel)
 			_pause_status.text = ""
 		Overlay.DEATH:
 			_death_panel.visible = true
 	if _overlay == EXPLORATION_JOURNAL_OVERLAY and exploration_journal_panel != null:
-		exploration_journal_panel.visible = true
+		PanelAnimator.open(exploration_journal_panel)
 	var context := _context_for_overlay()
 	if guidance_overlay != null:
 		guidance_overlay.set_overlay_blocked(_overlay != Overlay.NONE)

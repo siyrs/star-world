@@ -127,6 +127,7 @@ func _normalize_prompt(value: Dictionary) -> Dictionary:
 		return {}
 	return {
 		"visible": true,
+		"focus_type": str(value.get("focus_type", "")),
 		"title": title,
 		"subtitle": str(value.get("subtitle", "")).strip_edges(),
 		"primary": primary,

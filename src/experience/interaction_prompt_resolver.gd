@@ -69,6 +69,7 @@ func _entity_prompt(
 			subtitle += " · 攻击恢复中"
 	return {
 		"visible": true,
+		"focus_type": "entity",
 		"title": "%s%s" % ["精英 · " if elite else "", str(focus.get("display_name", "生物"))],
 		"subtitle": subtitle,
 		"primary": primary,
@@ -119,6 +120,7 @@ func _block_prompt(
 		tone = "info"
 	return {
 		"visible": breakable or not secondary.is_empty() or not profile.is_empty(),
+		"focus_type": "block",
 		"title": str(focus.get("display_name", block_id)),
 		"subtitle": subtitle,
 		"primary": primary,
