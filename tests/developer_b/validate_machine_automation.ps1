@@ -67,7 +67,12 @@ if ($text.Service -match 'get_loaded_chunk' -or $text.Service -match 'block_over
 foreach ($method in @('get_slot','remove_from_slot','add_item','can_transact_items','transact_items')) {
   if ($text.Port -notmatch "func\s+$method\s*\(") { throw "Container inventory port is missing method: $method" }
 }
-if ($text.Container -notmatch 'InventoryTransactionPolicy' -or $text.Container -notmatch 'func\s+can_transact_items\s*\(' -or $text.Container -notmatch 'func\s+transact_items\s*\(') {
+if (
+  $text.Container -notmatch 'inventory_transaction_policy\.gd' -or
+  $text.Container -notmatch 'TransactionPolicyScript\.plan\(' -or
+  $text.Container -notmatch 'func\s+can_transact_items\s*\(' -or
+  $text.Container -notmatch 'func\s+transact_items\s*\('
+) {
   throw 'Container storage must support the same atomic planning contract as player inventory'
 }
 if ($text.Registry -notmatch 'func\s+get_machine_block_id\s*\(') {
