@@ -23,6 +23,16 @@ $ErrorActionPreference = 'Stop'
 
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 
+# A bare name (e.g. 'godot') must be resolved through PowerShell first:
+# System.Diagnostics.Process does not find the extension-less symlink that
+# chickensoft/setup-godot creates on PATH, while Get-Command does.
+if (-not [System.IO.Path]::IsPathRooted($Godot)) {
+    $command = Get-Command $Godot -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        $Godot = $command.Source
+    }
+}
+
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $Godot
 $startInfo.WorkingDirectory = $projectRoot
