@@ -1,0 +1,115 @@
+name: Agriculture runtime lifecycle quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agriculture-runtime-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agriculture-runtime-regression:
+    name: Lifecycle, migration, atomic harvest and maturity batching
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate agriculture runtime contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_agriculture_runtime.ps1
+
+      - name: Run lifecycle and adjacent agriculture regressions
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/agriculture_runtime_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/agriculture_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/irrigation_multicrop_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/fertilizer_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  agriculture-runtime-desktop:
+    name: Real fields, pause, maturity, atomic harvest, save and reload
+    needs: agriculture-runtime-regression
+    runs-on: windows-latest
+    timeout-minutes: 32
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production agriculture lifecycle
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/agriculture_runtime_desktop_acceptance.gd' `
+            -OutputPath 'build\agriculture-runtime-desktop.png' `
+            -TimeoutMilliseconds 140000
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/agriculture_desktop_acceptance.gd' `
+            -OutputPath 'build\agriculture-desktop.png' `
+            -TimeoutMilliseconds 110000
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/irrigation_desktop_acceptance.gd' `
+            -OutputPath 'build\irrigation-desktop.png' `
+            -TimeoutMilliseconds 110000
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/fertilizer_desktop_acceptance.gd' `
+            -OutputPath 'build\fertilizer-desktop.png' `
+            -TimeoutMilliseconds 110000
+
+      - name: Upload agriculture runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agriculture-runtime-desktop-${{ github.run_number }}
+          path: |
+            build/agriculture-*.png
+            build/agriculture-*.log
+            build/irrigation-*.png
+            build/irrigation-*.log
+            build/fertilizer-*.png
+            build/fertilizer-*.log
+          if-no-files-found: error
+          retention-days: 14
