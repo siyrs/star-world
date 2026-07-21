@@ -42,7 +42,8 @@ Game Runtime
 │  └─ Atomic Rewards
 │
 ├─ Agriculture & Ranch Domain
-│  ├─ Crops / Soil / Fertilizer
+│  ├─ AgricultureRuntimeParticipant / Pausable Crops
+│  ├─ Atomic Harvest / Soil / Fertilizer
 │  ├─ Husbandry / Breeding / Attraction
 │  └─ Persistent Products / Batched Feedback
 │
@@ -160,11 +161,23 @@ MachineInteractionRouter
 - 小麦、胡萝卜、马铃薯多阶段成长；
 - 有界离线成长、成熟收获和自动补种；
 - 堆肥与成熟保护；
+- 农业显式 `PROCESS_MODE_PAUSABLE`，Pause 与 Death 冻结作物和土壤计时；
+- 成熟收获复用 Inventory 原子事务，背包满和提交竞争时零中间状态；
+- 作物与土壤记录各最多 4096，异常坐标、Stage、时间和未知字段严格规范化；
+- 多作物同帧成熟最多缓存 64 条，合并为一条消息和一次音效；
+- Agriculture Runtime 提供有界聚合诊断，不复制完整农田 Dictionary；
 - 鸡、牛、猪繁殖、幼崽成长和持久管理；
 - 饲料吸引和持久鸡蛋；
 - 多动物同周期产物、出生和成长批量反馈；
-- 畜牧与牧场显式生命周期参与者；
+- 农业、畜牧与牧场均为显式生命周期参与者；
 - 独立状态白名单和旧世界恢复。
+
+合同见：
+
+- [AGRICULTURE.md](AGRICULTURE.md)
+- [AGRICULTURE_RUNTIME_LIFECYCLE.md](AGRICULTURE_RUNTIME_LIFECYCLE.md)
+- [HUSBANDRY_RUNTIME_LIFECYCLE.md](HUSBANDRY_RUNTIME_LIFECYCLE.md)
+- [RANCH_RUNTIME_LIFECYCLE.md](RANCH_RUNTIME_LIFECYCLE.md)
 
 ### 7. 地图资源、生态与危险
 
@@ -194,11 +207,12 @@ MachineInteractionRouter
 
 ### 9. ServiceHub 生命周期组合化
 
-生产入口继续保留七层继承，当前五个参与者：
+生产入口继续保留七层继承，当前六个参与者：
 
 ```text
 ServiceHubFeatureCoordinator
 ├─ machine_runtime
+├─ agriculture_runtime
 ├─ husbandry_runtime
 ├─ ranch_runtime
 ├─ exploration_runtime
@@ -214,38 +228,18 @@ ServiceHubFeatureCoordinator
 - 48 条有界阶段诊断；
 - 共享保存 Payload 和角色 Snapshot；
 - 公共字段、节点路径和玩家端口兼容；
+- Machine、Agriculture、Husbandry、Ranch、Exploration 与 Journal/Rewards 单一生命周期所有者；
 - 返回菜单、失败启动和退出清理；
-- 真实输入、保存、菜单、重载和发行验收。
+- 真实输入、暂停、保存、菜单、重载和发行验收。
 
 ## 下一阶段重点
 
-### 1. Agriculture 生命周期参与者
-
-农业仍在 Character 继承层中负责反序列化、世界绑定、保存和清理。
-
-建议迁移为：
-
-```text
-agriculture_runtime
-├─ AgricultureService
-├─ AgricultureInteractionAdapter
-└─ SoilMoisture / Fertilizer
-```
-
-必须保持：
-
-- `agriculture` 存档字段；
-- 右键交互；
-- 水源、浇灌、肥料和离线成长；
-- 作物位置、阶段和计时兼容；
-- 不为每株作物创建 Timer。
-
-### 2. 连接型建筑
+### 1. 连接型建筑统一形状合同
 
 优先建立邻接与方向纯策略：
 
 ```text
-门开关与朝向
+门开关与双格状态
 → 栅栏连接
 → 梯子攀爬
 → 玻璃板自动连接
@@ -253,18 +247,27 @@ agriculture_runtime
 
 视觉、碰撞、预览、提交和保存必须使用同一形状合同。
 
-### 3. 长期规模与性能
+需要先解决：
+
+- 方向与邻接计算不能分别散落在 Chunk、Player 和 Preview；
+- 双格门必须有唯一状态所有者和原子放置/拆除；
+- 邻接变化只重建受影响方块与边界 Chunk；
+- 连接结果应从世界状态确定性推导，不重复保存缓存；
+- 旧 `oak_door`、`oak_fence`、`ladder`、`glass_pane` numeric ID 保持不变。
+
+### 2. 长期规模与性能
 
 在继续扩大内容前补充：
 
 - 多机器自动供料、加工、收货和离线恢复压测；
-- 机器、畜牧、牧场和危险共享调度预算报告；
+- 大型农田暂停、成熟批次、保存和加载压测；
+- 机器、农业、畜牧、牧场和危险共享预算报告；
 - 大量方向/非整块方块区块重建压测；
 - 存档体积与加载时间报告；
 - 多小时运行 soak；
 - 多敌对死亡、掉落和卸载压力。
 
-### 4. CI reusable workflow
+### 3. CI reusable workflow
 
 专项工作流数量持续增长。提取可复用模板：
 
@@ -278,7 +281,7 @@ strict import
 
 完整 Windows Release 仍保留单一权威工作流。
 
-### 5. 自动化扩展前置条件
+### 4. 自动化扩展前置条件
 
 在以下数据出现前，不引入管道、电网或跨 Chunk 物流：
 
