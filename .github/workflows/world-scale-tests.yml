@@ -17,7 +17,7 @@ jobs:
   world-mutation-regression:
     name: Rebuild batching, limits, diagnostics and adjacent domain regression
     runs-on: windows-latest
-    timeout-minutes: 32
+    timeout-minutes: 36
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,19 +39,30 @@ jobs:
         run: |
           .\tests\developer_b\validate_world_mutation_batch.ps1
 
-      - name: Run batching and adjacent scale regressions
+      - name: Run bounded world mutation regression
         shell: pwsh
         run: |
-          $scripts = @(
-            'res://tests/qa/world_mutation_batch_regression.gd',
-            'res://tests/qa/connected_block_shapes_regression.gd',
-            'res://tests/qa/agriculture_runtime_lifecycle_regression.gd',
-            'res://tests/qa/adaptive_streaming_regression.gd',
-            'res://tests/qa/runtime_soak_regression.gd'
-          )
-          foreach ($script in $scripts) {
-            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script -- --disable-update-check"
-          }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/world_mutation_batch_regression.gd -- --disable-update-check'
+
+      - name: Re-run connected shape regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/connected_block_shapes_regression.gd -- --disable-update-check'
+
+      - name: Re-run agriculture lifecycle regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_runtime_lifecycle_regression.gd -- --disable-update-check'
+
+      - name: Re-run adaptive streaming regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/adaptive_streaming_regression.gd -- --disable-update-check'
+
+      - name: Re-run runtime soak regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_soak_regression.gd -- --disable-update-check'
 
   world-scale-desktop:
     name: Real 3000-mutation build, visualization, save, load and playable reload
