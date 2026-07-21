@@ -6,6 +6,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 StarWorldUpdateService="*res://src/update/update_service.gd"
+StarWorldUpdateMenuBridge="*res://src/update/update_menu_bridge.gd"
 
 [display]
 window/size/viewport_width=1280
