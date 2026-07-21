@@ -132,10 +132,16 @@ try {
     if ([string]$manifest.version -ne $TargetVersion) { throw 'Update package version mismatch.' }
     if ([string]$manifest.executable -ne $ExecutableName) { throw 'Update executable name mismatch.' }
 
+    $stageRoot = [System.IO.Path]::GetFullPath($stagingDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $manifestPaths = @{}
     foreach ($file in @($manifest.files)) {
-        $relative = ([string]$file.path).Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+        $manifestRelative = ([string]$file.path).Replace('\', '/').Trim()
+        $manifestKey = $manifestRelative.ToLowerInvariant()
+        if ([string]::IsNullOrWhiteSpace($manifestRelative) -or $manifestPaths.ContainsKey($manifestKey)) {
+            throw "Duplicate or empty manifest path: $manifestRelative"
+        }
+        $relative = $manifestRelative.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
         $candidate = [System.IO.Path]::GetFullPath((Join-Path $stagingDirectory $relative))
-        $stageRoot = [System.IO.Path]::GetFullPath($stagingDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
         if (-not $candidate.StartsWith($stageRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Manifest path escapes staging directory: $relative"
         }
@@ -147,6 +153,18 @@ try {
         }
         if ((Get-Sha256 $candidate) -ne ([string]$file.sha256).ToLowerInvariant()) {
             throw "Manifest file checksum mismatch: $relative"
+        }
+        $manifestPaths[$manifestKey] = $true
+    }
+    foreach ($stagedFile in @(Get-ChildItem -LiteralPath $stagingDirectory -File -Recurse)) {
+        $fullStagedPath = [System.IO.Path]::GetFullPath($stagedFile.FullName)
+        if (-not $fullStagedPath.StartsWith($stageRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Staged file escapes staging directory: $fullStagedPath"
+        }
+        $stagedRelative = $fullStagedPath.Substring($stageRoot.Length).Replace('\', '/')
+        if ($stagedRelative -eq 'update-manifest.json') { continue }
+        if (-not $manifestPaths.ContainsKey($stagedRelative.ToLowerInvariant())) {
+            throw "Archive contains an unlisted payload file: $stagedRelative"
         }
     }
 
