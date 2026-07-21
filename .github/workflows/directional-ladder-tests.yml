@@ -42,6 +42,7 @@ jobs:
       - name: Run ladder and adjacent movement regressions
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
           $scripts = @(
             'res://tests/qa/directional_ladder_regression.gd',
             'res://tests/qa/movement_lifecycle_regression.gd',
@@ -51,8 +52,25 @@ jobs:
             'res://tests/qa/tool_harvest_regression.gd'
           )
           foreach ($script in $scripts) {
-            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script -- --disable-update-check"
+            $slug = [System.IO.Path]::GetFileNameWithoutExtension($script)
+            $logPath = "build/directional-ladder-domain-$slug.log"
+            try {
+              .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script -- --disable-update-check" *>&1 |
+                Tee-Object -FilePath $logPath
+            } catch {
+              $_ | Out-String | Add-Content -LiteralPath $logPath
+              throw
+            }
           }
+
+      - name: Upload ladder domain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: directional-ladder-domain-${{ github.run_number }}
+          path: build/directional-ladder-domain-*.log
+          if-no-files-found: error
+          retention-days: 14
 
   ladder-desktop:
     name: Real wall placement, climb, hold, descend, detach, save and reload
