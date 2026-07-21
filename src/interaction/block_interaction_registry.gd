@@ -48,3 +48,18 @@ static func is_container(block_id: String) -> bool:
 
 static func is_machine(block_id: String) -> bool:
 	return str(get_interaction(block_id).get("action", "")) == ACTION_MACHINE
+
+
+static func get_machine_block_id(machine_type: StringName) -> String:
+	var normalized_type := str(machine_type).strip_edges()
+	if normalized_type.is_empty():
+		return ""
+	for raw_block_id: Variant in INTERACTIONS.keys():
+		var block_id := str(raw_block_id)
+		var definition: Dictionary = INTERACTIONS.get(block_id, {})
+		if (
+			str(definition.get("action", "")) == str(ACTION_MACHINE)
+			and str(definition.get("machine_type", "")) == normalized_type
+		):
+			return block_id
+	return ""
