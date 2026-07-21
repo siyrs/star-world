@@ -88,7 +88,10 @@ jobs:
           # D3D11 and falls back to WARP (software) on GPU-less runners.
           # (Mesa's opengl32.dll was tried and breaks Godot's native GL window creation.)
           # Game reads OS.get_cmdline_user_args(): everything must follow a literal `--`.
-          $arguments = '--rendering-driver opengl3_angle -- --disable-update-check --release-smoke --smoke-soak-frames=60 --smoke-output=build/release-smoke.json'
+          # The report path must be absolute: the exported game's working directory
+          # differs from the step's, so a relative path lands somewhere unexpected.
+          $reportPath = ($PWD -replace '\\', '/') + '/build/release-smoke.json'
+          $arguments = "--rendering-driver opengl3_angle -- --disable-update-check --release-smoke --smoke-soak-frames=60 --smoke-output=$reportPath"
           $process = Start-Process -FilePath build\release\StarWorld.exe -ArgumentList $arguments -PassThru -NoNewWindow `
             -RedirectStandardOutput build\smoke.out.log -RedirectStandardError build\smoke.err.log
           $failure = ''
