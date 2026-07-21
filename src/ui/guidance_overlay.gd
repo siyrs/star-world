@@ -26,6 +26,24 @@ var _tutorial_description: Label
 var _tutorial_hint: Label
 var _tutorial_state: Dictionary = {}
 var _prompt_state: Dictionary = {}
+var _crosshair: Control
+
+
+func attach_crosshair(crosshair: Control) -> void:
+	_crosshair = crosshair
+
+
+func _update_crosshair_state(prompt: Dictionary) -> void:
+	if _crosshair == null or not is_instance_valid(_crosshair):
+		return
+	if not _crosshair.has_method("set_target_state"):
+		return
+	var state := &"neutral"
+	if str(prompt.get("tone", "")) == "error":
+		state = &"hostile"
+	elif str(prompt.get("focus_type", "")) == "block" and str(prompt.get("tone", "")) == "info":
+		state = &"actionable"
+	_crosshair.call("set_target_state", state)
 var _gameplay_active := false
 var _overlay_blocked := false
 
@@ -211,6 +229,7 @@ func _on_toast_changed(toast: Dictionary) -> void:
 
 func _on_prompt_changed(prompt: Dictionary) -> void:
 	_prompt_state = prompt.duplicate(true)
+	_update_crosshair_state(prompt)
 	if prompt.is_empty():
 		_prompt_panel.visible = false
 		return

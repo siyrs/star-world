@@ -117,6 +117,8 @@ func setup(
 	experience_coordinator = p_experience_coordinator
 	hud.setup(inventory, survival, day_night)
 	guidance_overlay.setup(experience_coordinator)
+	if guidance_overlay.has_method("attach_crosshair") and hud.has_method("get_crosshair"):
+		guidance_overlay.call("attach_crosshair", hud.call("get_crosshair"))
 	inventory_panel.setup(inventory)
 	crafting_panel.setup(crafting, inventory)
 	furnace_panel.setup(inventory, furnace_service)
