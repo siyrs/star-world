@@ -1,7 +1,12 @@
 [application]
 config/name="星的世界"
+config/version="1.0.0"
 run/main_scene="res://scenes/game/game.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[autoload]
+StarWorldUpdateService="*res://src/update/update_service.gd"
+StarWorldUpdateMenuBridge="*res://src/update/update_menu_bridge.gd"
 
 [display]
 window/size/viewport_width=1280

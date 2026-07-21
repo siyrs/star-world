@@ -1,0 +1,109 @@
+name: Publish Windows GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-windows-release-${{ github.ref }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Export, validate and publish resumable update assets
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Resolve release tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.tag }}' } else { '${{ github.ref_name }}' }
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+)$') { throw "Release tag must be vX.Y.Z: $tag" }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$($Matches[1])" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+
+      - name: Setup Godot with export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Validate tag and updater contracts
+        shell: pwsh
+        run: |
+          $versionText = Get-Content -Raw -Encoding UTF8 .\src\update\app_version.gd
+          if ($versionText -notmatch 'CURRENT_VERSION\s*:=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') { throw 'Unable to read CURRENT_VERSION' }
+          if ($Matches[1] -ne '${{ steps.version.outputs.version }}') { throw "Tag/version mismatch: tag=${{ steps.version.outputs.version }} app=$($Matches[1])" }
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\developer_b\validate_auto_update.ps1
+
+      - name: Export Windows release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\release | Out-Null
+          godot --headless --path . --export-release 'Windows Desktop' build\release\StarWorld.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path build\release\StarWorld.exe)) { throw 'StarWorld.exe was not exported' }
+          if (-not (Test-Path build\release\StarWorld.pck)) { throw 'StarWorld.pck was not exported' }
+
+      - name: Build signed-by-checksum update package
+        shell: pwsh
+        run: |
+          .\tools\build_update_release.ps1 `
+            -BuildDirectory build\release `
+            -Version '${{ steps.version.outputs.version }}' `
+            -OutputDirectory build\release-assets
+
+      - name: Smoke exported release without network update check
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath build\release\StarWorld.exe -ArgumentList '--disable-update-check','--release-smoke','--release-smoke-output=build/release-smoke.json' -PassThru
+          if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Release smoke timed out' }
+          if ($process.ExitCode -ne 0) { throw "Release smoke failed with exit $($process.ExitCode)" }
+          if (-not (Test-Path build\release-smoke.json)) { throw 'Release smoke report is missing' }
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: starworld-windows-release-${{ steps.version.outputs.tag }}
+          path: |
+            build/release-assets/*
+            build/release-smoke.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          $assets = @(
+            'build/release-assets/StarWorld-Windows-x86_64.zip',
+            'build/release-assets/StarWorld-Windows-x86_64.zip.sha256'
+          )
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag @assets --generate-notes --title "星的世界 $tag" --repo $env:GITHUB_REPOSITORY
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
