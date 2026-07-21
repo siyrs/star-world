@@ -18,6 +18,8 @@ $paths = @{
   Builder = Join-Path $root 'tools\build_update_release.ps1'
   Publish = Join-Path $root '.github\workflows\publish-windows-release.yml'
   Tests = Join-Path $root '.github\workflows\auto-update-tests.yml'
+  RangeServer = Join-Path $root 'tests\ci\resumable_range_server.py'
+  RangeAcceptance = Join-Path $root 'tests\qa\resumable_download_acceptance.gd'
   RunAll = Join-Path $root 'tests\run_all.ps1'
 }
 foreach ($entry in $paths.GetEnumerator()) {
@@ -43,19 +45,22 @@ foreach ($token in @('draft_release','prerelease_ignored','package_asset_missing
 foreach ($token in @('Range: bytes=%d-','If-Range: %s','etag','already_complete','range_mismatch')) {
   if ($text.ResumePolicy -notmatch [regex]::Escape($token)) { throw "Resume policy missing: $token" }
 }
-foreach ($token in @('FLUSH_INTERVAL_BYTES','download-state.json','checksum_mismatch','HTTPClient','\.part')) {
+foreach ($token in @('FLUSH_INTERVAL_BYTES','download-state.json','checksum_mismatch','HTTPClient','\.part','untrusted_redirect_url','cancel\(true\)')) {
   if (($text.Downloader + "`n" + $text.Service) -notmatch $token) { throw "Resumable downloader contract missing: $token" }
 }
 if ($text.Downloader -notmatch 'HashingContext\.HASH_SHA256') { throw 'Downloaded package must be SHA-256 verified' }
-if ($text.Package -notmatch 'UPDATE_MANIFEST_NAME' -or $text.Package -notmatch 'StarWorld\.pck') { throw 'Package manifest must use the authoritative name and require EXE/PCK' }
+if ($text.Package -notmatch 'UPDATE_MANIFEST_NAME' -or $text.Package -notmatch 'StarWorld\.pck' -or $text.Package -notmatch 'manifest_unlisted_file') {
+  throw 'Package manifest must use the authoritative name, require EXE/PCK, and reject unlisted files'
+}
 
-foreach ($token in @('Move-Item -LiteralPath $installFull -Destination $backupDirectory','rolled_back','update-ack','Get-Sha256','Archive entry escapes','Updated application did not acknowledge startup')) {
+foreach ($token in @('Move-Item -LiteralPath $installFull -Destination $backupDirectory','rolled_back','update-ack','Get-Sha256','Archive entry escapes','Updated application did not acknowledge startup','Archive contains an unlisted payload file')) {
   if ($text.Helper -notmatch [regex]::Escape($token)) { throw "Windows helper safety contract missing: $token" }
 }
 $restoreCommand = 'Move-Item -LiteralPath $backupDirectory -Destination $installFull'
 if ($text.Helper -notmatch 'Stop-Process' -or $text.Helper -notmatch [regex]::Escape($restoreCommand)) {
   throw 'Windows helper must stop failed launch and restore the backup'
 }
+if ($text.Helper -match 'Get-FileHash') { throw 'Windows helper must use its own .NET SHA-256 implementation for broad compatibility' }
 
 if ($text.Project -notmatch 'StarWorldUpdateService=.*update_service\.gd' -or $text.Project -notmatch 'StarWorldUpdateMenuBridge=.*update_menu_bridge\.gd') {
   throw 'Update service and menu bridge must be autoloaded'
@@ -67,17 +72,23 @@ if ($text.Service -notmatch 'OS\.has_feature\("editor"\)' -or $text.Service -not
 }
 if ($text.Export -notmatch 'include_filter="src/update/\*\.ps1"') { throw 'Updater helper must be included in the exported PCK' }
 
-foreach ($token in @('update-manifest.json','Compress-Archive','Get-FileHash -Algorithm SHA256','StarWorld-Windows-x86_64.zip.sha256')) {
+foreach ($token in @('update-manifest.json','Compress-Archive','Get-FileHash -Algorithm SHA256','StarWorld-Windows-x86_64.zip.sha256','Get-ChildItem -LiteralPath $build -File -Recurse')) {
   if ($text.Builder -notmatch [regex]::Escape($token)) { throw "Release builder missing: $token" }
 }
 foreach ($token in @('permissions:','contents: write','gh release create','gh release upload','--disable-update-check')) {
   if ($text.Publish -notmatch [regex]::Escape($token)) { throw "Publish workflow missing: $token" }
 }
-foreach ($script in @('auto_update_regression.gd','auto_update_desktop_acceptance.gd','windows_update_helper_acceptance.ps1')) {
+foreach ($script in @('auto_update_regression.gd','auto_update_desktop_acceptance.gd','windows_update_helper_acceptance.ps1','resumable_download_acceptance.gd','resumable_range_server.py')) {
   if ($text.Tests -notmatch [regex]::Escape($script)) { throw "Auto-update workflow is missing test: $script" }
+}
+foreach ($token in @('forced_disconnect','Content-Range','ETag','If-Range')) {
+  if ($text.RangeServer -notmatch [regex]::Escape($token)) { throw "Range server fixture is missing: $token" }
+}
+foreach ($token in @('fresh downloader','HTTP 206','persisted byte boundary','authoritative SHA-256')) {
+  if ($text.RangeAcceptance -notmatch [regex]::Escape($token)) { throw "Real resume acceptance is missing: $token" }
 }
 if ($text.RunAll -notmatch 'validate_auto_update.ps1' -or $text.RunAll -notmatch 'auto_update_regression.gd') {
   throw 'Auto-update tests must be wired into tests/run_all.ps1'
 }
 
-Write-Host "PASS auto_update version=$version resumable=1 sha256=1 rollback=1 relaunch_ack=1"
+Write-Host "PASS auto_update version=$version resumable=real-http sha256=1 rollback=1 relaunch_ack=1 exact_manifest=1"
