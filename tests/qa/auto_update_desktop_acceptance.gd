@@ -19,7 +19,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
 	root.size = Vector2i(1024, 576)
-	var update_service := get_node_or_null("/root/StarWorldUpdateService")
+	var update_service: Node = root.get_node_or_null("StarWorldUpdateService")
 	_check(update_service != null, "production update autoload is mounted")
 	if update_service == null:
 		await _finish(null)
