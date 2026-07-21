@@ -25,16 +25,17 @@
 
 Machine Base 已经统一机器运行、保存和交互。如果自动化继续引入全局机器扫描、每机器 Timer、路径搜索或万能管理器，会重新制造新的生命周期和性能中心。
 
-本实现只增加一个共享 Scheduler Domain：
+本实现由 `MachineRuntimeParticipant` 创建，并只增加一个共享 Scheduler Domain：
 
 ```text
-MachineRuntimeScheduler
-├─ furnace
-├─ stonecutter
-└─ automation
+MachineRuntimeParticipant
+└─ MachineRuntimeScheduler
+   ├─ furnace
+   ├─ stonecutter
+   └─ automation
 ```
 
-自动化 Domain 不代表持久机器实例，因此它的运行 Snapshot 对聚合机器数量贡献 `0`。
+自动化 Domain 不代表持久机器实例，因此它的运行 Snapshot 对聚合机器数量贡献 `0`。Tool 继承层只保留兼容服务字段，不拥有自动化生命周期。
 
 ## 有界预算
 
@@ -97,30 +98,34 @@ machine_removed
 
 ## 世界与生命周期
 
-Automation Service 在 `ToolProgressionServiceHub` 中组合，因为该层是生产 Machine Router 兼容端口首次可用的位置。它仍由同一个 Machine Scheduler 驱动。
-
-生命周期：
+自动化生命周期由现有 `machine_runtime` 参与者统一管理，不增加新的 FeatureLifecycle 参与者：
 
 ```text
-ServiceHub Ready
-→ 注册 automation domain
+MachineRuntimeParticipant.install
+→ 创建 Automation Service
+→ 注册 automation Scheduler Domain
+→ 绑定 Furnace / Stonecutter 事件
 
 Begin World
-→ 清空旧世界引用、游标和统计
+→ 停止 Scheduler
+→ 清空旧 World、游标、缓存和统计
+→ 恢复机器状态
 
 Attach Game
 → 绑定当前 VoxelWorld
 → 从恢复后的机器服务重建一次候选目录
 
+Activate
+→ 与 Furnace / Stonecutter 一起启动共享 Scheduler
+
 Return to Menu / World Start Failed
 → 停止共享 Scheduler
+→ 清空机器与自动化瞬时状态
 → 释放 World
-→ 清空瞬时缓存
 
-Exit Tree
-→ 解绑机器信号
-→ 注销 automation domain
-→ Shutdown
+Shutdown
+→ 解绑机器和 Router 信号
+→ 关闭 Automation、Router、机器领域和 Scheduler
 ```
 
 ## 存档边界
