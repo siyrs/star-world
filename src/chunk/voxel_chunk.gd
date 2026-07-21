@@ -11,16 +11,17 @@ enum BuildPhase {
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const TextureAtlasScript = preload("res://src/block/block_texture_atlas.gd")
 const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
+const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
 const SIZE := 16
 const HEIGHT := 64
 const TOTAL_CELLS := SIZE * HEIGHT * SIZE
 const FACE_DIRECTIONS := [
-	Vector3i(1, 0, 0),
-	Vector3i(-1, 0, 0),
-	Vector3i(0, 1, 0),
-	Vector3i(0, -1, 0),
-	Vector3i(0, 0, 1),
-	Vector3i(0, 0, -1),
+	Vector3i(1,0,0),
+	Vector3i(-1,0,0),
+	Vector3i(0,1,0),
+	Vector3i(0,-1,0),
+	Vector3i(0,0,1),
+	Vector3i(0,0,-1),
 ]
 const FULL_FACE_VERTICES := [
 	[Vector3(1,0,0),Vector3(1,1,0),Vector3(1,1,1),Vector3(1,0,1)],
@@ -30,7 +31,7 @@ const FULL_FACE_VERTICES := [
 	[Vector3(0,0,1),Vector3(1,0,1),Vector3(1,1,1),Vector3(0,1,1)],
 	[Vector3(1,0,0),Vector3(0,0,0),Vector3(0,1,0),Vector3(1,1,0)],
 ]
-const FACE_VERTEX_ORDER := [0, 1, 2, 0, 2, 3]
+const FACE_VERTEX_ORDER := [0,1,2,0,2,3]
 const CROP_PLANES := [
 	[Vector3(0.14,0.02,0.14),Vector3(0.86,0.02,0.86),Vector3(0.86,1.0,0.86),Vector3(0.14,1.0,0.14)],
 	[Vector3(0.86,0.02,0.14),Vector3(0.14,0.02,0.86),Vector3(0.14,1.0,0.86),Vector3(0.86,1.0,0.14)],
@@ -62,7 +63,7 @@ func _ready() -> void:
 
 
 func initialize(p_chunk_coord: Vector2i, p_world: Node) -> void:
-	begin_initialize(p_chunk_coord, p_world)
+	begin_initialize(p_chunk_coord,p_world)
 	while not build_step(TOTAL_CELLS):
 		pass
 
@@ -70,8 +71,8 @@ func initialize(p_chunk_coord: Vector2i, p_world: Node) -> void:
 func begin_initialize(p_chunk_coord: Vector2i, p_world: Node) -> void:
 	chunk_coord = p_chunk_coord
 	_world = p_world
-	name = "Chunk_%d_%d" % [chunk_coord.x, chunk_coord.y]
-	position = Vector3(chunk_coord.x * SIZE, 0.0, chunk_coord.y * SIZE)
+	name = "Chunk_%d_%d" % [chunk_coord.x,chunk_coord.y]
+	position = Vector3(chunk_coord.x*SIZE,0.0,chunk_coord.y*SIZE)
 	_ensure_children()
 	blocks.resize(TOTAL_CELLS)
 	blocks.fill(0)
@@ -84,17 +85,17 @@ func begin_initialize(p_chunk_coord: Vector2i, p_world: Node) -> void:
 
 
 func build_step(cell_budget: int) -> bool:
-	var remaining := maxi(1, cell_budget)
+	var remaining := maxi(1,cell_budget)
 	while remaining > 0:
 		match _build_phase:
 			BuildPhase.GENERATING:
-				var generation_count := mini(remaining, TOTAL_CELLS - _build_cursor)
+				var generation_count := mini(remaining,TOTAL_CELLS-_build_cursor)
 				_generate_cells(generation_count)
 				remaining -= generation_count
 				if _build_cursor >= TOTAL_CELLS:
 					_begin_mesh_build()
 			BuildPhase.MESHING:
-				var mesh_count := mini(remaining, TOTAL_CELLS - _build_cursor)
+				var mesh_count := mini(remaining,TOTAL_CELLS-_build_cursor)
 				_mesh_cells(mesh_count)
 				remaining -= mesh_count
 				if _build_cursor >= TOTAL_CELLS:
@@ -114,9 +115,9 @@ func is_build_complete() -> bool:
 func get_build_progress() -> float:
 	match _build_phase:
 		BuildPhase.GENERATING:
-			return 0.5 * float(_build_cursor) / float(TOTAL_CELLS)
+			return 0.5*float(_build_cursor)/float(TOTAL_CELLS)
 		BuildPhase.MESHING:
-			return 0.5 + 0.5 * float(_build_cursor) / float(TOTAL_CELLS)
+			return 0.5+0.5*float(_build_cursor)/float(TOTAL_CELLS)
 		BuildPhase.READY:
 			return 1.0
 		_:
@@ -126,19 +127,25 @@ func get_build_progress() -> float:
 func get_local_block(local_position: Vector3i) -> String:
 	if not contains_local(local_position):
 		return BlockRegistryScript.AIR
-	var array_index := _index(local_position.x, local_position.y, local_position.z)
+	var array_index := _index(local_position.x,local_position.y,local_position.z)
 	if _pending_generation_overrides.has(array_index):
-		return BlockRegistryScript.get_block_id(int(_pending_generation_overrides[array_index]))
+		return BlockRegistryScript.get_block_id(
+			int(_pending_generation_overrides[array_index])
+		)
 	return BlockRegistryScript.get_block_id(blocks[array_index])
 
 
-func set_local_block(local_position: Vector3i, block_id: String, rebuild: bool = true) -> bool:
+func set_local_block(
+	local_position: Vector3i,
+	block_id: String,
+	rebuild: bool = true
+) -> bool:
 	if not contains_local(local_position) or not BlockRegistryScript.has_block(block_id):
 		return false
-	var array_index := _index(local_position.x, local_position.y, local_position.z)
+	var array_index := _index(local_position.x,local_position.y,local_position.z)
 	var numeric_id := BlockRegistryScript.get_numeric_id(block_id)
 	if _build_phase == BuildPhase.GENERATING and array_index >= _build_cursor:
-		if int(_pending_generation_overrides.get(array_index, -1)) == numeric_id:
+		if int(_pending_generation_overrides.get(array_index,-1)) == numeric_id:
 			return false
 		_pending_generation_overrides[array_index] = numeric_id
 		return true
@@ -151,7 +158,14 @@ func set_local_block(local_position: Vector3i, block_id: String, rebuild: bool =
 
 
 func contains_local(local_position: Vector3i) -> bool:
-	return local_position.x >= 0 and local_position.x < SIZE and local_position.z >= 0 and local_position.z < SIZE and local_position.y >= 0 and local_position.y < HEIGHT
+	return (
+		local_position.x >= 0
+		and local_position.x < SIZE
+		and local_position.z >= 0
+		and local_position.z < SIZE
+		and local_position.y >= 0
+		and local_position.y < HEIGHT
+	)
 
 
 func rebuild_mesh() -> void:
@@ -173,11 +187,13 @@ func get_block_count() -> int:
 
 
 func _generate_cells(count: int) -> void:
-	var origin := Vector3i(chunk_coord.x * SIZE, 0, chunk_coord.y * SIZE)
+	var origin := Vector3i(chunk_coord.x*SIZE,0,chunk_coord.y*SIZE)
 	for _offset in count:
 		var local_position := _position_from_index(_build_cursor)
-		var global_block := origin + local_position
-		var numeric_id := BlockRegistryScript.get_numeric_id(str(_world.call("get_initial_block", global_block)))
+		var global_block := origin+local_position
+		var numeric_id := BlockRegistryScript.get_numeric_id(
+			str(_world.call("get_initial_block",global_block))
+		)
 		if _pending_generation_overrides.has(_build_cursor):
 			numeric_id = int(_pending_generation_overrides[_build_cursor])
 			_pending_generation_overrides.erase(_build_cursor)
@@ -197,68 +213,152 @@ func _begin_mesh_build() -> void:
 
 
 func _mesh_cells(count: int) -> void:
-	var origin := Vector3i(chunk_coord.x * SIZE, 0, chunk_coord.y * SIZE)
+	var origin := Vector3i(chunk_coord.x*SIZE,0,chunk_coord.y*SIZE)
 	for _offset in count:
 		var local_position := _position_from_index(_build_cursor)
 		var block_id := BlockRegistryScript.get_block_id(blocks[_build_cursor])
 		if block_id != BlockRegistryScript.AIR:
-			var global_block := origin + local_position
+			var global_block := origin+local_position
 			var local_origin := Vector3(local_position)
-			var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", "cube"))
+			var shape := str(
+				BlockRegistryScript.get_definition(block_id).get("shape","cube")
+			)
+			var connection_mask := -1
+			if ConnectionPolicyScript.supports(block_id):
+				connection_mask = _resolve_connection_mask(
+					global_block,
+					local_position,
+					block_id
+				)
 			if shape == "crop":
-				_append_crop(_visual_tool, local_origin, block_id)
+				_append_crop(_visual_tool,local_origin,block_id)
 				_visual_faces += CROP_PLANES.size()
 			elif ShapeGeometryScript.uses_partial_geometry(block_id):
-				_append_partial_block(global_block, local_position, local_origin, block_id, shape)
+				_append_partial_block(
+					global_block,
+					local_position,
+					local_origin,
+					block_id,
+					shape,
+					connection_mask
+				)
 			else:
-				_append_full_cube(global_block, local_position, local_origin, block_id)
+				_append_full_cube(global_block,local_position,local_origin,block_id)
 		_build_cursor += 1
 
 
-func _append_full_cube(global_block: Vector3i, local_position: Vector3i, local_origin: Vector3, block_id: String) -> void:
+func _append_full_cube(
+	global_block: Vector3i,
+	local_position: Vector3i,
+	local_origin: Vector3,
+	block_id: String
+) -> void:
 	for face_index in FACE_DIRECTIONS.size():
-		var neighbor_id := _get_neighbor_block(global_block, local_position, FACE_DIRECTIONS[face_index])
-		if not _should_draw_shape_face(block_id, neighbor_id):
+		var neighbor_id := _get_neighbor_block(
+			global_block,
+			local_position,
+			FACE_DIRECTIONS[face_index]
+		)
+		if not _should_draw_shape_face(block_id,neighbor_id):
 			continue
-		_append_cube_face(_visual_tool, local_origin, face_index, block_id, true)
+		_append_cube_face(_visual_tool,local_origin,face_index,block_id,true)
 		_visual_faces += 1
 		if BlockRegistryScript.is_solid(block_id):
-			_append_cube_face(_collision_tool, local_origin, face_index, block_id, false)
+			_append_cube_face(_collision_tool,local_origin,face_index,block_id,false)
 			_collision_faces += 1
 
 
-func _append_partial_block(global_block: Vector3i, local_position: Vector3i, local_origin: Vector3, block_id: String, shape: String) -> void:
-	var boxes: Array[AABB] = ShapeGeometryScript.get_local_boxes(block_id)
+func _append_partial_block(
+	global_block: Vector3i,
+	local_position: Vector3i,
+	local_origin: Vector3,
+	block_id: String,
+	shape: String,
+	connection_mask: int
+) -> void:
+	var boxes: Array[AABB] = ShapeGeometryScript.get_local_boxes(
+		block_id,
+		connection_mask
+	)
 	for box_index in boxes.size():
 		var box: AABB = boxes[box_index]
 		for face_index in FACE_DIRECTIONS.size():
-			if not ShapeGeometryScript.face_enabled(block_id, box_index, face_index):
+			if not ShapeGeometryScript.face_enabled(
+				block_id,
+				box_index,
+				face_index,
+				boxes
+			):
 				continue
-			if ShapeGeometryScript.face_is_cell_boundary(box, face_index):
-				var neighbor_id := _get_neighbor_block(global_block, local_position, FACE_DIRECTIONS[face_index])
-				if not _should_draw_shape_face(block_id, neighbor_id):
+			if ShapeGeometryScript.face_is_cell_boundary(box,face_index):
+				var neighbor_id := _get_neighbor_block(
+					global_block,
+					local_position,
+					FACE_DIRECTIONS[face_index]
+				)
+				if ConnectionPolicyScript.connected_face(
+					block_id,
+					connection_mask,
+					face_index,
+					neighbor_id
+				):
 					continue
-			_append_box_face(_visual_tool, local_origin, box, face_index, block_id, true)
+				if not _should_draw_shape_face(block_id,neighbor_id):
+					continue
+			_append_box_face(
+				_visual_tool,
+				local_origin,
+				box,
+				face_index,
+				block_id,
+				true
+			)
 			_visual_faces += 1
 	if not BlockRegistryScript.is_solid(block_id):
 		return
 	if shape == "stairs":
-		_append_stair_ramp_collision(_collision_tool, local_origin, block_id)
+		_append_stair_ramp_collision(_collision_tool,local_origin,block_id)
 		_collision_faces += 5
 	else:
 		for box_index in boxes.size():
 			var box: AABB = boxes[box_index]
 			for face_index in FACE_DIRECTIONS.size():
-				if ShapeGeometryScript.face_enabled(block_id, box_index, face_index):
-					_append_box_face(_collision_tool, local_origin, box, face_index, block_id, false)
-					_collision_faces += 1
+				if not ShapeGeometryScript.face_enabled(
+					block_id,
+					box_index,
+					face_index,
+					boxes
+				):
+					continue
+				if ShapeGeometryScript.face_is_cell_boundary(box,face_index):
+					var neighbor_id := _get_neighbor_block(
+						global_block,
+						local_position,
+						FACE_DIRECTIONS[face_index]
+					)
+					if ConnectionPolicyScript.connected_face(
+						block_id,
+						connection_mask,
+						face_index,
+						neighbor_id
+					):
+						continue
+				_append_box_face(
+					_collision_tool,
+					local_origin,
+					box,
+					face_index,
+					block_id,
+					false
+				)
+				_collision_faces += 1
 
 
 func _commit_mesh_build() -> void:
 	surface_face_count = _visual_faces
 	if _visual_faces > 0:
 		var visual_mesh := _visual_tool.commit()
-		visual_mesh.surface_set_material(0, _get_shared_voxel_material())
+		visual_mesh.surface_set_material(0,_get_shared_voxel_material())
 		_mesh_instance.mesh = visual_mesh
 	else:
 		_mesh_instance.mesh = null
@@ -276,12 +376,33 @@ func _commit_mesh_build() -> void:
 	_build_phase = BuildPhase.READY
 
 
-func _get_neighbor_block(global_block: Vector3i, local_block: Vector3i, direction: Vector3i) -> String:
-	var neighbor_local := local_block + direction
+func _resolve_connection_mask(
+	global_block: Vector3i,
+	local_block: Vector3i,
+	block_id: String
+) -> int:
+	var neighbors := ConnectionPolicyScript.empty_neighbors()
+	for spec: Dictionary in ConnectionPolicyScript.DIRECTION_SPECS:
+		var direction_name := str(spec.get("name",""))
+		var offset: Vector3i = spec.get("offset",Vector3i.ZERO)
+		neighbors[direction_name] = _get_neighbor_block(
+			global_block,
+			local_block,
+			offset
+		)
+	return ConnectionPolicyScript.resolve_mask(block_id,neighbors)
+
+
+func _get_neighbor_block(
+	global_block: Vector3i,
+	local_block: Vector3i,
+	direction: Vector3i
+) -> String:
+	var neighbor_local := local_block+direction
 	if contains_local(neighbor_local):
 		return get_local_block(neighbor_local)
 	if _world != null:
-		return str(_world.call("get_block", global_block + direction))
+		return str(_world.call("get_block",global_block+direction))
 	return BlockRegistryScript.AIR
 
 
@@ -295,30 +416,43 @@ func _should_draw_shape_face(block_id: String, neighbor_id: String) -> bool:
 	return not ShapeGeometryScript.is_full_cube(neighbor_id)
 
 
-func _append_cube_face(tool: SurfaceTool, local_origin: Vector3, face_index: int, block_id: String, with_visual_data: bool) -> void:
+func _append_cube_face(
+	tool: SurfaceTool,
+	local_origin: Vector3,
+	face_index: int,
+	block_id: String,
+	with_visual_data: bool
+) -> void:
 	var direction := Vector3(FACE_DIRECTIONS[face_index])
 	var corners: Array = FULL_FACE_VERTICES[face_index]
 	var shade := _face_shade(direction)
-	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
+	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id,face_index)
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(direction)
 		if with_visual_data:
 			tool.set_color(shade)
 			tool.set_uv(uvs[corner_index])
-		tool.add_vertex(local_origin + Vector3(corners[corner_index]))
+		tool.add_vertex(local_origin+Vector3(corners[corner_index]))
 
 
-func _append_box_face(tool: SurfaceTool, local_origin: Vector3, box: AABB, face_index: int, block_id: String, with_visual_data: bool) -> void:
+func _append_box_face(
+	tool: SurfaceTool,
+	local_origin: Vector3,
+	box: AABB,
+	face_index: int,
+	block_id: String,
+	with_visual_data: bool
+) -> void:
 	var direction := Vector3(FACE_DIRECTIONS[face_index])
-	var corners: Array[Vector3] = ShapeGeometryScript.face_vertices(box, face_index)
+	var corners: Array[Vector3] = ShapeGeometryScript.face_vertices(box,face_index)
 	var shade := _face_shade(direction)
-	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, face_index)
+	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id,face_index)
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(direction)
 		if with_visual_data:
 			tool.set_color(shade)
 			tool.set_uv(uvs[corner_index])
-		tool.add_vertex(local_origin + corners[corner_index])
+		tool.add_vertex(local_origin+corners[corner_index])
 
 
 func _face_shade(direction: Vector3) -> Color:
@@ -329,42 +463,56 @@ func _face_shade(direction: Vector3) -> Color:
 	return Color.WHITE
 
 
-func _append_stair_ramp_collision(tool: SurfaceTool, local_origin: Vector3, block_id: String) -> void:
+func _append_stair_ramp_collision(
+	tool: SurfaceTool,
+	local_origin: Vector3,
+	block_id: String
+) -> void:
 	for face: Dictionary in ShapeGeometryScript.get_stair_ramp_collision_faces(block_id):
-		var corners: Array = face.get("corners", [])
-		var normal: Vector3 = face.get("normal", Vector3.UP)
+		var corners: Array = face.get("corners",[])
+		var normal: Vector3 = face.get("normal",Vector3.UP)
 		if corners.size() == 4:
-			_append_collision_quad(tool, local_origin, corners, normal)
+			_append_collision_quad(tool,local_origin,corners,normal)
 		elif corners.size() == 3:
-			_append_collision_triangle(tool, local_origin, corners, normal)
+			_append_collision_triangle(tool,local_origin,corners,normal)
 
 
-func _append_collision_quad(tool: SurfaceTool, local_origin: Vector3, corners: Array, normal: Vector3) -> void:
+func _append_collision_quad(
+	tool: SurfaceTool,
+	local_origin: Vector3,
+	corners: Array,
+	normal: Vector3
+) -> void:
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(normal)
-		tool.add_vertex(local_origin + Vector3(corners[corner_index]))
+		tool.add_vertex(local_origin+Vector3(corners[corner_index]))
 
 
-func _append_collision_triangle(tool: SurfaceTool, local_origin: Vector3, corners: Array, normal: Vector3) -> void:
+func _append_collision_triangle(
+	tool: SurfaceTool,
+	local_origin: Vector3,
+	corners: Array,
+	normal: Vector3
+) -> void:
 	for corner: Variant in corners:
 		tool.set_normal(normal)
-		tool.add_vertex(local_origin + Vector3(corner))
+		tool.add_vertex(local_origin+Vector3(corner))
 
 
 func _append_crop(tool: SurfaceTool, local_origin: Vector3, block_id: String) -> void:
 	var definition := BlockRegistryScript.get_definition(block_id)
-	var height := clampf(float(definition.get("crop_height", 1.0)), 0.08, 1.0)
-	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id, 4)
+	var height := clampf(float(definition.get("crop_height",1.0)),0.08,1.0)
+	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id,4)
 	for plane_index in CROP_PLANES.size():
 		var corners: Array = CROP_PLANES[plane_index]
 		var normal: Vector3 = CROP_NORMALS[plane_index]
 		for corner_index in FACE_VERTEX_ORDER:
 			var corner: Vector3 = corners[corner_index]
-			corner.y = minf(corner.y, height)
+			corner.y = minf(corner.y,height)
 			tool.set_normal(normal)
 			tool.set_color(Color.WHITE)
 			tool.set_uv(uvs[corner_index])
-			tool.add_vertex(local_origin + corner)
+			tool.add_vertex(local_origin+corner)
 
 
 static func reset_visual_cache_for_tests() -> void:
@@ -401,12 +549,12 @@ func _ensure_children() -> void:
 
 
 func _position_from_index(linear_index: int) -> Vector3i:
-	var x := linear_index % SIZE
-	var yz: int = linear_index / SIZE
-	var z := yz % SIZE
-	var y: int = yz / SIZE
+	var x := linear_index%SIZE
+	var yz: int = linear_index/SIZE
+	var z := yz%SIZE
+	var y: int = yz/SIZE
 	return Vector3i(x,y,z)
 
 
 func _index(x: int, y: int, z: int) -> int:
-	return (y * SIZE + z) * SIZE + x
+	return (y*SIZE+z)*SIZE+x
