@@ -47,7 +47,7 @@ foreach ($token in @('FLUSH_INTERVAL_BYTES','download-state.json','checksum_mism
   if (($text.Downloader + "`n" + $text.Service) -notmatch $token) { throw "Resumable downloader contract missing: $token" }
 }
 if ($text.Downloader -notmatch 'HashingContext\.HASH_SHA256') { throw 'Downloaded package must be SHA-256 verified' }
-if ($text.Package -notmatch 'update-manifest\.json' -or $text.Package -notmatch 'StarWorld\.pck') { throw 'Package manifest must require EXE and PCK' }
+if ($text.Package -notmatch 'UPDATE_MANIFEST_NAME' -or $text.Package -notmatch 'StarWorld\.pck') { throw 'Package manifest must use the authoritative name and require EXE/PCK' }
 
 foreach ($token in @('Move-Item -LiteralPath $installFull -Destination $backupDirectory','rolled_back','update-ack','Get-Sha256','Archive entry escapes','Updated application did not acknowledge startup')) {
   if ($text.Helper -notmatch [regex]::Escape($token)) { throw "Windows helper safety contract missing: $token" }
