@@ -54,10 +54,7 @@ func _run() -> void:
 
 
 func _test_catalog_and_orientation() -> void:
-	_check(
-		BlockRegistryScript.get_numeric_id("ladder") == 25,
-		"legacy ladder numeric ID remains stable",
-	)
+	_check(BlockRegistryScript.get_numeric_id("ladder") == 25, "legacy ladder numeric ID remains stable")
 	var expected := ["ladder", "ladder_east", "ladder_north", "ladder_west"]
 	for block_id: String in expected:
 		var definition: Dictionary = BlockRegistryScript.get_definition(block_id)
@@ -78,18 +75,13 @@ func _test_catalog_and_orientation() -> void:
 		{"normal":Vector3.RIGHT, "block_id":"ladder_west", "support":Vector3i.LEFT},
 	]
 	for item: Dictionary in face_cases:
-		var resolved := LadderPolicyScript.resolve_for_face_normal(
-			"ladder",
-			Vector3(item.get("normal", Vector3.ZERO))
-		)
+		var normal_value: Vector3 = item.get("normal", Vector3.ZERO)
+		var support_value: Vector3i = item.get("support", Vector3i.ZERO)
+		var resolved := LadderPolicyScript.resolve_for_face_normal("ladder", normal_value)
+		_check(resolved == str(item.get("block_id", "")), "wall face resolves %s" % resolved)
 		_check(
-			resolved == str(item.get("block_id", "")),
-			"wall face resolves ladder orientation %s" % str(item.get("block_id", "")),
-		)
-		_check(
-			LadderPolicyScript.support_offset(resolved)
-			== Vector3i(item.get("support", Vector3i.ZERO)),
-			"%s stores the expected backing-wall direction" % resolved,
+			LadderPolicyScript.support_offset(resolved) == support_value,
+			"%s stores its backing-wall direction" % resolved,
 		)
 	_check(
 		LadderPolicyScript.resolve_for_face_normal("ladder", Vector3.UP).is_empty(),
@@ -104,7 +96,8 @@ func _test_wall_geometry_and_support() -> void:
 		"ladder_north":AABB(Vector3.ZERO, Vector3(1.0, 1.0, 0.125)),
 		"ladder_west":AABB(Vector3.ZERO, Vector3(0.125, 1.0, 1.0)),
 	}
-	for block_id: String in expected_boxes.keys():
+	for raw_id: Variant in expected_boxes.keys():
+		var block_id := str(raw_id)
 		var boxes: Array[AABB] = ShapeGeometryScript.get_local_boxes(block_id)
 		var expected_box: AABB = expected_boxes[block_id]
 		_check(boxes.size() == 1, "%s uses one bounded wall panel" % block_id)
@@ -120,14 +113,8 @@ func _test_wall_geometry_and_support() -> void:
 		"ladder enters the shared partial geometry pipeline",
 	)
 	_check(LadderPolicyScript.is_valid_support("stone"), "full cubes support ladders")
-	_check(
-		not LadderPolicyScript.is_valid_support("stone_slab"),
-		"partial slabs cannot silently support a wall ladder",
-	)
-	_check(
-		not LadderPolicyScript.is_valid_support("ladder"),
-		"another ladder is not treated as a structural backing wall",
-	)
+	_check(not LadderPolicyScript.is_valid_support("stone_slab"), "partial slabs do not support ladders")
+	_check(not LadderPolicyScript.is_valid_support("ladder"), "ladders are not structural backing walls")
 
 
 func _test_placement_preview() -> void:
@@ -145,41 +132,19 @@ func _test_placement_preview() -> void:
 	}
 	var valid: Dictionary = policy.evaluate(focus, "ladder")
 	_check(bool(valid.get("valid", false)), "side-wall ladder preview is valid")
-	_check(
-		(valid.get("placement_boxes", []) as Array).size() == 1,
-		"ladder preview uses the final thin geometry",
-	)
-	_check(
-		valid.get("placement_support_position", []) == [0, 1, 1],
-		"ladder preview exposes its backing-wall position",
-	)
+	_check((valid.get("placement_boxes", []) as Array).size() == 1, "preview uses final thin geometry")
+	_check(valid.get("placement_support_position", []) == [0, 1, 1], "preview exposes support position")
 	var invalid_face := focus.duplicate(true)
 	invalid_face["placement_ladder_face_valid"] = false
-	_check(
-		str(policy.evaluate(invalid_face, "ladder").get("reason", ""))
-		== "ladder_face_invalid",
-		"horizontal floor/ceiling placement is rejected",
-	)
+	_check(str(policy.evaluate(invalid_face, "ladder").get("reason", "")) == "ladder_face_invalid", "floor placement is rejected")
 	var missing_support := focus.duplicate(true)
 	missing_support["placement_ladder_support_block_id"] = "air"
-	_check(
-		str(policy.evaluate(missing_support, "ladder").get("reason", ""))
-		== "ladder_support_missing",
-		"preview rejects a ladder without a complete backing wall",
-	)
-	var mismatched_support := focus.duplicate(true)
-	mismatched_support["placement_ladder_support_matches_target"] = false
-	_check(
-		str(policy.evaluate(mismatched_support, "ladder").get("reason", ""))
-		== "ladder_support_mismatch",
-		"preview rejects a support that differs from the aimed wall",
-	)
-	var overlapping_body := AABB(Vector3(0.2, 1.1, 0.84), Vector3(0.6, 0.7, 0.15))
-	_check(
-		str(policy.evaluate(focus, "ladder", overlapping_body).get("reason", ""))
-		== "player_overlap",
-		"thin ladder placement still protects the player body",
-	)
+	_check(str(policy.evaluate(missing_support, "ladder").get("reason", "")) == "ladder_support_missing", "missing support is rejected")
+	var mismatch := focus.duplicate(true)
+	mismatch["placement_ladder_support_matches_target"] = false
+	_check(str(policy.evaluate(mismatch, "ladder").get("reason", "")) == "ladder_support_mismatch", "wrong support is rejected")
+	var body := AABB(Vector3(0.2, 1.1, 0.84), Vector3(0.6, 0.7, 0.15))
+	_check(str(policy.evaluate(focus, "ladder", body).get("reason", "")) == "player_overlap", "thin ladder still protects the player body")
 
 
 func _test_targeting_and_bounded_contact() -> void:
@@ -188,134 +153,61 @@ func _test_targeting_and_bounded_contact() -> void:
 	world.set_test_block(Vector3i(0, 0, 0), "ladder")
 	world.set_test_block(Vector3i(0, 0, 1), "stone")
 	var resolver = TargetResolverScript.new()
+	# Approach from the playable side (negative Z); the supporting wall remains behind the ladder.
 	var target: Dictionary = resolver.resolve_grid_from_sample(
-		Vector3(0.5, 0.5, 2.5),
-		Vector3.FORWARD,
+		Vector3(0.5, 0.5, -2.5),
+		Vector3.BACK,
 		4.0,
 		Callable(world, "world_to_block"),
 		Callable(world, "get_block")
 	)
-	_check(
-		str(target.get("hit_block_id", "")) == "ladder",
-		"non-solid ladder remains targetable for focus and harvest",
-	)
+	_check(str(target.get("hit_block_id", "")) == "ladder", "non-solid ladder remains targetable")
 	var body_bounds := AABB(Vector3(0.2, 0.05, 0.2), Vector3(0.6, 1.8, 0.6))
 	var contact: Dictionary = LadderPolicyScript.resolve_contact(world, body_bounds)
 	_check(bool(contact.get("active", false)), "supported ladder creates climb contact")
-	_check(
-		int(contact.get("scan_count", 0)) <= LadderPolicyScript.MAX_CONTACT_CELLS,
-		"ladder contact scan remains within its hard budget",
-	)
-	_check(
-		str(contact.get("support_direction", "")) == "south",
-		"contact diagnostics retain the wall orientation",
-	)
+	_check(int(contact.get("scan_count", 0)) <= LadderPolicyScript.MAX_CONTACT_CELLS, "contact scan stays bounded")
+	_check(str(contact.get("support_direction", "")) == "south", "contact retains wall orientation")
 	world.set_test_block(Vector3i(0, 0, 1), "air")
-	var orphan: Dictionary = LadderPolicyScript.resolve_contact(world, body_bounds)
-	_check(not bool(orphan.get("active", false)), "orphan ladder cannot hold the player")
-	var huge_scan: Dictionary = LadderPolicyScript.resolve_contact(
+	_check(not bool(LadderPolicyScript.resolve_contact(world, body_bounds).get("active", false)), "orphan ladder cannot hold the player")
+	var huge: Dictionary = LadderPolicyScript.resolve_contact(
 		world,
 		AABB(Vector3(-10.0, -10.0, -10.0), Vector3(20.0, 20.0, 20.0))
 	)
 	_check(
-		int(huge_scan.get("scan_count", 0)) == LadderPolicyScript.MAX_CONTACT_CELLS
-		and bool(huge_scan.get("budget_exhausted", false)),
-		"pathological body bounds stop at the eighteen-cell contact budget",
+		int(huge.get("scan_count", 0)) == LadderPolicyScript.MAX_CONTACT_CELLS
+		and bool(huge.get("budget_exhausted", false)),
+		"pathological bounds stop at eighteen cells",
 	)
 	world.queue_free()
 
 
 func _test_ladder_velocity_policy() -> void:
 	var controller = MovementControllerScript.new()
-	controller.configure({
-		"ladder_climb_speed":3.2,
-		"ladder_acceleration":16.0,
-		"ladder_detach_speed":2.4,
-		"ladder_jump_velocity":4.2,
-	})
-	var contact := {
-		"active":true,
-		"outward_offset":Vector3i.FORWARD,
-	}
-	var ascent: Dictionary = controller.resolve_ladder_velocity(
-		Vector3(0.0, -2.0, 0.0),
-		Basis.IDENTITY,
-		0.25,
-		Vector2(0.0, -1.0),
-		false,
-		contact
-	)
+	controller.configure({"ladder_climb_speed":3.2, "ladder_acceleration":16.0, "ladder_detach_speed":2.4, "ladder_jump_velocity":4.2})
+	var contact := {"active":true, "outward_offset":Vector3i.FORWARD}
+	var ascent: Dictionary = controller.resolve_ladder_velocity(Vector3(0.0, -2.0, 0.0), Basis.IDENTITY, 0.25, Vector2(0.0, -1.0), false, contact)
 	var ascent_velocity: Vector3 = ascent.get("velocity", Vector3.ZERO)
-	_check(
-		bool(ascent.get("on_ladder", false))
-		and bool(ascent.get("climbing", false))
-		and ascent_velocity.y > 0.0,
-		"forward input climbs and suppresses falling velocity",
-	)
-	var idle: Dictionary = controller.resolve_ladder_velocity(
-		Vector3(0.0, 2.0, 0.0),
-		Basis.IDENTITY,
-		0.25,
-		Vector2.ZERO,
-		false,
-		contact
-	)
-	_check(
-		absf(Vector3(idle.get("velocity", Vector3.ZERO)).y) < 0.001,
-		"releasing movement holds the player instead of applying gravity",
-	)
-	var descent: Dictionary = controller.resolve_ladder_velocity(
-		Vector3.ZERO,
-		Basis.IDENTITY,
-		0.25,
-		Vector2(0.0, 1.0),
-		false,
-		contact
-	)
-	_check(
-		Vector3(descent.get("velocity", Vector3.ZERO)).y < 0.0,
-		"backward input descends the ladder",
-	)
-	var detach: Dictionary = controller.resolve_ladder_velocity(
-		Vector3.ZERO,
-		Basis.IDENTITY,
-		0.1,
-		Vector2.ZERO,
-		true,
-		contact
-	)
+	_check(bool(ascent.get("on_ladder", false)) and bool(ascent.get("climbing", false)) and ascent_velocity.y > 0.0, "forward input climbs")
+	var idle: Dictionary = controller.resolve_ladder_velocity(Vector3(0.0, 2.0, 0.0), Basis.IDENTITY, 0.25, Vector2.ZERO, false, contact)
+	var idle_velocity: Vector3 = idle.get("velocity", Vector3.ZERO)
+	_check(absf(idle_velocity.y) < 0.001, "release holds instead of applying gravity")
+	var descent: Dictionary = controller.resolve_ladder_velocity(Vector3.ZERO, Basis.IDENTITY, 0.25, Vector2(0.0, 1.0), false, contact)
+	var descent_velocity: Vector3 = descent.get("velocity", Vector3.ZERO)
+	_check(descent_velocity.y < 0.0, "backward input descends")
+	var detach: Dictionary = controller.resolve_ladder_velocity(Vector3.ZERO, Basis.IDENTITY, 0.1, Vector2.ZERO, true, contact)
 	var detach_velocity: Vector3 = detach.get("velocity", Vector3.ZERO)
-	_check(
-		bool(detach.get("detached_ladder", false))
-		and detach_velocity.y > 0.0
-		and detach_velocity.z < 0.0,
-		"jump applies an upward outward detach impulse",
-	)
+	_check(bool(detach.get("detached_ladder", false)) and detach_velocity.y > 0.0 and detach_velocity.z < 0.0, "jump detaches upward and outward")
 
 
 func _test_production_player_contract() -> void:
 	var player = PlayerScene.instantiate()
 	root.add_child(player)
 	await process_frame
-	_check(
-		player.has_method("get_ladder_movement_snapshot"),
-		"production player includes ladder runtime diagnostics",
-	)
+	_check(player.has_method("get_ladder_movement_snapshot"), "production player includes ladder diagnostics")
 	var snapshot: Dictionary = player.call("get_ladder_movement_snapshot")
-	_check(
-		snapshot.has("enter_count")
-		and snapshot.has("exit_count")
-		and snapshot.has("contact_scan_count"),
-		"ladder diagnostics expose bounded entry, exit and scan evidence",
-	)
+	_check(snapshot.has("enter_count") and snapshot.has("exit_count") and snapshot.has("contact_scan_count"), "diagnostics expose bounded evidence")
 	var saved: Dictionary = player.call("serialize_state")
-	var serialized := JSON.stringify(saved)
-	_check(
-		not serialized.contains("ladder")
-		and saved.has("position")
-		and saved.has("rotation"),
-		"transient ladder contact never enters player persistence",
-	)
+	_check(not JSON.stringify(saved).contains("ladder") and saved.has("position") and saved.has("rotation"), "transient contact never enters player persistence")
 	player.queue_free()
 	await process_frame
 
