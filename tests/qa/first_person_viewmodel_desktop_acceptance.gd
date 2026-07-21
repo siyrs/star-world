@@ -5,6 +5,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://first-person-viewmodel-desktop-acceptance.png"
 const CLEANUP_FRAMES := 6
+const MAX_MINING_SAMPLE_RATIO := 0.35
 
 var checks := 0
 var failures: Array[String] = []
@@ -19,113 +20,208 @@ func _initialize() -> void:
 func _run() -> void:
 	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
 	root.size = Vector2i(1024, 576)
-	var game = GameScene.instantiate()
+	var game: Node = GameScene.instantiate()
 	root.add_child(game)
 	for _frame in 4:
 		await process_frame
-	var hub: Node = game.service_hub
+	var hub: Node = game.get("service_hub") as Node
 	_check(hub != null, "production game exposes its service hub")
 	if hub == null:
 		await _finish(game, null)
 		return
-	var state: Dictionary = hub.save_service.create_world(
-		"Held-Item-Desktop-%d" % Time.get_ticks_msec(), "star_continent", 93511742
+	var state: Dictionary = hub.get("save_service").create_world(
+		"Held-Item-Desktop-%d" % Time.get_ticks_msec(),
+		"star_continent",
+		93511742
 	)
 	_check(not state.is_empty(), "desktop viewmodel journey creates a temporary world")
 	if state.is_empty():
 		await _finish(game, hub)
 		return
 	_world_id = str(state.get("metadata", {}).get("id", ""))
-	game.begin_world_state(state)
-	for _frame in 6:
-		await process_frame
-	await physics_frame
+	game.call("begin_world_state", state)
+	_check(await _wait_for_world_ready(game, hub), "production world reaches a bounded ready state")
 
-	var player: CharacterBody3D = game.player
-	var world: Node = game.world
+	var player: CharacterBody3D = game.get("player") as CharacterBody3D
+	var world: Node = game.get("world") as Node
 	_check(player != null and bool(player.get("input_enabled")), "real player owns gameplay input")
 	_check(world != null and bool(world.get("is_started")), "real voxel world starts")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "gameplay starts with captured mouse")
-	var view: Node3D = player.get_node_or_null("CameraPivot/Camera3D/HeldItemView") as Node3D
+	if player == null or world == null:
+		await _finish(game, hub)
+		return
+	var view: Node3D = player.get_node_or_null(
+		"CameraPivot/Camera3D/HeldItemView"
+	) as Node3D
+	var harvest: Node = hub.get("block_harvest_service") as Node
 	_check(view != null, "production camera mounts the held item view")
-	if view == null:
+	_check(harvest != null, "production hub exposes the real harvest service")
+	if view == null or harvest == null:
 		await _finish(game, hub)
 		return
 
-	var player_block: Vector3i = world.call("world_to_block", player.global_position)
+	var player_block: Vector3i = world.call(
+		"world_to_block", player.global_position
+	)
 	var floor_y: int = _find_floor_y(world, player_block)
 	world.call("force_load_chunk", world.call("block_to_chunk", player_block))
 	_prepare_arena(world, player_block.x, player_block.z, floor_y)
 	_add_physics_platform(world, player_block.x, player_block.z, floor_y)
-	player.global_position = Vector3(player_block.x + 0.5, floor_y + 1.25, player_block.z + 0.5)
+	player.global_position = Vector3(
+		player_block.x + 0.5, floor_y + 1.25, player_block.z + 0.5
+	)
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
 	player.velocity.y = -1.0
 	await _settle_player(player, 120)
 	view.call("refresh_for_test")
-	_check(bool(view.call("get_snapshot").get("visually_grounded", false)), "held item view detects real support before gameplay actions")
+	_check(
+		bool(view.call("get_snapshot").get("visually_grounded", false)),
+		"held item view detects real support before gameplay actions"
+	)
 
-	hub.inventory.clear()
-	hub.inventory.add_item("wooden_pickaxe", 1)
-	hub.inventory.add_item("grass_block", 6)
-	hub.inventory.add_item("iron_sword", 1)
-	hub.inventory.select_slot(0)
+	var inventory: Node = hub.get("inventory") as Node
+	inventory.call("clear")
+	inventory.call("add_item", "wooden_pickaxe", 1)
+	inventory.call("add_item", "grass_block", 6)
+	inventory.call("add_item", "iron_sword", 1)
+	inventory.call("select_slot", 0)
 	await process_frame
 	view.call("refresh_for_test")
 	var snapshot: Dictionary = view.call("get_snapshot")
-	_check(str(snapshot.get("item_id", "")) == "wooden_pickaxe", "real hotbar selection displays the wooden pickaxe")
-	_check(str(snapshot.get("model_kind", "")) == "tool", "pickaxe uses the procedural tool model")
-	_check(bool(snapshot.get("visible", false)), "held pickaxe is visible in the production camera")
-	_check(int(snapshot.get("part_count", 0)) >= 3, "held pickaxe has multiple low-poly parts")
+	_check(
+		str(snapshot.get("item_id", "")) == "wooden_pickaxe",
+		"real hotbar selection displays the wooden pickaxe"
+	)
+	_check(
+		str(snapshot.get("model_kind", "")) == "tool",
+		"pickaxe uses the procedural tool model"
+	)
+	_check(
+		bool(snapshot.get("visible", false)),
+		"held pickaxe is visible in the production camera"
+	)
+	_check(
+		int(snapshot.get("part_count", 0)) >= 3,
+		"held pickaxe has multiple low-poly parts"
+	)
 
-	var target_block := Vector3i(player_block.x, floor_y + 2, player_block.z - 3)
+	# Use a deliberately hard target. The sample exits as soon as the real
+	# animation is measurable or before harvest progress can approach completion.
+	# This preserves real input while remaining stable on slow software renderers.
+	var target_block := Vector3i(
+		player_block.x, floor_y + 2, player_block.z - 3
+	)
 	world.call("force_load_chunk", world.call("block_to_chunk", target_block))
-	world.call("set_block", target_block, "stone")
+	world.call("set_block", target_block, "diamond_ore")
 	for y in range(floor_y + 1, floor_y + 5):
 		if y != target_block.y:
-			world.call("set_block", Vector3i(target_block.x, y, target_block.z), "air")
+			world.call(
+				"set_block",
+				Vector3i(target_block.x, y, target_block.z),
+				"air"
+			)
 	for _frame in 3:
 		await physics_frame
 		await process_frame
 	await _aim_at(player, world.call("block_to_world", target_block))
-	_check(_focus_hits_block(player, target_block), "authoritative center focus resolves the real stone target")
+	_check(
+		_focus_hits_block(player, target_block),
+		"authoritative center focus resolves the real hard target"
+	)
 	await RenderingServer.frame_post_draw
 	_save_stage_image(root.get_texture().get_image(), "target")
 
 	var rest_position: Vector3 = view.position
 	var max_mining_distance := 0.0
 	var mining_active_observed := false
+	var maximum_ratio_observed := 0.0
 	_mouse_button(MOUSE_BUTTON_LEFT, true)
-	for _frame in 12:
-		await physics_frame
+	for _frame in 24:
 		await process_frame
 		snapshot = view.call("get_snapshot")
-		mining_active_observed = mining_active_observed or bool(snapshot.get("mining_active", false))
-		max_mining_distance = maxf(max_mining_distance, view.position.distance_to(rest_position))
-	_check(mining_active_observed, "holding real left mouse enables continuous mining animation")
-	_check(max_mining_distance > 0.01, "mining visibly moves the held pickaxe during a bounded observation window")
-	_check(str(world.call("get_block", target_block)) == "stone", "short mining sample does not fake completion")
+		mining_active_observed = (
+			mining_active_observed
+			or bool(snapshot.get("mining_active", false))
+		)
+		max_mining_distance = maxf(
+			max_mining_distance,
+			view.position.distance_to(rest_position)
+		)
+		var harvest_snapshot: Dictionary = harvest.call("get_active_snapshot")
+		maximum_ratio_observed = maxf(
+			maximum_ratio_observed,
+			float(harvest_snapshot.get("ratio", 0.0))
+		)
+		if mining_active_observed and max_mining_distance > 0.01:
+			break
+		if maximum_ratio_observed >= MAX_MINING_SAMPLE_RATIO:
+			break
 	_mouse_button(MOUSE_BUTTON_LEFT, false)
 	await process_frame
-	_check(not bool(view.call("get_snapshot").get("mining_active", true)), "releasing real left mouse stops mining animation")
+	_check(
+		mining_active_observed,
+		"holding real left mouse enables continuous mining animation"
+	)
+	_check(
+		max_mining_distance > 0.01,
+		"mining visibly moves the held pickaxe during a bounded observation window"
+	)
+	_check(
+		maximum_ratio_observed > 0.0
+		and maximum_ratio_observed < 1.0,
+		"real harvest progress advances without reaching completion"
+	)
+	_check(
+		str(world.call("get_block", target_block)) == "diamond_ore",
+		"bounded mining sample preserves the hard target"
+	)
+	_check(
+		not bool(view.call("get_snapshot").get("mining_active", true)),
+		"releasing real left mouse stops mining animation"
+	)
 
 	_scroll_hotbar_down()
 	await process_frame
 	await process_frame
 	view.call("refresh_for_test")
 	snapshot = view.call("get_snapshot")
-	_check(str(snapshot.get("item_id", "")) == "grass_block", "real mouse wheel switches to grass block")
-	_check(str(snapshot.get("model_kind", "")) == "block", "grass block uses a textured block viewmodel")
-	_check(str(snapshot.get("block_id", "")) == "grass", "held block resolves the production block id")
+	_check(
+		str(snapshot.get("item_id", "")) == "grass_block",
+		"real mouse wheel switches to grass block"
+	)
+	_check(
+		str(snapshot.get("model_kind", "")) == "block",
+		"grass block uses a textured block viewmodel"
+	)
+	_check(
+		str(snapshot.get("block_id", "")) == "grass",
+		"held block resolves the production block id"
+	)
+	await _aim_at(player, world.call("block_to_world", target_block))
 	player.call("_update_interaction_focus", true)
 	var preview: Dictionary = player.call("get_placement_preview_state")
-	_check(bool(preview.get("valid", false)), "production placement policy exposes a valid target")
-	var placement_position: Vector3i = _vector3i_from(preview.get("placement_position", []))
-	var grass_before := int(hub.inventory.count_item("grass_block"))
+	_check(
+		bool(preview.get("valid", false)),
+		"production placement policy exposes a valid target"
+	)
+	var placement_position: Vector3i = _vector3i_from(
+		preview.get("placement_position", [])
+	)
+	var grass_before := int(inventory.call("count_item", "grass_block"))
 	await _right_click_center()
-	_check(str(world.call("get_block", placement_position)) == "grass", "real right click places the block at the previewed voxel")
-	_check(int(hub.inventory.count_item("grass_block")) == grass_before - 1, "real placement consumes exactly one held block")
-	_check(str(view.call("get_snapshot").get("last_action", "")) == "place", "successful placement reaches the held-item use action")
+	_check(
+		str(world.call("get_block", placement_position)) == "grass",
+		"real right click places the block at the previewed voxel"
+	)
+	_check(
+		int(inventory.call("count_item", "grass_block")) == grass_before - 1,
+		"real placement consumes exactly one held block"
+	)
+	_check(
+		str(view.call("get_snapshot").get("last_action", "")) == "place",
+		"successful placement reaches the held-item use action"
+	)
 
 	world.call("set_block", placement_position, "air")
 	world.call("set_block", target_block, "air")
@@ -136,20 +232,35 @@ func _run() -> void:
 	await process_frame
 	view.call("refresh_for_test")
 	snapshot = view.call("get_snapshot")
-	_check(str(snapshot.get("item_id", "")) == "iron_sword", "second real wheel step displays the iron sword")
-	_check(str(snapshot.get("model_kind", "")) == "tool", "iron sword uses the tool model family")
+	_check(
+		str(snapshot.get("item_id", "")) == "iron_sword",
+		"second real wheel step displays the iron sword"
+	)
+	_check(
+		str(snapshot.get("model_kind", "")) == "tool",
+		"iron sword uses the tool model family"
+	)
 
-	var cow_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 2.8)
-	var cow_variant: Variant = hub.creature_spawner.call("spawn_creature", "cow", cow_position)
+	var cow_position := Vector3(
+		player_block.x + 0.5, floor_y + 1.05, player_block.z - 2.8
+	)
+	var cow_variant: Variant = hub.get("creature_spawner").call(
+		"spawn_creature", "cow", cow_position
+	)
 	_check(cow_variant is Node3D, "real creature spawner creates an attack target")
 	if cow_variant is Node3D:
 		var cow: Node3D = cow_variant
 		cow.set("move_speed", 0.0)
 		cow.set("_decision_timer", 999.0)
-		await _aim_at(player, cow.global_position + Vector3(0.0, 0.65, 0.0))
+		await _aim_at(
+			player, cow.global_position + Vector3(0.0, 0.65, 0.0)
+		)
 		_check(_ray_hits_entity(player, cow), "center ray resolves the live cow")
 		await _left_click_center()
-		_check(str(view.call("get_snapshot").get("last_action", "")) == "attack", "real attack reaches the held-item swing action")
+		_check(
+			str(view.call("get_snapshot").get("last_action", "")) == "attack",
+			"real attack reaches the held-item swing action"
+		)
 		cow.queue_free()
 		await process_frame
 
@@ -157,25 +268,39 @@ func _run() -> void:
 		if float(view.call("get_snapshot").get("swing_remaining", 0.0)) <= 0.0:
 			break
 		await process_frame
-	var camera: Camera3D = player.call("get_view_camera")
+	var camera: Camera3D = player.call("get_view_camera") as Camera3D
 	camera.rotation = Vector3.ZERO
 	player.rotation = Vector3.ZERO
 	player.velocity.y = -1.0
 	await _settle_player(player, 120)
 	view.call("refresh_for_test")
-	_check(bool(view.call("get_snapshot").get("visually_grounded", false)), "held item view retains grounded support before walk-bob acceptance")
+	_check(
+		bool(view.call("get_snapshot").get("visually_grounded", false)),
+		"held item view retains grounded support before walk-bob acceptance"
+	)
 
 	var player_start: Vector3 = player.global_position
 	var view_start: Vector3 = view.position
 	var max_player_distance := 0.0
 	var max_view_distance := 0.0
 	Input.action_press("move_forward")
-	_check(Input.is_action_pressed("move_forward"), "move_forward action enters pressed state")
+	_check(
+		Input.is_action_pressed("move_forward"),
+		"move_forward action enters pressed state"
+	)
 	var player_input_service: Node = player.get("input_service") as Node
-	_check(player_input_service != null, "production player exposes its gameplay input service")
+	_check(
+		player_input_service != null,
+		"production player exposes its gameplay input service"
+	)
 	if player_input_service != null:
-		var service_vector: Vector2 = player_input_service.call("get_movement_vector")
-		_check(service_vector.y < -0.5, "production input service resolves forward movement")
+		var service_vector: Vector2 = player_input_service.call(
+			"get_movement_vector"
+		)
+		_check(
+			service_vector.y < -0.5,
+			"production input service resolves forward movement"
+		)
 	for _frame in 36:
 		await physics_frame
 		await process_frame
@@ -186,28 +311,76 @@ func _run() -> void:
 				player.global_position.z - player_start.z
 			).length()
 		)
-		max_view_distance = maxf(max_view_distance, view.position.distance_to(view_start))
+		max_view_distance = maxf(
+			max_view_distance,
+			view.position.distance_to(view_start)
+		)
 	Input.action_release("move_forward")
 	await process_frame
-	_check(max_player_distance > 0.05, "production movement physics moves the player forward")
-	_check(max_view_distance > 0.005, "real supported movement produces measurable first-person walk bob")
+	_check(
+		max_player_distance > 0.05,
+		"production movement physics moves the player forward"
+	)
+	_check(
+		max_view_distance > 0.005,
+		"real supported movement produces measurable first-person walk bob"
+	)
 
 	await RenderingServer.frame_post_draw
 	var image: Image = root.get_texture().get_image()
-	_check(image != null and not image.is_empty(), "production viewport renders held item evidence")
+	_check(
+		image != null and not image.is_empty(),
+		"production viewport renders held item evidence"
+	)
 	if image != null and not image.is_empty():
 		_save_image(image)
 
 	await _tap_key(KEY_E)
-	_check(hub.game_ui.get_active_overlay() == 1, "E opens the real character inventory")
-	_check(not bool(view.call("get_snapshot").get("visible", true)), "blocking inventory overlay hides the held item")
+	_check(
+		int(hub.get("game_ui").call("get_active_overlay")) == 1,
+		"E opens the real character inventory"
+	)
+	_check(
+		not bool(view.call("get_snapshot").get("visible", true)),
+		"blocking inventory overlay hides the held item"
+	)
 	await _tap_key(KEY_E)
-	_check(hub.game_ui.get_active_overlay() == 0, "E closes the inventory")
-	_check(bool(view.call("get_snapshot").get("visible", false)), "closing inventory restores the held item")
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing inventory recaptures the mouse")
-	_check(bool(player.get("input_enabled")), "closing inventory restores WASD input")
-	_check(bool(hub.save_current()), "viewmodel coexists with the production save transaction")
+	_check(
+		int(hub.get("game_ui").call("get_active_overlay")) == 0,
+		"E closes the inventory"
+	)
+	_check(
+		bool(view.call("get_snapshot").get("visible", false)),
+		"closing inventory restores the held item"
+	)
+	_check(
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
+		"closing inventory recaptures the mouse"
+	)
+	_check(
+		bool(player.get("input_enabled")),
+		"closing inventory restores WASD input"
+	)
+	_check(
+		bool(hub.call("save_current")),
+		"viewmodel coexists with the production save transaction"
+	)
 	await _finish(game, hub)
+
+
+func _wait_for_world_ready(game: Node, hub: Node) -> bool:
+	for _frame in 180:
+		await process_frame
+		var world: Node = game.get("world") as Node if is_instance_valid(game) else null
+		var player: Node = game.get("player") as Node if is_instance_valid(game) else null
+		if (
+			world != null
+			and player != null
+			and bool(world.get("is_started"))
+			and str(hub.get("current_world_id")) == _world_id
+		):
+			return true
+	return false
 
 
 func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
@@ -218,12 +391,16 @@ func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
 		await process_frame
 
 
-func _add_physics_platform(parent: Node, center_x: int, center_z: int, floor_y: int) -> void:
+func _add_physics_platform(
+	parent: Node, center_x: int, center_z: int, floor_y: int
+) -> void:
 	var body := StaticBody3D.new()
 	body.name = "QAViewmodelPhysicsPlatform"
 	body.collision_layer = 1
 	body.collision_mask = 0
-	body.position = Vector3(center_x + 0.5, floor_y + 0.5, center_z + 0.5)
+	body.position = Vector3(
+		center_x + 0.5, floor_y + 0.5, center_z + 0.5
+	)
 	var shape_node := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(12.0, 1.0, 12.0)
@@ -232,29 +409,43 @@ func _add_physics_platform(parent: Node, center_x: int, center_z: int, floor_y: 
 	parent.add_child(body)
 
 
-func _prepare_arena(world: Node, center_x: int, center_z: int, floor_y: int) -> void:
+func _prepare_arena(
+	world: Node, center_x: int, center_z: int, floor_y: int
+) -> void:
 	for x_offset in range(-4, 5):
 		for z_offset in range(-7, 4):
-			world.call("set_block", Vector3i(center_x + x_offset, floor_y, center_z + z_offset), "stone")
+			var floor_position := Vector3i(
+				center_x + x_offset, floor_y, center_z + z_offset
+			)
+			world.call("set_block", floor_position, "stone")
 			for y in range(floor_y + 1, floor_y + 5):
-				world.call("set_block", Vector3i(center_x + x_offset, y, center_z + z_offset), "air")
+				world.call(
+					"set_block",
+					Vector3i(center_x + x_offset, y, center_z + z_offset),
+					"air"
+				)
 
 
 func _find_floor_y(world: Node, player_block: Vector3i) -> int:
 	for offset in range(0, 12):
 		var candidate := player_block.y - offset - 1
-		if str(world.call("get_block", Vector3i(player_block.x, candidate, player_block.z))) != "air":
+		if str(world.call(
+			"get_block",
+			Vector3i(player_block.x, candidate, player_block.z)
+		)) != "air":
 			return candidate
 	return maxi(1, player_block.y - 1)
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
-	var camera: Camera3D = player.call("get_view_camera")
+	var camera: Camera3D = player.call("get_view_camera") as Camera3D
 	camera.look_at(target, Vector3.UP)
 	for _frame in 2:
 		await physics_frame
 		await process_frame
-	var ray := player.get_node("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	var ray := player.get_node(
+		"CameraPivot/Camera3D/InteractionRay"
+	) as RayCast3D
 	ray.force_raycast_update()
 	player.call("_update_interaction_focus", true)
 	await process_frame
@@ -265,11 +456,16 @@ func _focus_hits_block(player: Node, expected: Vector3i) -> bool:
 	if focus_value is not Dictionary:
 		return false
 	var focus: Dictionary = focus_value
-	return str(focus.get("type", "")) == "block" and _vector3i_from(focus.get("hit_position", [])) == expected
+	return (
+		str(focus.get("type", "")) == "block"
+		and _vector3i_from(focus.get("hit_position", [])) == expected
+	)
 
 
 func _ray_hits_entity(player: Node3D, expected: Node) -> bool:
-	var ray := player.get_node("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+	var ray := player.get_node(
+		"CameraPivot/Camera3D/InteractionRay"
+	) as RayCast3D
 	ray.force_raycast_update()
 	return ray.is_colliding() and ray.get_collider() == expected
 
@@ -344,7 +540,10 @@ func _save_stage_image(image: Image, suffix: String) -> void:
 func _save_image(image: Image) -> void:
 	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
 	var error: Error = image.save_png(_capture_path)
-	_check(error == OK and FileAccess.file_exists(_capture_path), "first-person viewmodel screenshot is saved")
+	_check(
+		error == OK and FileAccess.file_exists(_capture_path),
+		"first-person viewmodel screenshot is saved"
+	)
 
 
 func _finish(game: Node, hub: Node) -> void:
@@ -352,20 +551,29 @@ func _finish(game: Node, hub: Node) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hub != null:
 		if not _world_id.is_empty() and hub.get("save_service") != null:
-			hub.save_service.delete_world(_world_id)
-		if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
-			hub.audio_service.shutdown()
+			hub.get("save_service").delete_world(_world_id)
+		var audio: Node = hub.get("audio_service") as Node
+		if audio != null and audio.has_method("shutdown"):
+			audio.call("shutdown")
 	if game != null and is_instance_valid(game):
 		game.queue_free()
 	for _frame in CLEANUP_FRAMES:
 		await process_frame
 	if failures.is_empty():
-		print("QA FIRST PERSON VIEWMODEL DESKTOP PASS | checks=%d | capture=%s" % [checks, _capture_path])
+		print(
+			"QA FIRST PERSON VIEWMODEL DESKTOP PASS | checks=%d | capture=%s"
+			% [checks, _capture_path]
+		)
 		quit(0)
 	else:
 		for failure: String in failures:
-			push_error("QA FIRST PERSON VIEWMODEL DESKTOP FAILURE: %s" % failure)
-		print("QA FIRST PERSON VIEWMODEL DESKTOP FAIL | checks=%d | failures=%d" % [checks, failures.size()])
+			push_error(
+				"QA FIRST PERSON VIEWMODEL DESKTOP FAILURE: %s" % failure
+			)
+		print(
+			"QA FIRST PERSON VIEWMODEL DESKTOP FAIL | checks=%d | failures=%d"
+			% [checks, failures.size()]
+		)
 		quit(1)
 
 

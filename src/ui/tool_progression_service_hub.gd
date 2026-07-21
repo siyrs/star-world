@@ -9,6 +9,7 @@ const HarvestOverlayScript = preload("res://src/ui/harvest_progress_overlay.gd")
 # MachineRuntimeParticipant can publish them during GameplayServiceHub._ready.
 var stonecutter_service: Node
 var machine_interaction_router: Node
+var machine_automation_service: Node
 var tool_service: Node
 var block_harvest_service: Node
 var harvest_progress_overlay: Control

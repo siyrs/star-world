@@ -8,6 +8,7 @@ signal container_removed(container_id: String)
 
 const SERIAL_VERSION := 1
 const DEFAULT_SLOT_COUNT := 27
+const TransactionPolicyScript = preload("res://src/inventory/inventory_transaction_policy.gd")
 
 var registry
 var _containers: Dictionary = {}
@@ -135,6 +136,47 @@ func add_item(
 	if remaining != count:
 		container_changed.emit(container_id)
 	return remaining
+
+
+func can_transact_items(
+	container_id: String, removals: Dictionary = {}, additions: Array = []
+) -> bool:
+	if not _containers.has(container_id) or registry == null:
+		return false
+	var slots: Array = _containers[container_id].get("slots", [])
+	return bool(
+		TransactionPolicyScript.plan(slots, registry, removals, additions).get(
+			"success", false
+		)
+	)
+
+
+func transact_items(
+	container_id: String, removals: Dictionary = {}, additions: Array = []
+) -> Dictionary:
+	if not _containers.has(container_id) or registry == null:
+		return {"success": false, "reason": "container_unavailable"}
+	var container: Dictionary = _containers[container_id]
+	var slots: Array = container.get("slots", [])
+	var plan: Dictionary = TransactionPolicyScript.plan(
+		slots, registry, removals, additions
+	)
+	if not bool(plan.get("success", false)):
+		return plan
+	var raw_slots: Variant = plan.get("slots", [])
+	if raw_slots is not Array or raw_slots.size() != slots.size():
+		return {"success": false, "reason": "invalid_plan"}
+	var next_slots: Array = []
+	for raw_slot: Variant in raw_slots:
+		next_slots.append(raw_slot.duplicate(true) if raw_slot is Dictionary else {})
+	container["slots"] = next_slots
+	_containers[container_id] = container
+	var changed_indices: Array = plan.get("changed_indices", [])
+	if not changed_indices.is_empty():
+		container_changed.emit(container_id)
+	var result := plan.duplicate(true)
+	result.erase("slots")
+	return result
 
 
 func remove_from_slot(container_id: String, index: int, count: int = 1) -> Dictionary:

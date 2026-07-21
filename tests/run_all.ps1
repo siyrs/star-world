@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
+& "$PSScriptRoot\developer_b\validate_machine_automation.ps1"
 & "$PSScriptRoot\developer_b\validate_auto_update.ps1"
 & "$PSScriptRoot\developer_b\validate_resource_distribution.ps1"
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
@@ -66,6 +67,7 @@ Invoke-GodotTest 'res://tests/qa/inventory_transaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/machine_base_regression.gd'
 Invoke-GodotTest 'res://tests/qa/stonecutter_machine_regression.gd'
 Invoke-GodotTest 'res://tests/qa/machine_capability_regression.gd'
+Invoke-GodotTest 'res://tests/qa/machine_automation_regression.gd'
 Invoke-GodotTest 'res://tests/qa/auto_update_regression.gd'
 Invoke-GodotTest 'res://tests/qa/resource_distribution_regression.gd'
 Invoke-GodotTest 'res://tests/qa/prospecting_regression.gd'
@@ -109,4 +111,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: GitHub release auto-update + atomic machine capabilities + release-safe runtime checks'
+Write-Host 'PASS: bounded adjacent machine automation + GitHub release auto-update + atomic machine capabilities + release-safe runtime checks'

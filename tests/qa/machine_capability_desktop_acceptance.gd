@@ -99,7 +99,7 @@ func _run() -> void:
 	var batch: Dictionary = scheduler.call("advance_time", 12.1, true)
 	for _frame in 4:
 		await process_frame
-	_check(int(batch.get("advanced_domain_count", 0)) == 2, "one scheduler batch advances both capability domains")
+	_check(int(batch.get("advanced_domain_count", 0)) == 3, "one scheduler batch advances both capability domains and bounded automation")
 	_check(int((furnace.call("get_slot", furnace_id, "output") as Dictionary).get("count", 0)) == 2, "furnace creates two iron outputs")
 	_check(int((cutter.call("get_slot", cutter_id, "output") as Dictionary).get("count", 0)) == 4, "stonecutter creates four slab outputs")
 

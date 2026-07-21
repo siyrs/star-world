@@ -1,0 +1,91 @@
+name: Machine automation quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: machine-automation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  machine-automation-regression:
+    name: Adjacent chest policy, bounded scheduler and atomic transfer regression
+    runs-on: windows-latest
+    timeout-minutes: 24
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate bounded automation contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_machine_automation.ps1
+
+      - name: Run automation and adjacent transaction regressions
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/machine_automation_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/machine_capability_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/machine_base_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/inventory_transaction_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  real-machine-automation-desktop:
+    name: Real stacked chests, shared machines, save and reload
+    needs: machine-automation-regression
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production adjacent machine automation
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/machine_automation_desktop_acceptance.gd' `
+            -OutputPath 'build\machine-automation-desktop.png' `
+            -TimeoutMilliseconds 150000
+
+      - name: Upload machine automation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: machine-automation-desktop-${{ github.run_number }}
+          path: |
+            build/machine-automation-*.png
+            build/machine-automation-*.log
+          if-no-files-found: error
+          retention-days: 14
