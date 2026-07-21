@@ -8,6 +8,7 @@ const VoxelTargetResolverScript = preload("res://src/interaction/voxel_target_re
 const PlacementPreviewPolicyScript = preload(
 	"res://src/interaction/placement_preview_policy.gd"
 )
+const INVALID_CONNECTION_POSITION := Vector3i(2147483647,2147483647,2147483647)
 
 var _precision_target_resolver = VoxelTargetResolverScript.new()
 var _placement_preview_policy = PlacementPreviewPolicyScript.new()
@@ -174,18 +175,26 @@ func _resolve_placement_target() -> Dictionary:
 func _append_connection_context(focus: Dictionary) -> void:
 	if world == null:
 		return
-	var hit_position_value: Variant = focus.get("hit_position",Vector3i.ZERO)
-	if hit_position_value is Vector3i:
-		focus["target_neighbor_ids"] = _connection_neighbors_for(hit_position_value)
-	var placement_position_value: Variant = focus.get("placement_position",Vector3i.ZERO)
-	if placement_position_value is Vector3i:
+	var hit_position := _focus_position(focus.get("hit_position",[]))
+	if hit_position != INVALID_CONNECTION_POSITION:
+		focus["target_neighbor_ids"] = _connection_neighbors_for(hit_position)
+	var placement_position := _focus_position(focus.get("placement_position",[]))
+	if placement_position != INVALID_CONNECTION_POSITION:
 		focus["placement_neighbor_ids"] = _connection_neighbors_for(
-			placement_position_value
+			placement_position
 		)
 
 
 func _connection_neighbors_for(block_position: Vector3i) -> Dictionary:
 	return ConnectionPolicyScript.read_neighbors(world,block_position)
+
+
+func _focus_position(value: Variant) -> Vector3i:
+	if value is Vector3i:
+		return value
+	if value is Array and value.size() >= 3:
+		return Vector3i(int(value[0]),int(value[1]),int(value[2]))
+	return INVALID_CONNECTION_POSITION
 
 
 func _report_placement_failure(reason: String, block_id: String) -> void:
