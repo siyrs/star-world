@@ -80,21 +80,15 @@ jobs:
             -Version '${{ steps.version.outputs.version }}' `
             -OutputDirectory build\release-assets
 
-      - name: Install Mesa software OpenGL for smoke run
-        shell: pwsh
-        run: |
-          # windows-latest runners have no OpenGL 3.3 driver; Mesa llvmpipe provides one.
-          # Installed after packaging so the DLL never ships inside the release zip.
-          $mesaUrl = 'https://github.com/mmozeiko/build-mesa/releases/download/26.1.5/mesa-llvmpipe-x64-26.1.5.7z'
-          Invoke-WebRequest -Uri $mesaUrl -OutFile mesa-llvmpipe.7z
-          C:\Windows\System32\tar.exe -xf mesa-llvmpipe.7z -C build\release
-          if (-not (Test-Path build\release\opengl32.dll)) { throw 'Mesa opengl32.dll was not extracted' }
-
       - name: Smoke exported release without network update check
         shell: pwsh
         run: |
+          # windows-latest runners have no GPU and no OpenGL 3.3 driver for the default
+          # native WGL path. Godot ships statically-linked ANGLE, which renders over
+          # D3D11 and falls back to WARP (software) on GPU-less runners.
+          # (Mesa's opengl32.dll was tried and breaks Godot's native GL window creation.)
           # Game reads OS.get_cmdline_user_args(): everything must follow a literal `--`.
-          $arguments = '-- --disable-update-check --release-smoke --smoke-soak-frames=60 --smoke-output=build/release-smoke.json'
+          $arguments = '--rendering-driver opengl3_angle -- --disable-update-check --release-smoke --smoke-soak-frames=60 --smoke-output=build/release-smoke.json'
           $process = Start-Process -FilePath build\release\StarWorld.exe -ArgumentList $arguments -PassThru -NoNewWindow `
             -RedirectStandardOutput build\smoke.out.log -RedirectStandardError build\smoke.err.log
           $failure = ''
