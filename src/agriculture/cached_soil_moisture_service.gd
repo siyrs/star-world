@@ -24,6 +24,11 @@ func attach_world_without_refresh(p_world: Node) -> void:
 	_rebuild_refresh_keys()
 
 
+func detach_world() -> void:
+	super.detach_world()
+	_reset_cache_runtime()
+
+
 func refresh_all() -> void:
 	if world == null:
 		return
