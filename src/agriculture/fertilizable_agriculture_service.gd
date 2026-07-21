@@ -18,7 +18,6 @@ const FertilizerPolicyScript = preload(
 const StateMigrationScript = preload(
 	"res://src/agriculture/agriculture_state_migration.gd"
 )
-const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 
 var fertilizer_registry = FertilizerRegistryScript.new()
 var fertilizer_policy = FertilizerPolicyScript.new()
