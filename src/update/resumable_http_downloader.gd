@@ -6,6 +6,7 @@ signal download_completed(package_path: String, sha256: String)
 signal download_failed(reason: String)
 
 const Policy = preload("res://src/update/resumable_download_policy.gd")
+const ReleasePolicy = preload("res://src/update/github_release_policy.gd")
 const USER_AGENT := "StarWorldUpdater/1"
 const FLUSH_INTERVAL_BYTES := 256 * 1024
 const MAX_RESTARTS := 2
@@ -28,6 +29,7 @@ var _restart_count := 0
 var _bytes_since_flush := 0
 var _active := false
 var _failed := false
+var _allow_local_test_urls := false
 
 
 func _ready() -> void:
@@ -36,7 +38,11 @@ func _ready() -> void:
 
 
 func start(request: Dictionary, partial_path: String, state_path: String) -> bool:
-	cancel(false)
+	# Preserve an interrupted transfer until the requested release identity has
+	# been compared.  Calling cancel(false) here would silently delete the bytes
+	# that make an in-process retry resumable.
+	cancel(true)
+	_allow_local_test_urls = bool(request.get("allow_local_test_urls", false))
 	_request = Policy.normalize_state(request)
 	_expected_size = int(_request.get("expected_size", 0))
 	if (
@@ -66,6 +72,9 @@ func start(request: Dictionary, partial_path: String, state_path: String) -> boo
 	_redirect_count = 0
 	_restart_count = 0
 	_failed = false
+	if not ReleasePolicy.is_trusted_url(_current_url, _allow_local_test_urls):
+		download_failed.emit("untrusted_asset_url")
+		return false
 	_active = true
 	_write_state()
 	if Policy.completion_ready(_downloaded, _expected_size):
@@ -105,9 +114,11 @@ func get_snapshot() -> Dictionary:
 		"expected_bytes": _expected_size,
 		"partial_path": _partial_path,
 		"state_path": _state_path,
+		"current_url": _current_url,
 		"etag": str(_state.get("etag", "")),
 		"redirect_count": _redirect_count,
 		"restart_count": _restart_count,
+		"allow_local_test_urls": _allow_local_test_urls,
 	}
 
 
@@ -147,6 +158,9 @@ func _connect_current_url() -> bool:
 	_request_sent = false
 	_response_started = false
 	_response_action = ""
+	if not ReleasePolicy.is_trusted_url(_current_url, _allow_local_test_urls):
+		_fail("untrusted_redirect_url")
+		return false
 	var parsed := _parse_url(_current_url)
 	if not bool(parsed.get("success", false)):
 		_fail("invalid_asset_url")
@@ -203,8 +217,12 @@ func _handle_response_headers() -> void:
 		if location.is_empty() or _redirect_count >= Policy.MAX_REDIRECTS:
 			_fail("redirect_invalid")
 			return
+		var redirected_url := _resolve_redirect(_current_url, location)
+		if not ReleasePolicy.is_trusted_url(redirected_url, _allow_local_test_urls):
+			_fail("untrusted_redirect_url")
+			return
 		_redirect_count += 1
-		_current_url = _resolve_redirect(_current_url, location)
+		_current_url = redirected_url
 		_connect_current_url()
 		return
 	if action == "restart":
