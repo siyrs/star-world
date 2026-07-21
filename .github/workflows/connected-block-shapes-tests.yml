@@ -1,0 +1,101 @@
+name: Connected block shapes quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connected-shapes-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  connected-shapes-regression:
+    name: Neighbor masks, shared geometry, preview and chunk rebuild regression
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate connected shape contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_connected_block_shapes.ps1
+
+      - name: Run connected and adjacent shape regressions
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/connected_block_shapes_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/glass_pane_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/non_cube_block_geometry_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/directional_stair_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          godot --headless --path . --script res://tests/qa/placement_preview_regression.gd --disable-update-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  connected-shapes-desktop:
+    name: Real pane and fence placement, neighbor rebuild, save and reload
+    needs: connected-shapes-regression
+    runs-on: windows-latest
+    timeout-minutes: 32
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production connected building journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/connected_block_shapes_desktop_acceptance.gd' `
+            -OutputPath 'build\connected-block-shapes-desktop.png' `
+            -TimeoutMilliseconds 150000
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/placement_preview_desktop_acceptance.gd' `
+            -OutputPath 'build\placement-preview-connected.png' `
+            -TimeoutMilliseconds 120000
+
+      - name: Upload connected shape evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: connected-block-shapes-desktop-${{ github.run_number }}
+          path: |
+            build/connected-block-shapes-*.png
+            build/connected-block-shapes-*.log
+            build/placement-preview-connected.png
+            build/placement-preview-connected.log
+          if-no-files-found: error
+          retention-days: 14
