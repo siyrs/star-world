@@ -26,7 +26,9 @@ const BLOCK_IDS := [
 	"oak_door_upper", "oak_door_upper_east", "oak_door_upper_north", "oak_door_upper_west",
 	"oak_door_open", "oak_door_open_east", "oak_door_open_north", "oak_door_open_west",
 	"oak_door_upper_open", "oak_door_upper_open_east",
-	"oak_door_upper_open_north", "oak_door_upper_open_west"
+	"oak_door_upper_open_north", "oak_door_upper_open_west",
+	# The legacy ladder ID remains the south-supported canonical state.
+	"ladder_east", "ladder_north", "ladder_west"
 ]
 
 const DEFINITIONS := {
@@ -55,7 +57,7 @@ const DEFINITIONS := {
 	"chest": {"name":"箱子", "color":"#A66B2C", "solid":true, "transparent":false, "collectible":true, "item_id":"chest", "hardness":2.0},
 	"oak_door": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":false, "rotation_quarters":0},
 	"oak_fence": {"name":"木栅栏", "color":"#A87540", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_fence", "hardness":1.5, "shape":"fence", "connection_family":"oak_fence"},
-	"ladder": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5},
+	"ladder": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":0, "targetable":true, "climbable":true},
 	"torch": {"name":"火把", "color":"#F3B63F", "solid":false, "transparent":true, "collectible":true, "item_id":"torch", "hardness":0.1, "emissive":true},
 	"wool": {"name":"羊毛", "color":"#F0EFE8", "solid":true, "transparent":false, "collectible":true, "item_id":"wool", "hardness":0.5},
 	"ice": {"name":"冰", "color":"#A8DDEB", "solid":true, "transparent":true, "collectible":true, "item_id":"snow_block", "hardness":0.5},
@@ -96,7 +98,10 @@ const DEFINITIONS := {
 	"oak_door_upper_open": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":0, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
 	"oak_door_upper_open_east": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":1, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
 	"oak_door_upper_open_north": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":2, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
-	"oak_door_upper_open_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"}
+	"oak_door_upper_open_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"ladder_east": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":1, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"},
+	"ladder_north": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":2, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"},
+	"ladder_west": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":3, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"}
 }
 
 

@@ -32,8 +32,7 @@ jobs:
       - name: Validate strict project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate double-door contracts
         shell: pwsh
@@ -43,14 +42,15 @@ jobs:
       - name: Run door and adjacent geometry regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/double_door_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/block_interaction_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/non_cube_block_geometry_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/placement_preview_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scripts = @(
+            'res://tests/qa/double_door_regression.gd',
+            'res://tests/qa/block_interaction_regression.gd',
+            'res://tests/qa/non_cube_block_geometry_regression.gd',
+            'res://tests/qa/placement_preview_regression.gd'
+          )
+          foreach ($script in $scripts) {
+            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script -- --disable-update-check"
+          }
 
   double-door-desktop:
     name: Real placement, open/close, upper harvest, save and reload

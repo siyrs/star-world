@@ -1,5 +1,5 @@
 class_name ExplorationPlayer
-extends "res://src/player/precision_interaction_player.gd"
+extends "res://src/player/ladder_climbing_player.gd"
 
 var prospecting_service: Node
 

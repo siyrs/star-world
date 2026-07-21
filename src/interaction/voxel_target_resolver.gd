@@ -212,9 +212,12 @@ func _grid_result(
 
 
 func _is_grid_target(block_id: String) -> bool:
+	if block_id == BlockRegistryScript.AIR:
+		return false
+	var definition: Dictionary = BlockRegistryScript.get_definition(block_id)
 	return (
-		block_id != BlockRegistryScript.AIR
-		and BlockRegistryScript.is_solid(block_id)
+		BlockRegistryScript.is_solid(block_id)
+		or bool(definition.get("targetable", false))
 	)
 
 

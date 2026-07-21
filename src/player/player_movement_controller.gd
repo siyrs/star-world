@@ -11,6 +11,11 @@ var swim_speed := 3.4
 var swim_horizontal_factor := 0.62
 var swim_acceleration := 12.0
 var swim_sink_speed := 0.35
+var ladder_climb_speed := 3.2
+var ladder_acceleration := 16.0
+var ladder_horizontal_factor := 0.35
+var ladder_detach_speed := 2.4
+var ladder_jump_velocity := 4.2
 
 
 func configure(config: Dictionary) -> void:
@@ -26,6 +31,13 @@ func configure(config: Dictionary) -> void:
 	)
 	swim_acceleration = maxf(0.0, float(config.get("swim_acceleration", swim_acceleration)))
 	swim_sink_speed = maxf(0.0, float(config.get("swim_sink_speed", swim_sink_speed)))
+	ladder_climb_speed = maxf(0.0, float(config.get("ladder_climb_speed", ladder_climb_speed)))
+	ladder_acceleration = maxf(0.0, float(config.get("ladder_acceleration", ladder_acceleration)))
+	ladder_horizontal_factor = clampf(
+		float(config.get("ladder_horizontal_factor", ladder_horizontal_factor)), 0.0, 1.0
+	)
+	ladder_detach_speed = maxf(0.0, float(config.get("ladder_detach_speed", ladder_detach_speed)))
+	ladder_jump_velocity = maxf(0.0, float(config.get("ladder_jump_velocity", ladder_jump_velocity)))
 
 
 func step(
@@ -35,8 +47,12 @@ func step(
 	jump_requested: bool,
 	sprinting: bool,
 	in_fluid: bool,
-	grounded_override: bool = false
+	grounded_override: bool = false,
+	ladder_contact: Dictionary = {}
 ) -> Dictionary:
+	var on_ladder := bool(ladder_contact.get("active", false)) and not in_fluid
+	if on_ladder:
+		return _step_ladder(body, delta, input_vector, jump_requested, ladder_contact)
 	var jumped := false
 	var next_velocity := body.velocity
 	var grounded := body.is_on_floor() or grounded_override
@@ -71,10 +87,96 @@ func step(
 	body.velocity = next_velocity
 	body.move_and_slide()
 	return {
-		"jumped": jumped,
-		"moving": input_vector.length_squared() > 0.0001,
-		"sprinting": sprinting and input_vector.length_squared() > 0.0001,
+		"jumped":jumped,
+		"moving":input_vector.length_squared() > 0.0001,
+		"sprinting":sprinting and input_vector.length_squared() > 0.0001,
+		"on_ladder":false,
+		"climbing":false,
+		"detached_ladder":false,
 	}
+
+
+func resolve_ladder_velocity(
+	current_velocity: Vector3,
+	basis: Basis,
+	delta: float,
+	input_vector: Vector2,
+	jump_requested: bool,
+	ladder_contact: Dictionary
+) -> Dictionary:
+	var next_velocity := current_velocity
+	var climb_input := clampf(-input_vector.y, -1.0, 1.0)
+	if jump_requested:
+		var outward := Vector3.ZERO
+		var outward_value: Variant = ladder_contact.get("outward_offset", Vector3i.ZERO)
+		if outward_value is Vector3i:
+			outward = Vector3(outward_value)
+		elif outward_value is Vector3:
+			outward = outward_value
+		next_velocity.x = outward.x * ladder_detach_speed
+		next_velocity.z = outward.z * ladder_detach_speed
+		next_velocity.y = ladder_jump_velocity
+		return {
+			"velocity":next_velocity,
+			"jumped":true,
+			"moving":true,
+			"sprinting":false,
+			"on_ladder":false,
+			"climbing":false,
+			"climb_input":climb_input,
+			"detached_ladder":true,
+		}
+	next_velocity.y = move_toward(
+		next_velocity.y,
+		climb_input * ladder_climb_speed,
+		ladder_acceleration * delta
+	)
+	var strafe_direction := world_direction(
+		basis,
+		Vector2(input_vector.x, 0.0)
+	)
+	var horizontal_speed := walk_speed * ladder_horizontal_factor
+	next_velocity.x = move_toward(
+		next_velocity.x,
+		strafe_direction.x * horizontal_speed,
+		ladder_acceleration * delta
+	)
+	next_velocity.z = move_toward(
+		next_velocity.z,
+		strafe_direction.z * horizontal_speed,
+		ladder_acceleration * delta
+	)
+	return {
+		"velocity":next_velocity,
+		"jumped":false,
+		"moving":input_vector.length_squared() > 0.0001,
+		"sprinting":false,
+		"on_ladder":true,
+		"climbing":absf(climb_input) > 0.05,
+		"climb_input":climb_input,
+		"detached_ladder":false,
+	}
+
+
+func _step_ladder(
+	body: CharacterBody3D,
+	delta: float,
+	input_vector: Vector2,
+	jump_requested: bool,
+	ladder_contact: Dictionary
+) -> Dictionary:
+	var result := resolve_ladder_velocity(
+		body.velocity,
+		body.global_transform.basis,
+		delta,
+		input_vector,
+		jump_requested,
+		ladder_contact
+	)
+	body.velocity = Vector3(result.get("velocity", body.velocity))
+	body.move_and_slide()
+	result.erase("velocity")
+	return result
 
 
 func stop_horizontal(body: CharacterBody3D) -> void:
