@@ -164,10 +164,14 @@ func _test_creature_hit_capability() -> void:
 	var impulse: Array = snapshot.get("combat_impulse", [])
 	_check(impulse.size() == 3 and float(impulse[2]) < -2.5, "creature stores knockback in an independent combat impulse channel")
 	var start: Vector3 = creature.global_position
-	# move_and_slide() integrates with the engine physics delta, not the value
-	# passed here, so hold several frames to observe the knockback clearly.
-	for _tick in 3:
-		creature.call("_physics_process", 0.1)
+	# Measure displacement through real physics frames: a manually invoked
+	# _physics_process integrates move_and_slide with an engine-internal delta
+	# that is not reliable across environments. Hit stun (0.2s = 12 physics
+	# frames) keeps AI steering at zero, so only the impulse moves the body.
+	creature.set_physics_process(true)
+	for _frame in 4:
+		await physics_frame
+	creature.set_physics_process(false)
 	_check(creature.global_position.z < start.z - 0.05, "independent combat impulse moves the real CharacterBody3D")
 	creature.clear_combat_motion()
 	snapshot = creature.get_combat_snapshot()
