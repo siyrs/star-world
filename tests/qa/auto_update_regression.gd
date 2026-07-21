@@ -66,6 +66,8 @@ func _test_release_selection() -> void:
 	var malicious := _release_payload("v2.0.0")
 	malicious["assets"][0]["browser_download_url"] = "https://example.com/malware.zip"
 	_check(str(ReleasePolicy.select_update(malicious, "1.0.0", AppVersion.PACKAGE_ASSET_NAME, AppVersion.CHECKSUM_ASSET_NAME).get("reason", "")) == "package_asset_missing", "untrusted asset hosts are rejected")
+	_check(ReleasePolicy.is_trusted_url("https://release-assets.githubusercontent.com/github-production-release-asset/x"), "official GitHub release CDN is trusted")
+	_check(not ReleasePolicy.is_trusted_url("http://github.com/siyrs/star-world/releases/x"), "unencrypted GitHub asset URL is rejected")
 	var checksum := ReleasePolicy.parse_checksum("%s  %s" % ["a".repeat(64), AppVersion.PACKAGE_ASSET_NAME], AppVersion.PACKAGE_ASSET_NAME)
 	_check(bool(checksum.get("success", false)), "release checksum line parses")
 	_check(not bool(ReleasePolicy.parse_checksum("not-a-hash", AppVersion.PACKAGE_ASSET_NAME).get("success", false)), "invalid checksum is rejected")
@@ -99,6 +101,7 @@ func _test_package_manifest() -> void:
 	var directory := ProjectSettings.globalize_path("user://auto-update-regression")
 	DirAccess.make_dir_recursive_absolute(directory)
 	var package_path := directory.path_join("fixture.zip")
+	var malicious_path := directory.path_join("fixture-with-extra-file.zip")
 	var exe_bytes := "new-executable".to_utf8_buffer()
 	var pck_bytes := "new-resource-pack".to_utf8_buffer()
 	var manifest := {
@@ -120,9 +123,19 @@ func _test_package_manifest() -> void:
 	packer.close()
 	var inspection := PackagePolicy.inspect_package(package_path, "1.1.0")
 	_check(bool(inspection.get("success", false)), "strict package manifest accepts EXE and PCK")
+	packer = ZIPPacker.new()
+	_check(packer.open(malicious_path) == OK, "extra-file package fixture opens")
+	_packer_add(packer, AppVersion.EXECUTABLE_NAME, exe_bytes)
+	_packer_add(packer, "StarWorld.pck", pck_bytes)
+	_packer_add(packer, "side-load.dll", "unlisted-native-library".to_utf8_buffer())
+	_packer_add(packer, AppVersion.UPDATE_MANIFEST_NAME, JSON.stringify(manifest).to_utf8_buffer())
+	packer.close()
+	var malicious_inspection := PackagePolicy.inspect_package(malicious_path, "1.1.0")
+	_check(str(malicious_inspection.get("reason", "")) == "manifest_unlisted_file", "archive files not covered by the manifest are rejected")
 	manifest["version"] = "9.9.9"
 	_check(str(PackagePolicy.validate_manifest(manifest, "1.1.0").get("reason", "")) == "manifest_version", "package version mismatch is rejected")
 	DirAccess.remove_absolute(package_path)
+	DirAccess.remove_absolute(malicious_path)
 
 
 func _test_service_and_prompt() -> void:
