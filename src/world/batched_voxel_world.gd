@@ -1,11 +1,12 @@
 class_name BatchedVoxelWorld
 extends "res://src/world/voxel_world.gd"
 
-const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const BatchBlockRegistryScript = preload("res://src/block/block_registry.gd")
 const MAX_REBUILD_BATCH_DEPTH := 8
 const MAX_DIRTY_REBUILD_CHUNKS := 256
 const MAX_BLOCK_MUTATIONS_PER_BATCH := 4096
 const MAX_BATCH_REASON_LENGTH := 64
+const INVALID_MUTATION_POSITION := Vector3i(2147483647, 2147483647, 2147483647)
 
 var _rebuild_batch_depth := 0
 var _dirty_rebuild_chunks: Dictionary = {}
@@ -127,7 +128,7 @@ func apply_block_mutations(
 		var change: Dictionary = raw_change
 		var position := _mutation_position(change.get("position", null))
 		var block_id := str(change.get("block_id", ""))
-		if position == INVALID_MUTATION_POSITION or not BlockRegistryScript.has_block(block_id):
+		if position == INVALID_MUTATION_POSITION or not BatchBlockRegistryScript.has_block(block_id):
 			rejected += 1
 			continue
 		if set_block(position, block_id):
@@ -237,9 +238,6 @@ func _reset_rebuild_runtime() -> void:
 	_last_rebuild_flush_usec = 0
 	_last_rebuild_flush_chunk_count = 0
 	_last_rebuild_reason = ""
-
-
-const INVALID_MUTATION_POSITION := Vector3i(2147483647, 2147483647, 2147483647)
 
 
 func _mutation_position(value: Variant) -> Vector3i:
