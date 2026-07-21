@@ -5,6 +5,7 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const OrientationPolicyScript = preload("res://src/block/block_orientation_policy.gd")
 const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
 const DoorPolicyScript = preload("res://src/block/block_door_policy.gd")
+const LadderPolicyScript = preload("res://src/block/block_ladder_policy.gd")
 const FACE_POS_X := 0
 const FACE_NEG_X := 1
 const FACE_POS_Y := 2
@@ -43,6 +44,8 @@ static func get_local_boxes(block_id: String, connection_mask: int = -1) -> Arra
 			boxes = _fence_boxes(_connection_mask(block_id, connection_mask))
 		"door":
 			boxes = [DoorPolicyScript.local_box(block_id)]
+		"ladder":
+			boxes = [LadderPolicyScript.local_box(block_id)]
 		_:
 			if block_id in ["farmland", "farmland_wet"]:
 				boxes = [AABB(Vector3.ZERO, Vector3(1.0, 0.9375, 1.0))]
@@ -84,7 +87,7 @@ static func is_full_cube(block_id: String) -> bool:
 	if block_id in ["farmland", "farmland_wet"]:
 		return false
 	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", "cube"))
-	return shape not in ["slab", "stairs", "bed", "crop", "pane", "fence", "door"]
+	return shape not in ["slab", "stairs", "bed", "crop", "pane", "fence", "door", "ladder"]
 
 
 static func uses_partial_geometry(block_id: String) -> bool:
