@@ -4,12 +4,14 @@ extends "res://src/player/husbandry_player.gd"
 const PrecisionBlockRegistry = preload("res://src/block/block_registry.gd")
 const OrientationPolicyScript = preload("res://src/block/block_orientation_policy.gd")
 const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
+const DoorPolicyScript = preload("res://src/block/block_door_policy.gd")
 const VoxelTargetResolverScript = preload("res://src/interaction/voxel_target_resolver.gd")
 const PlacementPreviewPolicyScript = preload(
 	"res://src/interaction/placement_preview_policy.gd"
 )
 const INVALID_CONNECTION_POSITION := Vector3i(2147483647,2147483647,2147483647)
 
+var block_structure_service: Node
 var _precision_target_resolver = VoxelTargetResolverScript.new()
 var _placement_preview_policy = PlacementPreviewPolicyScript.new()
 var _last_placement_evaluation: Dictionary = {
@@ -25,6 +27,10 @@ func _ready() -> void:
 	if interaction_preview != null:
 		interaction_preview.call("setup", self)
 		interaction_preview.call("set_active", input_enabled)
+
+
+func bind_block_structure_service(service: Node) -> void:
+	block_structure_service = service
 
 
 func set_input_enabled(enabled: bool) -> void:
@@ -49,10 +55,12 @@ func get_resolved_placement_block_id() -> String:
 func _update_interaction_focus(force: bool = false) -> void:
 	var next_focus: Dictionary = _focus_resolver.resolve(interaction_ray, world)
 	if str(next_focus.get("type", "")) == "block":
+		var selected_block_id := get_resolved_placement_block_id()
 		_append_connection_context(next_focus)
+		_append_door_context(next_focus, selected_block_id)
 		next_focus["placement_preview"] = _placement_preview_policy.evaluate(
 			next_focus,
-			get_resolved_placement_block_id(),
+			selected_block_id,
 			_player_bounds()
 		)
 	if not force and next_focus == _interaction_focus:
@@ -119,7 +127,10 @@ func _place_block(block_id: String) -> bool:
 		return false
 	var placed := _commit_block_placement(resolved_block_id,target)
 	if not placed:
-		_report_placement_failure("placement_unavailable",resolved_block_id)
+		_report_placement_failure(
+			str(_last_placement_evaluation.get("reason","placement_unavailable")),
+			resolved_block_id
+		)
 	return placed
 
 
@@ -148,12 +159,11 @@ func _resolve_placement_target() -> Dictionary:
 		"hit_position":[hit_position.x,hit_position.y,hit_position.z],
 		"hit_block_id":hit_block_id,
 		"target_neighbor_ids":_connection_neighbors_for(hit_position),
-		"placement_position":[
-			placement_position.x,placement_position.y,placement_position.z
-		],
+		"placement_position":[placement_position.x,placement_position.y,placement_position.z],
 		"placement_target_block_id":previous_block,
 		"placement_neighbor_ids":_connection_neighbors_for(placement_position),
 	}
+	_append_door_context(preview_focus, selected_block_id)
 	var evaluation: Dictionary = _placement_preview_policy.evaluate(
 		preview_focus,
 		selected_block_id,
@@ -172,6 +182,45 @@ func _resolve_placement_target() -> Dictionary:
 	}
 
 
+func _commit_block_placement(block_id: String, target: Dictionary) -> bool:
+	if (
+		block_structure_service != null
+		and block_structure_service.has_method("try_place_block")
+	):
+		var raw_result: Variant = block_structure_service.call(
+			"try_place_block",
+			world,
+			inventory,
+			target.get("position", Vector3i.ZERO),
+			block_id,
+			str(target.get("previous_block", PrecisionBlockRegistry.AIR))
+		)
+		if raw_result is Dictionary:
+			var result: Dictionary = raw_result
+			if bool(result.get("handled", false)):
+				if not bool(result.get("success", false)):
+					_last_placement_evaluation["reason"] = str(
+						result.get("reason", "placement_unavailable")
+					)
+					return false
+				var block_position: Vector3i = target.get("position", Vector3i.ZERO)
+				var display_name := str(
+					PrecisionBlockRegistry.get_definition(block_id).get("name", block_id)
+				)
+				_report_player_action(
+					&"place",
+					{
+						"block_id":block_id,
+						"display_name":display_name,
+						"position":[block_position.x,block_position.y,block_position.z],
+					}
+				)
+				block_placed.emit(block_position, block_id)
+				_update_interaction_focus(true)
+				return true
+	return super._commit_block_placement(block_id, target)
+
+
 func _append_connection_context(focus: Dictionary) -> void:
 	if world == null:
 		return
@@ -180,9 +229,21 @@ func _append_connection_context(focus: Dictionary) -> void:
 		focus["target_neighbor_ids"] = _connection_neighbors_for(hit_position)
 	var placement_position := _focus_position(focus.get("placement_position",[]))
 	if placement_position != INVALID_CONNECTION_POSITION:
-		focus["placement_neighbor_ids"] = _connection_neighbors_for(
-			placement_position
-		)
+		focus["placement_neighbor_ids"] = _connection_neighbors_for(placement_position)
+
+
+func _append_door_context(focus: Dictionary, selected_block_id: String) -> void:
+	if world == null or not DoorPolicyScript.supports(selected_block_id):
+		return
+	var placement_position := _focus_position(focus.get("placement_position", []))
+	if placement_position == INVALID_CONNECTION_POSITION:
+		return
+	focus["placement_upper_block_id"] = str(
+		world.call("get_block", placement_position + Vector3i.UP)
+	)
+	focus["placement_support_block_id"] = str(
+		world.call("get_block", placement_position + Vector3i.DOWN)
+	)
 
 
 func _connection_neighbors_for(block_position: Vector3i) -> Dictionary:
@@ -211,8 +272,8 @@ func _report_placement_failure(reason: String, block_id: String) -> void:
 			message = "准星没有对准方块表面；先退开一点，看到绿色预览格后再按右键"
 		"player_overlap":
 			message = "你离得太近了；后退一步，看到绿色预览格后再按右键"
-		"occupied":
-			message = "%s；请换一个绿色预览格位置" % detail
+		"occupied", "door_upper_occupied", "door_support_missing":
+			message = "%s；请换一个绿色预览位置" % detail
 		"no_block_selected":
 			message = "先用数字键选中快捷栏里的方块"
 		_:
