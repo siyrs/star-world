@@ -42,7 +42,14 @@ jobs:
       - name: Run agriculture scale regression
         shell: pwsh
         run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_scale_batch_regression.gd -- --disable-update-check'
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          try {
+            .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_scale_batch_regression.gd -- --disable-update-check' *>&1 |
+              Tee-Object -FilePath 'build\agriculture-scale-regression.log'
+          } catch {
+            $_ | Out-File -FilePath 'build\agriculture-scale-regression.log' -Append
+            throw
+          }
 
       - name: Re-run agriculture lifecycle regression
         shell: pwsh
@@ -53,6 +60,15 @@ jobs:
         shell: pwsh
         run: |
           .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/world_mutation_batch_regression.gd -- --disable-update-check'
+
+      - name: Upload agriculture domain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agriculture-scale-domain-${{ github.run_number }}
+          path: build/agriculture-scale-regression.log
+          if-no-files-found: error
+          retention-days: 14
 
   agriculture-scale-desktop:
     name: Real 2048-crop growth, visualization, save and reload
