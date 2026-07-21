@@ -186,8 +186,8 @@ func _run() -> void:
 	var serialized := JSON.stringify(loaded)
 	_check(not serialized.contains("connection_mask"),"derived connection masks never enter the world save")
 	_check(not loaded.has("connected_shapes"),"world save adds no parallel connected-shape domain")
-	var panes_before_reload := hub.inventory.count_item("glass_pane")
-	var fences_before_reload := hub.inventory.count_item("oak_fence")
+	var panes_before_reload: int = int(hub.inventory.count_item("glass_pane"))
+	var fences_before_reload: int = int(hub.inventory.count_item("oak_fence"))
 	hub.return_to_menu()
 	for _frame in 8:
 		await process_frame
@@ -244,7 +244,6 @@ func _prepare_corridor(
 	for x in range(min_x,max_x+1):
 		for z in range(min_z,max_z+1):
 			world.call("set_block",Vector3i(x,support_y,z),"stone")
-	# Preserve the player's immediate floor and avoid a corridor setup race.
 	world.call("set_block",Vector3i(player_block.x,support_y,player_block.z),"stone")
 
 
