@@ -58,9 +58,14 @@ func _process(delta: float) -> void:
 			goal_arm = arm_length + 1.0
 			goal_color = COLOR_HOSTILE
 	var weight := clampf(delta * 12.0, 0.0, 1.0)
-	_display_arm = lerpf(_display_arm, goal_arm, weight)
-	_display_color = _display_color.lerp(goal_color, weight)
-	queue_redraw()
+	var new_arm := lerpf(_display_arm, goal_arm, weight)
+	var new_color: Color = _display_color.lerp(goal_color, weight)
+	# Only redraw when something visibly changed; a per-frame queue_redraw is
+	# wasted canvas work on every machine, headless or not.
+	if absf(new_arm - _display_arm) > 0.001 or not new_color.is_equal_approx(_display_color):
+		_display_arm = new_arm
+		_display_color = new_color
+		queue_redraw()
 
 
 func _draw() -> void:

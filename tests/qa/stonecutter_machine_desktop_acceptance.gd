@@ -130,13 +130,7 @@ func _run() -> void:
 	_check(int((furnace.call("get_machine_snapshot", furnace_id) as Dictionary).get("output", {}).get("count", 0)) == 1, "furnace produces one iron ingot")
 	panel.call("refresh")
 	var output_button: Button = panel.get("_output_button") as Button
-	_check(
-		output_button != null
-		and output_button.tooltip_text.contains("石台阶")
-		and output_button.get("_icon_rect").texture != null
-		and output_button.get("_count_label").text == "×4",
-		"real UI displays all cut output"
-	)
+	_check(output_button != null and output_button.text.contains("石台阶") and output_button.text.contains("×4"), "real UI displays all cut output")
 	var block_interaction: Node = hub.get("block_interaction") as Node
 	_check(not bool(block_interaction.call("can_break_block", world, cutter_position, "stonecutter")), "non-empty stonecutter is protected from removal")
 

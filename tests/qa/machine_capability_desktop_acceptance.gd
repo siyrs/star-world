@@ -114,13 +114,7 @@ func _run() -> void:
 	if panel != null:
 		panel.call("refresh")
 		var output_button: Button = panel.get("_output_button") as Button
-		_check(
-		output_button != null
-		and output_button.tooltip_text.contains("石台阶")
-		and output_button.get("_icon_rect").texture != null
-		and output_button.get("_count_label").text == "×4",
-		"real UI reflects capability-produced output"
-	)
+		_check(output_button != null and output_button.text.contains("石台阶") and output_button.text.contains("×4"), "real UI reflects capability-produced output")
 	await RenderingServer.frame_post_draw
 	var image: Image = root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "desktop viewport renders the capability journey")

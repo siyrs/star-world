@@ -175,6 +175,9 @@ func _apply_sky(environment: Environment, day_color: Color, strength: float) -> 
 
 
 func _update_clouds(delta: float) -> void:
+	# Clouds are invisible in headless runs; skip all of their per-frame cost.
+	if OS.has_feature("headless"):
+		return
 	if sun == null or not is_instance_valid(sun):
 		return
 	if _cloud_mesh == null:
