@@ -10,6 +10,8 @@ const TEST_FLOOR_Y := 48
 const CLEANUP_FRAMES := 8
 const READY_FRAMES := 180
 const CLIMB_FRAMES := 60
+const LADDER_SETTLE_FRAMES := 45
+const DETACH_OBSERVATION_FRAMES := 8
 
 var checks := 0
 var failures: Array[String] = []
@@ -61,8 +63,9 @@ func _run() -> void:
 	var base_block: Vector3i = world.call("world_to_block", player.global_position)
 	var wall_z := base_block.z - 4
 	var wall_x := base_block.x
-	_prepare_ladder_wall(world, wall_x, wall_z)
-	player.global_position = Vector3(wall_x + 0.5, TEST_FLOOR_Y + 1.05, wall_z - 3.5)
+	await _prepare_ladder_wall(world, wall_x, wall_z)
+	var gallery_position := Vector3(wall_x + 0.5, TEST_FLOOR_Y + 1.05, wall_z - 3.5)
+	player.global_position = gallery_position
 	player.rotation = Vector3(0.0, PI, 0.0)
 	player.get_view_camera().rotation = Vector3.ZERO
 	player.call("reset_motion")
@@ -159,13 +162,22 @@ func _run() -> void:
 		str(active_snapshot.get("support_direction", "")) == "south",
 		"runtime diagnostics retain the backing-wall direction",
 	)
+
 	_set_key(KEY_W, false)
+	var settled := false
+	for _frame in LADDER_SETTLE_FRAMES:
+		await physics_frame
+		var snapshot: Dictionary = player.call("get_ladder_movement_snapshot")
+		if bool(snapshot.get("active", false)) and absf(player.velocity.y) < 0.05:
+			settled = true
+			break
+	_check(settled, "releasing W settles vertical ladder velocity within a bounded window")
 	var hold_y := player.global_position.y
 	for _frame in 8:
 		await physics_frame
 	_check(
-		absf(player.global_position.y - hold_y) < 0.12,
-		"releasing W holds position instead of restoring gravity",
+		absf(player.global_position.y - hold_y) < 0.08,
+		"settled ladder contact holds position instead of restoring gravity",
 	)
 	var hold_snapshot: Dictionary = player.call("get_ladder_movement_snapshot")
 	_check(
@@ -185,22 +197,48 @@ func _run() -> void:
 	_set_key(KEY_S, false)
 	_check(descended, "holding real S descends the production ladder")
 
-	var detach_start := player.global_position
-	await _tap_key(KEY_SPACE)
-	for _frame in 4:
+	# Let the descent velocity settle while remaining attached before exercising
+	# the edge-triggered jump input.
+	for _frame in LADDER_SETTLE_FRAMES:
 		await physics_frame
-	var detached_snapshot: Dictionary = player.call("get_ladder_movement_snapshot")
+		if absf(player.velocity.y) < 0.05:
+			break
+	var detach_start := player.global_position
+	_set_key(KEY_SPACE, true)
+	var detached := false
+	var detach_velocity := Vector3.ZERO
+	var detached_snapshot: Dictionary = {}
+	for _frame in DETACH_OBSERVATION_FRAMES:
+		await physics_frame
+		detached_snapshot = player.call("get_ladder_movement_snapshot")
+		if (
+			not bool(detached_snapshot.get("active", true))
+			and str(detached_snapshot.get("last_exit_reason", "")) == "jump_detach"
+		):
+			detached = true
+			detach_velocity = player.velocity
+			break
+	_set_key(KEY_SPACE, false)
+	await physics_frame
+	_check(detached, "jump exits the ladder through the explicit detach boundary")
 	_check(
-		not bool(detached_snapshot.get("active", true))
-		and str(detached_snapshot.get("last_exit_reason", "")) == "jump_detach",
-		"jump exits the ladder through the explicit detach boundary",
-	)
-	_check(
-		player.global_position.z < detach_start.z - 0.02
-		or player.velocity.z < -0.2,
+		detach_velocity.z < -0.2
+		or player.global_position.z < detach_start.z - 0.02,
 		"jump pushes the player outward from the backing wall",
 	)
 
+	# Save from a known non-ladder location so reloading tests lifecycle reset,
+	# not an immediate legitimate contact at the saved spawn point.
+	player.global_position = gallery_position
+	player.call("reset_motion")
+	for _frame in 6:
+		await physics_frame
+		await process_frame
+	var pre_save_snapshot: Dictionary = player.call("get_ladder_movement_snapshot")
+	_check(
+		not bool(pre_save_snapshot.get("active", true)),
+		"safe save position is outside the ladder contact volume",
+	)
 	_check(bool(hub.save_current()), "directional ladders join the production save transaction")
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
 	var serialized := JSON.stringify(loaded)
@@ -306,13 +344,6 @@ func _set_key(keycode: Key, pressed: bool) -> void:
 	event.physical_keycode = keycode
 	event.pressed = pressed
 	root.push_input(event)
-
-
-func _tap_key(keycode: Key) -> void:
-	_set_key(keycode, true)
-	await process_frame
-	_set_key(keycode, false)
-	await process_frame
 
 
 func _focus_hits(focus: Dictionary, expected: Vector3i) -> bool:
