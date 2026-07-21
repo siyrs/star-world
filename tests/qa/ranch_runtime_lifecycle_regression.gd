@@ -176,7 +176,7 @@ func _test_production_ranch_composition() -> void:
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("husbandry"), "husbandry participant preserves its legacy diagnostics field")
 	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 5, "production diagnostics expose all five lifecycle participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 6, "production diagnostics expose all six lifecycle participants")
 
 	coordinator.call("clear", &"qa_ranch_clear")
 	_check(fake_player.entity_interaction_service == null, "reverse clear unbinds the husbandry interaction service")

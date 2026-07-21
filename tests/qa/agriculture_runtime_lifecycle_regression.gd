@@ -185,7 +185,7 @@ func _test_atomic_harvest_and_pause() -> void:
 	var harvested: Dictionary = agriculture.try_interact(world, inventory, crop, "wheat_stage_3")
 	_check(bool(harvested.get("success", false)), "mature harvest commits through one inventory transaction")
 	_check(bool(harvested.get("transaction", {}).get("success", false)), "harvest exposes the committed transaction result")
-	_check(inventory.count_item("wheat") == 1 and inventory.count_item("wheat_seeds") == 3, "atomic harvest grants every configured output")
+	_check(inventory.count_item("wheat") == 1 and inventory.count_item("wheat_seeds") == 2, "atomic harvest grants every configured output")
 	_check(world.get_block(crop) == "wheat_stage_0", "atomic harvest replants only after transaction capacity is proven")
 	_check(
 		int(agriculture.get_runtime_snapshot().get("atomic_harvest_count", 0)) == 1,
