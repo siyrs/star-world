@@ -80,13 +80,34 @@ jobs:
             -Version '${{ steps.version.outputs.version }}' `
             -OutputDirectory build\release-assets
 
+      - name: Install Mesa software OpenGL for smoke run
+        shell: pwsh
+        run: |
+          # windows-latest runners have no OpenGL 3.3 driver; Mesa llvmpipe provides one.
+          # Installed after packaging so the DLL never ships inside the release zip.
+          $mesaUrl = 'https://github.com/mmozeiko/build-mesa/releases/download/26.1.5/mesa-llvmpipe-x64-26.1.5.7z'
+          Invoke-WebRequest -Uri $mesaUrl -OutFile mesa-llvmpipe.7z
+          C:\Windows\System32\tar.exe -xf mesa-llvmpipe.7z -C build\release
+          if (-not (Test-Path build\release\opengl32.dll)) { throw 'Mesa opengl32.dll was not extracted' }
+
       - name: Smoke exported release without network update check
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath build\release\StarWorld.exe -ArgumentList '--disable-update-check','--release-smoke','--release-smoke-output=build/release-smoke.json' -PassThru
-          if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Release smoke timed out' }
-          if ($process.ExitCode -ne 0) { throw "Release smoke failed with exit $($process.ExitCode)" }
-          if (-not (Test-Path build\release-smoke.json)) { throw 'Release smoke report is missing' }
+          # Game reads OS.get_cmdline_user_args(): everything must follow a literal `--`.
+          $arguments = '-- --disable-update-check --release-smoke --smoke-soak-frames=60 --smoke-output=build/release-smoke.json'
+          $process = Start-Process -FilePath build\release\StarWorld.exe -ArgumentList $arguments -PassThru -NoNewWindow `
+            -RedirectStandardOutput build\smoke.out.log -RedirectStandardError build\smoke.err.log
+          $failure = ''
+          if (-not $process.WaitForExit(300000)) {
+            Stop-Process -Id $process.Id -Force
+            $failure = 'timed out after 300s'
+          } elseif ($process.ExitCode -ne 0) {
+            $failure = "exited with code $($process.ExitCode)"
+          } elseif (-not (Test-Path build\release-smoke.json)) {
+            $failure = 'report build/release-smoke.json is missing'
+          }
+          Get-Content build\smoke.out.log, build\smoke.err.log -ErrorAction SilentlyContinue
+          if ($failure) { throw "Release smoke failed: $failure" }
 
       - name: Upload release evidence
         uses: actions/upload-artifact@v4
