@@ -5,6 +5,7 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
 const DoorPolicyScript = preload("res://src/block/block_door_policy.gd")
+const LadderPolicyScript = preload("res://src/block/block_ladder_policy.gd")
 const INVALID_COORD := Vector3i(2147483647,2147483647,2147483647)
 
 
@@ -25,6 +26,8 @@ func evaluate(
 		"placement_connection_mask":0,
 		"placement_companion_position":[],
 		"placement_companion_block_id":"",
+		"placement_support_position":[],
+		"placement_support_block_id":"",
 		"selected_block_id":selected_block_id,
 		"valid":false,
 		"reason":"no_focus",
@@ -101,6 +104,23 @@ func evaluate(
 		if not BlockRegistryScript.is_solid(support_block_id):
 			result["reason"] = "door_support_missing"
 			return result
+	if LadderPolicyScript.supports(selected_block_id):
+		result["placement_support_position"] = _position_array(
+			_position_from(focus.get("placement_ladder_support_position", []))
+		)
+		var ladder_support_id := str(
+			focus.get("placement_ladder_support_block_id", BlockRegistryScript.AIR)
+		)
+		result["placement_support_block_id"] = ladder_support_id
+		if not bool(focus.get("placement_ladder_face_valid", false)):
+			result["reason"] = "ladder_face_invalid"
+			return result
+		if not bool(focus.get("placement_ladder_support_matches_target", false)):
+			result["reason"] = "ladder_support_mismatch"
+			return result
+		if not LadderPolicyScript.is_valid_support(ladder_support_id):
+			result["reason"] = "ladder_support_missing"
+			return result
 	if player_bounds.size.length_squared() > 0.0:
 		var world_boxes: Array[AABB] = (
 			DoorPolicyScript.placement_world_boxes(selected_block_id, placement_position)
@@ -138,6 +158,12 @@ static func reason_text(reason: String, occupied_name: String = "") -> String:
 			)
 		"door_support_missing":
 			return "木门需要放在实体方块上"
+		"ladder_face_invalid":
+			return "梯子只能贴在墙面的侧面"
+		"ladder_support_mismatch":
+			return "梯子必须贴在当前瞄准的墙面上"
+		"ladder_support_missing":
+			return "梯子背后需要完整实体方块支撑"
 		"player_overlap":
 			return "不能放在角色身体内"
 		"placement_unavailable":
@@ -166,4 +192,6 @@ func _position_from(value: Variant) -> Vector3i:
 
 
 func _position_array(position: Vector3i) -> Array[int]:
+	if position == INVALID_COORD:
+		return []
 	return [position.x,position.y,position.z]
