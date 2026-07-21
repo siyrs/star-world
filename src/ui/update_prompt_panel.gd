@@ -116,6 +116,7 @@ func _on_update_available(release: Dictionary) -> void:
 	_primary_button.text = "下载并自动更新"
 	_primary_button.disabled = false
 	_later_button.visible = true
+	_later_button.text = "稍后"
 	_later_button.disabled = false
 
 
@@ -133,9 +134,11 @@ func _on_status_changed(state: StringName, message: String) -> void:
 		_primary_button.disabled = true
 		_primary_button.text = "正在准备安装…"
 	elif state == &"failed":
+		_download_started = false
 		visible = true
 		_primary_button.disabled = false
 		_primary_button.text = "重试更新"
+		_later_button.visible = true
 		_later_button.text = "稍后"
 		_later_button.disabled = false
 	elif state == &"installing":
