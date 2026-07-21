@@ -2,12 +2,14 @@ class_name MachineRuntimeParticipant
 extends Node
 
 signal machine_batch_announced(summary: Dictionary)
+signal machine_automation_announced(summary: Dictionary)
 
 const SchedulerScript = preload("res://src/machine/machine_runtime_scheduler.gd")
 const StateMigrationScript = preload("res://src/machine/machine_state_migration.gd")
 const CompletionPolicyScript = preload("res://src/machine/machine_completion_policy.gd")
 const StonecutterServiceScript = preload("res://src/machine/stonecutter_service.gd")
 const InteractionRouterScript = preload("res://src/machine/machine_interaction_router.gd")
+const AutomationServiceScript = preload("res://src/machine/machine_automation_service.gd")
 const MAX_PENDING_COMPLETIONS := 128
 
 var hub: Node
@@ -15,6 +17,7 @@ var scheduler: Node
 var furnace_service: Node
 var stonecutter_service: Node
 var interaction_router: Node
+var automation_service: Node
 var _installed := false
 var _active := false
 var _shutdown := false
@@ -39,12 +42,16 @@ func install(p_hub: Node) -> bool:
 	hub = p_hub
 	furnace_service = hub.get("furnace_service") as Node
 	var inventory: Node = hub.get("inventory") as Node
+	var container_storage: Node = hub.get("container_storage") as Node
 	var item_registry: Variant = inventory.get("registry") if inventory != null else null
 	if (
 		furnace_service == null
 		or not furnace_service.has_method("advance_machine_runtime")
 		or not furnace_service.has_method("get_runtime_snapshot")
 		or item_registry == null
+		or container_storage == null
+		or not container_storage.has_method("can_transact_items")
+		or not container_storage.has_method("transact_items")
 		or not hub.has_method("_add_service")
 	):
 		return false
@@ -75,11 +82,7 @@ func install(p_hub: Node) -> bool:
 			registration_data.get("service") as Node
 		)
 		if not bool(registration.get("success", false)):
-			scheduler.call("shutdown")
-			_dispose_service(scheduler)
-			_dispose_service(stonecutter_service)
-			scheduler = null
-			stonecutter_service = null
+			_rollback_install()
 			return false
 	interaction_router = hub.call(
 		"_add_service",
@@ -87,11 +90,7 @@ func install(p_hub: Node) -> bool:
 		"MachineInteractionRouter"
 	) as Node
 	if interaction_router == null:
-		scheduler.call("shutdown")
-		_dispose_service(scheduler)
-		_dispose_service(stonecutter_service)
-		scheduler = null
-		stonecutter_service = null
+		_rollback_install()
 		return false
 	var furnace_registration: Dictionary = interaction_router.call(
 		"register_machine_type",
@@ -115,14 +114,26 @@ func install(p_hub: Node) -> bool:
 		not bool(furnace_registration.get("success", false))
 		or not bool(stonecutter_registration.get("success", false))
 	):
-		interaction_router.call("shutdown")
-		_dispose_service(interaction_router)
-		scheduler.call("shutdown")
-		_dispose_service(scheduler)
-		_dispose_service(stonecutter_service)
-		interaction_router = null
-		scheduler = null
-		stonecutter_service = null
+		_rollback_install()
+		return false
+	automation_service = hub.call(
+		"_add_service",
+		AutomationServiceScript.new(),
+		"MachineAutomationService"
+	) as Node
+	if (
+		automation_service == null
+		or not bool(automation_service.call(
+			"setup", interaction_router, container_storage
+		))
+	):
+		_rollback_install()
+		return false
+	var automation_registration: Dictionary = scheduler.call(
+		"register_domain", &"automation", automation_service
+	)
+	if not bool(automation_registration.get("success", false)):
+		_rollback_install()
 		return false
 	_connect_completion_signal(
 		furnace_service,
@@ -134,9 +145,15 @@ func install(p_hub: Node) -> bool:
 		"item_processed",
 		Callable(self, "_on_item_processed")
 	)
+	_connect_completion_signal(
+		automation_service,
+		"automation_machine_activated",
+		Callable(self, "_on_machine_automation_activated")
+	)
 	hub.set("machine_runtime", scheduler)
 	hub.set("stonecutter_service", stonecutter_service)
 	hub.set("machine_interaction_router", interaction_router)
+	hub.set("machine_automation_service", automation_service)
 	_installed = true
 	_shutdown = false
 	return true
@@ -151,6 +168,8 @@ func begin_world(state: Dictionary) -> void:
 	_reset_completion_batch()
 	if scheduler != null and scheduler.has_method("deactivate"):
 		scheduler.call("deactivate")
+	if automation_service != null and automation_service.has_method("clear"):
+		automation_service.call("clear")
 	var machine_state: Dictionary = state.get("machines", {})
 	for service: Node in [furnace_service, stonecutter_service]:
 		if service == null or not is_instance_valid(service):
@@ -161,13 +180,14 @@ func begin_world(state: Dictionary) -> void:
 
 
 func attach_game(
-	_world,
+	world,
 	_player: Node3D,
 	_sun: DirectionalLight3D = null,
 	_environment: WorldEnvironment = null,
 	_ground_resolver: Callable = Callable()
 ) -> void:
-	pass
+	if automation_service != null and automation_service.has_method("attach_world"):
+		automation_service.call("attach_world", world)
 
 
 func activate() -> void:
@@ -211,6 +231,11 @@ func snapshot_into(snapshot: Dictionary) -> void:
 		if stonecutter_service != null and stonecutter_service.has_method("get_runtime_snapshot")
 		else {}
 	)
+	var automation_snapshot: Dictionary = (
+		automation_service.call("get_runtime_snapshot")
+		if automation_service != null and automation_service.has_method("get_runtime_snapshot")
+		else {}
+	)
 	var machine_snapshot := furnace_snapshot.duplicate(true)
 	machine_snapshot["machine_count"] = (
 		maxi(0, int(furnace_snapshot.get("machine_count", 0)))
@@ -222,9 +247,11 @@ func snapshot_into(snapshot: Dictionary) -> void:
 	machine_snapshot["stonecutter_machine_count"] = maxi(
 		0, int(stonecutter_snapshot.get("machine_count", 0))
 	)
+	machine_snapshot["automation"] = automation_snapshot.duplicate(true)
 	machine_snapshot["domains"] = {
 		"furnace": furnace_snapshot.duplicate(true),
 		"stonecutter": stonecutter_snapshot.duplicate(true),
+		"automation": automation_snapshot.duplicate(true),
 	}
 	snapshot["machines"] = machine_snapshot
 	snapshot["machine_runtime"] = (
@@ -247,6 +274,9 @@ func clear(_reason: StringName = &"clear") -> void:
 	for service: Node in [stonecutter_service, furnace_service]:
 		if service != null and is_instance_valid(service) and service.has_method("clear"):
 			service.call("clear")
+	if automation_service != null and is_instance_valid(automation_service):
+		if automation_service.has_method("clear"):
+			automation_service.call("clear")
 
 
 func shutdown() -> void:
@@ -264,6 +294,13 @@ func shutdown() -> void:
 		"item_processed",
 		Callable(self, "_on_item_processed")
 	)
+	_disconnect_completion_signal(
+		automation_service,
+		"automation_machine_activated",
+		Callable(self, "_on_machine_automation_activated")
+	)
+	if automation_service != null and automation_service.has_method("shutdown"):
+		automation_service.call("shutdown")
 	if interaction_router != null and interaction_router.has_method("shutdown"):
 		interaction_router.call("shutdown")
 	for service: Node in [stonecutter_service, furnace_service]:
@@ -289,6 +326,10 @@ func get_interaction_router() -> Node:
 	return interaction_router
 
 
+func get_automation_service() -> Node:
+	return automation_service
+
+
 func get_lifecycle_snapshot() -> Dictionary:
 	return {
 		"installed": _installed,
@@ -301,6 +342,9 @@ func get_lifecycle_snapshot() -> Dictionary:
 		),
 		"interaction_router_ready": (
 			interaction_router != null and is_instance_valid(interaction_router)
+		),
+		"automation_ready": (
+			automation_service != null and is_instance_valid(automation_service)
 		),
 		"registered_domain_count": (
 			int(scheduler.call("get_snapshot").get("domain_count", 0))
@@ -325,6 +369,34 @@ func _on_item_smelted(machine_id: String, recipe_id: String, output: Dictionary)
 
 func _on_item_processed(machine_id: String, recipe_id: String, output: Dictionary) -> void:
 	_queue_completion("stonecutter", machine_id, recipe_id, output)
+
+
+func _on_machine_automation_activated(summary: Dictionary) -> void:
+	if not _active:
+		return
+	var machine_type := str(summary.get("machine_type", ""))
+	var label := (
+		"熔炉" if machine_type == "furnace"
+		else "石材切割机" if machine_type == "stonecutter"
+		else "机器"
+	)
+	var has_input := not str(summary.get("input_container_id", "")).is_empty()
+	var has_output := not str(summary.get("output_container_id", "")).is_empty()
+	var detail := (
+		"上方供料，下方收货" if has_input and has_output
+		else "上方箱子自动供料" if has_input
+		else "下方箱子自动收货"
+	)
+	var message := "已启用%s相邻箱子自动化：%s" % [label, detail]
+	_publish_message(
+		message,
+		"info",
+		"machine_automation:%s" % str(summary.get("machine_id", machine_type)),
+		3.2
+	)
+	var announced := summary.duplicate(true)
+	announced["message"] = message
+	machine_automation_announced.emit(announced)
 
 
 func _queue_completion(
@@ -401,7 +473,9 @@ func _publish_message(
 		hub.call("_publish_character_message", message, severity, dedupe_key, duration)
 
 
-func _connect_completion_signal(service: Node, signal_name: String, callback: Callable) -> void:
+func _connect_completion_signal(
+	service: Node, signal_name: String, callback: Callable
+) -> void:
 	if (
 		service != null
 		and is_instance_valid(service)
@@ -411,7 +485,9 @@ func _connect_completion_signal(service: Node, signal_name: String, callback: Ca
 		service.connect(signal_name, callback)
 
 
-func _disconnect_completion_signal(service: Node, signal_name: String, callback: Callable) -> void:
+func _disconnect_completion_signal(
+	service: Node, signal_name: String, callback: Callable
+) -> void:
 	if (
 		service != null
 		and is_instance_valid(service)
@@ -419,6 +495,29 @@ func _disconnect_completion_signal(service: Node, signal_name: String, callback:
 		and service.is_connected(signal_name, callback)
 	):
 		service.disconnect(signal_name, callback)
+
+
+func _rollback_install() -> void:
+	if automation_service != null and is_instance_valid(automation_service):
+		if automation_service.has_method("shutdown"):
+			automation_service.call("shutdown")
+		_dispose_service(automation_service)
+	if interaction_router != null and is_instance_valid(interaction_router):
+		if interaction_router.has_method("shutdown"):
+			interaction_router.call("shutdown")
+		_dispose_service(interaction_router)
+	if scheduler != null and is_instance_valid(scheduler):
+		if scheduler.has_method("shutdown"):
+			scheduler.call("shutdown")
+		_dispose_service(scheduler)
+	if stonecutter_service != null and is_instance_valid(stonecutter_service):
+		if stonecutter_service.has_method("shutdown"):
+			stonecutter_service.call("shutdown")
+		_dispose_service(stonecutter_service)
+	automation_service = null
+	interaction_router = null
+	scheduler = null
+	stonecutter_service = null
 
 
 func _dispose_service(service: Node) -> void:
