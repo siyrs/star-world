@@ -5,7 +5,7 @@ const EquipmentServiceScript = preload("res://src/equipment/equipment_service.gd
 const AttributeServiceScript = preload("res://src/attribute/attribute_service.gd")
 const CombatServiceScript = preload("res://src/combat/combat_service.gd")
 const AgricultureRuntimeParticipantScript = preload(
-	"res://src/agriculture/agriculture_runtime_participant.gd"
+	"res://src/agriculture/scalable_agriculture_runtime_participant.gd"
 )
 const RestServiceScript = preload("res://src/rest/rest_service.gd")
 const AGRICULTURE_RUNTIME_FEATURE := &"agriculture_runtime"
