@@ -3,9 +3,11 @@ extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const DoorPolicyScript = preload("res://src/block/block_door_policy.gd")
+const LadderPolicyScript = preload("res://src/block/block_ladder_policy.gd")
 const STAIR_FAMILY := "oak_stairs"
 const PANE_FAMILY := "glass_pane"
 const DOOR_FAMILY := "oak_door"
+const LADDER_FAMILY := "ladder"
 const STAIR_VARIANTS: Array[String] = [
 	"oak_stairs",
 	"oak_stairs_east",
@@ -57,6 +59,8 @@ static func variant_for_quarters(block_id: String, quarters: int) -> String:
 			return PANE_VARIANTS[posmod(quarters, 4)]
 		DOOR_FAMILY:
 			return DoorPolicyScript.closed_lower_for_quarters(quarters)
+		LADDER_FAMILY:
+			return LadderPolicyScript.variant_for_quarters(quarters)
 		_:
 			return block_id
 
