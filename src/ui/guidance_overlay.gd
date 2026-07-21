@@ -7,6 +7,7 @@ const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
+const KeyBadges = preload("res://src/ui/key_badge_formatter.gd")
 
 var coordinator: Node
 var feedback
@@ -17,13 +18,13 @@ var _toast_label: Label
 var _prompt_panel: PanelContainer
 var _prompt_title: Label
 var _prompt_subtitle: Label
-var _prompt_actions: Label
+var _prompt_actions: RichTextLabel
 var _tutorial_panel: PanelContainer
 var _tutorial_progress: ProgressBar
 var _tutorial_step: Label
 var _tutorial_title: Label
 var _tutorial_description: Label
-var _tutorial_hint: Label
+var _tutorial_hint: RichTextLabel
 var _tutorial_state: Dictionary = {}
 var _prompt_state: Dictionary = {}
 var _crosshair: Control
@@ -152,11 +153,14 @@ func _build_prompt() -> void:
 	_prompt_subtitle.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	_prompt_subtitle.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	identity.add_child(_prompt_subtitle)
-	_prompt_actions = Label.new()
+	_prompt_actions = RichTextLabel.new()
+	_prompt_actions.bbcode_enabled = true
+	_prompt_actions.scroll_active = false
+	_prompt_actions.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_prompt_actions.custom_minimum_size = Vector2(220, 44)
 	_prompt_actions.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_prompt_actions.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_prompt_actions.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	_prompt_actions.modulate = Tokens.color(Tokens.COLOR_ACCENT_WARM)
+	_prompt_actions.add_theme_color_override("default_color", Tokens.color(Tokens.COLOR_ACCENT_WARM))
 	content.add_child(_prompt_actions)
 
 
@@ -194,10 +198,13 @@ func _build_tutorial() -> void:
 	_tutorial_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tutorial_description.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	content.add_child(_tutorial_description)
-	_tutorial_hint = Label.new()
+	_tutorial_hint = RichTextLabel.new()
+	_tutorial_hint.bbcode_enabled = true
+	_tutorial_hint.fit_content = true
+	_tutorial_hint.scroll_active = false
 	_tutorial_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tutorial_hint.add_theme_font_size_override("font_size", 19)
-	_tutorial_hint.modulate = Tokens.color(Tokens.COLOR_ACCENT_WARM)
+	_tutorial_hint.add_theme_color_override("default_color", Tokens.color(Tokens.COLOR_ACCENT_WARM))
 	content.add_child(_tutorial_hint)
 	_tutorial_progress = ProgressBar.new()
 	_tutorial_progress.show_percentage = false
@@ -240,7 +247,7 @@ func _on_prompt_changed(prompt: Dictionary) -> void:
 		var action_text := str(prompt.get(key, "")).strip_edges()
 		if not action_text.is_empty():
 			action_parts.append(action_text)
-	_prompt_actions.text = "\n".join(action_parts)
+	_prompt_actions.text = KeyBadges.format("\n".join(action_parts))
 	_refresh_visibility()
 
 
@@ -256,7 +263,7 @@ func _on_tutorial_state_changed(state: Dictionary) -> void:
 	]
 	_tutorial_title.text = str(step.get("title", ""))
 	_tutorial_description.text = str(step.get("description", ""))
-	_tutorial_hint.text = str(step.get("hint", ""))
+	_tutorial_hint.text = KeyBadges.format(str(step.get("hint", "")))
 	_tutorial_progress.value = float(state.get("progress", 0.0))
 	_refresh_visibility()
 
