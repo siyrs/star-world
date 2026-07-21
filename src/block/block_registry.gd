@@ -20,7 +20,13 @@ const BLOCK_IDS := [
 	# Glass panes were previously an unplaceable item; append real world variants.
 	"glass_pane", "glass_pane_ns",
 	# New machines append their IDs so old world numeric block IDs remain stable.
-	"stonecutter"
+	"stonecutter",
+	# Door state is encoded in appended variants; the legacy oak_door ID remains south/closed/lower.
+	"oak_door_east", "oak_door_north", "oak_door_west",
+	"oak_door_upper", "oak_door_upper_east", "oak_door_upper_north", "oak_door_upper_west",
+	"oak_door_open", "oak_door_open_east", "oak_door_open_north", "oak_door_open_west",
+	"oak_door_upper_open", "oak_door_upper_open_east",
+	"oak_door_upper_open_north", "oak_door_upper_open_west"
 ]
 
 const DEFINITIONS := {
@@ -47,7 +53,7 @@ const DEFINITIONS := {
 	"crafting_table": {"name":"工作台", "color":"#9A6333", "solid":true, "transparent":false, "collectible":true, "item_id":"crafting_table", "hardness":2.0},
 	"furnace": {"name":"熔炉", "color":"#55595D", "solid":true, "transparent":false, "collectible":true, "item_id":"furnace", "hardness":3.0},
 	"chest": {"name":"箱子", "color":"#A66B2C", "solid":true, "transparent":false, "collectible":true, "item_id":"chest", "hardness":2.0},
-	"oak_door": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5},
+	"oak_door": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":false, "rotation_quarters":0},
 	"oak_fence": {"name":"木栅栏", "color":"#A87540", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_fence", "hardness":1.5, "shape":"fence", "connection_family":"oak_fence"},
 	"ladder": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5},
 	"torch": {"name":"火把", "color":"#F3B63F", "solid":false, "transparent":true, "collectible":true, "item_id":"torch", "hardness":0.1, "emissive":true},
@@ -75,7 +81,22 @@ const DEFINITIONS := {
 	"oak_stairs_west": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":3, "visual_parent":"oak_stairs"},
 	"glass_pane": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "connection_family":"glass_pane", "rotation_quarters":0, "visual_parent":"glass"},
 	"glass_pane_ns": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "connection_family":"glass_pane", "rotation_quarters":1, "visual_parent":"glass"},
-	"stonecutter": {"name":"石材切割机", "color":"#6F777C", "solid":true, "transparent":false, "collectible":true, "item_id":"stonecutter", "hardness":3.0, "visual_parent":"repair_station"}
+	"stonecutter": {"name":"石材切割机", "color":"#6F777C", "solid":true, "transparent":false, "collectible":true, "item_id":"stonecutter", "hardness":3.0, "visual_parent":"repair_station"},
+	"oak_door_east": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":false, "rotation_quarters":1, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_north": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":false, "rotation_quarters":2, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":false, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":false, "rotation_quarters":0, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_east": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":false, "rotation_quarters":1, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_north": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":false, "rotation_quarters":2, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":false, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_open": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":true, "rotation_quarters":0, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_open_east": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":true, "rotation_quarters":1, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_open_north": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":true, "rotation_quarters":2, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_open_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "orientation_family":"oak_door", "door_family":"oak_door", "door_half":"lower", "door_open":true, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_open": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":0, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_open_east": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":1, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_open_north": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":2, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
+	"oak_door_upper_open_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"}
 }
 
 
