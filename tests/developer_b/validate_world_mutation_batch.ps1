@@ -120,7 +120,7 @@ if ($workflow -notmatch 'world_scale_desktop_acceptance\.gd' -or $workflow -notm
 if ($runAll -notmatch 'validate_world_mutation_batch\.ps1' -or $runAll -notmatch 'world_mutation_batch_regression\.gd') {
     throw 'Full regression entry point must permanently include world mutation batching'
 }
-if ($contract -notmatch '4096' -or $contract -notmatch '256' -or $contract -notmatch 'immediate') {
+if ($contract -notmatch '4,?096' -or $contract -notmatch '256' -or $contract -notmatch 'immediate') {
     throw 'World mutation contract must document budgets and immediate single-edit semantics'
 }
 if ($audit -notmatch 'set_block' -or $audit -notmatch '16×64×16') {
