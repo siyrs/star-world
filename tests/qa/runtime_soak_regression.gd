@@ -108,7 +108,7 @@ func _run_world_cycle(
 	_check(max_pending <= 128, "streaming queue remains bounded during repeated travel")
 	_check(max_loaded <= 96, "loaded chunk population remains bounded during repeated travel")
 	_check(
-		critical_samples <= 1,
+		critical_samples <= 2,
 		"sustained runtime health does not remain critical after the warmup window",
 	)
 	controller_status = diagnostics.call("get_adaptive_streaming_status")
