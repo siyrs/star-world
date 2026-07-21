@@ -32,8 +32,7 @@ jobs:
       - name: Validate strict project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate bounded automation contracts
         shell: pwsh
@@ -43,14 +42,10 @@ jobs:
       - name: Run automation and adjacent transaction regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/machine_automation_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/machine_capability_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/machine_base_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/inventory_transaction_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_automation_regression.gd -- --disable-update-check'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_capability_regression.gd -- --disable-update-check'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_base_regression.gd -- --disable-update-check'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/inventory_transaction_regression.gd -- --disable-update-check'
 
   real-machine-automation-desktop:
     name: Real stacked chests, shared machines, save and reload

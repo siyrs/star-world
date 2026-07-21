@@ -32,14 +32,12 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Non-cube geometry regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/non_cube_block_geometry_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/non_cube_block_geometry_regression.gd'
 
   real-geometry-desktop:
     name: Real slab, stair and collision desktop acceptance

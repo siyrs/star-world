@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate Machine Base and lifecycle contracts
         shell: pwsh
@@ -46,12 +45,9 @@ jobs:
       - name: Run Machine Base and furnace regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/machine_base_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/furnace_machine_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_base_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/furnace_machine_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd'
 
   real-machine-base-desktop:
     name: Real two-furnace scheduling, overlay, save and reload acceptance

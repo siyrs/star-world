@@ -158,8 +158,10 @@ func _test_heavy_attack_and_drop() -> void:
 		return
 	var brute: Node3D = brute_variant
 	host.add_child(brute)
-	await process_frame
+	# Disable the AI tick before the first frame so the elite cannot start a
+	# windup on its own; this test drives every attack transition manually.
 	brute.set_physics_process(false)
+	await process_frame
 	brute.set("target", target)
 	var attack: Dictionary = brute.call("get_hostile_attack_snapshot")
 	_check(float(attack.get("windup_seconds", 0.0)) == 1.35, "elite uses its authoritative long windup")

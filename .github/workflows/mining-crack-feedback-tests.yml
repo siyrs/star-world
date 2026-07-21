@@ -32,14 +32,12 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Mining crack feedback regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/mining_crack_feedback_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/mining_crack_feedback_regression.gd'
 
   real-mining-crack-desktop:
     name: Real mining crack desktop acceptance

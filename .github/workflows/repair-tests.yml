@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate repair registry
         shell: pwsh
@@ -42,8 +41,7 @@ jobs:
       - name: Repair transaction regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/repair_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/repair_regression.gd'
 
   repair-desktop:
     name: Real repair station desktop acceptance

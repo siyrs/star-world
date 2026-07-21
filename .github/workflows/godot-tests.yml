@@ -31,13 +31,12 @@ jobs:
 
       - name: Verify Godot
         shell: pwsh
-        run: godot --version
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--version'
 
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate data registry
         shell: pwsh
@@ -54,146 +53,122 @@ jobs:
       - name: Core smoke test
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/developer_a/core_smoke_test.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/developer_a/core_smoke_test.gd'
 
       - name: Gameplay services test
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/developer_b/run_tests.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/developer_b/run_tests.gd'
 
       - name: Integration regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/integration_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/integration_regression.gd'
 
       - name: Input interaction regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/input_interaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/input_interaction_regression.gd'
 
       - name: Movement lifecycle regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/movement_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/movement_lifecycle_regression.gd'
 
       - name: Physics interaction regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/physics_interaction_regression.gd'
 
       - name: Block interaction regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/block_interaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/block_interaction_regression.gd'
 
       - name: Furnace machine regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/furnace_machine_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/furnace_machine_regression.gd'
 
       - name: Tool harvest regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/tool_harvest_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/tool_harvest_regression.gd'
 
       - name: Equipment and combat regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/equipment_combat_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/equipment_combat_regression.gd'
 
       - name: Agriculture regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/agriculture_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_regression.gd'
 
       - name: Irrigation and multicrop regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/irrigation_multicrop_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/irrigation_multicrop_regression.gd'
 
       - name: Fertilizer regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/fertilizer_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/fertilizer_regression.gd'
 
       - name: Rest and respawn regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/rest_respawn_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/rest_respawn_regression.gd'
 
       - name: Desktop input contract regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/desktop_input_contract_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/desktop_input_contract_regression.gd'
 
       - name: Runtime diagnostics regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/runtime_diagnostics_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_diagnostics_regression.gd'
 
       - name: Player experience regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/player_experience_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/player_experience_regression.gd'
 
       - name: Compact UI layout regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/ui_layout_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ui_layout_regression.gd'
 
       - name: World-region visual acceptance
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/visual_acceptance_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/visual_acceptance_regression.gd'
 
       - name: Adaptive streaming regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/adaptive_streaming_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/adaptive_streaming_regression.gd'
 
       - name: Audio lifecycle regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/audio_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/audio_lifecycle_regression.gd'
 
       - name: Runtime stability regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/runtime_stability_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_stability_regression.gd'
 
       - name: Runtime lifecycle soak
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/runtime_soak_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_soak_regression.gd'
 
       - name: Settings regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/settings_retest.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/settings_retest.gd'
 
   desktop-acceptance:
     name: Real desktop input and UI acceptance

@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate multi-hostile danger contracts
         shell: pwsh
@@ -52,8 +51,7 @@ jobs:
             'res://tests/qa/abyss_elite_regression.gd'
           )
           foreach ($script in $scripts) {
-            godot --headless --path . --script $script
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script"
           }
 
   real-multi-hostile-danger-desktop:

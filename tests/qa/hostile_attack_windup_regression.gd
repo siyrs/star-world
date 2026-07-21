@@ -111,15 +111,17 @@ func _test_factory_and_state_machine() -> void:
 		return
 	var zombie = creature_variant
 	host.add_child(zombie)
-	await process_frame
+	# Disable the AI tick before the first frame so the zombie cannot start a
+	# windup on its own; this test drives every attack transition manually.
 	zombie.set_physics_process(false)
+	await process_frame
 	zombie.set("move_speed", 0.0)
 	zombie.set("target", target)
 	var profile: Dictionary = factory.get_hostile_attack_profile("zombie")
 	_check(is_equal_approx(float(zombie.get("attack_windup_seconds")), float(profile.get("windup_seconds", 0.0))), "factory injects the authoritative windup")
 	_check(str(zombie.get("attack_source_id")) == "zombie", "damage source comes from the attack profile")
 	_check(is_equal_approx(float(zombie.get("attack_damage")), 1.0), "production and fallback zombie damage remain aligned")
-	var telegraph := zombie.get_node_or_null("AttackTelegraph")
+	var telegraph: Node = zombie.get_node_or_null("AttackTelegraph")
 	_check(telegraph is MeshInstance3D, "hostile creature creates a non-colliding visual telegraph")
 	_check(not _tree_has_collision_object(telegraph), "attack telegraph cannot affect physics or ray targeting")
 

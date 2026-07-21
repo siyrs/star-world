@@ -284,7 +284,7 @@ func _test_production_service_hub() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,machine_runtime"
+			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
 		"production cleanup records complete reverse dependency order"
 	)

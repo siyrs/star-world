@@ -60,6 +60,9 @@ func _initialize() -> void:
 
 func _run() -> void:
 	root.size = Vector2i(1024, 576)
+	# With canvas_items stretch the design viewport only follows content_scale_size;
+	# resizing the window alone leaves layout running in the 1280x720 space.
+	root.content_scale_size = Vector2i(1024, 576)
 	_test_registry_and_overlay_contracts()
 	_test_migration_safety()
 	await _test_service_stable_ordering()

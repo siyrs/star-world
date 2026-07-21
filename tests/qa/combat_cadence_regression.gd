@@ -148,7 +148,7 @@ func _test_creature_hit_capability() -> void:
 	creature.global_position = Vector3(0.0, 2.0, -2.0)
 	creature.set_physics_process(false)
 	_check(not creature.is_physics_processing(), "simulation budget can pause a creature before combat")
-	var before := creature.health
+	var before: float = creature.health
 	var result: Dictionary = creature.apply_combat_hit(
 		{
 			"final_damage":2.0,
@@ -163,8 +163,15 @@ func _test_creature_hit_capability() -> void:
 	_check(float(snapshot.get("hit_stun_remaining", 0.0)) > 0.0, "creature stores transient hit stun")
 	var impulse: Array = snapshot.get("combat_impulse", [])
 	_check(impulse.size() == 3 and float(impulse[2]) < -2.5, "creature stores knockback in an independent combat impulse channel")
-	var start := creature.global_position
-	creature.call("_physics_process", 0.1)
+	var start: Vector3 = creature.global_position
+	# Measure displacement through real physics frames: a manually invoked
+	# _physics_process integrates move_and_slide with an engine-internal delta
+	# that is not reliable across environments. Hit stun (0.2s = 12 physics
+	# frames) keeps AI steering at zero, so only the impulse moves the body.
+	creature.set_physics_process(true)
+	for _frame in 4:
+		await physics_frame
+	creature.set_physics_process(false)
 	_check(creature.global_position.z < start.z - 0.05, "independent combat impulse moves the real CharacterBody3D")
 	creature.clear_combat_motion()
 	snapshot = creature.get_combat_snapshot()

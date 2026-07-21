@@ -187,7 +187,7 @@ func _test_serialized_focus_connection_context() -> void:
 	)
 	_check(
 		ConnectionPolicyScript.resolve_mask("glass_pane",placement_neighbors)
-		== ConnectionPolicyScript.NORTH,
+		== (ConnectionPolicyScript.NORTH | ConnectionPolicyScript.WEST),
 		"serialized player focus produces the same live mask as direct world reads"
 	)
 	player.free()

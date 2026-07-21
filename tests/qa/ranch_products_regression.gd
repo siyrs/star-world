@@ -345,7 +345,7 @@ func _test_composition_root() -> void:
 	_check(hub.get("animal_attraction_service") != null, "composition root mounts animal attraction")
 	_check(hub.get("animal_product_service") != null, "composition root mounts animal products")
 	_check(
-		str(hub.get_script().resource_path).ends_with("ranch_progression_service_hub.gd"),
+		hub is RanchProgressionServiceHub,
 		"production service scene selects the ranch composition root",
 	)
 	_check(

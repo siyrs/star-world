@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate block visual inheritance
         shell: pwsh
@@ -43,8 +42,7 @@ jobs:
       - name: Directional stair regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/directional_stair_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/directional_stair_regression.gd'
 
   real-directional-stair-desktop:
     name: Real four-direction placement, collision and reload acceptance

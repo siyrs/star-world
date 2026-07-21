@@ -139,16 +139,25 @@ func _test_progress_drop_and_durability() -> void:
 	world.set_test_block(position, "stone")
 	var preview: Dictionary = harvest.get_preview("stone", inventory)
 	var duration := float(preview.get("duration_seconds", 1.0))
-	var progress_events := 0
+	var progress_events: Array = []
 	harvest.harvest_progress_changed.connect(
 		func(snapshot: Dictionary) -> void:
+			# Arrays capture by reference; a plain int would capture by value and never update.
 			if not snapshot.is_empty():
-				progress_events += 1
+				progress_events.append(snapshot)
 	)
 	var partial: Dictionary = harvest.advance(world, inventory, position, "stone", duration * 0.45)
 	_check(str(partial.get("status", "")) == "progress", "harvest begins as a timed action")
 	_check(world.get_block(position) == "stone", "a partial hold does not instantly remove the block")
-	var completed: Dictionary = harvest.advance(world, inventory, position, "stone", duration)
+	# advance() caps each call at MAX_STEP_SECONDS; hold across successive
+	# calls the way the per-frame runtime drives it.
+	var completed: Dictionary = {}
+	for _step in 64:
+		completed = harvest.advance(
+			world, inventory, position, "stone", HarvestScript.MAX_STEP_SECONDS
+		)
+		if str(completed.get("status", "")) != "progress":
+			break
 	_check(str(completed.get("status", "")) == "completed", "holding long enough completes harvesting")
 	_check(world.get_block(position) == "air", "completed harvesting commits the world mutation")
 	_check(inventory.count_item("cobblestone") == 1, "stone follows the cobblestone drop rule")
@@ -157,17 +166,17 @@ func _test_progress_drop_and_durability() -> void:
 		int(tool_slot.get("metadata", {}).get("durability", 60)) == 59,
 		"successful harvesting consumes exactly one durability",
 	)
-	_check(progress_events >= 2, "progress snapshots are emitted for the experience layer")
+	_check(progress_events.size() >= 2, "progress snapshots are emitted for the experience layer")
 	_check(interactions.removed_count == 1, "block removal cleanup runs through interaction coordination")
 	inventory.update_slot_metadata(0, {"durability": 1})
 	world.set_test_block(position, "stone")
-	var broken_events := 0
+	var broken_events: Array = []
 	tools.item_broken.connect(
 		func(_slot: int, _item_id: String, _name: String, _reason: String) -> void:
-			broken_events += 1
+			broken_events.append(_item_id)
 	)
 	harvest.harvest_immediately(world, inventory, position, "stone")
-	_check(broken_events == 1, "a tool emits one break event when durability reaches zero")
+	_check(broken_events.size() == 1, "a tool emits one break event when durability reaches zero")
 	_check(inventory.get_slot(0).is_empty(), "broken tools are removed from their exact slot")
 	host.queue_free()
 	await process_frame

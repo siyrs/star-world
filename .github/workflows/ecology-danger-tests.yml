@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate ecology and danger data
         shell: pwsh
@@ -43,14 +42,12 @@ jobs:
       - name: Run ecology and danger regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/ecology_danger_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ecology_danger_regression.gd'
 
       - name: Re-run prospecting persistence regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/prospecting_regression.gd'
 
   real-ecology-danger-desktop:
     name: Real abyss ecology, HUD danger and saved discovery acceptance

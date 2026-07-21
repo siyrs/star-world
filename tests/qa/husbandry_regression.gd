@@ -214,7 +214,8 @@ func _test_persistence_population_and_migration() -> void:
 	_check(spawner.spawned[0] not in culled, "population policy never despawns managed animals")
 	var policy_root := Node3D.new()
 	host.add_child(policy_root)
-	policy_root.add_child(natural)
+	# add_child() rejects nodes that already have a parent; move with reparent().
+	natural.reparent(policy_root)
 	var natural_culled: Array[Node] = PopulationPolicyScript.collect_out_of_range(policy_root, player, 56.0)
 	_check(natural in natural_culled, "unmanaged distant animals remain eligible for despawn")
 
@@ -244,7 +245,7 @@ func _test_composition_root() -> void:
 		"player experience receives the entity interaction contract",
 	)
 	_check(
-		str(hub.get_script().resource_path).ends_with("husbandry_progression_service_hub.gd"),
+		hub is HusbandryProgressionServiceHub,
 		"production service scene selects the husbandry composition root",
 	)
 	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):

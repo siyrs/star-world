@@ -434,6 +434,12 @@ func _test_production_composition() -> void:
 		func(ids: Array[String], _snapshot: Dictionary) -> void:
 			announced.append(ids.duplicate())
 	)
+	# The scanner needs at least minimum_geology_samples rock blocks in range;
+	# an empty (all-air) world is rejected as insufficient_geology.
+	for dx in range(-6, 8, 2):
+		for dz in range(-6, 8, 2):
+			for dy in range(4, 30, 2):
+				fake_world.set_block(Vector3i(dx, dy, dz), "stone")
 	var scan: Dictionary = prospecting.call("use_item", "prospecting_kit", 5000)
 	_check(
 		bool(scan.get("success", false)),
