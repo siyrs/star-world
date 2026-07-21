@@ -22,7 +22,7 @@ func _run() -> void:
 	var update_service := get_node_or_null("/root/StarWorldUpdateService")
 	_check(update_service != null, "production update autoload is mounted")
 	if update_service == null:
-		_finish(null)
+		await _finish(null)
 		return
 	update_service.set("automatic_check_enabled", false)
 	update_service.set("automatic_install_enabled", false)
@@ -35,7 +35,7 @@ func _run() -> void:
 	_check(menu != null and bool(menu.get("visible")), "production main menu is visible on first startup")
 	_check(menu != null and menu.get("update_service") == update_service, "autoload bridge binds the production update service")
 	if menu == null:
-		_finish(game)
+		await _finish(game)
 		return
 	var before: Dictionary = update_service.call("get_snapshot")
 	_check(int(before.get("check_count", -1)) == 0, "editor and desktop acceptance do not perform an uncontrolled public network check")
@@ -67,7 +67,7 @@ func _run() -> void:
 	if later != null:
 		await _click_control(later)
 	_check(not bool(panel.get("visible")), "later action returns to the main menu")
-	_finish(game)
+	await _finish(game)
 
 
 func _release_payload(tag: String) -> Dictionary:
