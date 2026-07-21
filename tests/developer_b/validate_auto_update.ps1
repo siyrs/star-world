@@ -52,7 +52,8 @@ if ($text.Package -notmatch 'UPDATE_MANIFEST_NAME' -or $text.Package -notmatch '
 foreach ($token in @('Move-Item -LiteralPath $installFull -Destination $backupDirectory','rolled_back','update-ack','Get-Sha256','Archive entry escapes','Updated application did not acknowledge startup')) {
   if ($text.Helper -notmatch [regex]::Escape($token)) { throw "Windows helper safety contract missing: $token" }
 }
-if ($text.Helper -notmatch 'Stop-Process' -or $text.Helper -notmatch 'Move-Item -LiteralPath $backupDirectory -Destination $installFull') {
+$restoreCommand = 'Move-Item -LiteralPath $backupDirectory -Destination $installFull'
+if ($text.Helper -notmatch 'Stop-Process' -or $text.Helper -notmatch [regex]::Escape($restoreCommand)) {
   throw 'Windows helper must stop failed launch and restore the backup'
 }
 
