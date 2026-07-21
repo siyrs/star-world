@@ -96,6 +96,68 @@ func step(
 	}
 
 
+func resolve_ladder_velocity(
+	current_velocity: Vector3,
+	basis: Basis,
+	delta: float,
+	input_vector: Vector2,
+	jump_requested: bool,
+	ladder_contact: Dictionary
+) -> Dictionary:
+	var next_velocity := current_velocity
+	var climb_input := clampf(-input_vector.y, -1.0, 1.0)
+	if jump_requested:
+		var outward := Vector3.ZERO
+		var outward_value: Variant = ladder_contact.get("outward_offset", Vector3i.ZERO)
+		if outward_value is Vector3i:
+			outward = Vector3(outward_value)
+		elif outward_value is Vector3:
+			outward = outward_value
+		next_velocity.x = outward.x * ladder_detach_speed
+		next_velocity.z = outward.z * ladder_detach_speed
+		next_velocity.y = ladder_jump_velocity
+		return {
+			"velocity":next_velocity,
+			"jumped":true,
+			"moving":true,
+			"sprinting":false,
+			"on_ladder":false,
+			"climbing":false,
+			"climb_input":climb_input,
+			"detached_ladder":true,
+		}
+	next_velocity.y = move_toward(
+		next_velocity.y,
+		climb_input * ladder_climb_speed,
+		ladder_acceleration * delta
+	)
+	var strafe_direction := world_direction(
+		basis,
+		Vector2(input_vector.x, 0.0)
+	)
+	var horizontal_speed := walk_speed * ladder_horizontal_factor
+	next_velocity.x = move_toward(
+		next_velocity.x,
+		strafe_direction.x * horizontal_speed,
+		ladder_acceleration * delta
+	)
+	next_velocity.z = move_toward(
+		next_velocity.z,
+		strafe_direction.z * horizontal_speed,
+		ladder_acceleration * delta
+	)
+	return {
+		"velocity":next_velocity,
+		"jumped":false,
+		"moving":input_vector.length_squared() > 0.0001,
+		"sprinting":false,
+		"on_ladder":true,
+		"climbing":absf(climb_input) > 0.05,
+		"climb_input":climb_input,
+		"detached_ladder":false,
+	}
+
+
 func _step_ladder(
 	body: CharacterBody3D,
 	delta: float,
@@ -103,47 +165,18 @@ func _step_ladder(
 	jump_requested: bool,
 	ladder_contact: Dictionary
 ) -> Dictionary:
-	var next_velocity := body.velocity
-	var climb_input := clampf(-input_vector.y, -1.0, 1.0)
-	var detached := jump_requested
-	if detached:
-		var outward_value: Variant = ladder_contact.get("outward_offset", Vector3i.ZERO)
-		var outward := Vector3(outward_value) if outward_value is Vector3i else Vector3.ZERO
-		next_velocity.x = outward.x * ladder_detach_speed
-		next_velocity.z = outward.z * ladder_detach_speed
-		next_velocity.y = ladder_jump_velocity
-	else:
-		next_velocity.y = move_toward(
-			next_velocity.y,
-			climb_input * ladder_climb_speed,
-			ladder_acceleration * delta
-		)
-		var strafe_direction := world_direction(
-			body.global_transform.basis,
-			Vector2(input_vector.x, 0.0)
-		)
-		var horizontal_speed := walk_speed * ladder_horizontal_factor
-		next_velocity.x = move_toward(
-			next_velocity.x,
-			strafe_direction.x * horizontal_speed,
-			ladder_acceleration * delta
-		)
-		next_velocity.z = move_toward(
-			next_velocity.z,
-			strafe_direction.z * horizontal_speed,
-			ladder_acceleration * delta
-		)
-	body.velocity = next_velocity
+	var result := resolve_ladder_velocity(
+		body.velocity,
+		body.global_transform.basis,
+		delta,
+		input_vector,
+		jump_requested,
+		ladder_contact
+	)
+	body.velocity = Vector3(result.get("velocity", body.velocity))
 	body.move_and_slide()
-	return {
-		"jumped":detached,
-		"moving":input_vector.length_squared() > 0.0001,
-		"sprinting":false,
-		"on_ladder":not detached,
-		"climbing":not detached and absf(climb_input) > 0.05,
-		"climb_input":climb_input,
-		"detached_ladder":detached,
-	}
+	result.erase("velocity")
+	return result
 
 
 func stop_horizontal(body: CharacterBody3D) -> void:
