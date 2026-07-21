@@ -51,16 +51,24 @@ jobs:
           $versionText = Get-Content -Raw -Encoding UTF8 .\src\update\app_version.gd
           if ($versionText -notmatch 'CURRENT_VERSION\s*:=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') { throw 'Unable to read CURRENT_VERSION' }
           if ($Matches[1] -ne '${{ steps.version.outputs.version }}') { throw "Tag/version mismatch: tag=${{ steps.version.outputs.version }} app=$($Matches[1])" }
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Windows Godot editor is a GUI-subsystem binary: pwsh does not wait for it and
+          # $LASTEXITCODE stays stale. Use Start-Process -Wait and check the real ExitCode.
+          $proc = Start-Process -FilePath godot -ArgumentList '--headless --path . --editor --quit' -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput godot-editor.out.log -RedirectStandardError godot-editor.err.log
+          if ($proc.ExitCode -ne 0) {
+            Get-Content godot-editor.out.log, godot-editor.err.log -ErrorAction SilentlyContinue
+            exit $proc.ExitCode
+          }
           .\tests\developer_b\validate_auto_update.ps1
 
       - name: Export Windows release
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build\release | Out-Null
-          godot --headless --path . --export-release 'Windows Desktop' build\release\StarWorld.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $proc = Start-Process -FilePath godot -ArgumentList '--headless --path . --export-release "Windows Desktop" build\release\StarWorld.exe' -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput godot-export.out.log -RedirectStandardError godot-export.err.log
+          Get-Content godot-export.out.log, godot-export.err.log -ErrorAction SilentlyContinue
+          if ($proc.ExitCode -ne 0) { exit $proc.ExitCode }
           if (-not (Test-Path build\release\StarWorld.exe)) { throw 'StarWorld.exe was not exported' }
           if (-not (Test-Path build\release\StarWorld.pck)) { throw 'StarWorld.pck was not exported' }
 
