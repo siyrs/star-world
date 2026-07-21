@@ -98,7 +98,12 @@ func _run() -> void:
 	_check(int(second_after.get("output", {}).get("count", 0)) == 1, "second production furnace creates one gold ingot")
 	panel.call("refresh")
 	var output_button: Button = panel.get("_output_button") as Button
-	_check(output_button != null and output_button.text.contains("铁锭"), "real furnace UI refreshes from the Machine Base snapshot")
+	_check(
+		output_button != null
+		and output_button.tooltip_text.contains("铁锭")
+		and output_button.get("_icon_rect").texture != null,
+		"real furnace UI refreshes from the Machine Base snapshot"
+	)
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "desktop viewport renders the shared machine overlay")

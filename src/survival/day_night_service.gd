@@ -21,6 +21,7 @@ var _last_night: bool = false
 var _sky_material: ProceduralSkyMaterial
 var _cloud_mesh: MeshInstance3D
 var _cloud_material: StandardMaterial3D
+var _cloud_scroll_accum := 0.0
 
 
 func _ready() -> void:
@@ -179,13 +180,16 @@ func _update_clouds(delta: float) -> void:
 	if _cloud_mesh == null:
 		_cloud_mesh = _create_cloud_layer()
 		sun.get_parent().add_child(_cloud_mesh)
-	if _cloud_material != null:
+	# Material writes are throttled: dirtying the material every frame costs
+	# real time on low-end machines and CI runners.
+	_cloud_scroll_accum += delta
+	if _cloud_material != null and _cloud_scroll_accum >= 0.2:
 		var offset: Vector3 = _cloud_material.uv1_offset
-		offset.x = fposmod(offset.x + delta * 0.0035, 1.0)
+		offset.x = fposmod(offset.x + _cloud_scroll_accum * 0.0175, 1.0)
 		_cloud_material.uv1_offset = offset
 		var tint := Color("#3A4A6B").lerp(Color("#FFFFFF"), get_sun_strength())
-		tint.a = lerpf(0.25, 0.55, get_sun_strength())
 		_cloud_material.albedo_color = tint
+		_cloud_scroll_accum = 0.0
 	var camera := get_viewport().get_camera_3d()
 	if camera != null:
 		_cloud_mesh.global_position = Vector3(
@@ -197,13 +201,18 @@ func _create_cloud_layer() -> MeshInstance3D:
 	var texture := _build_cloud_texture()
 	_cloud_material = StandardMaterial3D.new()
 	_cloud_material.albedo_texture = texture
-	_cloud_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Alpha scissor (cutout) instead of alpha blending: fullscreen transparent
+	# blending is the most expensive possible fill on software rasterizers,
+	# while cutout pixels can be depth-tested and discarded cheaply. The hard
+	# edges also fit the voxel look.
+	_cloud_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	_cloud_material.alpha_scissor_threshold = 0.5
 	_cloud_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_cloud_material.albedo_color = Color(1.0, 1.0, 1.0, 0.55)
+	_cloud_material.albedo_color = Color(1.0, 1.0, 1.0, 0.8)
 	_cloud_material.no_depth_test = false
 	_cloud_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(520.0, 520.0)
+	plane.size = Vector2(300.0, 300.0)
 	plane.subdivide_depth = 1
 	plane.subdivide_width = 1
 	var mesh_instance := MeshInstance3D.new()
