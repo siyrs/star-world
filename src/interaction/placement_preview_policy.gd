@@ -3,7 +3,8 @@ extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
-const INVALID_COORD := Vector3i(2147483647, 2147483647, 2147483647)
+const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
+const INVALID_COORD := Vector3i(2147483647,2147483647,2147483647)
 
 
 func evaluate(
@@ -12,17 +13,19 @@ func evaluate(
 	player_bounds: AABB = AABB()
 ) -> Dictionary:
 	var result := {
-		"target_visible": false,
-		"target_position": [],
-		"target_block_id": "",
-		"target_boxes": [],
-		"placement_visible": false,
-		"placement_position": [],
-		"placement_boxes": [],
-		"selected_block_id": selected_block_id,
-		"valid": false,
-		"reason": "no_focus",
-		"occupied_block_id": "",
+		"target_visible":false,
+		"target_position":[],
+		"target_block_id":"",
+		"target_boxes":[],
+		"target_connection_mask":0,
+		"placement_visible":false,
+		"placement_position":[],
+		"placement_boxes":[],
+		"placement_connection_mask":0,
+		"selected_block_id":selected_block_id,
+		"valid":false,
+		"reason":"no_focus",
+		"occupied_block_id":"",
 	}
 	if str(focus.get("type", "")) != "block":
 		return result
@@ -34,10 +37,18 @@ func evaluate(
 	var target_block_id := str(
 		focus.get("hit_block_id", focus.get("block_id", BlockRegistryScript.AIR))
 	)
+	var target_mask := ConnectionPolicyScript.resolve_mask(
+		target_block_id,
+		_neighbors_from(focus.get("target_neighbor_ids", {}))
+	)
 	result["target_visible"] = true
 	result["target_position"] = _position_array(target_position)
 	result["target_block_id"] = target_block_id
-	result["target_boxes"] = ShapeGeometryScript.boxes_as_snapshot(target_block_id)
+	result["target_connection_mask"] = target_mask
+	result["target_boxes"] = ShapeGeometryScript.boxes_as_snapshot(
+		target_block_id,
+		target_mask
+	)
 	if selected_block_id.is_empty() or selected_block_id == BlockRegistryScript.AIR:
 		result["reason"] = "no_block_selected"
 		return result
@@ -45,9 +56,17 @@ func evaluate(
 	if placement_position == INVALID_COORD:
 		result["reason"] = "placement_unavailable"
 		return result
+	var placement_mask := ConnectionPolicyScript.resolve_mask(
+		selected_block_id,
+		_neighbors_from(focus.get("placement_neighbor_ids", {}))
+	)
 	result["placement_visible"] = true
 	result["placement_position"] = _position_array(placement_position)
-	result["placement_boxes"] = ShapeGeometryScript.boxes_as_snapshot(selected_block_id)
+	result["placement_connection_mask"] = placement_mask
+	result["placement_boxes"] = ShapeGeometryScript.boxes_as_snapshot(
+		selected_block_id,
+		placement_mask
+	)
 	var occupied_block_id := str(
 		focus.get("placement_target_block_id", BlockRegistryScript.AIR)
 	)
@@ -57,7 +76,9 @@ func evaluate(
 		return result
 	if player_bounds.size.length_squared() > 0.0:
 		for placement_bounds: AABB in ShapeGeometryScript.world_boxes(
-			selected_block_id, placement_position
+			selected_block_id,
+			placement_position,
+			placement_mask
 		):
 			if player_bounds.intersects(placement_bounds):
 				result["reason"] = "player_overlap"
@@ -87,13 +108,22 @@ static func reason_text(reason: String, occupied_name: String = "") -> String:
 			return "当前没有可用放置目标"
 
 
+func _neighbors_from(value: Variant) -> Dictionary:
+	var result := ConnectionPolicyScript.empty_neighbors()
+	if value is not Dictionary:
+		return result
+	for direction_name in result.keys():
+		result[direction_name] = str(value.get(direction_name, BlockRegistryScript.AIR))
+	return result
+
+
 func _position_from(value: Variant) -> Vector3i:
 	if value is Vector3i:
 		return value
 	if value is Array and value.size() >= 3:
-		return Vector3i(int(value[0]), int(value[1]), int(value[2]))
+		return Vector3i(int(value[0]),int(value[1]),int(value[2]))
 	return INVALID_COORD
 
 
 func _position_array(position: Vector3i) -> Array[int]:
-	return [position.x, position.y, position.z]
+	return [position.x,position.y,position.z]
