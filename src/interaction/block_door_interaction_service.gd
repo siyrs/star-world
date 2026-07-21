@@ -207,12 +207,16 @@ func get_snapshot() -> Dictionary:
 
 
 func clear() -> void:
+	placement_count = 0
+	toggle_count = 0
+	removal_count = 0
+	rejection_count = 0
 	last_result.clear()
 
 
 func shutdown() -> void:
 	_shutdown = true
-	last_result.clear()
+	clear()
 
 
 func _replace_pair(
