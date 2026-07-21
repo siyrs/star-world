@@ -86,14 +86,12 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Run abyss elite domain regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/abyss_elite_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/abyss_elite_regression.gd'
 
       - name: Re-run adjacent ecology, windup and combat regressions
         shell: pwsh
@@ -105,8 +103,7 @@ jobs:
             'res://tests/qa/physics_interaction_regression.gd'
           )
           foreach ($script in $scripts) {
-            godot --headless --path . --script $script
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script"
           }
 
   real-abyss-elite-desktop:

@@ -32,14 +32,12 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: First-person viewmodel regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/first_person_viewmodel_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/first_person_viewmodel_regression.gd'
 
   real-viewmodel-desktop:
     name: Real held item desktop acceptance

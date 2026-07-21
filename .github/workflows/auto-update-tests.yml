@@ -56,14 +56,12 @@ jobs:
       - name: Validate strict project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Run release, resume and package regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/auto_update_regression.gd --disable-update-check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/auto_update_regression.gd -- --disable-update-check'
 
       - name: Exercise real interrupted HTTP Range resume
         shell: pwsh
@@ -88,11 +86,7 @@ jobs:
             }
             if (-not (Test-Path -LiteralPath $ready)) { throw 'Local Range server did not become ready' }
             $download = Join-Path $work 'download'
-            godot --headless --path . --script res://tests/qa/resumable_download_acceptance.gd -- `
-              --disable-update-check `
-              "--range-ready=$ready" `
-              "--range-work-dir=$download"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script res://tests/qa/resumable_download_acceptance.gd -- --disable-update-check --range-ready=$ready --range-work-dir=$download"
           } finally {
             if ($null -ne $server -and -not $server.HasExited) {
               Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue

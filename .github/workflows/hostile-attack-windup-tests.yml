@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate hostile attack data and cross-domain timing
         shell: pwsh
@@ -43,18 +42,14 @@ jobs:
       - name: Run hostile attack windup regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/hostile_attack_windup_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/hostile_attack_windup_regression.gd'
 
       - name: Re-run combat cadence and ecology regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/combat_cadence_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/ecology_danger_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/physics_interaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/combat_cadence_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ecology_danger_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/physics_interaction_regression.gd'
 
   real-hostile-attack-windup:
     name: Real warning, WASD dodge, committed hit and save acceptance

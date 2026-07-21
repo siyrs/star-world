@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate stonecutter and shared machine contracts
         shell: pwsh
@@ -46,14 +45,10 @@ jobs:
       - name: Run stonecutter, Machine Base and interaction regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/stonecutter_machine_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/machine_base_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/block_interaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/furnace_machine_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/stonecutter_machine_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_base_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/block_interaction_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/furnace_machine_regression.gd'
 
   real-stonecutter-desktop:
     name: Real block interaction, cross-domain processing, UI, save and reload

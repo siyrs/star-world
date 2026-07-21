@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate machine capability contracts
         shell: pwsh
@@ -43,12 +42,9 @@ jobs:
       - name: Run capability and adjacent machine regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/machine_capability_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/machine_base_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/stonecutter_machine_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_capability_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_base_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/stonecutter_machine_regression.gd'
 
   real-machine-capability-desktop:
     name: Real atomic transfer, machine UI, save and reload

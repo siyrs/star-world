@@ -32,14 +32,12 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Combat cadence regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/combat_cadence_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/combat_cadence_regression.gd'
 
   real-combat-cadence:
     name: Real combat cadence desktop acceptance

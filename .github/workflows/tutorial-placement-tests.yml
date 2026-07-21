@@ -32,14 +32,12 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Tutorial and placement regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/tutorial_placement_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/tutorial_placement_regression.gd'
 
   real-tutorial-journey:
     name: Real full tutorial and placement desktop acceptance

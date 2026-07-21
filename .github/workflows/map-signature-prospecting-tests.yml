@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate map signature and calibrated prospecting contracts
         shell: pwsh
@@ -47,28 +46,23 @@ jobs:
       - name: Run prospecting compatibility regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/prospecting_regression.gd'
 
       - name: Run exploration journal and reward regressions
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/exploration_journal_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/exploration_milestone_reward_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/exploration_journal_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/exploration_milestone_reward_regression.gd'
 
       - name: Run map signature cross-domain regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/map_signature_prospecting_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/map_signature_prospecting_regression.gd'
 
       - name: Re-run atomic inventory and crafting regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/inventory_transaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/inventory_transaction_regression.gd'
 
   real-signature-prospecting-desktop:
     name: Real abyss signature, calibrated scan and full reload acceptance

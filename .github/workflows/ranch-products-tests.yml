@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate ranch registries and lifecycle
         shell: pwsh
@@ -45,16 +44,13 @@ jobs:
       - name: Ranch attraction and product regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/ranch_products_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ranch_products_regression.gd'
 
       - name: Ranch lifecycle and notification batching regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/ranch_runtime_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          godot --headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ranch_runtime_lifecycle_regression.gd'
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd'
 
   ranch-desktop:
     name: Real ranch products desktop acceptance

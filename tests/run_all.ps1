@@ -52,10 +52,10 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 
 function Invoke-GodotTest {
     param([Parameter(Mandatory = $true)][string]$ScriptPath)
-    & $Godot --headless --path "$PSScriptRoot\.." --script $ScriptPath --disable-update-check
-    if ($LASTEXITCODE -ne 0) {
-        throw "Godot test failed: $ScriptPath (exit $LASTEXITCODE)"
-    }
+    # Route through Invoke-Godot.ps1: GUI-subsystem Godot binaries are not
+    # awaited by PowerShell, which would fake-pass this suite (and would also
+    # drop the user-arg flag unless it follows a literal `--`).
+    & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path . --script $ScriptPath -- --disable-update-check"
 }
 
 Invoke-GodotTest 'res://tests/developer_a/core_smoke_test.gd'

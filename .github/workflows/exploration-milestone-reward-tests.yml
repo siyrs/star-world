@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate reward and transaction data contracts
         shell: pwsh
@@ -44,26 +43,22 @@ jobs:
       - name: Run atomic inventory transaction regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/inventory_transaction_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/inventory_transaction_regression.gd'
 
       - name: Run exploration reward regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/exploration_milestone_reward_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/exploration_milestone_reward_regression.gd'
 
       - name: Re-run exploration journal regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/exploration_journal_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/exploration_journal_regression.gd'
 
       - name: Re-run gameplay service tests
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/developer_b/run_tests.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/developer_b/run_tests.gd'
 
   real-exploration-reward-desktop:
     name: Real claim, full inventory retry and world reload acceptance

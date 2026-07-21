@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate journal and extension overlay contracts
         shell: pwsh
@@ -43,20 +42,17 @@ jobs:
       - name: Re-run prospecting persistence regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/prospecting_regression.gd'
 
       - name: Run exploration journal regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/exploration_journal_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/exploration_journal_regression.gd'
 
       - name: Re-run compact UI layout regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/ui_layout_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ui_layout_regression.gd'
 
   real-exploration-journal-desktop:
     name: Real J-key journal, input isolation and reload acceptance

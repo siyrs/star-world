@@ -32,8 +32,7 @@ jobs:
       - name: Validate project import
         shell: pwsh
         run: |
-          godot --headless --path . --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Validate production catalog integrity
         shell: pwsh
@@ -45,14 +44,12 @@ jobs:
       - name: Run prospecting regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/prospecting_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/prospecting_regression.gd'
 
       - name: Run glass pane regression
         shell: pwsh
         run: |
-          godot --headless --path . --script res://tests/qa/glass_pane_regression.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/glass_pane_regression.gd'
 
   real-exploration-desktop:
     name: Real prospecting, pane placement and reload acceptance
