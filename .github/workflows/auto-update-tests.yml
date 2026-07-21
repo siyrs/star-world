@@ -68,7 +68,26 @@ jobs:
       - name: Exercise real Windows directory swap, relaunch and rollback
         shell: pwsh
         run: |
-          .\tests\qa\windows_update_helper_acceptance.ps1
+          try {
+            .\tests\qa\windows_update_helper_acceptance.ps1
+          } catch {
+            New-Item -ItemType Directory -Force -Path build | Out-Null
+            @(
+              "WINDOWS_UPDATE_HELPER_FAILURE=$($_.Exception.Message)",
+              "STACK=$($_.ScriptStackTrace)"
+            ) | Set-Content -LiteralPath build\windows-update-helper-failure.txt -Encoding UTF8
+            Write-Host "WINDOWS_UPDATE_HELPER_FAILURE=$($_.Exception.Message)"
+            throw
+          }
+
+      - name: Upload helper failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-update-helper-failure-${{ github.run_number }}
+          path: build/windows-update-helper-failure.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
   updater-desktop:
     name: Real first-start prompt, progress, interruption and retry UI
