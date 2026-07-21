@@ -52,7 +52,7 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production voxel world starts")
 	_check(bool(scheduler.call("is_active")), "shared machine scheduler is active")
-	_check(int((scheduler.call("get_snapshot") as Dictionary).get("domain_count", 0)) == 2, "production scheduler owns two machine domains")
+	_check(int((scheduler.call("get_snapshot") as Dictionary).get("domain_count", 0)) == 3, "production scheduler owns two machine domains and bounded automation")
 	_check(bool(router.call("has_machine_type", &"stonecutter")), "generic router exposes stonecutter")
 	if player == null or world == null:
 		await _finish(game, hub)
@@ -116,7 +116,7 @@ func _run() -> void:
 	var batch: Dictionary = scheduler.call("advance_time", 6.1, true)
 	for _frame in 4:
 		await process_frame
-	_check(int(batch.get("advanced_domain_count", 0)) == 2, "one scheduler batch advances both domains")
+	_check(int(batch.get("advanced_domain_count", 0)) == 3, "one scheduler batch advances both machines and bounded automation")
 	_check(int(batch.get("changed_machine_count", 0)) == 2, "cross-domain batch changes both machines")
 	_check(announcements.size() == 1, "cross-domain completions create one player summary")
 	if not announcements.is_empty():
@@ -166,7 +166,7 @@ func _run() -> void:
 	_check(int(inventory.call("count_item", "stone_slab")) == slab_count, "reload does not duplicate collected output")
 	_check(announcements.size() == announcement_count, "reload does not replay completion feedback")
 	var character: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character.get("machine_runtime", {}).get("domain_count", 0)) == 2, "reload diagnostics expose both domains")
+	_check(int(character.get("machine_runtime", {}).get("domain_count", 0)) == 3, "reload diagnostics expose both machines and bounded automation")
 	_check(int(character.get("machine_interactions", {}).get("machine_type_count", 0)) == 2, "reload diagnostics expose both interaction types")
 	await _finish(game, hub)
 
