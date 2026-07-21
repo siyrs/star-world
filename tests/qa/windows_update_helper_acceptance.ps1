@@ -121,6 +121,7 @@ function Build-Package([string]$Directory, [string]$ZipPath, [bool]$Acknowledge)
 }
 
 function Invoke-UpdaterHelper([string]$PackagePath, [string]$PackageHash, [int]$AckTimeoutSeconds) {
+    if (Test-Path -LiteralPath $result) { Remove-Item -Force -LiteralPath $result }
     $arguments = @(
         '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
@@ -134,8 +135,30 @@ function Invoke-UpdaterHelper([string]$PackagePath, [string]$PackageHash, [int]$
         '-ResultPath', $result,
         '-AckTimeoutSeconds', [string]$AckTimeoutSeconds
     )
-    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Wait -PassThru -NoNewWindow
-    return [int]$process.ExitCode
+    $powershellPath = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $powershellPath
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $arguments) {
+        [void]$startInfo.ArgumentList.Add([string]$argument)
+    }
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { throw 'Unable to launch updater helper process.' }
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    return [pscustomobject]@{
+        ExitCode = [int]$process.ExitCode
+        Stdout = [string]$stdout
+        Stderr = [string]$stderr
+        Result = if (Test-Path -LiteralPath $result) { Get-Content -Raw -Encoding UTF8 -LiteralPath $result } else { '' }
+    }
 }
 
 try {
@@ -146,9 +169,11 @@ try {
     Build-Package -Directory $payload -ZipPath $package -Acknowledge $true
     $hash = Get-Sha256 $package
 
-    $successExitCode = Invoke-UpdaterHelper -PackagePath $package -PackageHash $hash -AckTimeoutSeconds 10
-    if ($successExitCode -ne 0) { throw "Updater helper success scenario exited $successExitCode" }
-    $success = Get-Content -Raw -Encoding UTF8 $result | ConvertFrom-Json
+    $successRun = Invoke-UpdaterHelper -PackagePath $package -PackageHash $hash -AckTimeoutSeconds 10
+    if ($successRun.ExitCode -ne 0) {
+        throw "Updater helper success scenario exited $($successRun.ExitCode); stdout=$($successRun.Stdout); stderr=$($successRun.Stderr); result=$($successRun.Result)"
+    }
+    $success = $successRun.Result | ConvertFrom-Json
     if (-not [bool]$success.success -or [string]$success.phase -ne 'completed') { throw 'Updater did not report completed success' }
     if ((Get-Content -Raw $install\StarWorld.pck).Trim() -ne 'new-pck-content') { throw 'New PCK was not installed' }
     if (Test-Path $install\old-only.txt) { throw 'Directory swap retained stale old files' }
@@ -165,10 +190,12 @@ try {
     $failedPackage = Join-Path $testRoot 'failed-update.zip'
     Build-Package -Directory $failedPayload -ZipPath $failedPackage -Acknowledge $false
     $failedHash = Get-Sha256 $failedPackage
-    $failureExitCode = Invoke-UpdaterHelper -PackagePath $failedPackage -PackageHash $failedHash -AckTimeoutSeconds 5
-    if ($failureExitCode -eq 0) { throw 'Updater helper should fail when the new app does not acknowledge startup' }
-    $failure = Get-Content -Raw -Encoding UTF8 $result | ConvertFrom-Json
-    if ([bool]$failure.success -or -not [bool]$failure.rolled_back) { throw 'Failed launch did not report rollback' }
+    $failureRun = Invoke-UpdaterHelper -PackagePath $failedPackage -PackageHash $failedHash -AckTimeoutSeconds 5
+    if ($failureRun.ExitCode -eq 0) { throw 'Updater helper should fail when the new app does not acknowledge startup' }
+    $failure = $failureRun.Result | ConvertFrom-Json
+    if ([bool]$failure.success -or -not [bool]$failure.rolled_back) {
+        throw "Failed launch did not report rollback; stdout=$($failureRun.Stdout); stderr=$($failureRun.Stderr); result=$($failureRun.Result)"
+    }
     if ((Get-Content -Raw $install\StarWorld.pck).Trim() -ne 'rollback-pck') { throw 'Rollback did not restore the original install' }
 
     Write-Host 'PASS windows_update_helper swap=1 relaunch=1 ack=1 rollback=1'
@@ -178,7 +205,7 @@ catch {
     @(
         "WINDOWS_UPDATE_HELPER_FAILURE=$($_.Exception.Message)",
         "STACK=$($_.ScriptStackTrace)",
-        "RESULT=$((Get-Content -Raw -ErrorAction SilentlyContinue $result))"
+        "RESULT=$((Get-Content -Raw -ErrorAction SilentlyContinue -LiteralPath $result))"
     ) | Set-Content -LiteralPath $failureEvidence -Encoding UTF8
     throw
 }
