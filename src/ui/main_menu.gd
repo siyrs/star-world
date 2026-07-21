@@ -224,6 +224,17 @@ func _add_menu_button(parent: Control, label: String, callback: Callable) -> voi
 	button.text = label
 	button.custom_minimum_size = Vector2(470, 52)
 	button.pressed.connect(callback)
+	button.mouse_entered.connect(
+		func() -> void:
+			var tween := button.create_tween()
+			tween.tween_property(button, "scale", Vector2(1.02, 1.02), 0.1)
+	)
+	button.mouse_exited.connect(
+		func() -> void:
+			var tween := button.create_tween()
+			tween.tween_property(button, "scale", Vector2.ONE, 0.12)
+	)
+	button.pivot_offset = button.custom_minimum_size * 0.5
 	parent.add_child(button)
 	_menu_buttons.append(button)
 	_connect_button_audio(button)
