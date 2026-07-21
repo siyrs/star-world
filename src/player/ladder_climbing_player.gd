@@ -25,9 +25,10 @@ var _ladder_contact: Dictionary = {}
 
 
 func bind_world(p_world: Node) -> void:
-	var changed := world != p_world
-	if changed:
-		_reset_ladder_runtime()
+	# bind_world is the lifecycle boundary, even when a scene reuses the same
+	# VoxelWorld node instance. Never carry contact, counters or cooldown into
+	# the next world session.
+	_reset_ladder_runtime()
 	super.bind_world(p_world)
 
 
