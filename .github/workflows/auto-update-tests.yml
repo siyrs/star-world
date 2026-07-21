@@ -28,9 +28,23 @@ jobs:
           try {
             .\tests\developer_b\validate_auto_update.ps1
           } catch {
+            New-Item -ItemType Directory -Force -Path build | Out-Null
+            @(
+              "AUTO_UPDATE_STATIC_FAILURE=$($_.Exception.Message)",
+              "STACK=$($_.ScriptStackTrace)"
+            ) | Set-Content -LiteralPath build\auto-update-static-failure.txt -Encoding UTF8
             Write-Host "AUTO_UPDATE_STATIC_FAILURE=$($_.Exception.Message)"
             throw
           }
+
+      - name: Upload static failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-update-static-failure-${{ github.run_number }}
+          path: build/auto-update-static-failure.txt
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Setup Godot
         uses: chickensoft-games/setup-godot@v2
