@@ -8,6 +8,7 @@ $install = Join-Path $testRoot 'StarWorld'
 $payload = Join-Path $testRoot 'payload'
 $package = Join-Path $testRoot 'StarWorld-Windows-x86_64.zip'
 $result = Join-Path $testRoot 'install-result.json'
+$failureEvidence = Join-Path $root 'build\windows-update-helper-failure.txt'
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
@@ -119,6 +120,24 @@ function Build-Package([string]$Directory, [string]$ZipPath, [bool]$Acknowledge)
     Compress-Archive -Path (Join-Path $Directory '*') -DestinationPath $ZipPath
 }
 
+function Invoke-UpdaterHelper([string]$PackagePath, [string]$PackageHash, [int]$AckTimeoutSeconds) {
+    $arguments = @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $helper,
+        '-ParentProcessId', '0',
+        '-PackagePath', $PackagePath,
+        '-ExpectedPackageSha256', $PackageHash,
+        '-InstallDirectory', $install,
+        '-ExecutableName', 'StarWorld.exe',
+        '-TargetVersion', '1.1.0',
+        '-ResultPath', $result,
+        '-AckTimeoutSeconds', [string]$AckTimeoutSeconds
+    )
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+    return [int]$process.ExitCode
+}
+
 try {
     New-Item -ItemType Directory -Force -Path $install | Out-Null
     'old-executable' | Set-Content -LiteralPath (Join-Path $install 'StarWorld.exe') -Encoding ASCII
@@ -127,16 +146,8 @@ try {
     Build-Package -Directory $payload -ZipPath $package -Acknowledge $true
     $hash = Get-Sha256 $package
 
-    & $helper `
-        -ParentProcessId 0 `
-        -PackagePath $package `
-        -ExpectedPackageSha256 $hash `
-        -InstallDirectory $install `
-        -ExecutableName 'StarWorld.exe' `
-        -TargetVersion '1.1.0' `
-        -ResultPath $result `
-        -AckTimeoutSeconds 10
-    if ($LASTEXITCODE -ne 0) { throw "Updater helper success scenario exited $LASTEXITCODE" }
+    $successExitCode = Invoke-UpdaterHelper -PackagePath $package -PackageHash $hash -AckTimeoutSeconds 10
+    if ($successExitCode -ne 0) { throw "Updater helper success scenario exited $successExitCode" }
     $success = Get-Content -Raw -Encoding UTF8 $result | ConvertFrom-Json
     if (-not [bool]$success.success -or [string]$success.phase -ne 'completed') { throw 'Updater did not report completed success' }
     if ((Get-Content -Raw $install\StarWorld.pck).Trim() -ne 'new-pck-content') { throw 'New PCK was not installed' }
@@ -154,21 +165,22 @@ try {
     $failedPackage = Join-Path $testRoot 'failed-update.zip'
     Build-Package -Directory $failedPayload -ZipPath $failedPackage -Acknowledge $false
     $failedHash = Get-Sha256 $failedPackage
-    & $helper `
-        -ParentProcessId 0 `
-        -PackagePath $failedPackage `
-        -ExpectedPackageSha256 $failedHash `
-        -InstallDirectory $install `
-        -ExecutableName 'StarWorld.exe' `
-        -TargetVersion '1.1.0' `
-        -ResultPath $result `
-        -AckTimeoutSeconds 5
-    if ($LASTEXITCODE -eq 0) { throw 'Updater helper should fail when the new app does not acknowledge startup' }
+    $failureExitCode = Invoke-UpdaterHelper -PackagePath $failedPackage -PackageHash $failedHash -AckTimeoutSeconds 5
+    if ($failureExitCode -eq 0) { throw 'Updater helper should fail when the new app does not acknowledge startup' }
     $failure = Get-Content -Raw -Encoding UTF8 $result | ConvertFrom-Json
     if ([bool]$failure.success -or -not [bool]$failure.rolled_back) { throw 'Failed launch did not report rollback' }
     if ((Get-Content -Raw $install\StarWorld.pck).Trim() -ne 'rollback-pck') { throw 'Rollback did not restore the original install' }
 
     Write-Host 'PASS windows_update_helper swap=1 relaunch=1 ack=1 rollback=1'
+}
+catch {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $failureEvidence) | Out-Null
+    @(
+        "WINDOWS_UPDATE_HELPER_FAILURE=$($_.Exception.Message)",
+        "STACK=$($_.ScriptStackTrace)",
+        "RESULT=$((Get-Content -Raw -ErrorAction SilentlyContinue $result))"
+    ) | Set-Content -LiteralPath $failureEvidence -Encoding UTF8
+    throw
 }
 finally {
     if (Test-Path $testRoot) { Remove-TreeWithRetry $testRoot }
