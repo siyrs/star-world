@@ -51,12 +51,14 @@ Game Runtime
 │  ├─ Machine State / Progress / Completion Policies
 │  ├─ FurnaceService
 │  ├─ StonecutterService
-│  └─ MachineInteractionRouter
+│  ├─ MachineInteractionRouter / Atomic Capability
+│  └─ Bounded Adjacent Chest Automation
 │
-├─ Persistence Domain
+├─ Persistence & Release Domain
 │  ├─ Atomic Save Transaction
 │  ├─ Domain Migration / Whitelist
-│  └─ Recovery
+│  ├─ Backup Recovery
+│  └─ Resumable GitHub Release Auto-update
 │
 └─ Experience & Composition Layer
    ├─ UI / Feedback / Audio
@@ -75,7 +77,12 @@ Game Runtime
 - 渐进区块加载、卸载和自适应预算；
 - F3 诊断与多轮生命周期 soak；
 - 原子 JSON、临时文件和备份恢复；
-- Windows Release 实际导出、启动、截图、报告和资源退出检查。
+- Windows Release 实际导出、启动、截图、报告和资源退出检查；
+- 首次启动检查 GitHub 最新稳定 Release；
+- Range / If-Range / ETag 跨重启续传；
+- ZIP 与逐文件 SHA-256、Manifest 白名单；
+- 外部更新助手目录切换、自动重启、ACK 和失败回滚；
+- Tag 驱动的 Windows GitHub Release 固定资产发布。
 
 ### 2. 建造、交互与目录完整性
 
@@ -86,16 +93,18 @@ Game Runtime
 - 方块、物品、配方、视觉、采集和保存目录门禁；
 - 新方块 numeric ID 只追加。
 
-### 3. Machine Base 与两种生产机器
+### 3. Machine Base、能力合同与轻量自动化
 
 共享结构：
 
 ```text
-MachineRuntimeParticipant
-├─ MachineRuntimeScheduler
+MachineRuntimeScheduler
 ├─ FurnaceService
 ├─ StonecutterService
-└─ MachineInteractionRouter
+└─ MachineAutomationService
+
+MachineInteractionRouter
+└─ Atomic Machine Capability
 ```
 
 已完成：
@@ -109,12 +118,20 @@ MachineRuntimeParticipant
 - Furnace 原料、燃料、产出、离线恢复和拆除保护；
 - Stonecutter 无燃料单输入/单输出加工；
 - 通用机器打开、槽位、拆除和位置 ID 路由；
+- `get_machine_capabilities`、原子插入和原子提取；
+- 满背包与满容器时零部分写入；
+- 机器正上方箱子供料、正下方箱子收货；
+- 每 0.5 秒最多 16 台机器、64 件物品、128 次事务探测；
+- 事件维护候选目录，常规周期不遍历全部机器；
+- 自动化游标、缓存和统计不进入存档；
 - 两种机器同批加工、保存、菜单清理和完整重载验收。
 
 合同见：
 
 - [MACHINE_BASE.md](MACHINE_BASE.md)
 - [STONECUTTER_MACHINE.md](STONECUTTER_MACHINE.md)
+- [MACHINE_CAPABILITY_CONTRACT.md](MACHINE_CAPABILITY_CONTRACT.md)
+- [LIGHTWEIGHT_MACHINE_AUTOMATION.md](LIGHTWEIGHT_MACHINE_AUTOMATION.md)
 
 ### 4. 玩家体验与原创视觉
 
@@ -202,36 +219,7 @@ ServiceHubFeatureCoordinator
 
 ## 下一阶段重点
 
-### 1. 机器能力与轻量自动输入/输出
-
-在两个真实机器领域稳定后，下一步不是建立完整物流网络，而是增加小型能力合同：
-
-```text
-get_machine_capabilities()
-can_insert(slot, item)
-can_extract(slot)
-insert_transaction(...)
-extract_transaction(...)
-```
-
-目标：
-
-- 自动化只依赖槽位能力，不依赖 Furnace 或 Stonecutter 类型；
-- 输入和输出继续使用原子物品事务；
-- 每次自动搬运有明确数量预算；
-- 背包或机器满时零部分写入；
-- 不为每台机器创建独立 Timer；
-- 自动化瞬时状态不进入存档。
-
-暂不引入：
-
-- 电网；
-- 管道；
-- 长距离传送；
-- 无限吞吐；
-- 万能 MachineManager。
-
-### 2. Agriculture 生命周期参与者
+### 1. Agriculture 生命周期参与者
 
 农业仍在 Character 继承层中负责反序列化、世界绑定、保存和清理。
 
@@ -252,7 +240,7 @@ agriculture_runtime
 - 作物位置、阶段和计时兼容；
 - 不为每株作物创建 Timer。
 
-### 3. 连接型建筑
+### 2. 连接型建筑
 
 优先建立邻接与方向纯策略：
 
@@ -265,18 +253,18 @@ agriculture_runtime
 
 视觉、碰撞、预览、提交和保存必须使用同一形状合同。
 
-### 4. 长期规模与性能
+### 3. 长期规模与性能
 
 在继续扩大内容前补充：
 
-- 多机器长期运行和离线恢复压测；
+- 多机器自动供料、加工、收货和离线恢复压测；
 - 机器、畜牧、牧场和危险共享调度预算报告；
 - 大量方向/非整块方块区块重建压测；
 - 存档体积与加载时间报告；
 - 多小时运行 soak；
 - 多敌对死亡、掉落和卸载压力。
 
-### 5. CI reusable workflow
+### 4. CI reusable workflow
 
 专项工作流数量持续增长。提取可复用模板：
 
@@ -289,6 +277,16 @@ strict import
 ```
 
 完整 Windows Release 仍保留单一权威工作流。
+
+### 5. 自动化扩展前置条件
+
+在以下数据出现前，不引入管道、电网或跨 Chunk 物流：
+
+- 相邻箱子自动化真实世界使用率；
+- 16 台机器周期预算不足的证据；
+- 玩家确实需要跨越多方块搬运；
+- 路径、拓扑和 Chunk 生命周期的压测方案；
+- 存档迁移和故障恢复合同。
 
 ## 工程质量标准
 
