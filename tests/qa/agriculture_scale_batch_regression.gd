@@ -181,7 +181,7 @@ func _test_exact_large_maturity_aggregation() -> void:
 	participant.set("agriculture_service", service)
 	participant.set("_active", true)
 	for index in 2048:
-		var crop_id := ["wheat", "carrot", "potato"][index % 3]
+		var crop_id: String = ["wheat", "carrot", "potato"][index % 3]
 		participant.call(
 			"_on_crop_stage_changed",
 			Vector3i(index % 64, TEST_Y + 1, int(index / 64)),
