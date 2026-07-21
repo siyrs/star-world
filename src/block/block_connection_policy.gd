@@ -51,7 +51,9 @@ static func resolve_mask(block_id: String, neighbor_ids: Dictionary = {}) -> int
 	var result := 0
 	for spec: Dictionary in DIRECTION_SPECS:
 		var direction_name := str(spec.get("name", ""))
-		var neighbor_id := str(neighbor_ids.get(direction_name, BlockRegistryScript.AIR))
+		var neighbor_id := str(
+			neighbor_ids.get(direction_name, BlockRegistryScript.AIR)
+		)
 		if can_connect(block_id, neighbor_id):
 			result |= int(spec.get("bit", 0))
 	return result if result != 0 else fallback_mask(block_id)
@@ -67,15 +69,19 @@ static func fallback_mask(block_id: String) -> int:
 	return EAST | WEST if quarters % 2 == 0 else NORTH | SOUTH
 
 
+static func display_mask(block_id: String) -> int:
+	return ALL if family_id(block_id) == OAK_FENCE_FAMILY else fallback_mask(block_id)
+
+
 static func read_neighbors(world: Node, block_position: Vector3i) -> Dictionary:
 	var result := empty_neighbors()
 	if world == null or not is_instance_valid(world) or not world.has_method("get_block"):
 		return result
 	for spec: Dictionary in DIRECTION_SPECS:
-		result[str(spec.get("name", ""))] = str(
-		world.call(
-			"get_block",
-			block_position + Vector3i(spec.get("offset", Vector3i.ZERO))
+		var direction_name := str(spec.get("name", ""))
+		var offset: Vector3i = spec.get("offset", Vector3i.ZERO)
+		result[direction_name] = str(
+			world.call("get_block", block_position + offset)
 		)
 	return result
 
