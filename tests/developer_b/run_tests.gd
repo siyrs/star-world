@@ -113,8 +113,8 @@ func _test_survival_and_time() -> void:
 
 func _test_entities() -> void:
 	var factory = CreatureFactoryScript.new()
-	_expect(factory.profiles.size() == 4, "four creature profiles load")
-	for species in ["chicken", "cow", "pig", "zombie"]:
+	_expect(factory.profiles.size() == 5, "five creature profiles load")
+	for species in ["abyss_brute", "chicken", "cow", "pig", "zombie"]:
 		var creature = factory.create(species, Vector3.ZERO)
 		_expect(creature != null, "%s can be created" % species)
 		if creature != null:

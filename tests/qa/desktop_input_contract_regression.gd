@@ -24,6 +24,10 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	# In headless runs the window starts at 64x64 while the design viewport is
+	# 1280x720, so pushed input coordinates would land outside the window.
+	# Match the window to the design resolution before simulating pointer input.
+	root.size = Vector2i(1280, 720)
 	await _test_hud_pointer_passthrough()
 	await _test_real_menu_pointer_click()
 	await _test_safe_new_world_spawn()

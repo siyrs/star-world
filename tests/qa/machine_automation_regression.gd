@@ -195,16 +195,22 @@ func _test_real_machine_domains() -> void:
 		storage.add_item(input_id, "stone", 1)
 		cutter.open_machine(id)
 		cutter.close_machine()
-	var bounded: Dictionary = automation.advance_machine_runtime(0.5, true)
-	_check(int(bounded.get("scanned_machine_count", 0)) <= 16, "cycle scans at most sixteen machines")
-	_check(int(bounded.get("items_moved", 0)) <= 64, "cycle moves at most sixty-four items")
-	_check(int(bounded.get("slots_scanned", 0)) <= 256, "cycle scans at most 256 chest slots")
-	_check(int(bounded.get("transfer_attempts", 0)) <= 128, "cycle performs at most 128 transfer probes")
-	automation.advance_machine_runtime(0.5, true)
 	var supplied := 0
-	for id: String in budget_ids:
-		if int(cutter.get_slot(id, "input").get("count", 0)) == 1:
-			supplied += 1
+	var cycles := 0
+	# Any per-cycle budget (machines, items, slots, attempts) can defer candidates;
+	# the round-robin contract only guarantees eventual coverage over later cycles.
+	while supplied < 20 and cycles < 6:
+		var cycle: Dictionary = automation.advance_machine_runtime(0.5, true)
+		cycles += 1
+		_check(int(cycle.get("scanned_machine_count", 0)) <= 16, "cycle scans at most sixteen machines")
+		_check(int(cycle.get("items_moved", 0)) <= 64, "cycle moves at most sixty-four items")
+		_check(int(cycle.get("slots_scanned", 0)) <= 256, "cycle scans at most 256 chest slots")
+		_check(int(cycle.get("transfer_attempts", 0)) <= 128, "cycle performs at most 128 transfer probes")
+		supplied = 0
+		for id: String in budget_ids:
+			if int(cutter.get_slot(id, "input").get("count", 0)) == 1:
+				supplied += 1
+	_check(cycles > 1, "budget exhaustion defers machines to later cycles")
 	_check(supplied == 20, "round-robin reaches machines beyond the first sixteen")
 	_check(int(automation.get_runtime_snapshot().get("cache_rebuild_count", 0)) == cache_before, "normal cycles do not rebuild the full machine directory")
 

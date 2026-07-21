@@ -68,10 +68,11 @@ func _test_processing_and_transfer_contract() -> void:
 		inventory.count_item("raw_iron") == 0 and inventory.count_item("coal") == 0,
 		"machine insertion removes exactly the accepted inventory counts",
 	)
-	var smelted_events := 0
+	var smelted_events: Array = []
 	furnace.item_smelted.connect(
 		func(_machine_id: String, _recipe_id: String, _output: Dictionary) -> void:
-			smelted_events += 1
+			# Arrays capture by reference; a plain int would capture by value and never update.
+			smelted_events.append(_recipe_id)
 	)
 	furnace.advance_time(48.1, true)
 	var snapshot: Dictionary = furnace.get_machine_snapshot(machine_id)
@@ -80,7 +81,7 @@ func _test_processing_and_transfer_contract() -> void:
 		and int(snapshot.get("output", {}).get("count", 0)) == 8,
 		"one coal processes eight iron items through elapsed-time simulation",
 	)
-	_check(smelted_events == 8, "each completed item emits one domain completion event")
+	_check(smelted_events.size() == 8, "each completed item emits one domain completion event")
 	_check(
 		snapshot.get("input", {}).is_empty()
 		and snapshot.get("fuel", {}).is_empty()

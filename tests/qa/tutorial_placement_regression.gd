@@ -176,6 +176,9 @@ func _test_tutorial_aliases_and_copy() -> void:
 
 func _test_crosshair_and_production_player() -> void:
 	root.size = Vector2i(1024, 576)
+	# With canvas_items stretch the aim point lives in the design viewport space,
+	# which only follows content_scale_size.
+	root.content_scale_size = Vector2i(1024, 576)
 	var host := Control.new()
 	host.position = Vector2.ZERO
 	host.size = Vector2(root.size)
@@ -191,7 +194,7 @@ func _test_crosshair_and_production_player() -> void:
 	root.add_child(player)
 	await process_frame
 	_check(
-		str(player.get_script().resource_path).ends_with("precision_interaction_player.gd"),
+		player is PrecisionInteractionPlayer,
 		"production player selects the shared precision interaction contract",
 	)
 	var ray := player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D

@@ -289,20 +289,20 @@ func _test_prospecting_danger_persistence() -> void:
 	await process_frame
 	_check(bool(service.setup(items, danger)), "prospecting accepts the danger service")
 	service.attach_world(world, player)
-	var result: Dictionary = service.use_item("prospecting_scanner", 5000)
+	var result: Dictionary = service.use_item("prospecting_kit", 5000)
 	_check(bool(result.get("success", false)), "prospecting completes with danger context")
 	_check(str(result.get("danger_tier_id", "")) == "dangerous", "prospecting result includes current danger tier")
 	_check(int(result.get("danger_score", 0)) == 58, "prospecting result includes current danger score")
 	_check(str(result.get("message", "")).contains("当前危险"), "player-facing prospecting message includes danger")
 	var serialized: Dictionary = service.serialize()
-	_check(int(serialized.get("version", 0)) == 2, "exploration persistence advances to version 2")
+	_check(int(serialized.get("version", 0)) == 3, "exploration persistence advances to version 3")
 	var records: Array = serialized.get("records", [])
 	_check(records.size() == 1 and str(records[0].get("danger_label", "")) == "危险", "stored discovery retains danger label")
 	var migrated := ProspectingMigrationScript.normalize_exploration_state({
 		"version":1,
 		"records":[{"record_key":"0,0:deep", "chunk":[0,0], "depth_band_id":"deep", "depth_label":"深层", "density_id":"normal", "density_label":"普通"}],
 	})
-	_check(int(migrated.get("version", 0)) == 2, "version 1 exploration state migrates to version 2")
+	_check(int(migrated.get("version", 0)) == 3, "version 1 exploration state migrates to version 3")
 	var migrated_records: Array = migrated.get("records", [])
 	_check(str(migrated_records[0].get("danger_tier_id", "")) == "unknown", "old records receive safe unknown danger defaults")
 	service.clear()

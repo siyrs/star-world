@@ -93,6 +93,8 @@ func _test_pickup_collection_guard() -> void:
 
 	pickup.call("_on_body_entered", player)
 	_check(inventory.count_item("apple") == 2, "the player receives the pickup")
+	# Disposal is deferred to keep Area3D signal dispatch error-free.
+	await process_frame
 	_check(pickup.is_queued_for_deletion(), "fully collected pickups are removed exactly once")
 	host.queue_free()
 	await process_frame

@@ -89,7 +89,7 @@ func _test_policy_and_day_night_skip() -> void:
 	_check(day_night.day_count == 5, "evening sleep advances the calendar day")
 	_check(int(evening_skip.get("previous_day", 0)) == 4, "time skip reports its previous day")
 	day_night.set_time(2.0)
-	var early_day := day_night.day_count
+	var early_day: int = day_night.day_count
 	day_night.skip_to_time(6.5)
 	_check(day_night.day_count == early_day, "after-midnight sleep stays on the current calendar day")
 	day_night.queue_free()

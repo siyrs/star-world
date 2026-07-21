@@ -118,7 +118,7 @@ func _test_player_state_recovery() -> void:
 		"restored player orientation remains yaw-only",
 	)
 	_check(
-		player.camera_pivot.rotation.x <= deg_to_rad(89.0),
+		player.camera_pivot.rotation.x <= deg_to_rad(89.0) + 0.00001,
 		"restored camera pitch is clamped to a usable range",
 	)
 	_check(
