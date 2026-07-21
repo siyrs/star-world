@@ -22,6 +22,7 @@ var _sky_material: ProceduralSkyMaterial
 var _cloud_mesh: MeshInstance3D
 var _cloud_material: StandardMaterial3D
 var _cloud_scroll_accum := 0.0
+var _last_sky_strength := -1.0
 
 
 func _ready() -> void:
@@ -147,6 +148,11 @@ func serialize() -> Dictionary:
 
 
 func _apply_sky(environment: Environment, day_color: Color, strength: float) -> void:
+	# Sky material writes dirty the material; only refresh when the daylight
+	# strength has visibly moved instead of every frame.
+	if _sky_material != null and absf(strength - _last_sky_strength) < 0.004:
+		return
+	_last_sky_strength = strength
 	if _sky_material == null:
 		_sky_material = ProceduralSkyMaterial.new()
 		_sky_material.sun_angle_max = 12.0
