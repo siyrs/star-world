@@ -1,6 +1,6 @@
 [application]
 config/name="星的世界"
-config/version="1.0.0"
+config/version="1.1.0"
 run/main_scene="res://scenes/game/game.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 

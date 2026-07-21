@@ -1,7 +1,7 @@
 class_name StarWorldAppVersion
 extends RefCounted
 
-const CURRENT_VERSION := "1.0.0"
+const CURRENT_VERSION := "1.1.0"
 const REPOSITORY := "siyrs/star-world"
 const RELEASE_API_URL := "https://api.github.com/repos/%s/releases/latest" % REPOSITORY
 const PACKAGE_ASSET_NAME := "StarWorld-Windows-x86_64.zip"
