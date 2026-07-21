@@ -4,6 +4,7 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
 const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 const PlacementPolicyScript = preload("res://src/interaction/placement_preview_policy.gd")
+const PrecisionPlayerScript = preload("res://src/player/precision_interaction_player.gd")
 const ChunkScript = preload("res://src/chunk/voxel_chunk.gd")
 
 var checks := 0
@@ -34,6 +35,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_catalog_and_connection_policy()
 	_test_connected_geometry()
+	_test_serialized_focus_connection_context()
 	_test_connection_aware_preview()
 	await _test_live_chunk_neighbor_rebuild("glass_pane",9,Vector3(0.5625,1.0,0.125),6,Vector3(1.0,1.0,0.125))
 	await _test_live_chunk_neighbor_rebuild("oak_fence",14,Vector3(0.625,1.0,0.25),6,Vector3(0.25,1.0,0.25))
@@ -159,6 +161,37 @@ func _test_connected_geometry() -> void:
 	)
 	_check(cross_fence.size() == 9,"four-way fence uses one post and eight bounded rails")
 	_check(not ShapeGeometryScript.is_full_cube("oak_fence"),"fence enters the shared partial geometry pipeline")
+
+
+func _test_serialized_focus_connection_context() -> void:
+	var world := FakeWorld.new()
+	world.set_test_block(Vector3i(1,0,0),"stone")
+	world.set_test_block(Vector3i(2,0,-1),"glass_pane_ns")
+	var player = PrecisionPlayerScript.new()
+	player.world = world
+	var focus := {
+		"type":"block",
+		"hit_position":[0,0,0],
+		"placement_position":[2,0,0],
+	}
+	player.call("_append_connection_context",focus)
+	var target_neighbors: Dictionary = focus.get("target_neighbor_ids",{})
+	var placement_neighbors: Dictionary = focus.get("placement_neighbor_ids",{})
+	_check(
+		str(target_neighbors.get("east","")) == "stone",
+		"serialized focus arrays resolve target neighbor context"
+	)
+	_check(
+		str(placement_neighbors.get("north","")) == "glass_pane_ns",
+		"serialized focus arrays resolve placement neighbor context"
+	)
+	_check(
+		ConnectionPolicyScript.resolve_mask("glass_pane",placement_neighbors)
+		== ConnectionPolicyScript.NORTH,
+		"serialized player focus produces the same live mask as direct world reads"
+	)
+	player.free()
+	world.free()
 
 
 func _test_connection_aware_preview() -> void:
