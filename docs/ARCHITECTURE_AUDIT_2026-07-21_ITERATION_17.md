@@ -112,6 +112,28 @@ automation
 
 修复：只在某台机器当前世界第一次发生真实自动搬运时提示一次。常规周期只记录结构化诊断，不播放逐物品音效。
 
+## 发现 7：自动化最初被组合在错误的继承层
+
+第一版实现放在 `ToolProgressionServiceHub`，理由是该层已经暴露 Machine Router 兼容字段。但自动化的调度、世界绑定、清理和诊断全部属于 Machine Runtime，把实现放在 Tool 层会产生：
+
+- Machine 生命周期跨两个所有者；
+- 继承链加载顺序依赖；
+- Tool 层反向管理 Scheduler Domain；
+- 返回菜单和 Shutdown 的重复清理入口。
+
+真实桌面验收正确暴露了继承链解析问题。最终修复不是增加加载等待或静态引用，而是将完整组合下移到 `MachineRuntimeParticipant`：
+
+```text
+MachineRuntimeParticipant
+├─ MachineRuntimeScheduler
+├─ FurnaceService
+├─ StonecutterService
+├─ MachineInteractionRouter
+└─ MachineAutomationService
+```
+
+Tool 层只保留兼容字段和 UI/交互路由，不再拥有自动化生命周期。
+
 ## 最终设计
 
 ```text
@@ -119,12 +141,13 @@ VoxelWorld physical blocks
         │
         ├─ chest above
         │     ↓
-MachineAutomationService
-        │     ↓ MachineInteractionRouter
-        ├─ FurnaceService
-        └─ StonecutterService
-              ↓
-        chest below
+MachineRuntimeParticipant
+        └─ MachineAutomationService
+               │     ↓ MachineInteractionRouter
+               ├─ FurnaceService
+               └─ StonecutterService
+                     ↓
+               chest below
 ```
 
 预算：
@@ -142,6 +165,7 @@ MachineAutomationService
 
 保持不变：
 
+- 五个 FeatureLifecycle 参与者；
 - Machine Runtime Scheduler；
 - Furnace 与 Stonecutter 节点路径；
 - `machines.version = 1`；
@@ -152,6 +176,13 @@ MachineAutomationService
 - Machine Capability Schema 1；
 - 世界 Block numeric ID；
 - 存档事务和 Windows Release 流程。
+
+新增稳定兼容端口：
+
+```text
+machine_automation_service
+/Services/MachineAutomationService
+```
 
 ## 验收要求
 
