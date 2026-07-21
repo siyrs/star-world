@@ -6,6 +6,7 @@ $paths = @{
   Policy = Join-Path $root 'src\machine\machine_automation_policy.gd'
   Service = Join-Path $root 'src\machine\machine_automation_service.gd'
   Port = Join-Path $root 'src\machine\machine_container_inventory_port.gd'
+  Participant = Join-Path $root 'src\machine\machine_runtime_participant.gd'
   Router = Join-Path $root 'src\machine\machine_interaction_router.gd'
   Container = Join-Path $root 'src\inventory\container_storage_service.gd'
   Registry = Join-Path $root 'src\interaction\block_interaction_registry.gd'
@@ -78,11 +79,19 @@ if (
 if ($text.Registry -notmatch 'func\s+get_machine_block_id\s*\(') {
   throw 'Automation must resolve physical machine blocks through the interaction registry'
 }
-if ($text.ToolHub -notmatch 'MachineAutomationService' -or $text.ToolHub -notmatch 'register_domain.*MACHINE_AUTOMATION_DOMAIN' -or $text.ToolHub -notmatch 'attach_world') {
-  throw 'Tool progression root must compose, schedule and bind bounded automation'
+if (
+  $text.Participant -notmatch 'AutomationServiceScript' -or
+  $text.Participant -notmatch 'register_domain",\s*&"automation"' -or
+  $text.Participant -notmatch 'automation_service\.call\("attach_world"' -or
+  $text.Participant -notmatch 'hub\.set\("machine_automation_service"'
+) {
+  throw 'MachineRuntimeParticipant must own, schedule, bind and publish bounded automation'
 }
-if ($text.ToolHub -notmatch '上方供料，下方收货') {
+if ($text.Participant -notmatch '上方供料，下方收货') {
   throw 'Players must receive a one-time explanation of the adjacent chest convention'
+}
+if ($text.ToolHub -match 'MachineAutomationServiceScript' -or $text.ToolHub -match 'register_domain.*automation') {
+  throw 'Tool progression must expose only the compatibility port, not own machine automation lifecycle'
 }
 
 foreach ($script in @('machine_automation_regression.gd','machine_automation_desktop_acceptance.gd')) {
@@ -92,4 +101,4 @@ if ($text.RunAll -notmatch 'validate_machine_automation.ps1' -or $text.RunAll -n
   throw 'Machine automation tests must be wired into tests/run_all.ps1'
 }
 
-Write-Host 'PASS machine_automation interval=0.5 machines=16 items=64 transfer=8 slots=256 attempts=128 event_cache=1 atomic_chests=1 transient=1'
+Write-Host 'PASS machine_automation interval=0.5 machines=16 items=64 transfer=8 slots=256 attempts=128 event_cache=1 atomic_chests=1 participant_owned=1 transient=1'
