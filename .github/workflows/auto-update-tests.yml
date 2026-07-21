@@ -1,0 +1,90 @@
+name: GitHub release auto-update quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-update-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  updater-regression:
+    name: Release policy, resume state, package integrity and helper acceptance
+    runs-on: windows-latest
+    timeout-minutes: 22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          godot --headless --path . --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate auto-update contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_auto_update.ps1
+
+      - name: Run release, resume and package regressions
+        shell: pwsh
+        run: |
+          godot --headless --path . --script res://tests/qa/auto_update_regression.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Exercise real Windows directory swap, relaunch and rollback
+        shell: pwsh
+        run: |
+          .\tests\qa\windows_update_helper_acceptance.ps1
+
+  updater-desktop:
+    name: Real first-start prompt, progress, interruption and retry UI
+    needs: updater-regression
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production first-start update experience
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/auto_update_desktop_acceptance.gd' `
+            -OutputPath 'build\auto-update-desktop.png' `
+            -TimeoutMilliseconds 100000
+
+      - name: Upload update prompt evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-update-desktop-${{ github.run_number }}
+          path: |
+            build/auto-update-*.png
+            build/auto-update-*.log
+          if-no-files-found: error
+          retention-days: 14
