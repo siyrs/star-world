@@ -22,7 +22,8 @@ Game Runtime
 ├─ World Domain
 │  ├─ Chunk Streaming / Terrain Generation
 │  ├─ Resource Distribution / Map Identity
-│  └─ Directional / Partial Block Geometry
+│  ├─ Directional / Partial Block Geometry
+│  └─ Derived Connected Pane / Fence Shapes
 │
 ├─ Player Domain
 │  ├─ Movement / Survival
@@ -85,14 +86,28 @@ Game Runtime
 - 外部更新助手目录切换、自动重启、ACK 和失败回滚；
 - Tag 驱动的 Windows GitHub Release 固定资产发布。
 
-### 2. 建造、交互与目录完整性
+### 2. 建造、交互、连接形状与目录完整性
 
 - 工作台、箱子、熔炉、修理台、床和石材切割机；
 - 位置型世界交互和非空内容保护；
 - 精确目标和统一放置预览；
 - 台阶、四方向楼梯、耕地、床和玻璃板非整块几何；
+- `BlockConnectionPolicy` 四方向邻接掩码；
+- 玻璃板中心柱 + 最多四条连接臂；
+- 木栅栏中心柱 + 每方向两条横杆；
+- 同族或完整实体方块连接，部分形状不误连接；
+- 预览、玩家重叠、视觉网格和碰撞网格共享同一连接盒；
+- 相邻盒内部面与跨方块连接端面消除；
+- 邻居改变时只重建当前与边界 Chunk；
+- 连接掩码不进入存档，旧玻璃板孤立方向保持兼容；
 - 方块、物品、配方、视觉、采集和保存目录门禁；
 - 新方块 numeric ID 只追加。
+
+合同见：
+
+- [CONNECTED_BLOCK_SHAPES.md](CONNECTED_BLOCK_SHAPES.md)
+- [PLACEMENT_PREVIEW.md](PLACEMENT_PREVIEW.md)
+- [BLOCK_VISUALS.md](BLOCK_VISUALS.md)
 
 ### 3. Machine Base、能力合同与轻量自动化
 
@@ -234,40 +249,52 @@ ServiceHubFeatureCoordinator
 
 ## 下一阶段重点
 
-### 1. 连接型建筑统一形状合同
+### 1. 双格木门与开关状态
 
-优先建立邻接与方向纯策略：
+连接掩码是纯派生状态，但门需要持久交互状态。下一步应建立：
 
 ```text
-门开关与双格状态
-→ 栅栏连接
-→ 梯子攀爬
-→ 玻璃板自动连接
+DoorStatePolicy
+├─ facing
+├─ open / closed
+├─ lower / upper
+└─ hinge
 ```
 
-视觉、碰撞、预览、提交和保存必须使用同一形状合同。
+必须解决：
 
-需要先解决：
+- 放置前同时预演上下两个方格；
+- 扣除一个门物品并原子写入两格；
+- 点击任一半切换整扇门；
+- 开关时视觉和碰撞同时切换；
+- 破坏任一半只掉落一个门物品；
+- 邻居/支撑失效时安全清理；
+- 旧 `oak_door` numeric ID 和世界兼容。
 
-- 方向与邻接计算不能分别散落在 Chunk、Player 和 Preview；
-- 双格门必须有唯一状态所有者和原子放置/拆除；
-- 邻接变化只重建受影响方块与边界 Chunk；
-- 连接结果应从世界状态确定性推导，不重复保存缓存；
-- 旧 `oak_door`、`oak_fence`、`ladder`、`glass_pane` numeric ID 保持不变。
+### 2. 梯子贴面方向与真实攀爬
 
-### 2. 长期规模与性能
+梯子需要：
+
+- 依附面与朝向纯策略；
+- 与放置预览一致的薄碰撞；
+- 玩家进入梯子体积后的有界攀爬状态；
+- 离开梯子、跳跃和支撑拆除行为；
+- 不把攀爬状态写入世界存档。
+
+### 3. 长期规模与性能
 
 在继续扩大内容前补充：
 
+- 大量玻璃板/栅栏邻居切换的 Chunk 重建压测；
+- 跨 Chunk 连接、卸载和重载压力；
 - 多机器自动供料、加工、收货和离线恢复压测；
 - 大型农田暂停、成熟批次、保存和加载压测；
 - 机器、农业、畜牧、牧场和危险共享预算报告；
-- 大量方向/非整块方块区块重建压测；
 - 存档体积与加载时间报告；
 - 多小时运行 soak；
 - 多敌对死亡、掉落和卸载压力。
 
-### 3. CI reusable workflow
+### 4. CI reusable workflow
 
 专项工作流数量持续增长。提取可复用模板：
 
@@ -281,7 +308,7 @@ strict import
 
 完整 Windows Release 仍保留单一权威工作流。
 
-### 4. 自动化扩展前置条件
+### 5. 自动化扩展前置条件
 
 在以下数据出现前，不引入管道、电网或跨 Chunk 物流：
 
