@@ -10,15 +10,19 @@ const SaveServiceScript = preload("res://src/save/save_service.gd")
 const MapPanelScript = preload("res://src/ui/map_selection_panel.gd")
 const SaveBrowserScript = preload("res://src/ui/save_browser_panel.gd")
 const SettingsPanelScript = preload("res://src/ui/settings_panel.gd")
+const UpdatePromptPanelScript = preload("res://src/ui/update_prompt_panel.gd")
+const AppVersion = preload("res://src/update/app_version.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 
 var save_service
 var audio_service
+var update_service
 var _main_panel: PanelContainer
 var _map_panel
 var _save_panel
 var _settings_panel
+var _update_panel
 var _loading_panel: PanelContainer
 var _loading_label: Label
 var _status: Label
@@ -39,16 +43,18 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-func setup(p_save_service, p_audio_service = null) -> void:
+func setup(p_save_service, p_audio_service = null, p_update_service = null) -> void:
 	_disconnect_standalone_settings()
 	if _local_save_service != null and _local_save_service != p_save_service:
 		_local_save_service.queue_free()
 		_local_save_service = null
 	save_service = p_save_service
 	audio_service = p_audio_service
+	update_service = p_update_service
 	if is_node_ready():
 		_setup_panels()
 		_bind_menu_audio()
+		_setup_update_service()
 
 
 func show_main() -> void:
@@ -59,6 +65,8 @@ func show_main() -> void:
 	_map_panel.visible = false
 	_save_panel.visible = false
 	_settings_panel.visible = false
+	if _update_panel != null:
+		_update_panel.visible = false
 	_set_menu_enabled(true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -70,6 +78,8 @@ func show_loading(message: String = "正在生成世界…") -> void:
 	_map_panel.visible = false
 	_save_panel.visible = false
 	_settings_panel.visible = false
+	if _update_panel != null:
+		_update_panel.visible = false
 	_loading_panel.visible = true
 	_loading_label.text = message
 	_set_menu_enabled(false)
@@ -83,6 +93,10 @@ func show_error(message: String) -> void:
 func show_settings_result(saved: bool) -> void:
 	if _settings_panel != null and _settings_panel.has_method("show_apply_result"):
 		_settings_panel.call("show_apply_result", saved)
+
+
+func get_update_panel() -> Node:
+	return _update_panel
 
 
 func _ensure_standalone_services() -> void:
@@ -151,7 +165,7 @@ func _build_main_panel() -> void:
 	add_child(_main_panel)
 	var content := VBoxContainer.new()
 	content.alignment = BoxContainer.ALIGNMENT_CENTER
-	content.add_theme_constant_override("separation", 13)
+	content.add_theme_constant_override("separation", 10)
 	_main_panel.add_child(content)
 	var title := Label.new()
 	title.text = "星 的 世 界"
@@ -173,13 +187,14 @@ func _build_main_panel() -> void:
 			_show_panel(_save_panel)
 	)
 	_add_menu_button(content, "设置", func() -> void: _show_panel(_settings_panel))
+	_add_menu_button(content, "检查更新", _request_update_check)
 	_add_menu_button(content, "退出", _quit)
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_status)
 	var version := Label.new()
-	version.text = "v1.0.0  ·  Godot 4"
+	version.text = "%s  ·  Godot 4" % AppVersion.display_version()
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	version.modulate = Color("#7892A7")
 	content.add_child(version)
@@ -188,7 +203,7 @@ func _build_main_panel() -> void:
 func _add_menu_button(parent: Control, label: String, callback: Callable) -> void:
 	var button := Button.new()
 	button.text = label
-	button.custom_minimum_size = Vector2(470, 58)
+	button.custom_minimum_size = Vector2(470, 52)
 	button.pressed.connect(callback)
 	parent.add_child(button)
 	_menu_buttons.append(button)
@@ -229,6 +244,11 @@ func _build_subpanels() -> void:
 		func(settings: Dictionary) -> void: settings_changed.emit(settings)
 	)
 	_settings_panel.back_requested.connect(show_main)
+	_update_panel = UpdatePromptPanelScript.new()
+	_center_panel(_update_panel, Vector2(680, 500))
+	add_child(_update_panel)
+	_update_panel.visible = false
+	_update_panel.dismissed.connect(show_main)
 
 
 func _build_loading_panel() -> void:
@@ -268,6 +288,27 @@ func _setup_panels() -> void:
 		_save_panel.setup(save_service)
 	if _settings_panel != null:
 		_settings_panel.setup(save_service, audio_service)
+	_setup_update_service()
+
+
+func _setup_update_service() -> void:
+	if _update_panel == null or update_service == null:
+		return
+	_update_panel.setup(update_service)
+	var available_callback := Callable(self, "_on_update_available")
+	if update_service.has_signal("update_available") and not update_service.is_connected("update_available", available_callback):
+		update_service.connect("update_available", available_callback)
+	var no_update_callback := Callable(self, "_on_no_update_available")
+	if update_service.has_signal("no_update_available") and not update_service.is_connected("no_update_available", no_update_callback):
+		update_service.connect("no_update_available", no_update_callback)
+	var failed_callback := Callable(self, "_on_update_check_failed")
+	if update_service.has_signal("update_failed") and not update_service.is_connected("update_failed", failed_callback):
+		update_service.connect("update_failed", failed_callback)
+	var notice := str(update_service.call("get_startup_notice")) if update_service.has_method("get_startup_notice") else ""
+	if not notice.is_empty():
+		_status.text = notice
+	if update_service.has_method("check_on_startup"):
+		update_service.call_deferred("check_on_startup")
 
 
 func _show_panel(panel: Control) -> void:
@@ -278,11 +319,34 @@ func _show_panel(panel: Control) -> void:
 	_map_panel.visible = panel == _map_panel
 	_save_panel.visible = panel == _save_panel
 	_settings_panel.visible = panel == _settings_panel
+	if _update_panel != null:
+		_update_panel.visible = panel == _update_panel
 
 
 func _set_menu_enabled(enabled: bool) -> void:
 	for button in _menu_buttons:
 		button.disabled = not enabled
+
+
+func _request_update_check() -> void:
+	if update_service == null or not update_service.has_method("check_for_updates"):
+		_status.text = "更新服务当前不可用。"
+		return
+	_status.text = "正在检查 GitHub Release…"
+	update_service.call("check_for_updates", true)
+
+
+func _on_update_available(_release: Dictionary) -> void:
+	_show_panel(_update_panel)
+
+
+func _on_no_update_available(version: String) -> void:
+	_status.text = "当前 v%s 已是最新版本。" % version
+
+
+func _on_update_check_failed(_reason: String, message: String) -> void:
+	if _update_panel == null or not _update_panel.visible:
+		_status.text = message
 
 
 func _on_create_requested(world_name: String, map_id: String, seed_value: int) -> void:
