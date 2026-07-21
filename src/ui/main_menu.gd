@@ -11,6 +11,7 @@ const MapPanelScript = preload("res://src/ui/map_selection_panel.gd")
 const SaveBrowserScript = preload("res://src/ui/save_browser_panel.gd")
 const SettingsPanelScript = preload("res://src/ui/settings_panel.gd")
 const UpdatePromptPanelScript = preload("res://src/ui/update_prompt_panel.gd")
+const StarfieldScript = preload("res://src/ui/menu_starfield.gd")
 const AppVersion = preload("res://src/update/app_version.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
@@ -136,20 +137,32 @@ func _apply_standalone_settings(settings: Dictionary) -> void:
 func _build_background() -> void:
 	var background := ColorRect.new()
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.color = Color("#07111F")
+	background.color = Color("#0A1626")
 	UiInputPolicy.make_passthrough(background)
 	add_child(background)
-	var stars := Label.new()
-	stars.text = (
-		"✦     ·       ✧          ·    ✦       ·        ✧\n\n"
-		+ "       ·        ✦     ·          ✧          ·\n\n"
-		+ "  ✧         ·           ✦       ·      ✧"
-	)
-	stars.add_theme_font_size_override("font_size", 34)
-	stars.modulate = Color("#4F7899")
-	stars.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	UiInputPolicy.make_passthrough(stars)
-	add_child(stars)
+	var glow := TextureRect.new()
+	glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	glow.texture = _build_horizon_glow()
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	UiInputPolicy.make_passthrough(glow)
+	add_child(glow)
+	var starfield := StarfieldScript.new()
+	starfield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiInputPolicy.make_passthrough(starfield)
+	add_child(starfield)
+
+
+func _build_horizon_glow() -> ImageTexture:
+	# Soft vertical gradient: deep space up top, warm horizon glow at the bottom.
+	var image := Image.create(1, 256, false, Image.FORMAT_RGBA8)
+	for y in 256:
+		var t := float(y) / 255.0
+		var color := Color("#0A1626").lerp(Color("#16324F"), t)
+		if t > 0.72:
+			color = color.lerp(Color("#3A4E68"), (t - 0.72) / 0.28 * 0.55)
+		image.set_pixel(0, y, color)
+	return ImageTexture.create_from_image(image)
 
 
 func _build_main_panel() -> void:
@@ -170,13 +183,19 @@ func _build_main_panel() -> void:
 	var title := Label.new()
 	title.text = "星 的 世 界"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 50)
+	title.add_theme_font_size_override("font_size", 62)
+	title.add_theme_color_override("font_color", Color("#EAF7FF"))
+	title.add_theme_color_override("font_shadow_color", Color("#1A5E96"))
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	title.add_theme_constant_override("shadow_offset_y", 5)
+	title.add_theme_constant_override("shadow_outline_size", 10)
 	content.add_child(title)
-	var subtitle := Label.new()
-	subtitle.text = "STAR WORLD  ·  沙盒生存建造"
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.modulate = Color("#8FD7F0")
-	content.add_child(subtitle)
+	var divider := Label.new()
+	divider.text = "✦  ━━━━━━  STAR WORLD  ·  沙盒生存建造  ━━━━━━  ✦"
+	divider.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	divider.modulate = Color("#8FD7F0")
+	divider.add_theme_font_size_override("font_size", 15)
+	content.add_child(divider)
 	_add_menu_button(content, "开始游戏", func() -> void: _show_panel(_map_panel))
 	_add_menu_button(content, "地图选择", func() -> void: _show_panel(_map_panel))
 	_add_menu_button(
