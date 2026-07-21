@@ -48,7 +48,7 @@ const DEFINITIONS := {
 	"furnace": {"name":"熔炉", "color":"#55595D", "solid":true, "transparent":false, "collectible":true, "item_id":"furnace", "hardness":3.0},
 	"chest": {"name":"箱子", "color":"#A66B2C", "solid":true, "transparent":false, "collectible":true, "item_id":"chest", "hardness":2.0},
 	"oak_door": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5},
-	"oak_fence": {"name":"木栅栏", "color":"#A87540", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_fence", "hardness":1.5},
+	"oak_fence": {"name":"木栅栏", "color":"#A87540", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_fence", "hardness":1.5, "shape":"fence", "connection_family":"oak_fence"},
 	"ladder": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5},
 	"torch": {"name":"火把", "color":"#F3B63F", "solid":false, "transparent":true, "collectible":true, "item_id":"torch", "hardness":0.1, "emissive":true},
 	"wool": {"name":"羊毛", "color":"#F0EFE8", "solid":true, "transparent":false, "collectible":true, "item_id":"wool", "hardness":0.5},
@@ -73,8 +73,8 @@ const DEFINITIONS := {
 	"oak_stairs_east": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":1, "visual_parent":"oak_stairs"},
 	"oak_stairs_north": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":2, "visual_parent":"oak_stairs"},
 	"oak_stairs_west": {"name":"木楼梯", "color":"#B5834E", "solid":true, "transparent":false, "collectible":true, "item_id":"oak_stairs", "hardness":1.7, "shape":"stairs", "orientation_family":"oak_stairs", "rotation_quarters":3, "visual_parent":"oak_stairs"},
-	"glass_pane": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "rotation_quarters":0, "visual_parent":"glass"},
-	"glass_pane_ns": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "rotation_quarters":1, "visual_parent":"glass"},
+	"glass_pane": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "connection_family":"glass_pane", "rotation_quarters":0, "visual_parent":"glass"},
+	"glass_pane_ns": {"name":"玻璃板", "color":"#C8EDF1", "solid":true, "transparent":true, "collectible":true, "item_id":"glass_pane", "hardness":0.3, "shape":"pane", "orientation_family":"glass_pane", "connection_family":"glass_pane", "rotation_quarters":1, "visual_parent":"glass"},
 	"stonecutter": {"name":"石材切割机", "color":"#6F777C", "solid":true, "transparent":false, "collectible":true, "item_id":"stonecutter", "hardness":3.0, "visual_parent":"repair_station"}
 }
 
