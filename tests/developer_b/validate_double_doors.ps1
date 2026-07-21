@@ -78,7 +78,9 @@ if ($orientation -notmatch 'DOOR_FAMILY\s*:=\s*"oak_door"' -or $orientation -not
 if ($geometry -notmatch '"door"\s*:\s*\r?\n\s*boxes\s*=\s*\[DoorPolicyScript\.local_box') {
   throw 'Shared block geometry must render every persisted door half through the door policy'
 }
-if ($geometry -notmatch '"door"\]') { throw 'Door must remain a partial geometry shape' }
+if ($geometry -notmatch 'shape\s+not\s+in\s+\[[^\]]*"door"') {
+  throw 'Door must remain a member of the extensible partial geometry shape list'
+}
 
 foreach ($field in @('placement_companion_position','placement_companion_block_id','placement_upper_block_id','placement_support_block_id')) {
   if (($preview + "`n" + $player) -notmatch $field) { throw "Door preview pipeline is missing field: $field" }
