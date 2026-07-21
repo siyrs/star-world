@@ -10,6 +10,7 @@ Set-StrictMode -Version Latest
 $build = [System.IO.Path]::GetFullPath($BuildDirectory)
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 $packageName = 'StarWorld-Windows-x86_64.zip'
+$checksumName = 'StarWorld-Windows-x86_64.zip.sha256'
 $requiredNames = @('StarWorld.exe', 'StarWorld.pck')
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
@@ -46,10 +47,11 @@ $manifestPath = Join-Path $build 'update-manifest.json'
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 
 $packagePath = Join-Path $output $packageName
+$checksumPath = Join-Path $output $checksumName
 if (Test-Path -LiteralPath $packagePath) { Remove-Item -Force -LiteralPath $packagePath }
+if (Test-Path -LiteralPath $checksumPath) { Remove-Item -Force -LiteralPath $checksumPath }
 Compress-Archive -Path (Join-Path $build '*') -DestinationPath $packagePath -CompressionLevel Optimal
 $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash.ToLowerInvariant()
-$checksumPath = "$packagePath.sha256"
 "$packageHash  $packageName" | Set-Content -LiteralPath $checksumPath -Encoding ASCII
 
 Write-Host "UPDATE_PACKAGE=$packagePath"
