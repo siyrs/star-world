@@ -54,8 +54,8 @@ func _run() -> void:
 	_check(world != null and bool(world.get("is_started")), "production world starts before husbandry lifecycle acceptance")
 	_check(service != null and interaction != null, "participant-owned husbandry ports remain available")
 	_check(
-		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 5,
-		"production coordinator exposes five lifecycle participants"
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 6,
+		"production coordinator exposes six lifecycle participants"
 	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base is the lifecycle root participant")
 	_check(

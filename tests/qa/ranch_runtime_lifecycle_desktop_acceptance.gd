@@ -60,7 +60,7 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production voxel world starts before ranch lifecycle tests")
 	_check(husbandry != null and interaction != null and attraction != null and products != null, "participant-owned husbandry and ranch services keep their public ports")
-	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 5, "production coordinator exposes all five participants")
+	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 6, "production coordinator exposes all six participants")
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root")
 	_check(
 		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],

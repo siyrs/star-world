@@ -156,7 +156,7 @@ func _run() -> void:
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 1, "full reload restores the saved exploration record")
 	_check(bool(machine_runtime.call("is_active")), "full reload reactivates Machine Base")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 5, "production diagnostics expose all five participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 6, "production diagnostics expose all six participants")
 	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "production diagnostics include Machine Base fields")
 	_check(character_snapshot.has("husbandry") and character_snapshot.has("animal_products"), "production character diagnostics include husbandry and ranch participant fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "production character diagnostics retain legacy runtime fields")

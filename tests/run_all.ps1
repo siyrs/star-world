@@ -39,6 +39,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_exploration_rewards.ps1"
 & "$PSScriptRoot\developer_b\validate_map_signature_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_service_hub_lifecycle.ps1"
+& "$PSScriptRoot\developer_b\validate_agriculture_runtime.ps1"
 & "$PSScriptRoot\developer_b\validate_block_visuals.ps1"
 & "$PSScriptRoot\developer_b\validate_fertilizers.ps1"
 & "$PSScriptRoot\developer_b\validate_rest.ps1"
@@ -77,6 +78,7 @@ Invoke-GodotTest 'res://tests/qa/exploration_journal_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
 Invoke-GodotTest 'res://tests/qa/map_signature_prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/service_hub_feature_lifecycle_regression.gd'
+Invoke-GodotTest 'res://tests/qa/agriculture_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/husbandry_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ranch_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/glass_pane_regression.gd'
@@ -111,4 +113,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: bounded adjacent machine automation + GitHub release auto-update + atomic machine capabilities + release-safe runtime checks'
+Write-Host 'PASS: agriculture runtime lifecycle + bounded adjacent machine automation + GitHub release auto-update + release-safe runtime checks'

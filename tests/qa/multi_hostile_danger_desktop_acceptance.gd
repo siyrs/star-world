@@ -54,7 +54,7 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production world starts before multi-hostile acceptance")
 	_check(spawner != null and danger != null and hud != null, "production ecology, danger and HUD services are available")
-	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 5, "production coordinator retains all five lifecycle participants")
+	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 6, "production coordinator retains all six lifecycle participants")
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root during combat")
 	if player == null or world == null or spawner == null or danger == null or hud == null:
 		await _finish(game, hub)
