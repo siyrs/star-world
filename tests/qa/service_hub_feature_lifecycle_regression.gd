@@ -78,6 +78,7 @@ class FakeParticipant:
 
 class InvalidParticipant:
 	extends Node
+
 	func install(_hub: Node) -> bool:
 		return true
 
@@ -85,18 +86,35 @@ class InvalidParticipant:
 class FakeWorld:
 	extends Node
 	var profile_id := "star_continent"
+	var blocks: Dictionary = {}
 
 	func world_to_block(position: Vector3) -> Vector3i:
 		return Vector3i(floori(position.x), floori(position.y), floori(position.z))
 
 	func block_to_chunk(position: Vector3i) -> Vector2i:
-		return Vector2i(floori(float(position.x) / 16.0), floori(float(position.z) / 16.0))
+		return Vector2i(
+			floori(float(position.x) / 16.0), floori(float(position.z) / 16.0)
+		)
 
 	func get_initial_block(position: Vector3i) -> String:
-		return "air" if position.y < 1 or position.y > 63 else "stone"
+		return get_block(position)
+
+	func get_block(position: Vector3i) -> String:
+		return str(blocks.get(_key(position), "air"))
+
+	func set_block(position: Vector3i, block_id: String) -> bool:
+		var key := _key(position)
+		var previous := str(blocks.get(key, "air"))
+		if previous == block_id:
+			return false
+		blocks[key] = block_id
+		return true
 
 	func resolve_ground_position(candidate: Vector3) -> Vector3:
 		return Vector3(candidate.x, maxf(1.05, candidate.y), candidate.z)
+
+	func _key(position: Vector3i) -> String:
+		return "%d,%d,%d" % [position.x, position.y, position.z]
 
 
 class FakePlayer:
@@ -169,9 +187,17 @@ func _test_coordinator_contract() -> void:
 	var duplicate: Dictionary = coordinator.register_participant(
 		&"first", FakeParticipant.new("duplicate", events)
 	)
-	_check(str(duplicate.get("reason", "")) == "duplicate_participant", "duplicate lifecycle ids are rejected")
-	var invalid: Dictionary = coordinator.register_participant(&"invalid", InvalidParticipant.new())
-	_check(str(invalid.get("reason", "")) == "participant_contract", "participants missing lifecycle methods are rejected")
+	_check(
+		str(duplicate.get("reason", "")) == "duplicate_participant",
+		"duplicate lifecycle ids are rejected"
+	)
+	var invalid: Dictionary = coordinator.register_participant(
+		&"invalid", InvalidParticipant.new()
+	)
+	_check(
+		str(invalid.get("reason", "")) == "participant_contract",
+		"participants missing lifecycle methods are rejected"
+	)
 	var normalized: Dictionary = coordinator.normalize_world_state(
 		{"marker":"world-a", "normalization_order":[]}
 	)
@@ -191,15 +217,42 @@ func _test_coordinator_contract() -> void:
 	coordinator.clear(&"qa_clear")
 	coordinator.shutdown()
 	coordinator.shutdown()
-	_check(payload.get("first", "") == "saved" and payload.get("second", "") == "saved", "participants contribute to one shared save payload")
-	_check(snapshot.get("first", "") == "snapshot" and snapshot.get("second", "") == "snapshot", "participants contribute to one shared diagnostics snapshot")
-	_check(events.find("first:normalize") < events.find("second:normalize"), "normalizers execute in dependency order")
-	_check(events.find("first:begin:world-a") < events.find("second:begin:world-a"), "begin lifecycle follows dependency order")
-	_check(events.find("second:clear:qa_clear") < events.find("first:clear:qa_clear"), "clear lifecycle runs in reverse dependency order")
-	_check(events.count("first:shutdown") == 1 and events.count("second:shutdown") == 1, "shutdown is idempotent per participant")
+	_check(
+		payload.get("first", "") == "saved"
+		and payload.get("second", "") == "saved",
+		"participants contribute to one shared save payload"
+	)
+	_check(
+		snapshot.get("first", "") == "snapshot"
+		and snapshot.get("second", "") == "snapshot",
+		"participants contribute to one shared diagnostics snapshot"
+	)
+	_check(
+		events.find("first:normalize") < events.find("second:normalize"),
+		"normalizers execute in dependency order"
+	)
+	_check(
+		events.find("first:begin:world-a") < events.find("second:begin:world-a"),
+		"begin lifecycle follows dependency order"
+	)
+	_check(
+		events.find("second:clear:qa_clear") < events.find("first:clear:qa_clear"),
+		"clear lifecycle runs in reverse dependency order"
+	)
+	_check(
+		events.count("first:shutdown") == 1
+		and events.count("second:shutdown") == 1,
+		"shutdown is idempotent per participant"
+	)
 	var lifecycle_snapshot: Dictionary = coordinator.get_snapshot()
-	_check(int(lifecycle_snapshot.get("participant_count", 0)) == 2, "coordinator diagnostics report installed participants")
-	_check((lifecycle_snapshot.get("phase_history", []) as Array).size() <= 48, "lifecycle phase history remains bounded")
+	_check(
+		int(lifecycle_snapshot.get("participant_count", 0)) == 2,
+		"coordinator diagnostics report installed participants"
+	)
+	_check(
+		(lifecycle_snapshot.get("phase_history", []) as Array).size() <= 48,
+		"lifecycle phase history remains bounded"
+	)
 	host.queue_free()
 
 
@@ -210,10 +263,13 @@ func _test_production_composition() -> void:
 		await process_frame
 	var coordinator: Node = hub.get("feature_lifecycle")
 	var machine_participant: Node = hub.get("machine_runtime_participant")
+	var agriculture_participant: Node = hub.get("agriculture_runtime_participant")
 	var husbandry_participant: Node = hub.get("husbandry_runtime_participant")
 	var ranch_participant: Node = hub.get("ranch_runtime_participant")
 	var runtime_participant: Node = hub.get("exploration_runtime_participant")
 	var journal_participant: Node = hub.get("exploration_journal_reward_participant")
+	var agriculture: Node = hub.get("agriculture_service")
+	var agriculture_interaction: Node = hub.get("agriculture_interaction")
 	var husbandry: Node = hub.get("husbandry_service")
 	var husbandry_interaction: Node = hub.get("husbandry_interaction")
 	var attraction: Node = hub.get("animal_attraction_service")
@@ -226,22 +282,26 @@ func _test_production_composition() -> void:
 	_check(
 		coordinator != null
 		and coordinator.has_participant(&"machine_runtime")
+		and coordinator.has_participant(&"agriculture_runtime")
 		and coordinator.has_participant(&"husbandry_runtime")
 		and coordinator.has_participant(&"ranch_runtime")
 		and coordinator.has_participant(&"exploration_runtime")
 		and coordinator.has_participant(&"exploration_journal_rewards"),
-		"production hub registers all five lifecycle participants"
+		"production hub registers all six lifecycle participants"
 	)
 	_check(
 		machine_participant != null
+		and agriculture_participant != null
 		and husbandry_participant != null
 		and ranch_participant != null
 		and runtime_participant != null
 		and journal_participant != null,
-		"production hub exposes all participants for diagnostics"
+		"production hub exposes all six participants for diagnostics"
 	)
 	_check(
 		machine_runtime != null
+		and agriculture != null
+		and agriculture_interaction != null
 		and husbandry != null
 		and husbandry_interaction != null
 		and attraction != null
@@ -250,32 +310,93 @@ func _test_production_composition() -> void:
 		and rewards != null
 		and prospecting != null
 		and danger != null,
-		"legacy and Machine Base public service fields remain available"
+		"legacy public service fields remain available"
 	)
-	_check(hub.get_node_or_null("MachineRuntime") == machine_runtime, "machine runtime keeps its production node path")
-	_check(hub.get_node_or_null("FurnaceService") == hub.furnace_service, "furnace keeps its legacy production node path")
-	_check(hub.get_node_or_null("AnimalHusbandryService") == husbandry, "husbandry keeps its production node path")
-	_check(hub.get_node_or_null("HusbandryInteraction") == husbandry_interaction, "husbandry interaction keeps its production node path")
-	_check(hub.get_node_or_null("AnimalAttractionService") == attraction, "animal attraction keeps its production node path")
-	_check(hub.get_node_or_null("AnimalProductService") == products, "animal products keep their production node path")
-	_check(hub.get_node_or_null("ProspectingService") == prospecting, "prospecting keeps its production node path")
-	_check(hub.get_node_or_null("ExplorationDangerService") == danger, "danger keeps its production node path")
-	_check(hub.get_node_or_null("ExplorationJournalService") == journal, "journal keeps its production node path")
-	_check(hub.get_node_or_null("ExplorationMilestoneRewardService") == rewards, "reward keeps its production node path")
-	_check(coordinator.get_participant_dependencies(&"machine_runtime").is_empty(), "machine runtime is the root participant")
-	_check(coordinator.get_participant_dependencies(&"ranch_runtime") == ["husbandry_runtime"], "ranch explicitly depends on husbandry runtime")
-	_check(coordinator.get_participant_dependencies(&"exploration_journal_rewards") == ["exploration_runtime"], "journal/reward explicitly depends on exploration runtime")
+	_check(
+		hub.get_node_or_null("AgricultureService") == agriculture
+		and hub.get_node_or_null("AgricultureInteraction") == agriculture_interaction,
+		"agriculture participant preserves its production node paths"
+	)
+	_check(
+		hub.get_node_or_null("MachineRuntime") == machine_runtime,
+		"machine runtime keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("FurnaceService") == hub.furnace_service,
+		"furnace keeps its legacy production node path"
+	)
+	_check(
+		hub.get_node_or_null("AnimalHusbandryService") == husbandry,
+		"husbandry keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("HusbandryInteraction") == husbandry_interaction,
+		"husbandry interaction keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("AnimalAttractionService") == attraction,
+		"animal attraction keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("AnimalProductService") == products,
+		"animal products keep their production node path"
+	)
+	_check(
+		hub.get_node_or_null("ProspectingService") == prospecting,
+		"prospecting keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("ExplorationDangerService") == danger,
+		"danger keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("ExplorationJournalService") == journal,
+		"journal keeps its production node path"
+	)
+	_check(
+		hub.get_node_or_null("ExplorationMilestoneRewardService") == rewards,
+		"reward keeps its production node path"
+	)
+	_check(
+		coordinator.get_participant_dependencies(&"machine_runtime").is_empty()
+		and coordinator.get_participant_dependencies(&"agriculture_runtime").is_empty(),
+		"machine and agriculture runtimes are independent root participants"
+	)
+	_check(
+		coordinator.get_participant_dependencies(&"ranch_runtime")
+		== ["husbandry_runtime"],
+		"ranch explicitly depends on husbandry runtime"
+	)
+	_check(
+		coordinator.get_participant_dependencies(&"exploration_journal_rewards")
+		== ["exploration_runtime"],
+		"journal/reward explicitly depends on exploration runtime"
+	)
 
 	var state: Dictionary = hub.save_service.create_world(
 		"feature-lifecycle-%d" % Time.get_ticks_msec(), "star_continent", 6512039
 	)
 	var world_id := str(state.get("metadata", {}).get("id", ""))
-	_check(not world_id.is_empty(), "production save service creates a lifecycle test world")
+	_check(
+		not world_id.is_empty(),
+		"production save service creates a lifecycle test world"
+	)
 	hub.call("_begin_world", state)
 	var lifecycle_after_begin: Dictionary = coordinator.call("get_snapshot")
-	_check(int(lifecycle_after_begin.get("phase_counts", {}).get("normalize_world_state", 0)) == 1, "production begin runs one ordered normalization phase")
-	_check(int(lifecycle_after_begin.get("phase_counts", {}).get("begin_world", 0)) == 1, "world begin reaches all registered participants once")
-	_check(str(rewards.call("get_snapshot").get("profile_id", "")) == "star_continent", "dependent participant sees the runtime-restored active map")
+	_check(
+		int(lifecycle_after_begin.get("phase_counts", {}).get(
+			"normalize_world_state", 0
+		)) == 1,
+		"production begin runs one ordered normalization phase"
+	)
+	_check(
+		int(lifecycle_after_begin.get("phase_counts", {}).get("begin_world", 0)) == 1,
+		"world begin reaches all registered participants once"
+	)
+	_check(
+		str(rewards.call("get_snapshot").get("profile_id", "")) == "star_continent",
+		"dependent participant sees the runtime-restored active map"
+	)
 
 	var fake_world := FakeWorld.new()
 	var fake_player := FakePlayer.new()
@@ -284,47 +405,122 @@ func _test_production_composition() -> void:
 	root.add_child(fake_player)
 	coordinator.call("attach_game", fake_world, fake_player)
 	coordinator.call("activate")
-	_check(fake_player.entity_interaction_service == husbandry_interaction, "husbandry participant binds the production interaction service")
-	_check(fake_player.prospecting_service == prospecting, "exploration participant binds the production prospecting service")
-	_check(machine_runtime.call("is_active"), "machine participant activates the shared scheduler")
-	_check(bool(danger.get("active")), "exploration participant activates production danger assessment")
+	_check(
+		fake_player.entity_interaction_service == husbandry_interaction,
+		"husbandry participant binds the production interaction service"
+	)
+	_check(
+		fake_player.prospecting_service == prospecting,
+		"exploration participant binds the production prospecting service"
+	)
+	_check(
+		machine_runtime.call("is_active"),
+		"machine participant activates the shared scheduler"
+	)
+	_check(
+		bool(agriculture_participant.call("get_lifecycle_snapshot").get(
+			"active", false
+		)),
+		"agriculture participant activates the pausable crop runtime"
+	)
+	_check(
+		bool(danger.get("active")),
+		"exploration participant activates production danger assessment"
+	)
 
 	var announced: Array[Array] = []
 	journal_participant.connect(
 		"claimable_reward_announced",
-		func(ids: Array[String], _snapshot: Dictionary) -> void: announced.append(ids.duplicate())
+		func(ids: Array[String], _snapshot: Dictionary) -> void:
+			announced.append(ids.duplicate())
 	)
 	var scan: Dictionary = prospecting.call("use_item", "prospecting_kit", 5000)
-	_check(bool(scan.get("success", false)), "composed prospecting runtime completes a bounded scan")
+	_check(
+		bool(scan.get("success", false)),
+		"composed prospecting runtime completes a bounded scan"
+	)
 	journal.call("refresh")
 	await process_frame
-	_check(announced.size() == 1 and "first_discovery" in announced[0], "runtime scan unlocks and announces the dependent reward once")
+	_check(
+		announced.size() == 1 and "first_discovery" in announced[0],
+		"runtime scan unlocks and announces the dependent reward once"
+	)
 	journal.call("refresh")
 	await process_frame
-	_check(announced.size() == 1, "duplicate reward refresh does not spam the player")
+	_check(
+		announced.size() == 1,
+		"duplicate reward refresh does not spam the player"
+	)
 
 	hub.inventory.clear()
 	var claim: Dictionary = rewards.call("claim", "first_discovery")
-	_check(bool(claim.get("success", false)), "dependent reward service still commits the production inventory transaction")
-	_check(bool(hub.call("save_current")), "all participants write into one production save transaction")
+	_check(
+		bool(claim.get("success", false)),
+		"dependent reward service still commits the production inventory transaction"
+	)
+	_check(
+		bool(hub.call("save_current")),
+		"all participants write into one production save transaction"
+	)
 	var loaded: Dictionary = hub.save_service.load_world(world_id)
-	_check(loaded.has("machines") and loaded.get("machines", {}).has("furnaces"), "machine participant persists the compatible machine domain")
-	_check(loaded.has("husbandry"), "husbandry participant persists the husbandry domain")
-	_check(loaded.has("animal_products"), "ranch participant persists the animal product domain")
-	_check((loaded.get("exploration", {}).get("records", []) as Array).size() == 1, "runtime participant persists exploration records")
-	_check("first_discovery" in (loaded.get("exploration_rewards", {}).get("claimed", []) as Array), "dependent participant persists claimed rewards")
-	var announcement_count_before_reload := int(journal_participant.call("get_lifecycle_snapshot").get("announcement_count", 0))
+	_check(
+		loaded.has("machines") and loaded.get("machines", {}).has("furnaces"),
+		"machine participant persists the compatible machine domain"
+	)
+	_check(
+		loaded.has("agriculture")
+		and loaded.get("agriculture", {}).get("soil_moisture", null) is Dictionary,
+		"agriculture participant persists the compatible crop and soil domain"
+	)
+	_check(loaded.has("husbandry"), "husbandry participant persists its domain")
+	_check(
+		loaded.has("animal_products"),
+		"ranch participant persists the animal product domain"
+	)
+	_check(
+		(loaded.get("exploration", {}).get("records", []) as Array).size() == 1,
+		"runtime participant persists exploration records"
+	)
+	_check(
+		"first_discovery" in (
+			loaded.get("exploration_rewards", {}).get("claimed", []) as Array
+		),
+		"dependent participant persists claimed rewards"
+	)
+	var announcement_count_before_reload := int(
+		journal_participant.call("get_lifecycle_snapshot").get(
+			"announcement_count", 0
+		)
+	)
 	hub.call("return_to_menu")
-	_check(hub.current_world_id.is_empty(), "production return-to-menu completes after participant save")
-	_check(fake_player.entity_interaction_service == null, "reverse cleanup unbinds the old husbandry interaction")
-	_check(fake_player.prospecting_service == null, "reverse cleanup unbinds the old prospecting service")
-	_check(not machine_runtime.call("is_active"), "reverse cleanup stops the shared machine scheduler")
+	_check(
+		hub.current_world_id.is_empty(),
+		"production return-to-menu completes after participant save"
+	)
+	_check(
+		fake_player.entity_interaction_service == null,
+		"reverse cleanup unbinds the old husbandry interaction"
+	)
+	_check(
+		fake_player.prospecting_service == null,
+		"reverse cleanup unbinds the old prospecting service"
+	)
+	_check(
+		not machine_runtime.call("is_active"),
+		"reverse cleanup stops the shared machine scheduler"
+	)
+	_check(
+		not bool(agriculture_participant.call("get_lifecycle_snapshot").get(
+			"active", true
+		)),
+		"reverse cleanup deactivates agriculture"
+	)
 	var lifecycle_after_menu: Dictionary = coordinator.call("get_snapshot")
 	var history: Array = lifecycle_after_menu.get("phase_history", [])
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,machine_runtime"
+			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
 		"clear history records complete reverse dependency order"
 	)
@@ -333,26 +529,81 @@ func _test_production_composition() -> void:
 	coordinator.call("attach_game", fake_world, fake_player)
 	coordinator.call("activate")
 	await process_frame
-	_check(rewards.call("is_claimed", "first_discovery"), "world reload restores claimed reward through dependent begin_world")
-	_check(int(journal_participant.call("get_lifecycle_snapshot").get("announcement_count", 0)) == announcement_count_before_reload, "world reload establishes a baseline without duplicate reward notices")
+	_check(
+		rewards.call("is_claimed", "first_discovery"),
+		"world reload restores claimed reward through dependent begin_world"
+	)
+	_check(
+		int(journal_participant.call("get_lifecycle_snapshot").get(
+			"announcement_count", 0
+		)) == announcement_count_before_reload,
+		"world reload establishes a baseline without duplicate reward notices"
+	)
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "machine participant contributes runtime diagnostics")
-	_check(character_snapshot.has("husbandry"), "husbandry participant contributes legacy husbandry diagnostics")
-	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant contributes legacy ranch diagnostics")
-	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "runtime participant contributes legacy exploration diagnostics")
-	_check(character_snapshot.has("exploration_journal") and character_snapshot.has("exploration_rewards"), "dependent participant contributes legacy journal diagnostics")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 5, "character diagnostics expose all lifecycle participants")
+	_check(
+		character_snapshot.has("machine_runtime")
+		and character_snapshot.has("machines"),
+		"machine participant contributes runtime diagnostics"
+	)
+	_check(
+		character_snapshot.has("agriculture"),
+		"agriculture participant contributes bounded runtime diagnostics"
+	)
+	_check(
+		character_snapshot.has("husbandry"),
+		"husbandry participant contributes legacy diagnostics"
+	)
+	_check(
+		character_snapshot.has("animal_attraction")
+		and character_snapshot.has("animal_products"),
+		"ranch participant contributes legacy diagnostics"
+	)
+	_check(
+		character_snapshot.has("exploration")
+		and character_snapshot.has("danger"),
+		"runtime participant contributes legacy exploration diagnostics"
+	)
+	_check(
+		character_snapshot.has("exploration_journal")
+		and character_snapshot.has("exploration_rewards"),
+		"dependent participant contributes legacy journal diagnostics"
+	)
+	_check(
+		int(character_snapshot.get("feature_lifecycle", {}).get(
+			"participant_count", 0
+		)) == 6,
+		"character diagnostics expose all six lifecycle participants"
+	)
 
 	hub.call("handle_world_start_failed", "qa_simulated_failure")
-	_check(hub.current_world_id.is_empty(), "world-start failure resets the production hub identity")
-	_check(fake_player.entity_interaction_service == null and fake_player.prospecting_service == null, "world-start failure unbinds player capability ports")
-	_check(not machine_runtime.call("is_active"), "world-start failure stops machine processing")
+	_check(
+		hub.current_world_id.is_empty(),
+		"world-start failure resets the production hub identity"
+	)
+	_check(
+		fake_player.entity_interaction_service == null
+		and fake_player.prospecting_service == null,
+		"world-start failure unbinds player capability ports"
+	)
+	_check(
+		not machine_runtime.call("is_active"),
+		"world-start failure stops machine processing"
+	)
+	_check(
+		not bool(agriculture_participant.call("get_lifecycle_snapshot").get(
+			"active", true
+		)),
+		"world-start failure stops agriculture processing"
+	)
 	if not world_id.is_empty():
 		hub.save_service.delete_world(world_id)
 	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
 		hub.audio_service.shutdown()
 	coordinator.call("shutdown")
-	_check(bool(coordinator.call("get_snapshot").get("shutdown", false)), "coordinator records deterministic shutdown")
+	_check(
+		bool(coordinator.call("get_snapshot").get("shutdown", false)),
+		"coordinator records deterministic shutdown"
+	)
 	fake_player.queue_free()
 	fake_world.queue_free()
 	hub.queue_free()
