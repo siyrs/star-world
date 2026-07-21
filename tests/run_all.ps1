@@ -44,6 +44,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_connected_block_shapes.ps1"
 & "$PSScriptRoot\developer_b\validate_double_doors.ps1"
 & "$PSScriptRoot\developer_b\validate_directional_ladders.ps1"
+& "$PSScriptRoot\developer_b\validate_world_mutation_batch.ps1"
 & "$PSScriptRoot\developer_b\validate_fertilizers.ps1"
 & "$PSScriptRoot\developer_b\validate_rest.ps1"
 & "$PSScriptRoot\developer_b\validate_repair.ps1"
@@ -88,6 +89,7 @@ Invoke-GodotTest 'res://tests/qa/glass_pane_regression.gd'
 Invoke-GodotTest 'res://tests/qa/connected_block_shapes_regression.gd'
 Invoke-GodotTest 'res://tests/qa/double_door_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_ladder_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_mutation_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/non_cube_block_geometry_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_stair_regression.gd'
@@ -119,4 +121,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: directional ladders + double doors + connected shapes + agriculture lifecycle + bounded automation + release-safe runtime checks'
+Write-Host 'PASS: bounded world mutation batching + directional ladders + double doors + connected shapes + lifecycle + automation + release-safe runtime checks'
