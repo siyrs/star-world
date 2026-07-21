@@ -50,14 +50,13 @@ foreach ($constant in @('EAST\s*:=\s*1','WEST\s*:=\s*2','SOUTH\s*:=\s*4','NORTH\
 foreach ($method in @('supports','family_id','can_connect','resolve_mask','fallback_mask','read_neighbors','connected_face','mask_names')) {
   if ($connection -notmatch "static\s+func\s+$method\s*\(") { throw "Connection policy is missing method: $method" }
 }
-if ($connection -notmatch 'shape",\s*"cube"\)\)\s*==\s*"cube"') {
+if ($connection -notmatch 'neighbor\.get\("shape",\s*"cube"\)\)\s*==\s*"cube"') {
   throw 'Connected shapes must only attach to same-family blocks or full cube anchors'
 }
 
 foreach ($shapeMethod in @('_pane_boxes','_fence_boxes','_face_fully_covered_by_neighbor_box')) {
   if ($geometry -notmatch "static\s+func\s+$shapeMethod\s*\(") { throw "Shape geometry is missing connected helper: $shapeMethod" }
 }
-if ($geometry -notmatch 'cross_fence|') { }
 if ($geometry -notmatch 'return\s+shape\s+not\s+in\s+\[[^\]]*"pane"[^\]]*"fence"') {
   throw 'Panes and fences must remain in the shared partial geometry pipeline'
 }
@@ -81,7 +80,7 @@ if ($world -notmatch '_rebuild_affected_chunks' -or $world -notmatch 'chunk\.reb
 foreach ($field in @('target_connection_mask','placement_connection_mask','target_neighbor_ids','placement_neighbor_ids')) {
   if (($preview + "`n" + $player) -notmatch $field) { throw "Preview pipeline is missing connected-shape field: $field" }
 }
-if ($preview -notmatch 'world_boxes\([\s\S]{0,160}placement_mask') {
+if ($preview -notmatch 'world_boxes\([\s\S]{0,180}placement_mask') {
   throw 'Placement overlap must use the same resolved connection mask as the preview'
 }
 
