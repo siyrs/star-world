@@ -17,7 +17,7 @@ jobs:
   pickup-stack-regression:
     name: Pickup stacking, no-loss pressure and adjacent domain regression
     runs-on: windows-latest
-    timeout-minutes: 42
+    timeout-minutes: 38
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,11 +53,6 @@ jobs:
         shell: pwsh
         run: |
           .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/multi_hostile_danger_batch_regression.gd -- --disable-update-check'
-
-      - name: Re-run runtime lifecycle soak
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_soak_regression.gd -- --disable-update-check'
 
   mixed-runtime-endurance-desktop:
     name: Real machine, crop, hostile drop, Chunk revisit, visualization, save and reload
