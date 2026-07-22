@@ -6,6 +6,7 @@ $paths = @{
   Pickup = Join-Path $root 'src\entity\item_pickup.gd'
   Coordinator = Join-Path $root 'src\entity\pickup_stack_coordinator.gd'
   Bounded = Join-Path $root 'src\entity\bounded_pickup_stack_coordinator.gd'
+  Participant = Join-Path $root 'src\exploration\pickup_aware_exploration_runtime_participant.gd'
   Hub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
   Regression = Join-Path $root 'tests\qa\pickup_stack_regression.gd'
   Desktop = Join-Path $root 'tests\qa\mixed_runtime_endurance_desktop_acceptance.gd'
@@ -54,8 +55,20 @@ if ($text.Coordinator -notmatch '_pending_pickups' -or $text.Coordinator -notmat
 if ($text.Coordinator -match 'Timer\.new\(' -or $text.Coordinator -match 'func\s+_process\s*\(' -or $text.Coordinator -match 'func\s+serialize\s*\(' -or $text.Coordinator -match 'FileAccess') {
   throw 'Pickup stacking must not create another timer, frame scheduler, persistence owner, or file'
 }
-if ($text.Hub -notmatch 'bounded_pickup_stack_coordinator\.gd' -or $text.Hub -notmatch 'snapshot\["pickups"\]') {
-  throw 'Production ServiceHub must own pickup coordination and expose bounded diagnostics'
+if ($text.Participant -notmatch 'extends\s+"res://src/exploration/exploration_runtime_participant\.gd"' -or $text.Participant -notmatch 'bounded_pickup_stack_coordinator\.gd') {
+  throw 'Pickup runtime must extend the stable exploration participant and own the bounded coordinator'
+}
+foreach ($method in @('install','begin_world','activate','snapshot_into','clear','shutdown','get_pickup_coordinator','get_lifecycle_snapshot')) {
+  if ($text.Participant -notmatch "func\s+$method\s*\(") { throw "Pickup-aware exploration participant is missing: $method" }
+}
+if ($text.Participant -notmatch 'snapshot\["pickups"\]' -or $text.Participant -notmatch 'hub\.set\("pickup_stack_coordinator"') {
+  throw 'Exploration participant must publish the compatibility port and bounded pickup diagnostics'
+}
+if ($text.Hub -notmatch 'pickup_aware_exploration_runtime_participant\.gd' -or $text.Hub -notmatch 'get_pickup_coordinator') {
+  throw 'Production Exploration hub must select the pickup-aware participant and retain its public port'
+}
+foreach ($legacyLifecycle in @('_begin_world','activate_gameplay','handle_world_start_failed','return_to_menu','_exit_tree')) {
+  if ($text.Hub -match "func\s+$legacyLifecycle\s*\(") { throw "Exploration hub must remain a thin registration layer: $legacyLifecycle" }
 }
 foreach ($phrase in @(
   'one hundred nearby drops consolidate to the eight-node readability trigger',
@@ -94,4 +107,4 @@ if ($text.Audit -notmatch 'Area3D' -or $text.Audit -notmatch '180' -or $text.Aud
   throw 'Architecture audit must record the original physical-drop accumulation problem and mixed validation'
 }
 
-Write-Host 'PASS pickup_stacks nodes=128 trigger=8 scan=64 pending_types=256 materialize=16 exact_items=1 persistence=none'
+Write-Host 'PASS pickup_stacks nodes=128 trigger=8 scan=64 pending_types=256 materialize=16 exact_items=1 lifecycle=exploration_runtime persistence=none'
