@@ -1,0 +1,111 @@
+name: Agriculture scale batching quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agriculture-scale-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agriculture-scale-regression:
+    name: Growth batching, hydration cache and exact maturity regression
+    runs-on: windows-latest
+    timeout-minutes: 36
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Validate agriculture scale contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_agriculture_scale.ps1
+
+      - name: Run agriculture scale regression
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          try {
+            .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_scale_batch_regression.gd -- --disable-update-check' *>&1 |
+              Tee-Object -FilePath 'build\agriculture-scale-regression.log'
+          } catch {
+            $_ | Out-File -FilePath 'build\agriculture-scale-regression.log' -Append
+            throw
+          }
+
+      - name: Re-run agriculture lifecycle regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_runtime_lifecycle_regression.gd -- --disable-update-check'
+
+      - name: Re-run world mutation batching regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/world_mutation_batch_regression.gd -- --disable-update-check'
+
+      - name: Upload agriculture domain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agriculture-scale-domain-${{ github.run_number }}
+          path: build/agriculture-scale-regression.log
+          if-no-files-found: error
+          retention-days: 14
+
+  agriculture-scale-desktop:
+    name: Real 2048-crop growth, visualization, save and reload
+    needs: agriculture-scale-regression
+    runs-on: windows-latest
+    timeout-minutes: 52
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production agriculture scale journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/agriculture_scale_desktop_acceptance.gd' `
+            -OutputPath 'build\agriculture-scale-desktop.png' `
+            -TimeoutMilliseconds 360000
+
+      - name: Upload agriculture visualization and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agriculture-scale-evidence-${{ github.run_number }}
+          path: |
+            build/agriculture-scale-desktop.png
+            build/agriculture-scale-desktop.json
+            build/agriculture-scale-desktop.stdout.log
+            build/agriculture-scale-desktop.stderr.log
+          if-no-files-found: error
+          retention-days: 14
