@@ -9,7 +9,7 @@ $paths = @{
   Automation = Join-Path $root 'src\machine\scalable_machine_automation_service.gd'
   Completion = Join-Path $root 'src\machine\scalable_machine_completion_policy.gd'
   Participant = Join-Path $root 'src\machine\scalable_machine_runtime_participant.gd'
-  Hub = Join-Path $root 'src\ui\scalable_machine_service_hub.gd'
+  Hub = Join-Path $root 'src\ui\service_hub.gd'
   Scene = Join-Path $root 'scenes\ui\service_hub.tscn'
   Regression = Join-Path $root 'tests\qa\machine_scale_runtime_regression.gd'
   Desktop = Join-Path $root 'tests\qa\machine_scale_desktop_acceptance.gd'
@@ -71,10 +71,12 @@ foreach ($token in @(
   '_pending_completion_job_count',
   '_pending_completion_item_total',
   '_pending_dropped_completion_samples',
-  'flush_pending_completion_batch'
+  'flush_pending_completion_batch',
+  'ScaleStonecutterServiceScript',
+  'ScaleAutomationServiceScript'
 )) {
   if ($text.Participant -notmatch $token) {
-    throw "Exact completion aggregation is missing: $token"
+    throw "Exact completion or participant-owned composition is missing: $token"
   }
 }
 if ($text.Participant -match '_pending_completions\.size\(\)\s*>=\s*MAX_PENDING_COMPLETIONS') {
@@ -84,13 +86,16 @@ if ($text.Completion -notmatch 'build_counts' -or $text.Completion -notmatch 'MA
   throw 'Large completion summaries must keep exact counts and bounded player-visible types'
 }
 
-foreach ($token in @('ScalableFurnaceScript','ScalableStonecutterScript','ScalableAutomationScript','ScalableParticipantScript')) {
+foreach ($token in @('ScalableFurnaceScript','ScalableMachineRuntimeParticipantScript')) {
   if ($text.Hub -notmatch $token) {
-    throw "Production machine composition is missing: $token"
+    throw "Gameplay root machine composition is missing: $token"
   }
 }
-if ($text.Scene -notmatch 'scalable_machine_service_hub\.gd') {
-  throw 'Production ServiceHub scene must instantiate scalable machine composition'
+if ($text.Scene -notmatch 'exploration_progression_service_hub\.gd') {
+  throw 'Production ServiceHub scene must preserve the stable exploration entry point'
+}
+if ($text.Scene -match 'scalable_machine_service_hub\.gd') {
+  throw 'Machine implementation selection must not be owned by the exploration inheritance layer'
 }
 
 foreach ($phrase in @(
@@ -131,4 +136,4 @@ if ($text.Audit -notmatch 'get_machine_ids' -or $text.Audit -notmatch 'MAX_PENDI
   throw 'Architecture audit must record the original full scan and completion truncation risks'
 }
 
-Write-Host 'PASS machine_scale machines=4096 runtime_step_ms=100 changed_id_samples=64 completion_samples=64 candidate_sort=cycle-boundary persistence=unchanged'
+Write-Host 'PASS machine_scale machines=4096 runtime_step_ms=100 changed_id_samples=64 completion_samples=64 candidate_sort=cycle-boundary composition=gameplay-root persistence=unchanged'
