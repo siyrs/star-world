@@ -4,6 +4,18 @@ extends "res://src/machine/machine_runtime_participant.gd"
 const ScaleCompletionPolicyScript = preload(
 	"res://src/machine/scalable_machine_completion_policy.gd"
 )
+const ScaleStonecutterServiceScript = preload(
+	"res://src/machine/scalable_stonecutter_service.gd"
+)
+const ScaleAutomationServiceScript = preload(
+	"res://src/machine/scalable_machine_automation_service.gd"
+)
+const ScaleSchedulerScript = preload(
+	"res://src/machine/machine_runtime_scheduler.gd"
+)
+const ScaleInteractionRouterScript = preload(
+	"res://src/machine/machine_interaction_router.gd"
+)
 const MAX_COMPLETION_EVENT_SAMPLES := 64
 const MAX_TRACKED_COMPLETION_MACHINES := 4096
 const MAX_TRACKED_COMPLETION_RECIPES := 256
@@ -20,6 +32,131 @@ var _pending_unclassified_completion_jobs := 0
 var _pending_unclassified_completion_items := 0
 var _pending_dropped_completion_samples := 0
 var _dropped_completion_sample_count := 0
+
+
+func install(p_hub: Node) -> bool:
+	if _installed or p_hub == null or not is_instance_valid(p_hub):
+		return false
+	hub = p_hub
+	furnace_service = hub.get("furnace_service") as Node
+	var inventory: Node = hub.get("inventory") as Node
+	var container_storage: Node = hub.get("container_storage") as Node
+	var item_registry: Variant = inventory.get("registry") if inventory != null else null
+	if (
+		furnace_service == null
+		or not furnace_service.has_method("advance_machine_runtime")
+		or not furnace_service.has_method("get_runtime_snapshot")
+		or item_registry == null
+		or container_storage == null
+		or not container_storage.has_method("can_transact_items")
+		or not container_storage.has_method("transact_items")
+		or not hub.has_method("_add_service")
+	):
+		return false
+	stonecutter_service = hub.call(
+		"_add_service",
+		ScaleStonecutterServiceScript.new(),
+		"StonecutterService"
+	) as Node
+	if (
+		stonecutter_service == null
+		or not bool(stonecutter_service.call("setup", item_registry))
+	):
+		_dispose_service(stonecutter_service)
+		stonecutter_service = null
+		return false
+	scheduler = hub.call(
+		"_add_service", ScaleSchedulerScript.new(), "MachineRuntime"
+	) as Node
+	if scheduler == null:
+		_dispose_service(stonecutter_service)
+		stonecutter_service = null
+		return false
+	for registration_data: Dictionary in [
+		{"id": &"furnace", "service": furnace_service},
+		{"id": &"stonecutter", "service": stonecutter_service},
+	]:
+		var registration: Dictionary = scheduler.call(
+			"register_domain",
+			registration_data.get("id", &""),
+			registration_data.get("service") as Node
+		)
+		if not bool(registration.get("success", false)):
+			_rollback_install()
+			return false
+	interaction_router = hub.call(
+		"_add_service",
+		ScaleInteractionRouterScript.new(),
+		"MachineInteractionRouter"
+	) as Node
+	if interaction_router == null:
+		_rollback_install()
+		return false
+	var furnace_registration: Dictionary = interaction_router.call(
+		"register_machine_type",
+		&"furnace",
+		furnace_service,
+		&"open_furnace",
+		["input", "fuel", "output"],
+		"熔炉",
+		"熔炉中仍有物品，请先清空三个槽位后再拆除"
+	)
+	var stonecutter_registration: Dictionary = interaction_router.call(
+		"register_machine_type",
+		&"stonecutter",
+		stonecutter_service,
+		&"open_stonecutter",
+		["input", "output"],
+		"石材切割机",
+		"石材切割机中仍有物品，请先清空原料与产出槽后再拆除"
+	)
+	if (
+		not bool(furnace_registration.get("success", false))
+		or not bool(stonecutter_registration.get("success", false))
+	):
+		_rollback_install()
+		return false
+	automation_service = hub.call(
+		"_add_service",
+		ScaleAutomationServiceScript.new(),
+		"MachineAutomationService"
+	) as Node
+	if (
+		automation_service == null
+		or not bool(automation_service.call(
+			"setup", interaction_router, container_storage
+		))
+	):
+		_rollback_install()
+		return false
+	var automation_registration: Dictionary = scheduler.call(
+		"register_domain", &"automation", automation_service
+	)
+	if not bool(automation_registration.get("success", false)):
+		_rollback_install()
+		return false
+	_connect_completion_signal(
+		furnace_service,
+		"item_smelted",
+		Callable(self, "_on_item_smelted")
+	)
+	_connect_completion_signal(
+		stonecutter_service,
+		"item_processed",
+		Callable(self, "_on_item_processed")
+	)
+	_connect_completion_signal(
+		automation_service,
+		"automation_machine_activated",
+		Callable(self, "_on_machine_automation_activated")
+	)
+	hub.set("machine_runtime", scheduler)
+	hub.set("stonecutter_service", stonecutter_service)
+	hub.set("machine_interaction_router", interaction_router)
+	hub.set("machine_automation_service", automation_service)
+	_installed = true
+	_shutdown = false
+	return true
 
 
 func begin_world(state: Dictionary) -> void:
