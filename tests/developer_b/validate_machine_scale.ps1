@@ -70,7 +70,7 @@ foreach ($token in @(
   'MAX_TRACKED_COMPLETION_MACHINES\s*:=\s*4096',
   '_pending_completion_job_count',
   '_pending_completion_item_total',
-  'dropped_event_samples',
+  '_pending_dropped_completion_samples',
   'flush_pending_completion_batch'
 )) {
   if ($text.Participant -notmatch $token) {
