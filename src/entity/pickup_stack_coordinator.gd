@@ -2,12 +2,16 @@ class_name PickupStackCoordinator
 extends Node
 
 signal pickup_stack_consolidated(summary: Dictionary)
+signal pickup_runtime_advanced(summary: Dictionary)
 
 const PickupScript = preload("res://src/entity/item_pickup.gd")
+const VisualResources = preload("res://src/entity/pickup_visual_resource_cache.gd")
 const MAX_PICKUP_NODES := 128
+const MAX_RUNTIME_NODES := 128
 const MAX_MERGE_SCAN_NODES := 64
 const MAX_PENDING_ITEM_TYPES := 256
 const MAX_PENDING_MATERIALIZATIONS := 16
+const MAX_RUNTIME_DELTA_SECONDS := 0.25
 const MERGE_RADIUS := 1.75
 const MAX_ITEMS_PER_PICKUP := 65535
 
@@ -26,10 +30,23 @@ var _budget_deferral_count := 0
 var _pending_type_rejection_count := 0
 var _max_pickup_nodes_observed := 0
 var _last_summary: Dictionary = {}
+var _runtime_pickups: Array[Node] = []
+var _runtime_elapsed_seconds := 0.0
+var _runtime_step_count := 0
+var _runtime_advance_count := 0
+var _expired_pickup_count := 0
+var _max_runtime_nodes_observed := 0
+var _last_runtime_step: Dictionary = {}
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+	set_process(false)
 
 
 func setup(p_spawner: Node3D, p_inventory = null) -> bool:
 	_disconnect_spawner()
+	_runtime_pickups.clear()
 	spawner = p_spawner
 	inventory_service = p_inventory
 	_shutdown = false
@@ -41,6 +58,8 @@ func setup(p_spawner: Node3D, p_inventory = null) -> bool:
 		spawner.child_entered_tree.connect(entered)
 	if not spawner.child_exiting_tree.is_connected(exiting):
 		spawner.child_exiting_tree.connect(exiting)
+	_register_existing_runtime_pickups(false)
+	_update_runtime_processing()
 	return true
 
 
@@ -48,14 +67,19 @@ func activate() -> void:
 	if _shutdown:
 		return
 	_active = true
+	_register_existing_runtime_pickups(true)
 	_schedule_pending_flush()
+	_update_runtime_processing()
 
 
 func clear(reset_counters: bool = true) -> void:
 	_active = false
+	set_process(false)
 	_pending_pickups.clear()
 	_flush_scheduled = false
+	_runtime_pickups.clear()
 	_last_summary.clear()
+	_last_runtime_step.clear()
 	if not reset_counters:
 		return
 	_spawned_node_count = 0
@@ -66,6 +90,11 @@ func clear(reset_counters: bool = true) -> void:
 	_budget_deferral_count = 0
 	_pending_type_rejection_count = 0
 	_max_pickup_nodes_observed = 0
+	_runtime_elapsed_seconds = 0.0
+	_runtime_step_count = 0
+	_runtime_advance_count = 0
+	_expired_pickup_count = 0
+	_max_runtime_nodes_observed = 0
 
 
 func shutdown() -> void:
@@ -76,6 +105,68 @@ func shutdown() -> void:
 	_disconnect_spawner()
 	spawner = null
 	inventory_service = null
+
+
+func _process(delta: float) -> void:
+	advance_shared_runtime(delta)
+
+
+func advance_shared_runtime(seconds: float) -> Dictionary:
+	if not _active or _shutdown or spawner == null or not is_instance_valid(spawner):
+		return _runtime_idle_summary(seconds, "inactive")
+	var safe_delta := (
+		clampf(seconds, 0.0, MAX_RUNTIME_DELTA_SECONDS)
+		if is_finite(seconds)
+		else 0.0
+	)
+	if safe_delta <= 0.0:
+		return _runtime_idle_summary(seconds, "invalid_elapsed")
+	_runtime_elapsed_seconds += safe_delta
+	_runtime_step_count += 1
+	var advanced_nodes := 0
+	var expired_nodes := 0
+	var invalid_nodes := 0
+	var snapshot: Array[Node] = _runtime_pickups.duplicate()
+	for pickup: Node in snapshot:
+		if advanced_nodes >= MAX_RUNTIME_NODES:
+			break
+		if (
+			pickup == null
+			or not is_instance_valid(pickup)
+			or pickup.is_queued_for_deletion()
+			or pickup.get_parent() != spawner
+		):
+			invalid_nodes += 1
+			_unregister_runtime_pickup(pickup)
+			continue
+		if not pickup.has_method("advance_runtime"):
+			invalid_nodes += 1
+			_unregister_runtime_pickup(pickup)
+			continue
+		advanced_nodes += 1
+		if bool(pickup.call("advance_runtime", safe_delta, _runtime_elapsed_seconds)):
+			expired_nodes += 1
+			_expired_pickup_count += 1
+			_unregister_runtime_pickup(pickup)
+	_runtime_advance_count += advanced_nodes
+	_max_runtime_nodes_observed = maxi(
+		_max_runtime_nodes_observed, _runtime_pickups.size() + expired_nodes
+	)
+	_last_runtime_step = {
+		"reason": "advanced",
+		"requested_seconds": seconds,
+		"advanced_seconds": safe_delta,
+		"elapsed_seconds": _runtime_elapsed_seconds,
+		"step_index": _runtime_step_count,
+		"tracked_pickup_count": _runtime_pickups.size(),
+		"advanced_pickup_count": advanced_nodes,
+		"expired_pickup_count": expired_nodes,
+		"invalid_pickup_count": invalid_nodes,
+		"runtime_node_budget": MAX_RUNTIME_NODES,
+	}
+	pickup_runtime_advanced.emit(_last_runtime_step.duplicate(true))
+	_update_runtime_processing()
+	return _last_runtime_step.duplicate(true)
 
 
 func flush_pending_pickups() -> Dictionary:
@@ -121,6 +212,7 @@ func get_snapshot() -> Dictionary:
 	var node_count := 0
 	var stacked_nodes := 0
 	var visible_item_total := 0
+	var individual_process_count := 0
 	if spawner != null and is_instance_valid(spawner):
 		for child: Node in spawner.get_children():
 			if not _is_pickup(child):
@@ -130,6 +222,8 @@ func get_snapshot() -> Dictionary:
 			visible_item_total += count
 			if count > 1:
 				stacked_nodes += 1
+			if child.is_processing():
+				individual_process_count += 1
 	var pending_item_total := 0
 	for raw_entry: Variant in _pending_pickups.values():
 		if raw_entry is Dictionary:
@@ -156,17 +250,33 @@ func get_snapshot() -> Dictionary:
 		"pending_materializations_per_flush": MAX_PENDING_MATERIALIZATIONS,
 		"merge_radius": MERGE_RADIUS,
 		"max_items_per_pickup": MAX_ITEMS_PER_PICKUP,
+		"runtime_process_mode": int(process_mode),
+		"runtime_processing": is_processing(),
+		"runtime_node_budget": MAX_RUNTIME_NODES,
+		"tracked_runtime_pickup_count": _runtime_pickups.size(),
+		"individual_process_count": individual_process_count,
+		"runtime_step_count": _runtime_step_count,
+		"runtime_advance_count": _runtime_advance_count,
+		"runtime_elapsed_seconds": _runtime_elapsed_seconds,
+		"expired_pickup_count": _expired_pickup_count,
+		"max_runtime_nodes_observed": _max_runtime_nodes_observed,
+		"max_runtime_delta_seconds": MAX_RUNTIME_DELTA_SECONDS,
+		"last_runtime_step": _last_runtime_step.duplicate(true),
+		"visual_resources": VisualResources.get_stats(),
 		"last_summary": _last_summary.duplicate(true),
 	}
 
 
 func _on_spawner_child_entered(child: Node) -> void:
-	if not _active or _shutdown or not _is_pickup(child):
+	if _shutdown or not _is_pickup(child):
 		return
-	call_deferred("_consolidate_pickup", child)
+	_register_runtime_pickup(child)
+	if _active:
+		call_deferred("_consolidate_pickup", child)
 
 
 func _on_spawner_child_exiting(child: Node) -> void:
+	_unregister_runtime_pickup(child)
 	if not _is_pickup(child):
 		return
 	_schedule_pending_flush()
@@ -278,6 +388,56 @@ func _queue_pending(item_id: String, count: int, position: Vector3) -> bool:
 	_pending_pickups[item_id] = entry
 	_queued_item_count += count
 	return true
+
+
+func _register_existing_runtime_pickups(schedule_consolidation: bool) -> void:
+	if spawner == null or not is_instance_valid(spawner):
+		return
+	for child: Node in spawner.get_children():
+		if not _is_pickup(child):
+			continue
+		_register_runtime_pickup(child)
+		if schedule_consolidation:
+			call_deferred("_consolidate_pickup", child)
+
+
+func _register_runtime_pickup(pickup: Node) -> void:
+	if not _is_pickup(pickup) or _runtime_pickups.has(pickup):
+		return
+	_runtime_pickups.append(pickup)
+	if pickup.has_method("configure_shared_runtime"):
+		var phase := float(int(pickup.get_instance_id()) % 6283) / 1000.0
+		pickup.call("configure_shared_runtime", phase)
+	_max_runtime_nodes_observed = maxi(_max_runtime_nodes_observed, _runtime_pickups.size())
+	_update_runtime_processing()
+
+
+func _unregister_runtime_pickup(pickup: Node) -> void:
+	if pickup == null:
+		return
+	var index := _runtime_pickups.find(pickup)
+	if index >= 0:
+		_runtime_pickups.remove_at(index)
+	_update_runtime_processing()
+
+
+func _update_runtime_processing() -> void:
+	set_process(_active and not _shutdown and not _runtime_pickups.is_empty())
+
+
+func _runtime_idle_summary(seconds: float, reason: String) -> Dictionary:
+	return {
+		"reason": reason,
+		"requested_seconds": seconds,
+		"advanced_seconds": 0.0,
+		"elapsed_seconds": _runtime_elapsed_seconds,
+		"step_index": _runtime_step_count,
+		"tracked_pickup_count": _runtime_pickups.size(),
+		"advanced_pickup_count": 0,
+		"expired_pickup_count": 0,
+		"invalid_pickup_count": 0,
+		"runtime_node_budget": MAX_RUNTIME_NODES,
+	}
 
 
 func _live_pickup_count() -> int:
