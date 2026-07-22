@@ -98,10 +98,10 @@ func _test_indexed_furnace_runtime() -> void:
 		and str(pending.get("reason", "")) == "runtime_step_pending",
 		"furnace runtime coalesces sub-step scheduler calls",
 	)
-	var completion_count := 0
+	var completion_counter := {"count": 0}
 	furnace.item_smelted.connect(
 		func(_machine_id: String, _recipe_id: String, _output: Dictionary) -> void:
-			completion_count += 1
+			completion_counter["count"] = int(completion_counter.get("count", 0)) + 1
 	)
 	var batch: Dictionary = furnace.advance_machine_runtime(6.05, true)
 	_check(
@@ -110,7 +110,7 @@ func _test_indexed_furnace_runtime() -> void:
 	)
 	_check(
 		int(batch.get("changed_machine_count", 0)) == ACTIVE_MACHINES_PER_DOMAIN
-		and completion_count == ACTIVE_MACHINES_PER_DOMAIN,
+		and int(completion_counter.get("count", 0)) == ACTIVE_MACHINES_PER_DOMAIN,
 		"all active furnaces complete through the indexed batch",
 	)
 	_check(
@@ -148,10 +148,10 @@ func _test_indexed_stonecutter_runtime() -> void:
 		and int(restored.get("active_machine_count", 0)) == ACTIVE_MACHINES_PER_DOMAIN,
 		"stonecutter activity index excludes idle persisted machines",
 	)
-	var completion_count := 0
+	var completion_counter := {"count": 0}
 	stonecutter.item_processed.connect(
 		func(_machine_id: String, _recipe_id: String, _output: Dictionary) -> void:
-			completion_count += 1
+			completion_counter["count"] = int(completion_counter.get("count", 0)) + 1
 	)
 	var batch: Dictionary = stonecutter.advance_machine_runtime(3.1, true)
 	_check(
@@ -160,7 +160,7 @@ func _test_indexed_stonecutter_runtime() -> void:
 		"stonecutter runtime evaluates and advances only runnable machines",
 	)
 	_check(
-		completion_count == ACTIVE_MACHINES_PER_DOMAIN
+		int(completion_counter.get("count", 0)) == ACTIVE_MACHINES_PER_DOMAIN
 		and (batch.get("changed_machine_ids", []) as Array).size() == 64,
 		"stonecutter completion count remains exact with bounded diagnostics",
 	)
