@@ -34,7 +34,8 @@ if ($text.Index -notmatch 'MAX_TRACKED_IDS\s*:=\s*4096') {
 if ($text.Index -notmatch 'func\s+ordered_ids_view\s*\(' -or $text.Index -notmatch '_ensure_sorted\(\)') {
   throw 'Machine activity ordering must be maintained outside per-frame full scans'
 }
-if ($text.Index -match 'func\s+set_active[\s\S]*?_order\.sort\(\)') {
+$setActiveMatch = [regex]::Match($text.Index, 'func\s+set_active[\s\S]*?func\s+rebuild')
+if (-not $setActiveMatch.Success -or $setActiveMatch.Value -match '_order\.sort\(\)') {
   throw 'Each machine activity event must not sort the complete directory'
 }
 
