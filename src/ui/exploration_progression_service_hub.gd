@@ -8,7 +8,7 @@ const JournalRewardParticipantScript = preload(
 	"res://src/exploration/exploration_journal_reward_participant.gd"
 )
 const PickupStackCoordinatorScript = preload(
-	"res://src/entity/pickup_stack_coordinator.gd"
+	"res://src/entity/bounded_pickup_stack_coordinator.gd"
 )
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
