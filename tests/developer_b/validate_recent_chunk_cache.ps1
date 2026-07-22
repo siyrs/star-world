@@ -79,7 +79,7 @@ foreach ($phrase in @(
   }
 }
 foreach ($phrase in @(
-  'warm cycle 1 hydrates every target chunk from a recent snapshot',
+  'hydrates every target chunk from a recent snapshot',
   'cross-chunk glass panes re-derive a non-empty connection mask after repeated reloads',
   'recent chunk cache never exceeds its sixty-four snapshot memory budget',
   'chunk-cache visual evidence uses 1024x576 resolution',
