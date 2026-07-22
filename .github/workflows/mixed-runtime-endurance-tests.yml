@@ -1,0 +1,100 @@
+name: Mixed runtime endurance quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mixed-runtime-endurance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pickup-stack-regression:
+    name: Pickup stacking, no-loss pressure and adjacent domain regression
+    runs-on: windows-latest
+    timeout-minutes: 42
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Validate bounded pickup stack contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_pickup_stacks.ps1
+
+      - name: Run pickup stack regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/pickup_stack_regression.gd -- --disable-update-check'
+
+      - name: Re-run physics interaction regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/physics_interaction_regression.gd -- --disable-update-check'
+
+      - name: Re-run multi-hostile batching regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/multi_hostile_danger_batch_regression.gd -- --disable-update-check'
+
+      - name: Re-run runtime lifecycle soak
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_soak_regression.gd -- --disable-update-check'
+
+  mixed-runtime-endurance-desktop:
+    name: Real machine, crop, hostile drop, Chunk revisit, visualization, save and reload
+    needs: pickup-stack-regression
+    runs-on: windows-latest
+    timeout-minutes: 65
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production mixed runtime endurance journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/mixed_runtime_endurance_desktop_acceptance.gd' `
+            -OutputPath 'build\mixed-runtime-endurance-desktop.png' `
+            -TimeoutMilliseconds 480000
+
+      - name: Upload mixed runtime visualization and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mixed-runtime-endurance-evidence-${{ github.run_number }}
+          path: |
+            build/mixed-runtime-endurance-desktop.png
+            build/mixed-runtime-endurance-desktop.json
+            build/mixed-runtime-endurance-desktop.stdout.log
+            build/mixed-runtime-endurance-desktop.stderr.log
+          if-no-files-found: error
+          retention-days: 14
