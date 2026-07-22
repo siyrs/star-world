@@ -9,6 +9,9 @@ signal settings_applied(settings: Dictionary)
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 const ContainerStorageScript = preload("res://src/inventory/container_storage_service.gd")
 const FurnaceScript = preload("res://src/machine/furnace_service.gd")
+const ScalableFurnaceScript = preload(
+	"res://src/machine/scalable_furnace_service.gd"
+)
 const CraftingScript = preload("res://src/crafting/crafting_service.gd")
 const SaveScript = preload("res://src/save/save_service.gd")
 const SurvivalScript = preload("res://src/survival/survival_service.gd")
@@ -26,6 +29,9 @@ const FeatureCoordinatorScript = preload(
 )
 const MachineRuntimeParticipantScript = preload(
 	"res://src/machine/machine_runtime_participant.gd"
+)
+const ScalableMachineRuntimeParticipantScript = preload(
+	"res://src/machine/scalable_machine_runtime_participant.gd"
 )
 const MACHINE_RUNTIME_FEATURE := &"machine_runtime"
 const DEFAULT_SETTINGS := {
@@ -82,7 +88,7 @@ func _ready() -> void:
 	inventory = _add_service(InventoryScript.new(), "Inventory")
 	container_storage = _add_service(ContainerStorageScript.new(), "ContainerStorage")
 	container_storage.setup(inventory.registry)
-	furnace_service = _add_service(FurnaceScript.new(), "FurnaceService")
+	furnace_service = _add_service(ScalableFurnaceScript.new(), "FurnaceService")
 	furnace_service.setup(inventory.registry)
 	crafting = _add_service(CraftingScript.new(), "Crafting")
 	save_service = _add_service(SaveScript.new(), "Save")
@@ -99,7 +105,7 @@ func _ready() -> void:
 	feature_lifecycle.call("setup", self)
 	machine_runtime_participant = _register_feature_participant(
 		MACHINE_RUNTIME_FEATURE,
-		MachineRuntimeParticipantScript.new(),
+		ScalableMachineRuntimeParticipantScript.new(),
 		"machine runtime"
 	)
 	if machine_runtime_participant != null:

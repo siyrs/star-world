@@ -1,0 +1,100 @@
+name: Machine scale runtime quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: machine-scale-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  machine-scale-regression:
+    name: Active indexes, deferred automation ordering and exact completion regression
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Validate machine scale contracts
+        shell: pwsh
+        run: |
+          .\tests\developer_b\validate_machine_scale.ps1
+
+      - name: Run machine scale runtime regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_scale_runtime_regression.gd -- --disable-update-check'
+
+      - name: Re-run Machine Base regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_base_regression.gd -- --disable-update-check'
+
+      - name: Re-run automation regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/machine_automation_regression.gd -- --disable-update-check'
+
+      - name: Re-run Stonecutter regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/stonecutter_machine_regression.gd -- --disable-update-check'
+
+  machine-scale-desktop:
+    name: Real 512-machine feed, process, collect, visualization, save and reload
+    needs: machine-scale-regression
+    runs-on: windows-latest
+    timeout-minutes: 65
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production machine scale journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/machine_scale_desktop_acceptance.gd' `
+            -OutputPath 'build\machine-scale-desktop.png' `
+            -TimeoutMilliseconds 480000
+
+      - name: Upload machine scale visualization and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: machine-scale-evidence-${{ github.run_number }}
+          path: |
+            build/machine-scale-desktop.png
+            build/machine-scale-desktop.json
+            build/machine-scale-desktop.stdout.log
+            build/machine-scale-desktop.stderr.log
+          if-no-files-found: error
+          retention-days: 14
