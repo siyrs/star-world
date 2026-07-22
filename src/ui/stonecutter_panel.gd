@@ -4,6 +4,7 @@ extends PanelContainer
 signal panel_closed
 
 const SlotScript = preload("res://src/ui/inventory_slot.gd")
+const IconFactory = preload("res://src/ui/item_icon_factory.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const SLOT_INPUT := "input"
@@ -79,6 +80,8 @@ func refresh() -> void:
 		return
 	_input_button.text = _slot_text("原料", snapshot.get(SLOT_INPUT, {}))
 	_output_button.text = _slot_text("产出", snapshot.get(SLOT_OUTPUT, {}))
+	_input_button.icon = _slot_icon(snapshot.get(SLOT_INPUT, {}))
+	_output_button.icon = _slot_icon(snapshot.get(SLOT_OUTPUT, {}))
 	_progress.value = float(snapshot.get("progress_ratio", 0.0))
 	var recipe: Dictionary = snapshot.get("recipe", {})
 	_recipe_label.text = (
@@ -257,6 +260,14 @@ func _slot_text(label: String, slot: Dictionary) -> String:
 		else item_id
 	)
 	return "%s\n%s ×%d" % [label, display_name, int(slot.get("count", 0))]
+
+
+func _slot_icon(slot: Dictionary) -> Texture2D:
+	if slot.is_empty() or inventory == null:
+		return null
+	var item_id := str(slot.get("item_id", ""))
+	var item: Dictionary = inventory.registry.get_item(item_id)
+	return IconFactory.get_icon(item_id, item)
 
 
 func _on_inventory_slot_clicked(index: int) -> void:
