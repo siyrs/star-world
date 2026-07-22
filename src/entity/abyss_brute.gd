@@ -48,6 +48,7 @@ func _build_model() -> void:
 	_make_box("Torso", Vector3(1.08, 1.15, 0.64), Vector3(0.0, 1.38, 0.0), Color("#3B2731"))
 	_make_box("ChestPlate", Vector3(1.18, 0.72, 0.72), Vector3(0.0, 1.56, -0.02), Color("#5D3034"))
 	_make_box("Head", Vector3(0.78, 0.72, 0.7), Vector3(0.0, 2.28, 0.0), Color("#59403E"))
+	_make_eyes(0.36, 2.34, 0.17, 0.1, Color("#E04038"))
 	_make_box("Brow", Vector3(0.82, 0.18, 0.74), Vector3(0.0, 2.52, 0.03), Color("#261D25"))
 	_make_box("LeftHorn", Vector3(0.18, 0.34, 0.18), Vector3(-0.38, 2.78, 0.0), Color("#B54A32"))
 	_make_box("RightHorn", Vector3(0.18, 0.34, 0.18), Vector3(0.38, 2.78, 0.0), Color("#B54A32"))
