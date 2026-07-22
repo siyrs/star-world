@@ -134,28 +134,35 @@ Participant 在事件到达时立即聚合：
 
 有效事件不会因为样本预算被标记为 dropped。
 
-## 发现 5：生产组合必须保持公共端口
+## 发现 5：实现选择必须位于正确的生命周期所有者
 
 直接将 base Furnace/Stonecutter 改成复杂索引实现会扩大旧领域测试风险；另建新的机器存档或服务路径又会破坏兼容。
 
-### 修复
+第一版尝试将替换逻辑放到最上层 `ScalableMachineServiceHub`，但真实全仓静态门禁立即暴露问题：公开 `service_hub.tscn → exploration_progression_service_hub.gd` 入口被改变，机器实现选择也反向落入探索继承层。
 
-生产 ServiceHub 使用最上层组合适配：
+### 最终修复
+
+公开 Scene 与七层继承入口恢复原样。内部替换下沉到真正的所有者：
 
 ```text
-scalable_machine_service_hub.gd
+GameplayServiceHub
+├─ 创建 ScalableFurnaceService
+└─ 注册 ScalableMachineRuntimeParticipant
+
+ScalableMachineRuntimeParticipant
+├─ 创建 ScalableStonecutterService
+├─ 创建 ScalableMachineAutomationService
+├─ 创建原 MachineRuntimeScheduler
+└─ 创建原 MachineInteractionRouter
 ```
 
-它只替换内部实例：
-
-- `FurnaceService` → `ScalableFurnaceService`；
-- `StonecutterService` → `ScalableStonecutterService`；
-- `MachineAutomationService` → `ScalableMachineAutomationService`；
-- `machine_runtime` Participant → `ScalableMachineRuntimeParticipant`。
+因此机器实现由 Gameplay 根和 Machine Participant 负责，探索、牧场、畜牧和角色继承层不拥有机器内部类型。
 
 以下全部保持：
 
 ```text
+service_hub.tscn 的稳定脚本入口
+七层公开继承
 变量名
 节点名
 节点路径
@@ -211,7 +218,8 @@ base 类继续作为稳定兼容实现和纯领域测试入口。
 
 ### 静态合同
 
-- Production Scene 必须选择规模化组合；
+- Production Scene 必须保留原公开入口；
+- Gameplay 根和 Machine Participant 必须选择规模化实现；
 - 活跃索引上限 4096；
 - 运行步长 0.1 秒；
 - changed ID 和完成样本各 64；
