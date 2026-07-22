@@ -149,11 +149,14 @@ func _test_service_and_prompt() -> void:
 	host.add_child(panel)
 	await process_frame
 	panel.setup(service)
-	var selection: Dictionary = service.ingest_release_payload(_release_payload("v1.1.0"))
+	var offered_version := _next_patch_version(AppVersion.CURRENT_VERSION)
+	var selection: Dictionary = service.ingest_release_payload(
+		_release_payload("v%s" % offered_version)
+	)
 	await process_frame
 	_check(bool(selection.get("update_available", false)), "production service exposes a newer release")
 	_check(panel.visible, "update prompt becomes visible")
-	_check(panel.get_release_version() == "1.1.0", "prompt displays the selected release")
+	_check(panel.get_release_version() == offered_version, "prompt displays the selected release")
 	_check(panel.get_primary_button() != null and panel.get_primary_button().text.contains("自动更新"), "prompt exposes download-and-update action")
 	panel.get_later_button().emit_signal("pressed")
 	await process_frame
@@ -161,6 +164,15 @@ func _test_service_and_prompt() -> void:
 	host.queue_free()
 	await process_frame
 	await process_frame
+
+
+func _next_patch_version(current: String) -> String:
+	var parsed: Dictionary = SemVer.parse(current)
+	return "%d.%d.%d" % [
+		int(parsed.get("major", 0)),
+		int(parsed.get("minor", 0)),
+		int(parsed.get("patch", 0)) + 1,
+	]
 
 
 func _release_payload(tag: String) -> Dictionary:
