@@ -2,6 +2,7 @@ extends SceneTree
 
 const GameScene = preload("res://scenes/game/game.tscn")
 const AppVersion = preload("res://src/update/app_version.gd")
+const SemVer = preload("res://src/update/semantic_version_policy.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://auto-update-desktop.png"
@@ -39,13 +40,17 @@ func _run() -> void:
 		return
 	var before: Dictionary = update_service.call("get_snapshot")
 	_check(int(before.get("check_count", -1)) == 0, "editor and desktop acceptance do not perform an uncontrolled public network check")
-	var selection: Dictionary = update_service.call("ingest_release_payload", _release_payload("v1.1.0"))
+	var offered_version := _next_patch_version(AppVersion.CURRENT_VERSION)
+	var selection: Dictionary = update_service.call(
+		"ingest_release_payload",
+		_release_payload("v%s" % offered_version)
+	)
 	for _frame in 3:
 		await process_frame
 	_check(bool(selection.get("update_available", false)), "production service detects the newer GitHub release payload")
 	var panel: Node = menu.call("get_update_panel") as Node
 	_check(panel != null and bool(panel.get("visible")), "first-start update prompt opens automatically when an update exists")
-	_check(str(panel.call("get_release_version")) == "1.1.0", "prompt displays the latest release version")
+	_check(str(panel.call("get_release_version")) == offered_version, "prompt displays the latest release version")
 	var primary: Button = panel.call("get_primary_button") as Button
 	var later: Button = panel.call("get_later_button") as Button
 	_check(primary != null and primary.text.contains("自动更新"), "prompt offers download and automatic update")
@@ -68,6 +73,15 @@ func _run() -> void:
 		await _click_control(later)
 	_check(not bool(panel.get("visible")), "later action returns to the main menu")
 	await _finish(game)
+
+
+func _next_patch_version(current: String) -> String:
+	var parsed: Dictionary = SemVer.parse(current)
+	return "%d.%d.%d" % [
+		int(parsed.get("major", 0)),
+		int(parsed.get("minor", 0)),
+		int(parsed.get("patch", 0)) + 1,
+	]
 
 
 func _release_payload(tag: String) -> Dictionary:
