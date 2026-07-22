@@ -35,6 +35,13 @@ func _consolidate_pickup(pickup: Node) -> void:
 
 func _on_spawner_child_exiting(child: Node) -> void:
 	super._on_spawner_child_exiting(child)
+	if (
+		child != null
+		and is_instance_valid(child)
+		and child.has_method("merge_items")
+		and child.has_method("get_pickup_snapshot")
+	):
+		_schedule_pending_flush()
 
 
 func _is_pickup(node: Node) -> bool:
