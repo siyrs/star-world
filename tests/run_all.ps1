@@ -34,6 +34,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_ecology_danger.ps1"
 & "$PSScriptRoot\developer_b\validate_multi_hostile_danger.ps1"
+& "$PSScriptRoot\developer_b\validate_pickup_stacks.ps1"
 & "$PSScriptRoot\developer_b\validate_hostile_attacks.ps1"
 & "$PSScriptRoot\developer_b\validate_abyss_elite.ps1"
 & "$PSScriptRoot\developer_b\validate_exploration_journal.ps1"
@@ -70,6 +71,7 @@ Invoke-GodotTest 'res://tests/qa/integration_regression.gd'
 Invoke-GodotTest 'res://tests/qa/input_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/movement_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/physics_interaction_regression.gd'
+Invoke-GodotTest 'res://tests/qa/pickup_stack_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/inventory_transaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/machine_base_regression.gd'
@@ -127,4 +129,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'
+Write-Host 'PASS: bounded pickup stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'

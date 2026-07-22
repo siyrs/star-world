@@ -1,8 +1,11 @@
 class_name ExplorationProgressionServiceHub
 extends "res://src/ui/ranch_progression_service_hub.gd"
 
+# The production implementation extends the stable exploration participant at
+# res://src/exploration/exploration_runtime_participant.gd without changing the
+# public ServiceHub scene or feature id.
 const ExplorationRuntimeParticipantScript = preload(
-	"res://src/exploration/exploration_runtime_participant.gd"
+	"res://src/exploration/pickup_aware_exploration_runtime_participant.gd"
 )
 const JournalRewardParticipantScript = preload(
 	"res://src/exploration/exploration_journal_reward_participant.gd"
@@ -16,6 +19,7 @@ var exploration_journal_service: Node
 var exploration_reward_service: Node
 var exploration_runtime_participant: Node
 var exploration_journal_reward_participant: Node
+var pickup_stack_coordinator: Node
 
 
 func _ready() -> void:
@@ -31,6 +35,9 @@ func _ready() -> void:
 		) as Node
 		exploration_danger_service = exploration_runtime_participant.call(
 			"get_danger_service"
+		) as Node
+		pickup_stack_coordinator = exploration_runtime_participant.call(
+			"get_pickup_coordinator"
 		) as Node
 		exploration_journal_reward_participant = _register_feature_participant(
 			JOURNAL_REWARD_FEATURE,
