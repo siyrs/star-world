@@ -29,9 +29,9 @@ func _run() -> void:
 func _test_shared_visual_runtime_and_resources() -> void:
 	VisualResources.reset_stats(true)
 	var fixture := _make_fixture()
-	var host: Node3D = fixture.host
-	var spawner: Node3D = fixture.spawner
-	var coordinator: Node = fixture.coordinator
+	var host := fixture.get("host") as Node3D
+	var spawner := fixture.get("spawner") as Node3D
+	var coordinator := fixture.get("coordinator") as Node
 	var first = _spawn_pickup(spawner, "rotten_flesh", 2, Vector3(0.0, 4.0, 0.0))
 	var second = _spawn_pickup(spawner, "rotten_flesh", 3, Vector3(3.0, 4.0, 0.0))
 	for _frame in 3:
@@ -92,9 +92,9 @@ func _test_shared_visual_runtime_and_resources() -> void:
 
 func _test_scene_pause_freezes_pickup_runtime() -> void:
 	var fixture := _make_fixture()
-	var host: Node3D = fixture.host
-	var spawner: Node3D = fixture.spawner
-	var coordinator: Node = fixture.coordinator
+	var host := fixture.get("host") as Node3D
+	var spawner := fixture.get("spawner") as Node3D
+	var coordinator := fixture.get("coordinator") as Node
 	var pickup = _spawn_pickup(spawner, "coal", 1, Vector3(0.0, 3.0, 0.0))
 	for _frame in 5:
 		await process_frame
@@ -128,9 +128,9 @@ func _test_scene_pause_freezes_pickup_runtime() -> void:
 
 func _test_runtime_budget_and_expiration() -> void:
 	var fixture := _make_fixture()
-	var host: Node3D = fixture.host
-	var spawner: Node3D = fixture.spawner
-	var coordinator: Node = fixture.coordinator
+	var host := fixture.get("host") as Node3D
+	var spawner := fixture.get("spawner") as Node3D
+	var coordinator := fixture.get("coordinator") as Node
 	var pickups: Array[Node] = []
 	for index in CoordinatorScript.MAX_RUNTIME_NODES:
 		var column := index % 16
@@ -141,7 +141,6 @@ func _test_runtime_budget_and_expiration() -> void:
 			1,
 			Vector3(float(column) * 2.2, 4.0, float(row) * 2.2)
 		)
-		pickup.set("life_seconds", 0.05)
 		pickups.append(pickup)
 		if index % 16 == 15:
 			await process_frame
@@ -157,6 +156,9 @@ func _test_runtime_budget_and_expiration() -> void:
 		int(before.get("individual_process_count", -1)) == 0,
 		"one hundred twenty-eight production pickups still use zero individual process callbacks",
 	)
+	for pickup: Node in pickups:
+		if pickup != null and is_instance_valid(pickup):
+			pickup.set("life_seconds", 0.05)
 	var step: Dictionary = coordinator.call("advance_shared_runtime", 1.0)
 	_check(
 		int(step.get("advanced_pickup_count", 0)) == CoordinatorScript.MAX_RUNTIME_NODES
