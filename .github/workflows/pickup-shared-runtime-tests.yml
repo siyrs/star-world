@@ -43,7 +43,13 @@ jobs:
       - name: Run shared pickup runtime regression
         shell: pwsh
         run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/pickup_shared_runtime_regression.gd -- --disable-update-check'
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_headless_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/pickup_shared_runtime_regression.gd' `
+            -OutputBasePath 'build\pickup-shared-runtime-regression' `
+            -TimeoutMilliseconds 360000
 
       - name: Re-run pickup stack regression
         shell: pwsh
@@ -59,6 +65,17 @@ jobs:
         shell: pwsh
         run: |
           .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_stability_regression.gd -- --disable-update-check'
+
+      - name: Upload shared pickup headless regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pickup-shared-runtime-regression-${{ github.run_number }}
+          path: |
+            build/pickup-shared-runtime-regression.stdout.log
+            build/pickup-shared-runtime-regression.stderr.log
+          if-no-files-found: warn
+          retention-days: 14
 
   pickup-shared-runtime-desktop:
     name: Real 128-pickup animation, pause, visualization, save and reload
