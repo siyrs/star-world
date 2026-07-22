@@ -615,6 +615,14 @@ func _make_box(
 	return mesh_instance
 
 
+func _make_eyes(
+	head_front_z: float, eye_y: float, eye_x: float, size: float, color: Color
+) -> void:
+	# Small dark boxes on the face plane; the biggest life cue a box creature has.
+	_make_box("LeftEye", Vector3(size, size, 0.02), Vector3(-eye_x, eye_y, head_front_z), color)
+	_make_box("RightEye", Vector3(size, size, 0.02), Vector3(eye_x, eye_y, head_front_z), color)
+
+
 func _vector3_from(value: Variant) -> Vector3:
 	if value is Vector3:
 		return value
