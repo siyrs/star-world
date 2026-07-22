@@ -1,7 +1,7 @@
 class_name BatchedStarWorldGame
 extends "res://src/core/game.gd"
 
-const BATCHED_WORLD_SCRIPT_PATH := "res://src/world/batched_voxel_world.gd"
+const BATCHED_WORLD_SCRIPT_PATH := "res://src/world/cached_batched_voxel_world.gd"
 const BATCHED_PLAYER_SCENE_PATH := "res://scenes/game/player.tscn"
 
 
