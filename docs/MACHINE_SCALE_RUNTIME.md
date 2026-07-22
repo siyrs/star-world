@@ -40,18 +40,32 @@ MAX_PENDING_COMPLETIONS = 128
 
 ## 生产结构
 
+公开 Scene 与七层继承入口保持原样：
+
 ```text
-ScalableMachineServiceHub
-└─ Machine Runtime public ports remain unchanged
-   ├─ ScalableFurnaceService
-   │  └─ MachineActivityIndex
+service_hub.tscn
+└─ ExplorationProgressionServiceHub
+   └─ ...
+      └─ GameplayServiceHub
+```
+
+机器实现选择位于真正的领域所有者，而不是探索继承层：
+
+```text
+GameplayServiceHub
+├─ ScalableFurnaceService
+└─ ScalableMachineRuntimeParticipant
    ├─ ScalableStonecutterService
-   │  └─ MachineActivityIndex
    ├─ ScalableMachineAutomationService
    ├─ MachineInteractionRouter
    ├─ MachineRuntimeScheduler
-   └─ ScalableMachineRuntimeParticipant
-      └─ ScalableMachineCompletionPolicy
+   └─ ScalableMachineCompletionPolicy
+
+ScalableFurnaceService
+└─ MachineActivityIndex
+
+ScalableStonecutterService
+└─ MachineActivityIndex
 ```
 
 稳定入口继续为：
