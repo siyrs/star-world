@@ -352,7 +352,7 @@ func _verify_output_containers(containers: Node) -> Dictionary:
 		if not bool(record.get("active", false)):
 			continue
 		var container_id := str(record.get("output_container_id", ""))
-		var item_id := "iron_ingot" if str(record.get("machine_type", "")) == "furnace" else "stone_stairs"
+		var item_id := "iron_ingot" if str(record.get("machine_type", "")) == "furnace" else "stone_slab"
 		var count := _count_container_item(containers, container_id, item_id)
 		if count > 0:
 			nonempty_output_containers += 1
