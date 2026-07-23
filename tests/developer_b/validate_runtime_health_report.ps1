@@ -15,6 +15,7 @@ $overlayPath = Join-Path $root 'src\ui\diagnostics_overlay.gd'
 $policyTestPath = Join-Path $root 'tests\qa\runtime_health_report_policy_regression.gd'
 $integrationTestPath = Join-Path $root 'tests\qa\runtime_health_report_regression.gd'
 $desktopTestPath = Join-Path $root 'tests\qa\runtime_health_report_desktop_acceptance.gd'
+$soakTestPath = Join-Path $root 'tests\qa\runtime_soak_regression.gd'
 $workflowPath = Join-Path $root '.github\workflows\runtime-health-report-tests.yml'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $contractPath = Join-Path $root 'docs\RUNTIME_HEALTH_REPORT.md'
@@ -24,8 +25,8 @@ $roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 foreach ($path in @(
   $policyPath,$servicePath,$formatterPath,$hubPath,$explorationHubPath,$scenePath,
   $coordinatorPath,$telemetryPath,$healthPath,$overlayPath,$policyTestPath,
-  $integrationTestPath,$desktopTestPath,$workflowPath,$runAllPath,$contractPath,
-  $auditPath,$roadmapPath
+  $integrationTestPath,$desktopTestPath,$soakTestPath,$workflowPath,$runAllPath,
+  $contractPath,$auditPath,$roadmapPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) {
     throw "Missing runtime health contract file: $path"
@@ -45,6 +46,7 @@ $overlay = Get-Content -Raw -Encoding UTF8 $overlayPath
 $policyTest = Get-Content -Raw -Encoding UTF8 $policyTestPath
 $integrationTest = Get-Content -Raw -Encoding UTF8 $integrationTestPath
 $desktopTest = Get-Content -Raw -Encoding UTF8 $desktopTestPath
+$soakTest = Get-Content -Raw -Encoding UTF8 $soakTestPath
 $workflow = Get-Content -Raw -Encoding UTF8 $workflowPath
 $runAll = Get-Content -Raw -Encoding UTF8 $runAllPath
 $contract = Get-Content -Raw -Encoding UTF8 $contractPath
@@ -160,8 +162,17 @@ foreach ($token in @(
     throw "Telemetry is missing unified operations evidence: $token"
   }
 }
-if ($health -notmatch 'operations' -or $health -notmatch 'MAX_OPERATION_ISSUES\s*:=\s*8') {
-  throw 'Top-level runtime health must include bounded operations severity and issues'
+foreach ($token in @(
+  'MAX_OPERATION_ISSUES\s*:=\s*8',
+  'runtime_severity',
+  'runtime_status',
+  'operations_severity',
+  'operations_status',
+  'maxi\(runtime_severity,\s*operations_severity\)'
+)) {
+  if ($health -notmatch $token) {
+    throw "Top-level runtime health is missing split severity evidence: $token"
+  }
 }
 
 foreach ($token in @(
@@ -193,6 +204,7 @@ foreach ($phrase in @(
 foreach ($phrase in @(
   'aggregation reads exactly eleven bounded source snapshots',
   'top-level runtime health includes operations severity',
+  'runtime and operations severity remain independently observable',
   'a real F3 event opens the combined health surface',
   'failed save is retained as critical operational evidence'
 )) {
@@ -209,6 +221,16 @@ foreach ($phrase in @(
 )) {
   if ($desktopTest -notmatch [regex]::Escape($phrase)) {
     throw "Runtime health desktop acceptance is missing assertion: $phrase"
+  }
+}
+foreach ($phrase in @(
+  'sustained frame and streaming health does not remain critical after warmup',
+  'runtime_critical_samples',
+  'operations_critical_samples',
+  'QA RUNTIME SOAK CYCLE'
+)) {
+  if ($soakTest -notmatch [regex]::Escape($phrase)) {
+    throw "Runtime soak is missing split health diagnostics: $phrase"
   }
 }
 
@@ -229,7 +251,8 @@ if ($workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-ga
 foreach ($token in @(
   'validate_runtime_health_report\.ps1',
   'runtime_health_report_policy_regression\.gd',
-  'runtime_health_report_regression\.gd'
+  'runtime_health_report_regression\.gd',
+  'runtime_soak_regression\.gd'
 )) {
   if ($runAll -notmatch $token) {
     throw "Full regression entry point is missing runtime health coverage: $token"
@@ -241,6 +264,8 @@ foreach ($token in @(
   '最多 12 行、8 条问题',
   '75%',
   '90%',
+  '运行分量',
+  '运营分量',
   '主要瓶颈',
   '最近保存字节与耗时',
   '不进入存档'
@@ -253,6 +278,8 @@ foreach ($token in @(
   '平行监控域',
   '第二个 Timer',
   '固定大小',
+  '运行分量',
+  '运营分量',
   '确定',
   '真实验收'
 )) {
@@ -264,4 +291,4 @@ if ($roadmap -notmatch '统一运行与保存健康报告' -or $roadmap -notmatc
   throw 'Product roadmap must record completed unified health and the next recovery priority'
 }
 
-Write-Host 'PASS runtime_health_report sources=11 rows=12 issues=8 warning=75% critical=90% telemetry=shared save=measured catalog=self-healing ui=readonly entry=exploration-compatible'
+Write-Host 'PASS runtime_health_report sources=11 rows=12 issues=8 warning=75% critical=90% runtime=split operations=split telemetry=shared save=measured catalog=self-healing ui=readonly entry=exploration-compatible'
