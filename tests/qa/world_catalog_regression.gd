@@ -101,6 +101,7 @@ func _test_production_world_persistence_surface() -> void:
 		and not serialized.has("rebuild"),
 		"production world serialization excludes transient streaming and cache state",
 	)
+	world.free()
 
 
 func _test_catalog_round_trip_and_self_healing() -> void:
