@@ -4,6 +4,8 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const SOAK_CYCLES := 3
 const FRAMES_PER_CYCLE := 72
 const SAMPLE_INTERVAL_FRAMES := 12
+const MENU_SETTLE_FRAMES := 60
+const MENU_NODE_MARGIN := 40
 
 var checks := 0
 var failures: Array[String] = []
@@ -24,9 +26,12 @@ func _run() -> void:
 	var menu_node_baseline := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	for cycle in SOAK_CYCLES:
 		await _run_world_cycle(game, hub, diagnostics, cycle, initial_render_distance)
+		var node_budget_reached := await _wait_for_node_budget(
+			menu_node_baseline + MENU_NODE_MARGIN
+		)
 		var menu_nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 		_check(
-			menu_nodes <= menu_node_baseline + 40,
+			node_budget_reached and menu_nodes <= menu_node_baseline + MENU_NODE_MARGIN,
 			"world cycle %d returns to a bounded menu node count" % (cycle + 1),
 		)
 	var telemetry = diagnostics.get("telemetry")
@@ -121,9 +126,11 @@ func _run_world_cycle(
 		"adaptive streaming never rewrites the player's render-distance setting",
 	)
 	hub.call("return_to_menu")
-	await process_frame
-	await process_frame
-	await process_frame
+	var menu_cleanup_settled := await _wait_for_menu_cleanup(world, diagnostics, hub)
+	_check(
+		menu_cleanup_settled,
+		"returning from world cycle %d converges all menu cleanup contracts" % (cycle + 1),
+	)
 	_check(
 		not bool(world.get("is_started")) and int(world.call("get_loaded_chunk_count")) == 0,
 		"returning from world cycle %d clears chunks and collisions" % (cycle + 1),
@@ -150,6 +157,40 @@ func _run_world_cycle(
 	var save_service = hub.get("save_service")
 	if save_service != null:
 		save_service.call("delete_world", world_id)
+
+
+func _wait_for_menu_cleanup(world: Node, diagnostics: Node, hub: Node) -> bool:
+	for _frame in MENU_SETTLE_FRAMES:
+		await process_frame
+		if world == null or diagnostics == null or hub == null:
+			return false
+		var input_context = hub.get("input_context")
+		var simulation_pause = hub.get("simulation_pause")
+		var spawner = hub.get("creature_spawner")
+		if (
+			not bool(world.get("is_started"))
+			and int(world.call("get_loaded_chunk_count")) == 0
+			and not bool(
+				diagnostics.call("get_adaptive_streaming_status").get("attached", true)
+			)
+			and input_context != null
+			and str(input_context.call("get_context")) == "menu"
+			and not paused
+			and simulation_pause != null
+			and not bool(simulation_pause.call("is_paused"))
+			and spawner != null
+			and spawner.get_child_count() == 0
+		):
+			return true
+	return false
+
+
+func _wait_for_node_budget(maximum_nodes: int) -> bool:
+	for _frame in MENU_SETTLE_FRAMES:
+		await process_frame
+		if int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) <= maximum_nodes:
+			return true
+	return false
 
 
 func _world_state(world_id: String, seed_value: int) -> Dictionary:
