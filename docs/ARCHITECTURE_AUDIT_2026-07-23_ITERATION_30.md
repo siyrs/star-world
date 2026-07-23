@@ -45,6 +45,17 @@
 
 此前创建的世界可能已经包含孤立上半门、浮空门或无背墙梯子。只监听未来事件无法修复已有稀疏覆盖，但一次性扫描完整生成世界同样不可接受。
 
+### 6. 规模测试本身也需要结构合同
+
+第一版单元场地把梯子背墙放在门下半格上，导致测试自己覆盖目标结构；第一版桌面旅程又采用未被 Headless 提前加载的基类/子类组合，解析错误直到昂贵的 Windows Job 才出现。
+
+这两次失败都不是通过放宽断言解决，而是沉淀为新的测试架构约束：
+
+- 单元 fixture 必须断言门支撑、门上下半、梯子支撑和梯子坐标互不重叠；
+- 大规模跨 Chunk 场地必须由纯策略生成并报告坐标冲突数；
+- 桌面脚本必须在领域层通过 Headless 显式加载；
+- 正式桌面旅程只保留一个独立入口，不依赖未执行基类的隐式解析。
+
 ## 决策
 
 ### 纯策略组合
@@ -112,6 +123,17 @@ StructuralIntegrity
 
 服务在 `attach_game` 绑定生产世界，在 `_begin_world` 清空并检查持久覆盖，在菜单和退出路径清理。角色/F3 Snapshot 只接收有界聚合诊断。
 
+### 可验证的规模 fixture
+
+`StructuralIntegrityScaleFixture` 是纯 `RefCounted` 测试策略：
+
+- 生成 128 扇门、256 个方向梯子和 384 个唯一支撑；
+- 以奇偶 Chunk 错位布局防止跨边界支撑覆盖相邻梯子；
+- 返回目标坐标总数和冲突计数；
+- 不拥有 SceneTree、文件、Timer 或产品状态。
+
+`structural_integrity_desktop_import_regression.gd` 在领域层显式加载 fixture 与正式桌面脚本。只有解析和资源路径均通过后，才启动真实桌面 Job。
+
 ## 真实规模设计
 
 真实 Windows 桌面旅程创建：
@@ -123,7 +145,7 @@ StructuralIntegrity
 512 个结构方块
 ```
 
-结构分布在 4×4 Chunk 区域，门位于 Chunk 边界；梯子使用东、西、南、北四种朝向，支撑位于相邻 Chunk。另有四扇门和四个梯子作为受支持控制组。
+结构分布在 4×4 Chunk 区域，门位于 Chunk 边界；梯子使用东、西、南、北四种朝向，并包含跨 Chunk 支撑。另有四扇门和四个梯子作为受支持控制组。
 
 验收顺序：
 
@@ -157,7 +179,10 @@ StructuralIntegrity
 src/interaction/block_structure_integrity_policy.gd
 src/interaction/block_structure_integrity_service.gd
 tests/qa/structural_integrity_regression.gd
-tests/qa/structural_integrity_desktop_acceptance.gd
+tests/qa/structural_integrity_batched_regression.gd
+tests/qa/support/structural_integrity_scale_fixture.gd
+tests/qa/structural_integrity_desktop_import_regression.gd
+tests/qa/structural_integrity_scale_desktop_acceptance.gd
 tests/developer_b/validate_structural_integrity.ps1
 .github/workflows/structural-integrity-tests.yml
 docs/BOUNDED_STRUCTURAL_INTEGRITY.md
