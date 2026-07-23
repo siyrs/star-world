@@ -2,45 +2,40 @@
 
 # 星的世界 · Star World
 
-《星的世界》是一款使用 Godot 4 和 GDScript 开发的 Windows 第一人称 3D 像素沙盒游戏。玩家可以选择五种世界，探索确定性随机地形，采集、合成、烧制、切制、建造、经营农田与牧场，并在昼夜、地图生态和区域危险中生存。世界修改、玩家、背包、装备、农业、动物、容器、机器、生存、探索发现和已领取奖励都会持久保存。
+《星的世界》是一款使用 Godot 4 和 GDScript 开发的 Windows 第一人称 3D 像素沙盒游戏。玩家可以在五种世界中探索确定性随机地形，采集、合成、烧制、切制、建造、经营农田与牧场，并在昼夜、地图生态和区域危险中生存。
+
+项目不是只展示体素地形的 Demo。世界修改、玩家、背包、装备、农业、动物、容器、机器、生存、探索发现和已领取奖励都会持久保存；重要玩法均要求领域回归、真实桌面与最终 Windows Release 验收。
 
 ## 已实现玩法
 
-- 五张地图：星辰大陆、荒漠遗迹、极寒冰原、天空群岛和深渊世界；每张地图拥有独立资源档案、生态、危险基础值、地图印记和校准探矿路线。
+- 五张地图：星辰大陆、荒漠遗迹、极寒冰原、天空群岛和深渊世界；每张地图拥有独立资源、生态、危险基础值、地图印记和校准探矿路线。
 - 45 种以上注册体素与作物阶段、90 种以上物品，以及方块、物品、配方、视觉、采集和保存的目录一致性门禁。
 - 原创程序化 16×16 像素纹理、共享确定性图集、最近邻过滤和顶/侧/底方向明暗；不复制第三方游戏资产。
-- 16×16 水平分块、确定性 Seed、预算化渐进加载/卸载、自适应区块构建和稀疏修改存档。
+- 16×16 水平分块、确定性 Seed、预算化渐进加载/卸载、自适应构建、最近 Chunk 快照和稀疏修改存档。
 - 第一人称移动、跳跃、冲刺、碰撞、按住采集、单击攻击，以及右键交互、放置、食用、耕种和探矿。
-- 木、石、铁和钻石四档工具；方块硬度、推荐工具、最低能力、错误工具速度、掉落资格和耐久均为数据驱动。
+- 木、石、铁、金和钻石工具能力层级；方块硬度、推荐工具、最低能力、错误工具速度、掉落资格和耐久均为数据驱动。
 - 精确体素目标、白色目标框、绿色/红色放置预览、四方向楼梯和真实非整块碰撞。
-- 玻璃板和木栅栏会根据四方向邻居自动连接；预览、视觉、碰撞、拆除重建和完整重载使用同一派生形状，不为邻接组合新增存档方块 ID。
+- 玻璃板和木栅栏按四方向邻居自动连接；预览、视觉、碰撞、拆除重建和完整重载使用同一派生形状。
+- 四方向双格木门支持上下两格原子放置、成对开关、成对采集、失败回滚和旧世界兼容。
+- 四方向贴墙梯子使用薄碰撞和真实攀爬；离开、跳离和支撑变化均有明确行为，攀爬状态不进入存档。
 - 第一人称手持物、使用/挥动反馈和十阶段世界采集裂纹。
-- 小麦、胡萝卜和马铃薯，多阶段生长、灌溉、堆肥、有界离线成长、原子成熟收获和自动补种；农业拥有独立可暂停生命周期，多作物同帧成熟只提示一次。
-- 主手和四类防具槽；属性、防御减伤、攻击冷却、击退、硬直和装备耐久。
+- 小麦、胡萝卜和马铃薯，多阶段成长、灌溉、堆肥、有界离线成长、原子成熟收获和自动补种。
+- 主手和四类防具槽；属性、防御减伤、攻击冷却、击退、硬直、装备耐久与修理回滚。
 - 鸡、牛、猪、普通僵尸和深渊重击者：地图权重、条件生成、漫游/追击、伤害、死亡、繁殖、幼崽成长、饲料吸引和持久产物。
-- 普通僵尸拥有 0.8 秒攻击前摇、红色非碰撞预警圈、后退躲避、击退/硬直打断和五秒恢复。
-- 深渊重击者只在深渊夜间或 Y19 以下低概率出现，最多一只；拥有 1.35 秒重击前摇、四点伤害、七秒恢复和有用途的深渊余烬掉落。
-- 多只敌对同步生成、蓄力、取消、死亡或卸载时，危险事件按帧合并，每帧最多一次评估；同方块事件刷新复用环境样本，单次物理扫描不超过 125 方块。
+- 普通僵尸与深渊重击者拥有可躲避攻击前摇、红色非碰撞预警圈、距离取消和击退/硬直打断。
+- 多只敌对同步生成、蓄力、取消、死亡或卸载时，危险事件按帧合并；单次环境扫描不超过 125 方块。
 - HUD 全局显示附近蓄力攻击数量、精英数量和最快命中时间；实体红圈、真实范围和躲避判定保持独立。
 - 36 格背包和 9 格快捷栏；堆叠、交换、快速装备、metadata、序列化和原子多物品事务。
 - 随身与工作台合成都使用原子背包事务；失败不会先扣原料或公开中间状态。
 - 27 格箱子、非空拆除保护、修理台、床和安全重生点。
-- 熔炉拥有原料、燃料和产出槽、九条生产配方、关闭界面后持续加工、四小时有界离线恢复和非空拆除保护。
-- 石材切割机使用原料/产出槽和共享机器运行时，无需燃料即可加工石砖与台阶。
-- Machine Base 使用一个共享、可暂停的 Scheduler 推进 Furnace、Stonecutter 和轻量自动化 Domain；没有每机器 Timer。
-- Machine Capability 提供通用槽位、原子插入和原子提取，满背包或满箱时机器与容器都保持不变。
-- 机器正上方箱子自动供料/燃料，正下方箱子自动收取产物；每 0.5 秒最多检查 16 台机器、搬运 64 件，常规周期不扫描全世界或重建全部机器目录。
-- 多台机器同帧完成时只显示一条汇总并播放一次音效；机器面板显示队列、下一份剩余时间和整批 ETA。
+- Furnace 与 Stonecutter 共享一个可暂停机器运行时，没有每机器 Timer；支持离线恢复、精确完成反馈和 512 台真实机器规模验收。
+- 机器正上方箱子自动供料/燃料，正下方箱子自动收取产物；周期预算、物品预算和事务探测均有硬上限。
 - 生命、饥饿、饱和、自然恢复、死亡和重生；默认 10 分钟昼夜循环。
-- 地图、深度、昼夜、附近敌对生物、精英压力、岩浆和洞穴共同形成 0–100 区域危险分。
-- 简易探矿仪以固定预算返回深度、资源密度和主矿物趋势，不暴露方块级矿物坐标。
-- 按 `J` 打开探索日志，查看稳定发现编号、世界日期、地图、区块、深度、资源趋势、危险和八个探索里程碑。
-- 五种地图材料和五种校准探矿仪；错误地图不会扫描或进入冷却，全部受理论样本和全局 768 样本上限保护。
-- 里程碑奖励使用原子领取事务；背包满时保持待领取，释放空间后可重试，重复点击和世界重载不会重复发放。
-- ServiceHub 通过六个生命周期参与者组合 Machine、农业、畜牧、牧场、探索运行时和探索日志/奖励，同时保留原公共字段、节点路径和七层公开入口。
-- Windows 发行包首次进入主菜单时检查最新稳定 GitHub Release；支持 Range/ETag 断点续传、双重 SHA-256、自动安装/重启和失败回滚。
+- 简易探矿仪和五种地图校准仪返回区块、深度、密度与主矿物趋势，不暴露方块级矿物坐标。
+- 按 `J` 打开探索日志，查看稳定发现编号、世界日期、地图、区块、资源趋势、危险和八个里程碑。
+- 里程碑奖励使用原子领取事务；背包满时保持待领取，重复点击和世界重载不会重复发放。
 - 主菜单、多存档、设置、HUD、角色/背包、合成、机器、容器、修理、探索日志、真实暂停和死亡 UI。
-- 持久化新手引导、上下文提示、F3 运行诊断、有界反馈队列和可靠原子 JSON 保存。
+- Windows 发行包支持稳定 GitHub Release 检查、Range/ETag 断点续传、双重 SHA-256、外部安装助手、自动重启和失败回滚。
 - 无外部版权资产：纹理、生物模型和环境/方块/生物音效均在运行时程序化生成。
 
 ## 快速开始
@@ -49,40 +44,6 @@
 2. 在 Godot Project Manager 中导入根目录下的 `project.godot`。
 3. 按 `F5` 运行，或启动导出的 `StarWorld.exe`。
 4. 在主菜单选择地图、输入世界名和 Seed，然后创建世界。
-
-主要文档：
-
-- [构建与运行](BUILD.md)
-- [总体架构](ARCHITECTURE.md)
-- [产品与架构路线](docs/PRODUCT_ROADMAP.md)
-- [Machine Base 共享机器运行合同](docs/MACHINE_BASE.md)
-- [石材切割机合同](docs/STONECUTTER_MACHINE.md)
-- [机器能力与原子事务合同](docs/MACHINE_CAPABILITY_CONTRACT.md)
-- [有界相邻机器自动化合同](docs/LIGHTWEIGHT_MACHINE_AUTOMATION.md)
-- [连接型玻璃板与栅栏形状合同](docs/CONNECTED_BLOCK_SHAPES.md)
-- [GitHub Release 自动更新合同](docs/GITHUB_RELEASE_AUTO_UPDATE.md)
-- [ServiceHub 功能生命周期合同](docs/SERVICE_HUB_FEATURE_LIFECYCLE.md)
-- [农业运行时生命周期合同](docs/AGRICULTURE_RUNTIME_LIFECYCLE.md)
-- [畜牧生命周期合同](docs/HUSBANDRY_RUNTIME_LIFECYCLE.md)
-- [牧场生命周期与批量反馈合同](docs/RANCH_RUNTIME_LIFECYCLE.md)
-- [探索运行时生命周期合同](docs/EXPLORATION_RUNTIME_LIFECYCLE.md)
-- [地图资源分布合同](docs/RESOURCE_DISTRIBUTION.md)
-- [粗粒度探矿合同](docs/PROSPECTING_SYSTEM.md)
-- [地图生态与危险反馈合同](docs/CREATURE_ECOLOGY_DANGER.md)
-- [多敌对危险事件合并合同](docs/MULTI_HOSTILE_DANGER_BATCHING.md)
-- [敌对攻击前摇与躲避合同](docs/HOSTILE_ATTACK_WINDUP.md)
-- [深渊精英生态与重击合同](docs/ABYSS_ELITE_ECOLOGY.md)
-- [探索日志与里程碑合同](docs/EXPLORATION_JOURNAL.md)
-- [探索里程碑奖励与背包事务合同](docs/EXPLORATION_MILESTONE_REWARDS.md)
-- [地图印记与校准探矿合同](docs/MAP_SIGNATURE_PROSPECTING.md)
-- [方块与物品目录完整性合同](docs/CATALOG_INTEGRITY.md)
-- [原创方块像素视觉合同](docs/BLOCK_VISUALS.md)
-- [精确放置预览合同](docs/PLACEMENT_PREVIEW.md)
-- [工具、硬度与采集合同](docs/TOOL_HARVEST.md)
-- [装备、属性与战斗合同](docs/EQUIPMENT_SYSTEM.md)
-- [战斗节奏与命中反馈合同](docs/COMBAT_CADENCE.md)
-- [农业、耕地与作物合同](docs/AGRICULTURE.md)
-- [运行诊断与发行验收](RUNTIME_DIAGNOSTICS.md)
 
 ## 操作
 
@@ -95,8 +56,8 @@
 | 采集方块 | 瞄准后按住鼠标左键 |
 | 攻击生物 | 瞄准后单击鼠标左键 |
 | 躲避敌对近战 | 红色预警圈出现后后退、冲刺，或攻击将敌人打入硬直 |
-| 工作台、熔炉、石材切割机、箱子、修理台 | 瞄准后鼠标右键 |
-| 使用探矿仪 | 手持任一探矿仪后鼠标右键 |
+| 工作台、熔炉、石材切割机、箱子、修理台、门 | 瞄准后鼠标右键 |
+| 使用探矿仪 | 手持探矿仪后鼠标右键 |
 | 开垦、播种、收获 | 手持对应物品并鼠标右键 |
 | 放置方块或食用 | 鼠标右键 |
 | 快捷栏 | `1` 至 `9` 或滚轮 |
@@ -108,7 +69,7 @@
 | 关闭界面/暂停 | `Esc` |
 | 快速保存 | `F5` |
 
-右键优先处理农业、工作台、机器和容器，然后才尝试探矿、放置或食用。`J` 日志使用独立输入上下文：打开时释放鼠标并阻断移动、攻击、采集、探矿和放置，但不会暂停世界模拟；再次按 `J` 或 `Esc` 后恢复游戏输入。
+右键优先处理农业、工作台、机器、容器和门，然后才尝试探矿、放置或食用。`J` 日志使用独立输入上下文：打开时释放鼠标并阻断移动、攻击、采集、探矿和放置，但不会暂停世界模拟；再次按 `J` 或 `Esc` 后恢复游戏输入。
 
 ## 轻量机器自动化
 
@@ -129,7 +90,7 @@
 - 自动化只在世界实时运行时执行，不进行离线搬运；
 - 机器、箱子和物品正常保存，自动化游标、缓存和任务不保存。
 
-## 连接型建筑
+## 连接型与结构型建筑
 
 玻璃板和木栅栏读取所在方块的东、西、南、北邻居：
 
@@ -138,11 +99,12 @@
 木栅栏：连接同族栅栏与完整实体方块
 ```
 
-- 连续放置时，绿色预览会提前显示连接臂/横杆；
-- 拆除邻居后，剩余方块立即重建为新的形状；
+- 连续放置时，绿色预览提前显示连接臂或横杆；
+- 拆除邻居后，剩余方块立即重建；
 - 连接可以跨 16×16 Chunk 边界；
-- 旧 `glass_pane` / `glass_pane_ns` 在孤立时保持原方向；
-- 世界只保存方块 ID，不保存邻接掩码；完整重载会从当前邻居重新派生形状。
+- 世界只保存方块 ID，不保存邻接掩码；完整重载从当前邻居重新派生形状。
+
+木门以 16 个追加方块变体保存四方向、开关状态和上下半；命中任一半都操作完整门对。梯子朝向同样编码在追加变体中，视觉、碰撞、预览和攀爬读取同一方向合同。
 
 ## 地图印记与校准探矿
 
@@ -150,54 +112,56 @@
 2. 在当前地图符合特征的区域完成勘探。
 3. 新解锁的奖励会提示按 `J` 查看；打开日志后领取当前地图唯一材料。
 4. 使用简易探矿仪、地图材料和普通材料，在工作台制作对应校准仪。
-5. 校准仪只能在对应地图工作；错误地图会明确拒绝且不会创建记录。
-6. 校准扫描仍只返回区块、深度、密度、主矿物和危险等粗粒度信息。
+5. 校准仪只能在对应地图工作；错误地图会明确拒绝且不会创建记录或进入冷却。
+6. 扫描只返回区块、深度、密度、主矿物和危险等粗粒度信息。
 7. 材料、校准仪、探索记录和 claimed 状态随世界保存。
 
-## 世界存档
+## 世界存档与轻量世界目录
 
 Windows 默认位置：
 
 ```text
-%APPDATA%\Godot\app_userdata\星的世界\worlds\<world-id>\world.json
+%APPDATA%\Godot\app_userdata\星的世界\worlds\<world-id>\
+├─ world.json
+└─ catalog.json
 ```
 
-存档包含地图和 Seed、稀疏方块修改、玩家、背包和 metadata、装备与属性、农业、动物、容器、机器、生存、昼夜、重生点、引导、探索记录和已领取奖励。
+`world.json` 是唯一权威存档，包含地图和 Seed、稀疏方块修改、玩家、背包和 metadata、装备与属性、农业、动物、容器、机器、生存、昼夜、重生点、引导、探索记录和已领取奖励。
 
-机器继续使用兼容结构：
+`catalog.json` 是轻量世界目录缓存，只保存列表所需 metadata、权威存档大小和 schema。主菜单稳态不再为每个世界解析完整 `world.json`；目录缺失、损坏或过期时会从权威存档回退并自动修复。存档浏览器显示每个世界的存档大小和本次目录刷新耗时。
 
-```json
-{
-  "machines": {
-    "version": 1,
-    "saved_at_unix": 0,
-    "furnaces": {},
-    "stonecutters": {}
-  }
-}
+写入顺序为：
+
+```text
+原子提交 world.json
+→ 派生提交 catalog.json
 ```
 
-Machine Scheduler 诊断、完成反馈批次、自动化候选缓存/游标、连接型方块邻接掩码、农业成熟批次与事务计数、危险事件批次、环境样本缓存、生态选择、精英实例和敌对攻击前摇都是瞬时状态，不进入存档。
+目录写入失败不会把已经成功的世界提交伪装成保存失败；下一次打开存档列表会自愈目录。
 
-写入先落到临时文件，旧主文件保留为备份；正式文件损坏时会尝试恢复有效临时文件或上一版本。
+Machine Scheduler 诊断、自动化候选缓存/游标、连接型方块邻接掩码、农业成熟批次、危险事件批次、最近 Chunk 快照、重建统计、`loaded_chunks`、目录命中统计和敌对攻击前摇都是瞬时状态，不进入世界存档。
+
+`world.json` 写入先落到临时文件，旧主文件保留为备份；正式文件损坏时会尝试恢复有效临时文件或上一版本。
 
 ## 测试
 
 ```powershell
 # 一键运行静态合同和全部 Godot 回归
-powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\godot.exe
+powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 `
+  -Godot C:\path\to\godot.exe
+
+# 轻量世界目录、回退、自愈、瞬时字段和 UI 合同
+powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_world_catalog.ps1
+
+godot --headless --path . `
+  --script res://tests/qa/world_catalog_regression.gd `
+  -- --disable-update-check
 
 # 连接型玻璃板/栅栏、预览、碰撞和跨 Chunk 重建合同
 powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_connected_block_shapes.ps1
 
-# 连接型方块领域回归
-godot --headless --path . --script res://tests/qa/connected_block_shapes_regression.gd --disable-update-check
-
 # 农业生命周期、暂停、状态预算和原子收获合同
 powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_agriculture_runtime.ps1
-
-# 有界相邻机器自动化合同
-powershell -ExecutionPolicy Bypass -File .\tests\developer_b\validate_machine_automation.ps1
 
 # 导出并启动真实 Windows Release
 powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 `
@@ -206,11 +170,35 @@ powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smok
 
 CI 包括：
 
-1. 数据、目录、连接形状、机器、自动化、农业生命周期、生态、危险预算、敌对攻击、奖励和原子事务静态合同；
+1. 数据、目录、保存、连接形状、机器、农业生命周期、生态、危险预算、敌对攻击、奖励和原子事务静态合同；
 2. 全量 Runtime 与领域回归；
-3. 真实桌面输入、玻璃板/栅栏连接与重载、农业暂停/成熟/原子收获、相邻箱子自动化、机器 Overlay、采集、探索、多敌对、畜牧、牧场、保存和重载；
-4. 实际 Windows Release 导出、启动、画面和退出资源检查。
+3. 真实多世界存档浏览、目录修复、继续游戏、桌面输入、UI、农业、机器、探索、多敌对、畜牧、牧场、保存和重载；
+4. 实际 Windows Release 导出、启动、画面、报告和退出资源检查。
+
+## 主要文档
+
+- [构建与运行](BUILD.md)
+- [总体架构](ARCHITECTURE.md)
+- [产品与架构路线](docs/PRODUCT_ROADMAP.md)
+- [轻量世界目录与自愈](docs/WORLD_CATALOG.md)
+- [最近 Chunk 快照缓存](docs/RECENT_CHUNK_SNAPSHOT_CACHE.md)
+- [有界世界修改批处理](docs/BOUNDED_WORLD_MUTATION_BATCHING.md)
+- [Machine Base](docs/MACHINE_BASE.md)
+- [机器能力与原子事务](docs/MACHINE_CAPABILITY_CONTRACT.md)
+- [有界相邻机器自动化](docs/LIGHTWEIGHT_MACHINE_AUTOMATION.md)
+- [连接型玻璃板与栅栏](docs/CONNECTED_BLOCK_SHAPES.md)
+- [双格木门](docs/DOUBLE_HEIGHT_OAK_DOORS.md)
+- [方向梯子与攀爬](docs/DIRECTIONAL_LADDER_CLIMBING.md)
+- [农业运行时生命周期](docs/AGRICULTURE_RUNTIME_LIFECYCLE.md)
+- [地图资源分布](docs/RESOURCE_DISTRIBUTION.md)
+- [地图生态与危险](docs/CREATURE_ECOLOGY_DANGER.md)
+- [多敌对危险事件合并](docs/MULTI_HOSTILE_DANGER_BATCHING.md)
+- [探索日志与里程碑](docs/EXPLORATION_JOURNAL.md)
+- [地图印记与校准探矿](docs/MAP_SIGNATURE_PROSPECTING.md)
+- [运行诊断与发行验收](RUNTIME_DIAGNOSTICS.md)
 
 ## 当前边界
 
-当前版本定位为可持续扩展的单人核心。水和岩浆仍为静态体素；玻璃板与木栅栏已经使用统一派生邻接形状，但门、梯子和其他建筑交互仍为简化规则。ServiceHub 已将 Machine、农业、畜牧、牧场、探索运行时和日志/奖励迁移为六个显式参与者；装备、休息和修理仍有部分生命周期留在继承层。Machine Base 已支持 Furnace、Stonecutter、原子 Capability 和有界相邻箱子自动化，但尚未引入电网、管线、跨 Chunk 物流或自动路径搜索。敌对近战具备通用前摇、多敌对帧级危险合并和全局来袭提示，深渊拥有第一只低频精英；远程、多段和 Boss 攻击尚未引入。下一阶段重点是双格木门、梯子真实攀爬、连接形状规模压测和 GitHub Actions reusable workflow。多人和大型商业内容库不在当前阶段范围内。
+当前版本定位为可持续扩展的单人核心。水和岩浆仍为静态体素；远程、多段与 Boss 攻击尚未引入；装备、休息和修理仍有部分生命周期留在 ServiceHub 继承层。Machine Base 已支持 Furnace、Stonecutter、原子 Capability、活跃索引和有界相邻箱子自动化，但尚未引入电网、管线、跨 Chunk 物流或自动路径搜索。
+
+下一阶段重点是跨 Chunk 结构压力与完整性、统一运行与保存健康报告、多世界/大存档长期恢复，以及在真实使用率与预算证据出现后再决定是否扩展自动化。多人和大型商业内容库不在当前阶段范围内。
