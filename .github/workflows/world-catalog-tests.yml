@@ -1,0 +1,48 @@
+name: Lightweight world catalog quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: world-catalog-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Catalog authority, self-healing fallback and transient persistence regression
+      domain_timeout_minutes: 42
+      static_validators: |
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_recent_chunk_cache.ps1
+      primary_headless_script: res://tests/qa/world_catalog_regression.gd
+      primary_headless_output_base: build\world-catalog-regression
+      primary_headless_timeout_milliseconds: 300000
+      domain_scripts: |
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/recent_chunk_snapshot_cache_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: world-catalog-domain
+      domain_artifact_paths: |
+        build/world-catalog-regression.stdout.log
+        build/world-catalog-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 12-world browser, repair, visualization, continue and full load
+      desktop_timeout_minutes: 58
+      desktop_script: res://tests/qa/world_catalog_desktop_acceptance.gd
+      desktop_output_path: build\world-catalog-desktop.png
+      desktop_timeout_milliseconds: 420000
+      desktop_artifact_name: world-catalog-evidence
+      desktop_artifact_paths: |
+        build/world-catalog-desktop.png
+        build/world-catalog-desktop.json
+        build/world-catalog-desktop.stdout.log
+        build/world-catalog-desktop.stderr.log

@@ -4,6 +4,8 @@ Set-StrictMode -Version Latest
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $reusablePath = Join-Path $root '.github\workflows\reusable-godot-quality-gate.yml'
 $godotGatePath = Join-Path $root '.github\workflows\godot-tests.yml'
+$headlessRunnerPath = Join-Path $root 'tests\ci\run_godot_headless_test.ps1'
+$desktopRunnerPath = Join-Path $root 'tests\ci\run_godot_desktop_test.ps1'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $contractPath = Join-Path $root 'docs\REUSABLE_GODOT_QUALITY_GATES.md'
 $auditPath = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-23_ITERATION_28.md'
@@ -17,12 +19,14 @@ $callers = [ordered]@{
   'world-scale-tests.yml' = @('validate_world_mutation_batch.ps1','world_mutation_batch_regression.gd','connected_block_shapes_regression.gd','world_scale_desktop_acceptance.gd','world-scale-desktop.json')
 }
 
-foreach ($path in @($reusablePath,$godotGatePath,$runAllPath,$contractPath,$auditPath)) {
+foreach ($path in @($reusablePath,$godotGatePath,$headlessRunnerPath,$desktopRunnerPath,$runAllPath,$contractPath,$auditPath)) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Reusable CI contract file is missing: $path" }
 }
 
 $reusable = Get-Content -Raw -Encoding UTF8 $reusablePath
 $godotGate = Get-Content -Raw -Encoding UTF8 $godotGatePath
+$headlessRunner = Get-Content -Raw -Encoding UTF8 $headlessRunnerPath
+$desktopRunner = Get-Content -Raw -Encoding UTF8 $desktopRunnerPath
 $runAll = Get-Content -Raw -Encoding UTF8 $runAllPath
 $contract = Get-Content -Raw -Encoding UTF8 $contractPath
 $audit = Get-Content -Raw -Encoding UTF8 $auditPath
@@ -40,6 +44,16 @@ $inheritedCredentialPattern = ('se' + 'crets:\s*inherit')
 $writePermissionPattern = ('contents:\s*' + 'write')
 if ($reusable -match $inheritedCredentialPattern -or $reusable -match $writePermissionPattern) {
   throw 'Reusable domain and desktop gates must remain read-only without inherited credentials'
+}
+
+foreach ($runnerName in @('headless','desktop')) {
+  $runner = if ($runnerName -eq 'headless') { $headlessRunner } else { $desktopRunner }
+  foreach ($token in @('Assert-NoFatalGodotLog','SCRIPT ERROR','Parse Error','ObjectDB instances were leaked','Leaked instance:','Resources still in use at exit')) {
+    if ($runner -notmatch [regex]::Escape($token)) { throw "$runnerName runner is missing fatal Godot diagnostic: $token" }
+  }
+  if ($runner -notmatch 'Assert-NoFatalGodotLog\s+-Paths\s+@\(\$stdoutPath,\s*\$stderrPath\)') {
+    throw "$runnerName runner must scan captured stdout and stderr before reporting success"
+  }
 }
 
 $callerTexts = @{}
@@ -68,7 +82,7 @@ if ($checkoutCount -ne 2 -or $setupCount -ne 2 -or $uploadCount -ne 2) { throw "
 if ($godotGate -notmatch 'Exported Windows release smoke' -or $godotGate -notmatch 'include-templates:\s*true') { throw 'The authoritative Godot gate must retain real Windows export templates and release smoke' }
 if ($godotGate -match 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml') { throw 'The authoritative full desktop matrix and Windows Release gate must remain explicit' }
 if ($runAll -notmatch 'validate_reusable_ci_workflows\.ps1') { throw 'Full static regression entry point must include the reusable CI validator' }
-if ($contract -notmatch 'workflow_call' -or $contract -notmatch '六个' -or $contract -notmatch 'Windows Release') { throw 'Reusable CI contract must document call boundaries, migration scope, and release authority' }
+if ($contract -notmatch 'workflow_call' -or $contract -notmatch '六个' -or $contract -notmatch 'Windows Release' -or $contract -notmatch '资源泄漏') { throw 'Reusable CI contract must document call boundaries, fatal diagnostics, migration scope, and release authority' }
 if ($audit -notmatch 'Checkout' -or $audit -notmatch 'setup-godot' -or $audit -notmatch '重复') { throw 'Architecture audit must record the duplicated workflow implementation problem' }
 
-Write-Host 'PASS reusable_godot_ci callers=6 shared_jobs=2 checkout_impl=2 setup_impl=2 upload_impl=2 release_gate=explicit'
+Write-Host 'PASS reusable_godot_ci callers=6 shared_jobs=2 checkout_impl=2 setup_impl=2 upload_impl=2 fatal_logs=headless+desktop release_gate=explicit'

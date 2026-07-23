@@ -25,6 +25,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_data.ps1"
 & "$PSScriptRoot\developer_b\validate_catalog_integrity.ps1"
 & "$PSScriptRoot\developer_b\validate_reusable_ci_workflows.ps1"
+& "$PSScriptRoot\developer_b\validate_world_catalog.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
@@ -103,6 +104,7 @@ Invoke-GodotTest 'res://tests/qa/double_door_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_ladder_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_mutation_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/recent_chunk_snapshot_cache_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_catalog_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/non_cube_block_geometry_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_stair_regression.gd'
@@ -134,4 +136,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: reusable Godot CI + batched hostile arena + shared pickup runtime + bounded stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'
+Write-Host 'PASS: reusable Godot CI + lightweight world catalog + batched hostile arena + shared pickup runtime + bounded stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'
