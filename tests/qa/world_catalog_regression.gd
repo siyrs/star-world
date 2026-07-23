@@ -2,7 +2,9 @@ extends SceneTree
 
 const SaveServiceScript = preload("res://src/save/save_service.gd")
 const CatalogPolicyScript = preload("res://src/save/world_catalog_policy.gd")
-const ProductionWorldScript = preload("res://src/world/cached_batched_voxel_world.gd")
+const ProductionWorldScript = preload(
+	"res://src/world/persistent_cached_batched_voxel_world.gd"
+)
 
 const WORLD_COUNT := 3
 const OVERRIDES_PER_WORLD := 96
