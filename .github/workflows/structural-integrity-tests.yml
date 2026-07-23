@@ -43,7 +43,7 @@ jobs:
       domain_artifact_if_no_files: error
       desktop_job_name: Real 384-structure support loss, visualization, persistence and pickup fallback
       desktop_timeout_minutes: 60
-      desktop_script: res://tests/qa/structural_integrity_desktop_acceptance.gd
+      desktop_script: res://tests/qa/structural_integrity_batched_desktop_acceptance.gd
       desktop_output_path: build\structural-integrity-desktop.png
       desktop_timeout_milliseconds: 480000
       desktop_artifact_name: structural-integrity-evidence
