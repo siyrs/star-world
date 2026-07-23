@@ -85,6 +85,7 @@ func _run_world_cycle(
 	var max_pending := 0
 	var max_loaded := 0
 	var runtime_critical_samples := 0
+	var sustained_runtime_critical_samples := 0
 	var operations_critical_samples := 0
 	var sample_count := 0
 	var origin: Vector3 = world.call("get_spawn_position")
@@ -105,10 +106,34 @@ func _run_world_cycle(
 		max_pending = maxi(max_pending, int(streaming.get("pending", 0)))
 		max_loaded = maxi(max_loaded, int(streaming.get("loaded", 0)))
 		var health: Dictionary = snapshot.get("health", {})
-		if frame_index >= 24 and int(health.get("runtime_severity", health.get("severity", 0))) >= 2:
+		var runtime_severity := int(health.get("runtime_severity", health.get("severity", 0)))
+		var sustained_severity := int(
+			health.get("sustained_runtime_severity", runtime_severity)
+		)
+		var operations_severity := int(health.get("operations_severity", 0))
+		if frame_index >= 24 and runtime_severity >= 2:
 			runtime_critical_samples += 1
-		if frame_index >= 24 and int(health.get("operations_severity", 0)) >= 2:
+		if frame_index >= 24 and sustained_severity >= 2:
+			sustained_runtime_critical_samples += 1
+		if frame_index >= 24 and operations_severity >= 2:
 			operations_critical_samples += 1
+		var components: Dictionary = health.get("runtime_components", {})
+		print(
+			"QA RUNTIME SOAK SAMPLE | cycle=%d | frame=%d | avg_ms=%.3f | peak_ms=%.3f | stutters=%d | pending=%d | loaded=%d | runtime=%d | sustained=%d | operations=%d | components=%s"
+			% [
+				cycle + 1,
+				frame_index,
+				float(snapshot.get("frame_ms_avg", 0.0)),
+				float(snapshot.get("frame_ms_peak", 0.0)),
+				int(snapshot.get("stutter_count", 0)),
+				int(streaming.get("pending", 0)),
+				int(streaming.get("loaded", 0)),
+				runtime_severity,
+				sustained_severity,
+				operations_severity,
+				JSON.stringify(components),
+			]
+		)
 		var adaptive: Dictionary = snapshot.get("adaptive_streaming", {})
 		var profile: Dictionary = adaptive.get("profile", {})
 		_check(
@@ -132,13 +157,14 @@ func _run_world_cycle(
 		"adaptive streaming never rewrites the player's render-distance setting",
 	)
 	print(
-		"QA RUNTIME SOAK CYCLE | cycle=%d | samples=%d | pending_max=%d | loaded_max=%d | runtime_critical=%d | operations_critical=%d"
+		"QA RUNTIME SOAK CYCLE | cycle=%d | samples=%d | pending_max=%d | loaded_max=%d | runtime_critical=%d | sustained_critical=%d | operations_critical=%d"
 		% [
 			cycle + 1,
 			sample_count,
 			max_pending,
 			max_loaded,
 			runtime_critical_samples,
+			sustained_runtime_critical_samples,
 			operations_critical_samples,
 		]
 	)
