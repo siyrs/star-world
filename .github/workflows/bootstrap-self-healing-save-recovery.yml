@@ -1,0 +1,35 @@
+name: Bootstrap self-healing save recovery patch
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/self-healing-save-recovery
+          fetch-depth: 0
+
+      - name: Execute staged recovery patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/apply-self-healing-save-recovery-patch.yml').read_text(encoding='utf-8')
+          script = workflow.split("python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+          exec(compile(textwrap.dedent(script), 'staged-save-recovery-patch.py', 'exec'))
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/save/save_service.gd src/diagnostics/runtime_health_report_service.gd src/diagnostics/runtime_health_report_policy.gd tests/run_all.ps1 docs/PRODUCT_ROADMAP.md
+          git commit -m "feat: self-heal recovered save primaries"
+          git push origin HEAD:agent/self-healing-save-recovery
