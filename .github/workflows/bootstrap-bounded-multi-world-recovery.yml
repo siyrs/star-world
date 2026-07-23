@@ -31,130 +31,30 @@ jobs:
                   raise RuntimeError(f'missing replacement anchor in {path}: {old[:80]!r}')
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          replace_once(
-              'src/save/save_service.gd',
-              'const CATALOG_FILE_NAME := "catalog.json"\n',
-              'const CATALOG_FILE_NAME := "catalog.json"\nconst MAX_PRIMARY_REPAIRS_PER_LIST := 8\n',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              'var _last_catalog_elapsed_usec := 0\n',
-              'var _last_catalog_elapsed_usec := 0\nvar _catalog_deferred_recovery_count := 0\nvar _last_catalog_deferred_recovery_count := 0\nvar _last_catalog_repair_budget_used := 0\n',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\tvar repair_count := 0\n\tvar avoided_world_bytes := 0\n\tvar directory := DirAccess.open(WORLDS_DIR)\n\tif directory == null:\n\t\t_record_catalog_list(0, 0, 0, 0, 0, Time.get_ticks_usec() - started_at)\n\t\treturn result\n\tfor raw_world_id: String in directory.get_directories():\n''',
-              '''\tvar repair_count := 0\n\tvar deferred_recovery_count := 0\n\tvar repair_budget_used := 0\n\tvar avoided_world_bytes := 0\n\tvar directory := DirAccess.open(WORLDS_DIR)\n\tif directory == null:\n\t\t_record_catalog_list(0, 0, 0, 0, 0, 0, 0, Time.get_ticks_usec() - started_at)\n\t\treturn result\n\tvar world_ids: PackedStringArray = directory.get_directories()\n\tworld_ids.sort()\n\tfor raw_world_id: String in world_ids:\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t\t\tfallback_count += 1\n\t\t\tvar world_read := _read_world_result(world_id, false)\n''',
-              '''\t\t\tfallback_count += 1\n\t\t\tvar allow_primary_repair := repair_budget_used < MAX_PRIMARY_REPAIRS_PER_LIST\n\t\t\tvar world_read := _read_world_result(world_id, false, allow_primary_repair)\n\t\t\tif bool(world_read.get("repair_attempted", false)):\n\t\t\t\trepair_budget_used += 1\n\t\t\tif (\n\t\t\t\tstr(world_read.get("source", "primary")) != "primary"\n\t\t\t\tand not bool(world_read.get("primary_ready", false))\n\t\t\t):\n\t\t\t\tdeferred_recovery_count += 1\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t\t\tmetadata = WorldCatalogPolicyScript.metadata_for_list(\n\t\t\t\tentry,\n\t\t\t\t"world_fallback"\n\t\t\t)\n''',
-              '''\t\t\tmetadata = WorldCatalogPolicyScript.metadata_for_list(\n\t\t\t\tentry,\n\t\t\t\t"world_fallback"\n\t\t\t)\n\t\t\tmetadata["recovery_deferred"] = (\n\t\t\t\tstr(world_read.get("source", "primary")) != "primary"\n\t\t\t\tand not bool(world_read.get("primary_ready", false))\n\t\t\t)\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t\tresult.size(),\n\t\thit_count,\n\t\tfallback_count,\n\t\trepair_count,\n\t\tavoided_world_bytes,\n\t\tTime.get_ticks_usec() - started_at\n''',
-              '''\t\tresult.size(),\n\t\thit_count,\n\t\tfallback_count,\n\t\trepair_count,\n\t\tdeferred_recovery_count,\n\t\trepair_budget_used,\n\t\tavoided_world_bytes,\n\t\tTime.get_ticks_usec() - started_at\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t\t"last_elapsed_milliseconds": float(_last_catalog_elapsed_usec) / 1000.0,\n\t\t"last_hit_ratio": hit_ratio,\n''',
-              '''\t\t"last_elapsed_milliseconds": float(_last_catalog_elapsed_usec) / 1000.0,\n\t\t"last_hit_ratio": hit_ratio,\n\t\t"primary_repair_budget": MAX_PRIMARY_REPAIRS_PER_LIST,\n\t\t"deferred_recovery_count": _catalog_deferred_recovery_count,\n\t\t"last_deferred_recovery_count": _last_catalog_deferred_recovery_count,\n\t\t"last_repair_budget_used": _last_catalog_repair_budget_used,\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t_last_catalog_avoided_world_bytes = 0\n\t_last_catalog_elapsed_usec = 0\n''',
-              '''\t_last_catalog_avoided_world_bytes = 0\n\t_last_catalog_elapsed_usec = 0\n\t_catalog_deferred_recovery_count = 0\n\t_last_catalog_deferred_recovery_count = 0\n\t_last_catalog_repair_budget_used = 0\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              'func _read_world_result(world_id: String, emit_recovery: bool) -> Dictionary:\n',
-              'func _read_world_result(\n\tworld_id: String, emit_recovery: bool, repair_primary: bool = true\n) -> Dictionary:\n',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t\tCallable(self, "_is_valid_world_payload").bind(world_id),\n\t\ttrue\n''',
-              '''\t\tCallable(self, "_is_valid_world_payload").bind(world_id),\n\t\trepair_primary\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t\t"authoritative_bytes": _file_size(world_path) if primary_ready else 0,\n\t\t"repair_success": bool(result.get("repair_success", false)),\n''',
-              '''\t\t"authoritative_bytes": _file_size(world_path) if primary_ready else 0,\n\t\t"repair_attempted": bool(result.get("repair_attempted", false)),\n\t\t"repair_success": bool(result.get("repair_success", false)),\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''func _record_catalog_list(\n\tworld_count: int,\n\thit_count: int,\n\tfallback_count: int,\n\trepair_count: int,\n\tavoided_world_bytes: int,\n\telapsed_usec: int\n) -> void:\n''',
-              '''func _record_catalog_list(\n\tworld_count: int,\n\thit_count: int,\n\tfallback_count: int,\n\trepair_count: int,\n\tdeferred_recovery_count: int,\n\trepair_budget_used: int,\n\tavoided_world_bytes: int,\n\telapsed_usec: int\n) -> void:\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t_catalog_repair_count += repair_count\n\t_last_catalog_world_count = world_count\n''',
-              '''\t_catalog_repair_count += repair_count\n\t_catalog_deferred_recovery_count += deferred_recovery_count\n\t_last_catalog_world_count = world_count\n''',
-          )
-          replace_once(
-              'src/save/save_service.gd',
-              '''\t_last_catalog_repair_count = repair_count\n\t_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)\n''',
-              '''\t_last_catalog_repair_count = repair_count\n\t_last_catalog_deferred_recovery_count = maxi(0, deferred_recovery_count)\n\t_last_catalog_repair_budget_used = clampi(\n\t\trepair_budget_used, 0, MAX_PRIMARY_REPAIRS_PER_LIST\n\t)\n\t_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)\n''',
-          )
-
-          replace_once(
-              'src/ui/save_browser_panel.gd',
-              '''\tvar repairs := int(diagnostics.get("last_repair_count", 0))\n\tvar status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]\n''',
-              '''\tvar repairs := int(diagnostics.get("last_repair_count", 0))\n\tvar deferred := maxi(0, int(diagnostics.get("last_deferred_recovery_count", 0)))\n\tvar repair_budget := maxi(0, int(diagnostics.get("primary_repair_budget", 0)))\n\tvar status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]\n''',
-          )
-          replace_once(
-              'src/ui/save_browser_panel.gd',
-              '''\tif repairs > 0:\n\t\tstatus += " · 已修复 %d 个旧目录" % repairs\n''',
-              '''\tif repairs > 0:\n\t\tstatus += " · 已修复 %d 个旧目录" % repairs\n\tif deferred > 0:\n\t\tstatus += " · 待渐进修复 %d（每次最多 %d）" % [deferred, repair_budget]\n''',
-          )
-
-          replace_once(
-              'src/diagnostics/runtime_health_report_policy.gd',
-              '''\t\t"last_hit_ratio": clampf(float(snapshot.get("last_hit_ratio", 0.0)), 0.0, 1.0),\n''',
-              '''\t\t"last_hit_ratio": clampf(float(snapshot.get("last_hit_ratio", 0.0)), 0.0, 1.0),\n\t\t"primary_repair_budget": maxi(0, int(snapshot.get("primary_repair_budget", 0))),\n\t\t"last_deferred_recovery_count": maxi(\n\t\t\t0, int(snapshot.get("last_deferred_recovery_count", 0))\n\t\t),\n\t\t"last_repair_budget_used": maxi(\n\t\t\t0, int(snapshot.get("last_repair_budget_used", 0))\n\t\t),\n''',
-          )
-          replace_once(
-              'src/diagnostics/runtime_health_report_policy.gd',
-              '''\tvar repair_count := maxi(0, int(catalog.get("last_repair_count", 0)))\n\tif write_failures > 0:\n''',
-              '''\tvar repair_count := maxi(0, int(catalog.get("last_repair_count", 0)))\n\tvar deferred_count := maxi(0, int(catalog.get("last_deferred_recovery_count", 0)))\n\tvar repair_budget := maxi(0, int(catalog.get("primary_repair_budget", 0)))\n\tif write_failures > 0:\n''',
-          )
-          replace_once(
-              'src/diagnostics/runtime_health_report_policy.gd',
-              '''\telif fallback_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录本次回退 %d 个并自愈 %d 个" % [fallback_count, repair_count]\n''',
-              '''\telif deferred_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录仍有 %d 个存档待渐进修复（每次最多 %d）" % [\n\t\t\tdeferred_count, repair_budget\n\t\t]\n\telif fallback_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录本次回退 %d 个并自愈 %d 个" % [fallback_count, repair_count]\n''',
-          )
-          replace_once(
-              'src/diagnostics/runtime_health_report_policy.gd',
-              '''\t\t"命中 %d/%d · 回退 %d · 修复 %d · %.2f ms" % [\n''',
-              '''\t\t"命中 %d/%d · 回退 %d · 修复 %d · 待修复 %d · %.2f ms" % [\n''',
-          )
-          replace_once(
-              'src/diagnostics/runtime_health_report_policy.gd',
-              '''\t\t\trepair_count,\n\t\t\tfloat(catalog.get("last_elapsed_milliseconds", 0.0)),\n''',
-              '''\t\t\trepair_count,\n\t\t\tdeferred_count,\n\t\t\tfloat(catalog.get("last_elapsed_milliseconds", 0.0)),\n''',
-          )
-
-          replace_once(
-              'tests/run_all.ps1',
-              '''& "$PSScriptRoot\developer_b\validate_save_recovery.ps1"\n& "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"\n''',
-              '''& "$PSScriptRoot\developer_b\validate_save_recovery.ps1"\n& "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"\n& "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"\n''',
-          )
-          replace_once(
-              'tests/run_all.ps1',
-              '''Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd'\nInvoke-GodotTest 'res://tests/qa/block_texture_regression.gd'\n''',
-              '''Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd'\nInvoke-GodotTest 'res://tests/qa/bounded_multi_world_recovery_regression.gd'\nInvoke-GodotTest 'res://tests/qa/block_texture_regression.gd'\n''',
-          )
-
-          replace_once(
-              'docs/PRODUCT_ROADMAP.md',
-              '- 多世界连续损坏、跨会话恢复和更长周期目录重建压力；\n',
-              '- 多世界恢复采用每次最多 8 个主文件修复的渐进预算，世界始终可见，后续刷新确定性收敛；\n- 跨会话恢复和更长周期目录重建压力；\n',
-          )
+          replace_once('src/save/save_service.gd','const CATALOG_FILE_NAME := "catalog.json"\n','const CATALOG_FILE_NAME := "catalog.json"\nconst MAX_PRIMARY_REPAIRS_PER_LIST := 8\n')
+          replace_once('src/save/save_service.gd','var _last_catalog_elapsed_usec := 0\n','var _last_catalog_elapsed_usec := 0\nvar _catalog_deferred_recovery_count := 0\nvar _last_catalog_deferred_recovery_count := 0\nvar _last_catalog_repair_budget_used := 0\n')
+          replace_once('src/save/save_service.gd','''\tvar repair_count := 0\n\tvar avoided_world_bytes := 0\n\tvar directory := DirAccess.open(WORLDS_DIR)\n\tif directory == null:\n\t\t_record_catalog_list(0, 0, 0, 0, 0, Time.get_ticks_usec() - started_at)\n\t\treturn result\n\tfor raw_world_id: String in directory.get_directories():\n''','''\tvar repair_count := 0\n\tvar deferred_recovery_count := 0\n\tvar repair_budget_used := 0\n\tvar avoided_world_bytes := 0\n\tvar directory := DirAccess.open(WORLDS_DIR)\n\tif directory == null:\n\t\t_record_catalog_list(0, 0, 0, 0, 0, 0, 0, Time.get_ticks_usec() - started_at)\n\t\treturn result\n\tvar world_ids: PackedStringArray = directory.get_directories()\n\tworld_ids.sort()\n\tfor raw_world_id: String in world_ids:\n''')
+          replace_once('src/save/save_service.gd','''\t\t\tfallback_count += 1\n\t\t\tvar world_read := _read_world_result(world_id, false)\n''','''\t\t\tfallback_count += 1\n\t\t\tvar allow_primary_repair := repair_budget_used < MAX_PRIMARY_REPAIRS_PER_LIST\n\t\t\tvar world_read := _read_world_result(world_id, false, allow_primary_repair)\n\t\t\tif bool(world_read.get("repair_attempted", false)):\n\t\t\t\trepair_budget_used += 1\n\t\t\tif (\n\t\t\t\tstr(world_read.get("source", "primary")) != "primary"\n\t\t\t\tand not bool(world_read.get("primary_ready", false))\n\t\t\t):\n\t\t\t\tdeferred_recovery_count += 1\n''')
+          replace_once('src/save/save_service.gd','''\t\t\tmetadata = WorldCatalogPolicyScript.metadata_for_list(\n\t\t\t\tentry,\n\t\t\t\t"world_fallback"\n\t\t\t)\n''','''\t\t\tmetadata = WorldCatalogPolicyScript.metadata_for_list(\n\t\t\t\tentry,\n\t\t\t\t"world_fallback"\n\t\t\t)\n\t\t\tmetadata["recovery_deferred"] = (\n\t\t\t\tstr(world_read.get("source", "primary")) != "primary"\n\t\t\t\tand not bool(world_read.get("primary_ready", false))\n\t\t\t)\n''')
+          replace_once('src/save/save_service.gd','''\t\tresult.size(),\n\t\thit_count,\n\t\tfallback_count,\n\t\trepair_count,\n\t\tavoided_world_bytes,\n\t\tTime.get_ticks_usec() - started_at\n''','''\t\tresult.size(),\n\t\thit_count,\n\t\tfallback_count,\n\t\trepair_count,\n\t\tdeferred_recovery_count,\n\t\trepair_budget_used,\n\t\tavoided_world_bytes,\n\t\tTime.get_ticks_usec() - started_at\n''')
+          replace_once('src/save/save_service.gd','''\t\t"last_elapsed_milliseconds": float(_last_catalog_elapsed_usec) / 1000.0,\n\t\t"last_hit_ratio": hit_ratio,\n''','''\t\t"last_elapsed_milliseconds": float(_last_catalog_elapsed_usec) / 1000.0,\n\t\t"last_hit_ratio": hit_ratio,\n\t\t"primary_repair_budget": MAX_PRIMARY_REPAIRS_PER_LIST,\n\t\t"deferred_recovery_count": _catalog_deferred_recovery_count,\n\t\t"last_deferred_recovery_count": _last_catalog_deferred_recovery_count,\n\t\t"last_repair_budget_used": _last_catalog_repair_budget_used,\n''')
+          replace_once('src/save/save_service.gd','''\t_last_catalog_avoided_world_bytes = 0\n\t_last_catalog_elapsed_usec = 0\n''','''\t_last_catalog_avoided_world_bytes = 0\n\t_last_catalog_elapsed_usec = 0\n\t_catalog_deferred_recovery_count = 0\n\t_last_catalog_deferred_recovery_count = 0\n\t_last_catalog_repair_budget_used = 0\n''')
+          replace_once('src/save/save_service.gd','func _read_world_result(world_id: String, emit_recovery: bool) -> Dictionary:\n','func _read_world_result(\n\tworld_id: String, emit_recovery: bool, repair_primary: bool = true\n) -> Dictionary:\n')
+          replace_once('src/save/save_service.gd','''\t\tCallable(self, "_is_valid_world_payload").bind(world_id),\n\t\ttrue\n''','''\t\tCallable(self, "_is_valid_world_payload").bind(world_id),\n\t\trepair_primary\n''')
+          replace_once('src/save/save_service.gd','''\t\t"authoritative_bytes": _file_size(world_path) if primary_ready else 0,\n\t\t"repair_success": bool(result.get("repair_success", false)),\n''','''\t\t"authoritative_bytes": _file_size(world_path) if primary_ready else 0,\n\t\t"repair_attempted": bool(result.get("repair_attempted", false)),\n\t\t"repair_success": bool(result.get("repair_success", false)),\n''')
+          replace_once('src/save/save_service.gd','''func _record_catalog_list(\n\tworld_count: int,\n\thit_count: int,\n\tfallback_count: int,\n\trepair_count: int,\n\tavoided_world_bytes: int,\n\telapsed_usec: int\n) -> void:\n''','''func _record_catalog_list(\n\tworld_count: int,\n\thit_count: int,\n\tfallback_count: int,\n\trepair_count: int,\n\tdeferred_recovery_count: int,\n\trepair_budget_used: int,\n\tavoided_world_bytes: int,\n\telapsed_usec: int\n) -> void:\n''')
+          replace_once('src/save/save_service.gd','''\t_catalog_repair_count += repair_count\n\t_last_catalog_world_count = world_count\n''','''\t_catalog_repair_count += repair_count\n\t_catalog_deferred_recovery_count += deferred_recovery_count\n\t_last_catalog_world_count = world_count\n''')
+          replace_once('src/save/save_service.gd','''\t_last_catalog_repair_count = repair_count\n\t_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)\n''','''\t_last_catalog_repair_count = repair_count\n\t_last_catalog_deferred_recovery_count = maxi(0, deferred_recovery_count)\n\t_last_catalog_repair_budget_used = clampi(\n\t\trepair_budget_used, 0, MAX_PRIMARY_REPAIRS_PER_LIST\n\t)\n\t_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)\n''')
+          replace_once('src/ui/save_browser_panel.gd','''\tvar repairs := int(diagnostics.get("last_repair_count", 0))\n\tvar status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]\n''','''\tvar repairs := int(diagnostics.get("last_repair_count", 0))\n\tvar deferred := maxi(0, int(diagnostics.get("last_deferred_recovery_count", 0)))\n\tvar repair_budget := maxi(0, int(diagnostics.get("primary_repair_budget", 0)))\n\tvar status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]\n''')
+          replace_once('src/ui/save_browser_panel.gd','''\tif repairs > 0:\n\t\tstatus += " · 已修复 %d 个旧目录" % repairs\n''','''\tif repairs > 0:\n\t\tstatus += " · 已修复 %d 个旧目录" % repairs\n\tif deferred > 0:\n\t\tstatus += " · 待渐进修复 %d（每次最多 %d）" % [deferred, repair_budget]\n''')
+          replace_once('src/diagnostics/runtime_health_report_policy.gd','''\t\t"last_hit_ratio": clampf(float(snapshot.get("last_hit_ratio", 0.0)), 0.0, 1.0),\n''','''\t\t"last_hit_ratio": clampf(float(snapshot.get("last_hit_ratio", 0.0)), 0.0, 1.0),\n\t\t"primary_repair_budget": maxi(0, int(snapshot.get("primary_repair_budget", 0))),\n\t\t"last_deferred_recovery_count": maxi(0, int(snapshot.get("last_deferred_recovery_count", 0))),\n\t\t"last_repair_budget_used": maxi(0, int(snapshot.get("last_repair_budget_used", 0))),\n''')
+          replace_once('src/diagnostics/runtime_health_report_policy.gd','''\tvar repair_count := maxi(0, int(catalog.get("last_repair_count", 0)))\n\tif write_failures > 0:\n''','''\tvar repair_count := maxi(0, int(catalog.get("last_repair_count", 0)))\n\tvar deferred_count := maxi(0, int(catalog.get("last_deferred_recovery_count", 0)))\n\tvar repair_budget := maxi(0, int(catalog.get("primary_repair_budget", 0)))\n\tif write_failures > 0:\n''')
+          replace_once('src/diagnostics/runtime_health_report_policy.gd','''\telif fallback_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录本次回退 %d 个并自愈 %d 个" % [fallback_count, repair_count]\n''','''\telif deferred_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录仍有 %d 个存档待渐进修复（每次最多 %d）" % [deferred_count, repair_budget]\n\telif fallback_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录本次回退 %d 个并自愈 %d 个" % [fallback_count, repair_count]\n''')
+          replace_once('src/diagnostics/runtime_health_report_policy.gd','''\t\t"命中 %d/%d · 回退 %d · 修复 %d · %.2f ms" % [\n''','''\t\t"命中 %d/%d · 回退 %d · 修复 %d · 待修复 %d · %.2f ms" % [\n''')
+          replace_once('src/diagnostics/runtime_health_report_policy.gd','''\t\t\trepair_count,\n\t\t\tfloat(catalog.get("last_elapsed_milliseconds", 0.0)),\n''','''\t\t\trepair_count,\n\t\t\tdeferred_count,\n\t\t\tfloat(catalog.get("last_elapsed_milliseconds", 0.0)),\n''')
+          replace_once('tests/run_all.ps1','''& "$PSScriptRoot\developer_b\validate_save_recovery.ps1"\n& "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"\n''','''& "$PSScriptRoot\developer_b\validate_save_recovery.ps1"\n& "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"\n& "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"\n''')
+          replace_once('tests/run_all.ps1','''Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd'\nInvoke-GodotTest 'res://tests/qa/block_texture_regression.gd'\n''','''Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd'\nInvoke-GodotTest 'res://tests/qa/bounded_multi_world_recovery_regression.gd'\nInvoke-GodotTest 'res://tests/qa/block_texture_regression.gd'\n''')
+          replace_once('docs/PRODUCT_ROADMAP.md','- 多世界连续损坏、跨会话恢复和更长周期目录重建压力；\n','- 多世界恢复采用每次最多 8 个主文件修复的渐进预算，世界始终可见，后续刷新确定性收敛；\n- 跨会话恢复和更长周期目录重建压力；\n')
           PY
 
           git config user.name "github-actions[bot]"
@@ -162,3 +62,5 @@ jobs:
           git add src/save/save_service.gd src/ui/save_browser_panel.gd src/diagnostics/runtime_health_report_policy.gd tests/run_all.ps1 docs/PRODUCT_ROADMAP.md
           git commit -m "perf: bound multi-world recovery per catalog scan"
           git push origin HEAD:agent/bounded-multi-world-recovery
+
+# bootstrap-trigger: 2
