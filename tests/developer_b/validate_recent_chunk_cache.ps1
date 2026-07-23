@@ -10,19 +10,16 @@ $paths = @{
   Regression = Join-Path $root 'tests\qa\recent_chunk_snapshot_cache_regression.gd'
   Desktop = Join-Path $root 'tests\qa\recent_chunk_cache_desktop_acceptance.gd'
   Workflow = Join-Path $root '.github\workflows\recent-chunk-cache-tests.yml'
+  Reusable = Join-Path $root '.github\workflows\reusable-godot-quality-gate.yml'
   RunAll = Join-Path $root 'tests\run_all.ps1'
   Contract = Join-Path $root 'docs\RECENT_CHUNK_SNAPSHOT_CACHE.md'
   Audit = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-22_ITERATION_25.md'
 }
 foreach ($entry in $paths.GetEnumerator()) {
-  if (-not (Test-Path -LiteralPath $entry.Value)) {
-    throw "Recent chunk cache file is missing: $($entry.Key) $($entry.Value)"
-  }
+  if (-not (Test-Path -LiteralPath $entry.Value)) { throw "Recent chunk cache file is missing: $($entry.Key) $($entry.Value)" }
 }
 $text = @{}
-foreach ($entry in $paths.GetEnumerator()) {
-  $text[$entry.Key] = Get-Content -Raw -Encoding UTF8 $entry.Value
-}
+foreach ($entry in $paths.GetEnumerator()) { $text[$entry.Key] = Get-Content -Raw -Encoding UTF8 $entry.Value }
 
 if ($text.Policy -notmatch 'MAX_SNAPSHOTS\s*:=\s*64' -or $text.Policy -notmatch 'CHUNK_CELL_COUNT\s*:=\s*16\s*\*\s*64\s*\*\s*16') {
   throw 'Recent chunk cache must retain exactly sixty-four complete 16x64x16 block snapshots'
@@ -36,19 +33,15 @@ if ($text.Policy -notmatch '_lru_order\.pop_front\(\)' -or $text.Policy -notmatc
 if ($text.Policy -match 'func\s+serialize\s*\(' -or $text.Policy -match 'FileAccess' -or $text.Policy -match 'Timer\.new\(') {
   throw 'Recent chunk cache must remain transient and must not own files or timers'
 }
-
 if ($text.Chunk -notmatch 'extends\s+"res://src/chunk/voxel_chunk\.gd"') {
   throw 'Cached chunk must preserve the existing VoxelChunk public contract'
 }
 foreach ($method in @('begin_initialize_from_snapshot','capture_block_snapshot','can_capture_block_snapshot','was_hydrated_from_snapshot','local_cell_index')) {
-  if ($text.Chunk -notmatch "func\s+$method\s*\(" -and $text.Chunk -notmatch "static\s+func\s+$method\s*\(") {
-    throw "Cached chunk is missing: $method"
-  }
+  if ($text.Chunk -notmatch "func\s+$method\s*\(" -and $text.Chunk -notmatch "static\s+func\s+$method\s*\(") { throw "Cached chunk is missing: $method" }
 }
 if ($text.Chunk -notmatch '_begin_mesh_build\(\)' -or $text.Chunk -notmatch '_generation_cells_skipped\s*=\s*TOTAL_CELLS') {
   throw 'Snapshot hydration must skip generation and begin directly at mesh construction'
 }
-
 if ($text.World -notmatch 'extends\s+"res://src/world/batched_voxel_world\.gd"') {
   throw 'Cached world must retain bounded mutation batching through inheritance'
 }
@@ -67,16 +60,13 @@ if ($text.World -match 'func\s+serialize\s*\(' -or $text.World -match 'Timer\.ne
 if ($text.Game -notmatch 'cached_batched_voxel_world\.gd') {
   throw 'Production GameScene must compose the cached batched world'
 }
-
 foreach ($phrase in @(
   'sixty-five stores retain sixty-four recent snapshots and evict one',
   'warm chunk reload skips sixteen-thousand-three-hundred-eighty-four generation cells',
   'unloaded edits patch the cached block array before the next warm reload',
   'recent chunk snapshots and diagnostics remain transient and never enter world saves'
 )) {
-  if ($text.Regression -notmatch [regex]::Escape($phrase)) {
-    throw "Recent chunk cache regression is missing assertion: $phrase"
-  }
+  if ($text.Regression -notmatch [regex]::Escape($phrase)) { throw "Recent chunk cache regression is missing assertion: $phrase" }
 }
 foreach ($phrase in @(
   'hydrates every target chunk from a recent snapshot',
@@ -85,15 +75,16 @@ foreach ($phrase in @(
   'chunk-cache visual evidence uses 1024x576 resolution',
   'new world session starts without stale in-memory chunk snapshots'
 )) {
-  if ($text.Desktop -notmatch [regex]::Escape($phrase)) {
-    throw "Recent chunk cache desktop acceptance is missing assertion: $phrase"
-  }
+  if ($text.Desktop -notmatch [regex]::Escape($phrase)) { throw "Recent chunk cache desktop acceptance is missing assertion: $phrase" }
 }
-if ($text.Workflow -notmatch 'Invoke-Godot\.ps1' -or $text.Workflow -notmatch 'recent_chunk_snapshot_cache_regression\.gd') {
-  throw 'Recent chunk cache workflow must run real awaited domain tests'
+if ($text.Workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml' -or $text.Workflow -notmatch 'recent_chunk_snapshot_cache_regression\.gd') {
+  throw 'Recent chunk cache caller must declare real domain tests through the reusable gate'
+}
+if ($text.Reusable -notmatch 'tests\\ci\\Invoke-Godot\.ps1' -or $text.Reusable -notmatch 'tests\\ci\\run_godot_desktop_test\.ps1') {
+  throw 'Reusable Godot gate must own awaited domain and desktop execution'
 }
 if ($text.Workflow -notmatch 'recent_chunk_cache_desktop_acceptance\.gd' -or $text.Workflow -notmatch 'recent-chunk-cache-desktop\.json') {
-  throw 'Recent chunk cache workflow must upload visualization and benchmark evidence'
+  throw 'Recent chunk cache caller must retain visualization and benchmark evidence declarations'
 }
 if ($text.RunAll -notmatch 'validate_recent_chunk_cache\.ps1' -or $text.RunAll -notmatch 'recent_chunk_snapshot_cache_regression\.gd') {
   throw 'Full regression entry point must permanently include recent chunk caching'
@@ -105,4 +96,4 @@ if ($text.Audit -notmatch '16,384' -or $text.Audit -notmatch '卸载' -or $text.
   throw 'Architecture audit must record the repeated chunk regeneration problem and bounded solution'
 }
 
-Write-Host 'PASS recent_chunk_cache snapshots=64 cells=16384 memory=4MiB patch=1 persistence=none scheduler=shared'
+Write-Host 'PASS recent_chunk_cache snapshots=64 cells=16384 memory=4MiB patch=1 persistence=none scheduler=shared ci=reusable'
