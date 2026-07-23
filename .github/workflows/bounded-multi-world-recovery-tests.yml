@@ -1,0 +1,55 @@
+name: Bounded multi-world recovery quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-recovery-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Bounded repair budget, progressive convergence and adjacent save regressions
+      domain_timeout_minutes: 50
+      static_validators: |
+        tests/developer_b/validate_bounded_multi_world_recovery.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/bounded_multi_world_recovery_regression.gd
+      primary_headless_output_base: build\bounded-multi-world-recovery-regression
+      primary_headless_timeout_milliseconds: 420000
+      domain_scripts: |
+        res://tests/qa/save_recovery_regression.gd
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/runtime_health_report_policy_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: bounded-multi-world-recovery-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/bounded-multi-world-recovery-regression.stdout.log
+        build/bounded-multi-world-recovery-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 20-world damage, visible rows, progressive repair and steady sidecar convergence
+      desktop_timeout_minutes: 70
+      desktop_script: res://tests/qa/bounded_multi_world_recovery_desktop_acceptance.gd
+      desktop_output_path: build\bounded-multi-world-recovery-desktop.png
+      desktop_timeout_milliseconds: 600000
+      desktop_artifact_name: bounded-multi-world-recovery-evidence
+      desktop_artifact_paths: |
+        build/bounded-multi-world-recovery-desktop.png
+        build/bounded-multi-world-recovery-desktop.json
+        build/bounded-multi-world-recovery-desktop.stdout.log
+        build/bounded-multi-world-recovery-desktop.stderr.log
+      desktop_artifact_if_no_files: error
