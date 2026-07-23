@@ -71,6 +71,14 @@ func _catalog_status(world_count: int) -> String:
 	var status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]
 	if repairs > 0:
 		status += " · 已修复 %d 个旧目录" % repairs
+	if save_service.has_method("get_recovery_diagnostics"):
+		var recovery: Dictionary = save_service.call("get_recovery_diagnostics")
+		var repaired := maxi(0, int(recovery.get("repair_success_count", 0)))
+		var failures := maxi(0, int(recovery.get("repair_failure_count", 0)))
+		if repaired > 0:
+			status += " · 已自愈 %d 个存档" % repaired
+		if failures > 0:
+			status += " · 主文件修复失败 %d" % failures
 	return status
 
 
