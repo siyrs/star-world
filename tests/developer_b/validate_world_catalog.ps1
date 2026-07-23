@@ -84,7 +84,10 @@ if ($cacheWorld -match 'func\s+serialize\s*\(') {
 if ($world -notmatch 'extends\s+"res://src/world/cached_batched_voxel_world\.gd"') {
   throw 'Production persistence projection must preserve cached and batched world behavior'
 }
-$serializeMatch = [regex]::Match($world, 'func\s+serialize\s*\(\)\s*->\s*Dictionary\s*:[\s\S]*?(?=\n\nfunc\s+)')
+$serializeMatch = [regex]::Match(
+  $world,
+  'func\s+serialize\s*\(\)\s*->\s*Dictionary\s*:[\s\S]*?(?=(?:\r?\n){2,}func\s+serialize_state\s*\()'
+)
 if (-not $serializeMatch.Success) { throw 'Production world projection must own its sparse persistence surface' }
 if ($serializeMatch.Value -notmatch '"block_overrides"\s*:\s*serialize_sparse_overrides\(\)') {
   throw 'Production world serialization must retain sparse block overrides'
