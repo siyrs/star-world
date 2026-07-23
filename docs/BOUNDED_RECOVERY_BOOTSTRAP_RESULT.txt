@@ -1,1 +1,6 @@
-SUCCESS
+FAILURE
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+  File "bounded-recovery-bootstrap.py", line 76, in <module>
+  File "bounded-recovery-bootstrap.py", line 8, in once
+RuntimeError: missing anchor: catalog reset
