@@ -11,8 +11,9 @@ $worldPath = Join-Path $root 'src\world\batched_voxel_world.gd'
 $pickupPath = Join-Path $root 'src\entity\pickup_stack_coordinator.gd'
 $regressionBasePath = Join-Path $root 'tests\qa\structural_integrity_regression.gd'
 $regressionPath = Join-Path $root 'tests\qa\structural_integrity_batched_regression.gd'
-$desktopPath = Join-Path $root 'tests\qa\structural_integrity_desktop_acceptance.gd'
-$batchedDesktopPath = Join-Path $root 'tests\qa\structural_integrity_batched_desktop_acceptance.gd'
+$fixturePath = Join-Path $root 'tests\qa\support\structural_integrity_scale_fixture.gd'
+$importPath = Join-Path $root 'tests\qa\structural_integrity_desktop_import_regression.gd'
+$desktopPath = Join-Path $root 'tests\qa\structural_integrity_scale_desktop_acceptance.gd'
 $workflowPath = Join-Path $root '.github\workflows\structural-integrity-tests.yml'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $contractPath = Join-Path $root 'docs\BOUNDED_STRUCTURAL_INTEGRITY.md'
@@ -21,7 +22,7 @@ $roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 
 foreach ($path in @(
   $policyPath,$servicePath,$toolHubPath,$doorPolicyPath,$ladderPolicyPath,$worldPath,
-  $pickupPath,$regressionBasePath,$regressionPath,$desktopPath,$batchedDesktopPath,
+  $pickupPath,$regressionBasePath,$regressionPath,$fixturePath,$importPath,$desktopPath,
   $workflowPath,$runAllPath,$contractPath,$auditPath,$roadmapPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing structural integrity contract file: $path" }
@@ -34,10 +35,10 @@ $doorPolicy = Get-Content -Raw -Encoding UTF8 $doorPolicyPath
 $ladderPolicy = Get-Content -Raw -Encoding UTF8 $ladderPolicyPath
 $world = Get-Content -Raw -Encoding UTF8 $worldPath
 $pickup = Get-Content -Raw -Encoding UTF8 $pickupPath
-$regressionBase = Get-Content -Raw -Encoding UTF8 $regressionBasePath
-$regression = $regressionBase + "`n" + (Get-Content -Raw -Encoding UTF8 $regressionPath)
+$regression = (Get-Content -Raw -Encoding UTF8 $regressionBasePath) + "`n" + (Get-Content -Raw -Encoding UTF8 $regressionPath)
+$fixture = Get-Content -Raw -Encoding UTF8 $fixturePath
+$import = Get-Content -Raw -Encoding UTF8 $importPath
 $desktop = Get-Content -Raw -Encoding UTF8 $desktopPath
-$batchedDesktop = Get-Content -Raw -Encoding UTF8 $batchedDesktopPath
 $workflow = Get-Content -Raw -Encoding UTF8 $workflowPath
 $runAll = Get-Content -Raw -Encoding UTF8 $runAllPath
 $contract = Get-Content -Raw -Encoding UTF8 $contractPath
@@ -111,7 +112,6 @@ foreach ($token in @(
 )) {
   if ($toolHub -notmatch $token) { throw "Production service hub is missing structural integrity composition: $token" }
 }
-
 if ($doorPolicy -notmatch 'static\s+func\s+is_valid_pair' -or $ladderPolicy -notmatch 'static\s+func\s+is_valid_support') {
   throw 'Integrity cleanup must reuse the existing door and ladder state contracts'
 }
@@ -135,16 +135,47 @@ foreach ($phrase in @(
 if ($regression -notmatch 'extends\s+"res://tests/qa/structural_integrity_regression\.gd"') {
   throw 'Collision-free domain fixture must preserve the complete structural regression journey'
 }
+
 foreach ($token in @(
+  'class_name\s+StructuralIntegrityScaleFixture',
   'TARGET_DOOR_COUNT\s*:=\s*128',
   'TARGET_LADDER_COUNT\s*:=\s*256',
   'FALLBACK_DOOR_COUNT\s*:=\s*6',
   'FALLBACK_LADDER_COUNT\s*:=\s*10',
+  'static\s+func\s+build_main\s*\(',
+  'static\s+func\s+build_fallback\s*\(',
+  'target_collision_count',
+  'collision_count',
+  'posmod\(chunk_coord\.x,\s*2\)',
+  'posmod\(chunk_coord\.y,\s*2\)',
+  '\[2,\s*6\]',
+  '\[10,\s*14\]'
+)) {
+  if ($fixture -notmatch $token) { throw "Structural scale fixture is missing bounded collision-free behavior: $token" }
+}
+if ($fixture -match 'extends\s+SceneTree' -or $fixture -match 'FileAccess' -or $fixture -match 'Timer\.new\(') {
+  throw 'Structural scale fixture must remain a pure test policy without runtime or file ownership'
+}
+
+foreach ($token in @(
+  'structural_integrity_scale_fixture\.gd',
+  'structural_integrity_scale_desktop_acceptance\.gd',
+  'load\(FIXTURE_PATH\)',
+  'load\(DESKTOP_PATH\)',
+  'standalone structural desktop journey loads as a valid script'
+)) {
+  if ($import -notmatch $token) { throw "Structural desktop import regression is missing early parse coverage: $token" }
+}
+foreach ($token in @(
+  'FixtureScript\.TARGET_DOOR_COUNT',
+  'FixtureScript\.TARGET_LADDER_COUNT',
   'MAX_MAIN_CLEANUP_MILLISECONDS\s*:=\s*5000',
+  'target_collision_count',
+  'collision_count',
   'structural-integrity-desktop\.json'
 )) {
   if ($desktop -notmatch $token -and -not ($token -eq 'structural-integrity-desktop\.json' -and $desktop -match 'get_basename\(\)\s*\+\s*"\.json"')) {
-    throw "Structural integrity desktop acceptance is missing scale evidence: $token"
+    throw "Standalone structural desktop acceptance is missing scale evidence: $token"
   }
 }
 foreach ($phrase in @(
@@ -159,34 +190,25 @@ foreach ($phrase in @(
 )) {
   if ($desktop -notmatch [regex]::Escape($phrase)) { throw "Structural integrity desktop acceptance is missing assertion: $phrase" }
 }
-foreach ($token in @(
-  'extends\s+"res://tests/qa/structural_integrity_desktop_acceptance\.gd"',
-  'posmod\(chunk_coord\.x,\s*2\)',
-  'posmod\(chunk_coord\.y,\s*2\)',
-  '\[2,\s*6\]',
-  '\[10,\s*14\]',
-  'func\s+_build_main_fixture\s*\('
-)) {
-  if ($batchedDesktop -notmatch $token) { throw "Collision-free cross-Chunk fixture is missing: $token" }
-}
 
 if ($workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml') {
   throw 'Structural integrity workflow must use the reusable Godot quality gate'
 }
 foreach ($token in @(
   'validate_structural_integrity\.ps1',
+  'structural_integrity_desktop_import_regression\.gd',
   'structural_integrity_batched_regression\.gd',
   'double_door_regression\.gd',
   'directional_ladder_regression\.gd',
   'world_mutation_batch_regression\.gd',
   'pickup_stack_regression\.gd',
-  'structural_integrity_batched_desktop_acceptance\.gd',
+  'structural_integrity_scale_desktop_acceptance\.gd',
   'structural-integrity-desktop\.json'
 )) {
   if ($workflow -notmatch $token) { throw "Structural integrity workflow is missing validation or evidence: $token" }
 }
-if ($runAll -notmatch 'validate_structural_integrity\.ps1' -or $runAll -notmatch 'structural_integrity_batched_regression\.gd') {
-  throw 'Full regression entry point must permanently include structural integrity validation and corrected domain regression'
+if ($runAll -notmatch 'validate_structural_integrity\.ps1' -or $runAll -notmatch 'structural_integrity_desktop_import_regression\.gd' -or $runAll -notmatch 'structural_integrity_batched_regression\.gd') {
+  throw 'Full regression entry point must retain structural validation, early desktop import and corrected domain regression'
 }
 
 foreach ($token in @('65,536','4,096','1,024','2,048','浮空半门','物理掉落','不进入存档')) {
@@ -199,4 +221,4 @@ if ($roadmap -notmatch '结构完整性' -or $roadmap -notmatch '统一运行与
   throw 'Product roadmap must record completed structural integrity and the next health-report priority'
 }
 
-Write-Host 'PASS structural_integrity candidates=65536 per_flush=4096 structures=1024 mutations=2048 doors=128 ladders=256 removed_cells=512 fallback_items=16 pickup_nodes<=2 persistence=none ci=reusable'
+Write-Host 'PASS structural_integrity candidates=65536 per_flush=4096 structures=1024 mutations=2048 doors=128 ladders=256 removed_cells=512 fallback_items=16 pickup_nodes<=2 persistence=none desktop=standalone ci=reusable'
