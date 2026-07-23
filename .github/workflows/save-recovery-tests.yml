@@ -1,0 +1,55 @@
+name: Self-healing save recovery quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: save-recovery-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Validated candidates, atomic primary repair, bounded diagnostics and adjacent regressions
+      domain_timeout_minutes: 45
+      static_validators: |
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_runtime_health_sources.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/save_recovery_regression.gd
+      primary_headless_output_base: build\save-recovery-regression
+      primary_headless_timeout_milliseconds: 300000
+      domain_scripts: |
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/runtime_health_report_policy_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: save-recovery-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/save-recovery-regression.stdout.log
+        build/save-recovery-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real semantic corruption, backup promotion, save browser, F3, continue and steady catalog
+      desktop_timeout_minutes: 60
+      desktop_script: res://tests/qa/save_recovery_desktop_acceptance.gd
+      desktop_output_path: build\save-recovery-desktop.png
+      desktop_timeout_milliseconds: 480000
+      desktop_artifact_name: save-recovery-evidence
+      desktop_artifact_paths: |
+        build/save-recovery-desktop.png
+        build/save-recovery-desktop-health.png
+        build/save-recovery-desktop.json
+        build/save-recovery-desktop.stdout.log
+        build/save-recovery-desktop.stderr.log
+      desktop_artifact_if_no_files: error
