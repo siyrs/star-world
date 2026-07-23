@@ -1,11 +1,30 @@
 extends "res://tests/qa/structural_integrity_regression.gd"
 
+const BatchedServiceScript = preload(
+	"res://src/interaction/batched_block_structure_integrity_service.gd"
+)
+
+
+class PreFlushWorld extends FakeWorld:
+	signal block_mutation_batch_pre_flush(reason: String, summary: Dictionary)
+
+	var apply_reasons: Array[String] = []
+
+	func apply_block_mutations(
+		changes: Array,
+		reason: String = "test"
+	) -> Dictionary:
+		apply_reasons.append(reason)
+		var result: Dictionary = super.apply_block_mutations(changes, reason)
+		block_mutation_batch_pre_flush.emit(reason, result.duplicate(true))
+		return result
+
 
 func _test_batched_cleanup_and_dedupe() -> void:
-	var world := FakeWorld.new()
+	var world := PreFlushWorld.new()
 	var inventory = InventoryScript.new()
 	var pickup_parent := Node3D.new()
-	var service = ServiceScript.new()
+	var service = BatchedServiceScript.new()
 	root.add_child(world)
 	root.add_child(inventory)
 	root.add_child(pickup_parent)
@@ -17,7 +36,7 @@ func _test_batched_cleanup_and_dedupe() -> void:
 	)
 	_check(
 		service.bind_world(world),
-		"structural service binds the world block-change signal",
+		"structural service binds block changes and the outer batch pre-flush hook",
 	)
 
 	var lower := Vector3i(15, 20, 15)
@@ -42,26 +61,42 @@ func _test_batched_cleanup_and_dedupe() -> void:
 	world.set_test_block(ladder_position, "ladder_west")
 
 	var before_cleanup_calls := world.apply_call_count
-	world.set_block(door_support, "air")
-	world.block_changed.emit(door_support, "stone", "air")
-	world.set_block(ladder_support, "air")
-	world.block_changed.emit(ladder_support, "stone", "air")
-	var queued: Dictionary = service.get_snapshot()
-	_check(
-		int(queued.get("pending_candidates", 0)) > 0
-		and bool(queued.get("processing", false)),
-		"support changes activate one shared pausable integrity loop",
+	var outer_result: Dictionary = world.apply_block_mutations(
+		[
+			{"position": door_support, "block_id": "air"},
+			{"position": ladder_support, "block_id": "air"},
+		],
+		"structural_integrity_unit_supports",
 	)
-	var result: Dictionary = service.flush_pending()
 	_check(
-		world.apply_call_count == before_cleanup_calls + 1,
-		"door and ladder cleanup share one production mutation batch",
+		bool(outer_result.get("success", false)),
+		"outer support mutation batch completes successfully",
+	)
+	var snapshot: Dictionary = service.get_snapshot()
+	var result: Dictionary = snapshot.get("last_flush", {})
+	_check(
+		int(snapshot.get("pending_candidates", -1)) == 0
+		and not bool(snapshot.get("processing", true)),
+		"outer batch pre-flush drains the structural queue before the API returns",
+	)
+	_check(
+		world.apply_call_count == before_cleanup_calls + 2
+		and world.apply_reasons == [
+			"structural_integrity_unit_supports",
+			"structural_integrity_cleanup",
+		],
+		"one outer support batch owns exactly one nested structural mutation batch",
+	)
+	_check(
+		int(snapshot.get("pre_flush_signal_count", 0)) == 2
+		and int(snapshot.get("pre_flush_cleanup_count", 0)) == 1,
+		"nested cleanup emits diagnostics without recursively starting another cleanup",
 	)
 	_check(
 		str(world.get_block(lower)) == "air"
 		and str(world.get_block(lower + Vector3i.UP)) == "air"
 		and str(world.get_block(ladder_position)) == "air",
-		"one flush removes the complete unsupported door and ladder",
+		"one pre-flush cleanup removes the complete unsupported door and ladder",
 	)
 	_check(
 		inventory.count_item("oak_door") == 1
@@ -73,7 +108,6 @@ func _test_batched_cleanup_and_dedupe() -> void:
 		and int(result.get("mutation_count", 0)) == 3,
 		"flush evidence distinguishes structures from removed block cells",
 	)
-	var snapshot: Dictionary = service.get_snapshot()
 	_check(
 		int(snapshot.get("door_cleanup_count", 0)) == 1
 		and int(snapshot.get("ladder_cleanup_count", 0)) == 1
