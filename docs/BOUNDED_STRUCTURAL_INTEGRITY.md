@@ -51,7 +51,7 @@ BlockLadderPolicy
 
 ## 有界共享运行时
 
-`BlockStructureIntegrityService` 使用 `PROCESS_MODE_PAUSABLE`，仅在有待处理候选或待交付物品时启用共享循环。
+`BlockStructureIntegrityService` 使用 `PROCESS_MODE_PAUSABLE`，仅在有待处理候选或待交付物品时启用共享循环。生产组合使用 `BatchedBlockStructureIntegrityService`，在保留同一公共合同的同时接入世界批次 pre-flush 边界。
 
 硬边界：
 
@@ -66,7 +66,7 @@ BlockLadderPolicy
 
 门由两个方块组成，因此 1,024 个结构和 2,048 个修改是独立预算。达到任一预算后，剩余候选重新排队到后续帧，不会把大批清理退化为无限同步工作。
 
-## 清理事务
+## 清理事务与单次网格 Flush
 
 结构失效后，所有目标方块先汇总，再调用生产世界：
 
@@ -74,7 +74,15 @@ BlockLadderPolicy
 apply_block_mutations(changes, "structural_integrity_cleanup")
 ```
 
-同一 Flush 只提交一个世界修改批次，复用既有 Chunk 脏集合、边界 Chunk 传播和重建合并诊断。内部清理产生的 `block_changed` 事件会被显式抑制，防止递归排队。
+当外层生产批次正在删除门地面或梯子背墙时，`BatchedVoxelWorld` 会在真正重建网格前同步发出：
+
+```text
+block_mutation_batch_pre_flush(reason, summary)
+```
+
+`BatchedBlockStructureIntegrityService` 在该边界消费已经由 `block_changed` 收集的候选，并通过一个嵌套 `apply_block_mutations()` 提交依赖结构清理。此时外层批次深度仍为 1，所以嵌套修改只扩展同一个脏 Chunk 集合，不独立重建网格；最外层事务结束时统一执行一次 Flush。
+
+内部清理产生的 `block_changed` 和嵌套 pre-flush 事件由 `_applying_cleanup` 显式抑制，防止递归排队。世界不提供 pre-flush 信号时，基础服务仍可在后续有界帧中完成相同规则清理。
 
 ### 木门
 
@@ -130,14 +138,14 @@ StructuralIntegrity
 生命周期：
 
 ```text
-_ready      → 创建服务
-attach_game→ 绑定生产世界 block_changed
+_ready       → 创建服务
+attach_game → 绑定 block_changed 与可选 pre-flush
 _begin_world→ 清空瞬时状态并检查旧覆盖
-return/menu→ 清空候选和诊断
-_exit_tree → 断开信号并 shutdown
+return/menu → 断开世界、清空候选和诊断
+_exit_tree  → 断开信号并 shutdown
 ```
 
-候选队列、掉落积压、计数器、结构键、扫描游标和最近 Flush 均不进入存档。世界仍只持久化稀疏方块修改；结构完整性运行时不进入存档。
+候选队列、掉落积压、pre-flush 摘要、计数器、结构键、扫描游标和最近 Flush 均不进入存档。世界仍只持久化稀疏方块修改；结构完整性运行时不进入存档。
 
 ## 有界诊断
 
@@ -146,12 +154,13 @@ _exit_tree → 断开信号并 shutdown
 - 当前候选和待交付数量；
 - 观察到的变化、去重、溢出和内部抑制计数；
 - Flush、清理批次、门、梯子和删除方块总数；
+- pre-flush 支持、信号次数、实际清理次数和最近摘要；
 - 背包交付、物理掉落、掉落节点和积压溢出；
 - 初始覆盖扫描与截断；
 - 所有硬预算；
 - 最近一次 Flush 的候选、结构、修改、耗时与世界重建结果。
 
-诊断不复制完整世界、方块覆盖或背包 Dictionary。
+诊断不复制完整世界、完整修改数组、方块覆盖或背包 Dictionary。
 
 ## 永久验收
 
@@ -160,7 +169,8 @@ _exit_tree → 断开信号并 shutdown
 - 七格候选唯一性；
 - 开门状态和四向梯子支持；
 - 门与梯子共享一个世界修改批次；
-- 重复事件去重；
+- 真实外层/嵌套世界批次只执行一次网格 Flush；
+- 重复事件去重和嵌套 pre-flush 防递归；
 - 孤立门上半安全清理且只返回一件门；
 - 背包满时规范物品进入物理掉落；
 - 旧覆盖扫描修复孤立梯子且保留有效门；
@@ -168,7 +178,7 @@ _exit_tree → 断开信号并 shutdown
 
 规模场地由纯 `StructuralIntegrityScaleFixture` 生成。它显式统计支撑与结构坐标冲突，并用奇偶 Chunk 错位布局防止跨边界支撑覆盖相邻梯子。该 fixture 不拥有 SceneTree、文件或计时器，可独立接受静态合同验证。
 
-在启动昂贵的 Windows 桌面 Job 前，`structural_integrity_desktop_import_regression.gd` 会在 Headless 阶段显式加载规模 fixture 和单一桌面旅程。测试脚本解析、类型或资源路径错误会在领域层提前失败，而不是到桌面 Runner 才暴露。正式桌面验收只保留一个独立入口 `structural_integrity_scale_desktop_acceptance.gd`，不依赖未执行的基类/子类组合。
+在启动昂贵的 Windows 桌面 Job 前，`structural_integrity_desktop_import_regression.gd` 会在 Headless 阶段显式加载规模 fixture、完整基础旅程和单 Flush 验收入口。测试脚本解析、类型或资源路径错误会在领域层提前失败，而不是到桌面 Runner 才暴露。
 
 真实桌面验收使用正式 `GameScene`：
 
@@ -179,6 +189,16 @@ _exit_tree → 断开信号并 shutdown
 = 512 个结构方块
 ```
 
-结构分布在多个 16×16 Chunk，并包含跨 Chunk 支撑。用一个生产批次移除 384 个支撑后，要求结构清理在 5 秒内完成、没有浮空半门或梯子残片、物品数量精确、重建数量按 Chunk 而不是按结构增长。随后保存、返回菜单、完整重载，并在背包满场景验证 6 扇门和 10 个梯子聚合成至多两个物理掉落节点。
+结构分布在多个 16×16 Chunk，并包含跨 Chunk 支撑。用一个生产批次移除 384 个支撑后，必须满足：
 
-最终还必须通过总 Runtime、长期 soak、完整桌面矩阵和 Windows Release 实际导出与启动。
+- 没有浮空半门或梯子残片；
+- 精确返回 128 扇门和 256 个梯子；
+- 结构规则和事务阶段不超过 1 秒；
+- GitHub Windows 软件渲染总清理时间不超过 12 秒；
+- 世界网格 Flush 恰好 1 次；
+- 实际 Chunk 重建、最后 Flush Chunk 数和脏 Chunk 峰值均不超过 32；
+- pre-flush 信号 2 次、结构清理 1 次且没有递归；
+- 保存、返回菜单和完整重载不重复物品；
+- 满背包场景中 6 扇门和 10 个梯子聚合成至多两个物理掉落节点。
+
+优化前后真实证据和性能边界见 [STRUCTURAL_SINGLE_FLUSH_OPTIMIZATION.md](STRUCTURAL_SINGLE_FLUSH_OPTIMIZATION.md)。最终还必须通过总 Runtime、长期 soak、完整桌面矩阵和 Windows Release 实际导出与启动。
