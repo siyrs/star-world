@@ -7,6 +7,9 @@ const HarvestOverlayScript = preload("res://src/ui/harvest_progress_overlay.gd")
 const DoorInteractionServiceScript = preload(
 	"res://src/interaction/block_door_interaction_service.gd"
 )
+const StructuralIntegrityServiceScript = preload(
+	"res://src/interaction/batched_block_structure_integrity_service.gd"
+)
 
 # Compatibility ports are declared on the first inherited layer so the base
 # MachineRuntimeParticipant can publish them during GameplayServiceHub._ready.
@@ -16,6 +19,7 @@ var machine_automation_service: Node
 var tool_service: Node
 var block_harvest_service: Node
 var door_interaction_service: Node
+var structural_integrity_service: Node
 var harvest_progress_overlay: Control
 
 
@@ -30,6 +34,11 @@ func _ready() -> void:
 	if block_interaction != null and block_interaction.has_method("register_extension"):
 		block_interaction.call("register_extension", door_interaction_service)
 	_connect_door_feedback()
+	structural_integrity_service = _add_service(
+		StructuralIntegrityServiceScript.new(), "StructuralIntegrity"
+	)
+	if structural_integrity_service != null:
+		structural_integrity_service.call("setup", inventory, creature_spawner)
 	block_harvest_service = _add_service(HarvestServiceScript.new(), "BlockHarvestService")
 	block_harvest_service.call(
 		"setup", tool_service, block_interaction, door_interaction_service
@@ -48,6 +57,8 @@ func _ready() -> void:
 func _begin_world(state: Dictionary) -> void:
 	_clear_harvest_state()
 	super._begin_world(state)
+	if structural_integrity_service != null:
+		structural_integrity_service.call("begin_world")
 
 
 func handle_world_start_failed(reason: String) -> void:
@@ -66,6 +77,9 @@ func attach_game(
 	# GameplayServiceHub retains its legacy furnace fallback; restore the generic
 	# production router after every world bind.
 	_configure_machine_runtime_ports()
+	if structural_integrity_service != null:
+		structural_integrity_service.call("setup", inventory, creature_spawner)
+		structural_integrity_service.call("bind_world", world)
 	if player == null:
 		return
 	if player.has_method("bind_tool_service"):
@@ -82,6 +96,17 @@ func return_to_menu() -> void:
 		_clear_harvest_state()
 
 
+func get_character_snapshot() -> Dictionary:
+	var snapshot: Dictionary = super.get_character_snapshot()
+	snapshot["structural_integrity"] = (
+		structural_integrity_service.call("get_snapshot")
+		if structural_integrity_service != null
+		and structural_integrity_service.has_method("get_snapshot")
+		else {}
+	)
+	return snapshot
+
+
 func _exit_tree() -> void:
 	if (
 		block_interaction != null
@@ -91,6 +116,11 @@ func _exit_tree() -> void:
 		block_interaction.call("unregister_extension", door_interaction_service)
 	if door_interaction_service != null and door_interaction_service.has_method("shutdown"):
 		door_interaction_service.call("shutdown")
+	if (
+		structural_integrity_service != null
+		and structural_integrity_service.has_method("shutdown")
+	):
+		structural_integrity_service.call("shutdown")
 	_clear_harvest_state()
 	super._exit_tree()
 
@@ -135,5 +165,7 @@ func _clear_harvest_state() -> void:
 		block_harvest_service.call("clear")
 	if door_interaction_service != null and door_interaction_service.has_method("clear"):
 		door_interaction_service.call("clear")
+	if structural_integrity_service != null and structural_integrity_service.has_method("clear"):
+		structural_integrity_service.call("clear", true)
 	if harvest_progress_overlay != null and harvest_progress_overlay.has_method("clear"):
 		harvest_progress_overlay.call("clear")

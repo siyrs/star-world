@@ -1,0 +1,61 @@
+name: Bounded structural integrity quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: structural-integrity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Structural support, single-flush cleanup, no-loss returns and adjacent regressions
+      domain_timeout_minutes: 45
+      static_validators: |
+        tests/developer_b/validate_structural_integrity.ps1
+        tests/developer_b/validate_structural_single_flush.ps1
+        tests/developer_b/validate_double_doors.ps1
+        tests/developer_b/validate_directional_ladders.ps1
+        tests/developer_b/validate_world_mutation_batch.ps1
+        tests/developer_b/validate_pickup_stacks.ps1
+        tests/developer_b/validate_service_hub_lifecycle.ps1
+      # Parse the pure scale fixture, complete base journey and optimized desktop
+      # entry point before adjacent regressions or the expensive Windows job.
+      # Complete base journey: res://tests/qa/structural_integrity_scale_desktop_acceptance.gd
+      primary_headless_script: res://tests/qa/structural_integrity_desktop_import_regression.gd
+      primary_headless_output_base: build\structural-integrity-import
+      primary_headless_timeout_milliseconds: 300000
+      domain_scripts: |
+        res://tests/qa/world_mutation_pre_flush_regression.gd
+        res://tests/qa/structural_integrity_batched_regression.gd
+        res://tests/qa/double_door_regression.gd
+        res://tests/qa/directional_ladder_regression.gd
+        res://tests/qa/world_mutation_batch_regression.gd
+        res://tests/qa/pickup_stack_regression.gd
+        res://tests/qa/recent_chunk_snapshot_cache_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: structural-integrity-domain
+      domain_artifact_paths: |
+        build/structural-integrity-import.stdout.log
+        build/structural-integrity-import.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 384-structure single-flush support loss, persistence and pickup fallback
+      desktop_timeout_minutes: 60
+      desktop_script: res://tests/qa/structural_integrity_single_flush_desktop_acceptance.gd
+      desktop_output_path: build\structural-integrity-desktop.png
+      desktop_timeout_milliseconds: 480000
+      desktop_artifact_name: structural-integrity-evidence
+      desktop_artifact_paths: |
+        build/structural-integrity-desktop.png
+        build/structural-integrity-desktop.json
+        build/structural-integrity-desktop.stdout.log
+        build/structural-integrity-desktop.stderr.log
+      desktop_artifact_if_no_files: error
