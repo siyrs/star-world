@@ -34,6 +34,7 @@ jobs:
         res://tests/qa/runtime_stability_regression.gd
       domain_artifact_name: pickup-shared-runtime-regression
       domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
         build/pickup-shared-runtime-regression.stdout.log
         build/pickup-shared-runtime-regression.stderr.log
       domain_artifact_if_no_files: warn
