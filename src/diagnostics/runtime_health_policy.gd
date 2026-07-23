@@ -22,13 +22,13 @@ var critical_node_count := 9000
 
 
 func evaluate(snapshot: Dictionary) -> Dictionary:
-	var severity := 0
+	var runtime_severity := 0
 	var issues: Array[String] = []
 	var frame_sample_count := int(snapshot.get("frame_sample_count", 0))
 	var frame_metrics_ready: bool = frame_sample_count >= maxi(1, minimum_frame_samples)
 	if frame_metrics_ready:
-		severity = maxi(
-			severity,
+		runtime_severity = maxi(
+			runtime_severity,
 			_evaluate_upper_bound(
 				float(snapshot.get("frame_ms_avg", 0.0)),
 				warning_average_frame_ms,
@@ -37,8 +37,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 				issues
 			)
 		)
-		severity = maxi(
-			severity,
+		runtime_severity = maxi(
+			runtime_severity,
 			_evaluate_upper_bound(
 				float(snapshot.get("frame_ms_peak", 0.0)),
 				warning_peak_frame_ms,
@@ -47,8 +47,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 				issues
 			)
 		)
-		severity = maxi(
-			severity,
+		runtime_severity = maxi(
+			runtime_severity,
 			_evaluate_upper_bound(
 				float(snapshot.get("stutter_count", 0)),
 				float(warning_stutters_per_window),
@@ -58,8 +58,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 			)
 		)
 	var streaming: Dictionary = snapshot.get("streaming", {})
-	severity = maxi(
-		severity,
+	runtime_severity = maxi(
+		runtime_severity,
 		_evaluate_upper_bound(
 			float(streaming.get("pending", 0)),
 			float(warning_pending_chunks),
@@ -68,8 +68,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 			issues
 		)
 	)
-	severity = maxi(
-		severity,
+	runtime_severity = maxi(
+		runtime_severity,
 		_evaluate_upper_bound(
 			float(snapshot.get("memory_mib", 0.0)),
 			warning_memory_mib,
@@ -78,8 +78,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 			issues
 		)
 	)
-	severity = maxi(
-		severity,
+	runtime_severity = maxi(
+		runtime_severity,
 		_evaluate_upper_bound(
 			float(snapshot.get("node_count", 0)),
 			float(warning_node_count),
@@ -93,7 +93,7 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		if snapshot.get("operations", {}) is Dictionary
 		else {}
 	)
-	severity = maxi(severity, clampi(int(operations.get("severity", 0)), 0, 2))
+	var operations_severity := clampi(int(operations.get("severity", 0)), 0, 2)
 	var operation_issue_count := 0
 	var raw_operation_issues: Variant = operations.get("issues", [])
 	if raw_operation_issues is Array:
@@ -105,19 +105,18 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 				continue
 			issues.append("运行与保存：%s" % issue)
 			operation_issue_count += 1
-	var status := STATUS_HEALTHY
-	if severity >= 2:
-		status = STATUS_CRITICAL
-	elif severity == 1:
-		status = STATUS_WARNING
+	var severity := maxi(runtime_severity, operations_severity)
 	return {
-		"status": status,
+		"status": _status_for_severity(severity),
 		"severity": severity,
 		"healthy": severity == 0,
 		"issues": issues,
 		"frame_metrics_ready": frame_metrics_ready,
 		"frame_sample_count": frame_sample_count,
-		"operations_status": str(operations.get("status", STATUS_HEALTHY)),
+		"runtime_status": _status_for_severity(runtime_severity),
+		"runtime_severity": runtime_severity,
+		"operations_status": _status_for_severity(operations_severity),
+		"operations_severity": operations_severity,
 		"operations_issue_count": operation_issue_count,
 	}
 
@@ -136,3 +135,11 @@ func _evaluate_upper_bound(
 		issues.append("%s：%.1f（警告阈值 %.1f）" % [description, value, warning_threshold])
 		return 1
 	return 0
+
+
+func _status_for_severity(severity: int) -> String:
+	if severity >= 2:
+		return STATUS_CRITICAL
+	if severity == 1:
+		return STATUS_WARNING
+	return STATUS_HEALTHY
