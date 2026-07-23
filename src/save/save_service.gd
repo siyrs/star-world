@@ -230,27 +230,6 @@ func reset_catalog_diagnostics() -> void:
 	_last_catalog_elapsed_usec = 0
 
 
-func list_worlds_legacy_full_read() -> Array:
-	# Test-only compatibility probe used to quantify the old O(total save bytes)
-	# behavior. Product UI must call list_worlds(), never this method.
-	var result: Array = []
-	var directory := DirAccess.open(WORLDS_DIR)
-	if directory == null:
-		return result
-	for raw_world_id: String in directory.get_directories():
-		var world_id := str(raw_world_id)
-		var payload := _read_world_payload(world_id, false)
-		if not payload.is_empty():
-			var raw_metadata: Variant = payload.get("metadata", {})
-			if raw_metadata is Dictionary:
-				result.append(raw_metadata.duplicate(true))
-	result.sort_custom(
-		func(a: Dictionary, b: Dictionary) -> bool:
-			return str(a.get("updated_at", "")) > str(b.get("updated_at", ""))
-	)
-	return result
-
-
 func delete_world(world_id: String) -> bool:
 	if not _is_safe_id(world_id) or not world_exists(world_id):
 		return false
