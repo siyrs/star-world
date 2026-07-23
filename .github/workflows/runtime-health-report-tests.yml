@@ -49,6 +49,7 @@ jobs:
         res://tests/qa/runtime_stability_regression.gd
       domain_artifact_name: runtime-health-report-domain
       domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
         build/runtime-health-soak.stdout.log
         build/runtime-health-soak.stderr.log
       domain_artifact_if_no_files: error
