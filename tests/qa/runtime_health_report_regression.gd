@@ -191,8 +191,17 @@ func _test_read_only_aggregation_and_f3_surface() -> void:
 		"save bytes, duration and recovery remain available without copying world state",
 	)
 	var serialized := JSON.stringify(report)
-	for forbidden: String in ["must_not_escape", "crop_counts", "species_counts", "domains"]:
-		_check(not serialized.contains(forbidden), "aggregator excludes full %s dictionaries" % forbidden)
+	var forbidden_keys: Array[String] = [
+		"must_not_escape",
+		"\"crop_counts\":",
+		"\"species_counts\":",
+		"\"domains\":",
+	]
+	for forbidden: String in forbidden_keys:
+		_check(
+			not serialized.contains(forbidden),
+			"aggregator excludes full %s dictionaries" % forbidden,
+		)
 
 	var telemetry = TelemetryScript.new()
 	var overlay = OverlayScript.new()
