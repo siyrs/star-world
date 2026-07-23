@@ -68,9 +68,10 @@ foreach ($token in @(
   'bounded-multi-world-recovery-desktop\.json'
 )) { Assert-Match $text.workflow $token "Bounded recovery workflow is missing: $token" }
 
-foreach ($token in @('修复预算','世界始终可见','确定性收敛','完整加载不受预算限制','8 → 8 → 4')) {
+foreach ($token in @('修复预算','世界始终可见','确定性收敛','8 → 8 → 4')) {
   Assert-Match $text.contract ([regex]::Escape($token)) "Bounded recovery contract is missing: $token"
 }
+Assert-Match $text.contract '完整加载不受.*预算限制' 'Bounded recovery contract must state that explicit loads bypass the list repair budget'
 foreach ($token in @('同步修复所有损坏世界','主菜单卡顿','渐进恢复','真实桌面','Windows Release')) {
   Assert-Match $text.audit ([regex]::Escape($token)) "Architecture audit is missing: $token"
 }
