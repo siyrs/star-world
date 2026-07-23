@@ -11,6 +11,7 @@ $worldPath = Join-Path $root 'src\world\batched_voxel_world.gd'
 $pickupPath = Join-Path $root 'src\entity\pickup_stack_coordinator.gd'
 $regressionPath = Join-Path $root 'tests\qa\structural_integrity_regression.gd'
 $desktopPath = Join-Path $root 'tests\qa\structural_integrity_desktop_acceptance.gd'
+$batchedDesktopPath = Join-Path $root 'tests\qa\structural_integrity_batched_desktop_acceptance.gd'
 $workflowPath = Join-Path $root '.github\workflows\structural-integrity-tests.yml'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $contractPath = Join-Path $root 'docs\BOUNDED_STRUCTURAL_INTEGRITY.md'
@@ -19,8 +20,8 @@ $roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 
 foreach ($path in @(
   $policyPath,$servicePath,$toolHubPath,$doorPolicyPath,$ladderPolicyPath,$worldPath,
-  $pickupPath,$regressionPath,$desktopPath,$workflowPath,$runAllPath,$contractPath,
-  $auditPath,$roadmapPath
+  $pickupPath,$regressionPath,$desktopPath,$batchedDesktopPath,$workflowPath,
+  $runAllPath,$contractPath,$auditPath,$roadmapPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing structural integrity contract file: $path" }
 }
@@ -34,6 +35,7 @@ $world = Get-Content -Raw -Encoding UTF8 $worldPath
 $pickup = Get-Content -Raw -Encoding UTF8 $pickupPath
 $regression = Get-Content -Raw -Encoding UTF8 $regressionPath
 $desktop = Get-Content -Raw -Encoding UTF8 $desktopPath
+$batchedDesktop = Get-Content -Raw -Encoding UTF8 $batchedDesktopPath
 $workflow = Get-Content -Raw -Encoding UTF8 $workflowPath
 $runAll = Get-Content -Raw -Encoding UTF8 $runAllPath
 $contract = Get-Content -Raw -Encoding UTF8 $contractPath
@@ -120,7 +122,7 @@ if ($pickup -notmatch 'MAX_PICKUP_NODES\s*:=\s*128' -or $pickup -notmatch 'picku
 
 foreach ($phrase in @(
   'one changed cell produces seven bounded structural candidates',
-  'one shared cleanup batch for door and ladder',
+  'door and ladder cleanup share one production mutation batch',
   'orphan upper door half self-cleans',
   'full inventory produces one bounded physical fallback node',
   'world-start scan repairs an old unsupported ladder'
@@ -151,6 +153,16 @@ foreach ($phrase in @(
 )) {
   if ($desktop -notmatch [regex]::Escape($phrase)) { throw "Structural integrity desktop acceptance is missing assertion: $phrase" }
 }
+foreach ($token in @(
+  'extends\s+"res://tests/qa/structural_integrity_desktop_acceptance\.gd"',
+  'posmod\(chunk_coord\.x,\s*2\)',
+  'posmod\(chunk_coord\.y,\s*2\)',
+  '\[2,\s*6\]',
+  '\[10,\s*14\]',
+  'func\s+_build_main_fixture\s*\('
+)) {
+  if ($batchedDesktop -notmatch $token) { throw "Collision-free cross-Chunk fixture is missing: $token" }
+}
 
 if ($workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml') {
   throw 'Structural integrity workflow must use the reusable Godot quality gate'
@@ -162,7 +174,7 @@ foreach ($token in @(
   'directional_ladder_regression\.gd',
   'world_mutation_batch_regression\.gd',
   'pickup_stack_regression\.gd',
-  'structural_integrity_desktop_acceptance\.gd',
+  'structural_integrity_batched_desktop_acceptance\.gd',
   'structural-integrity-desktop\.json'
 )) {
   if ($workflow -notmatch $token) { throw "Structural integrity workflow is missing validation or evidence: $token" }
