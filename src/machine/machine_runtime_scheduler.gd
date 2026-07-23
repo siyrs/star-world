@@ -19,6 +19,8 @@ var _total_domain_advances := 0
 var _total_changed_machines := 0
 var _max_domains_per_tick := 0
 var _last_batch: Dictionary = {}
+var _health_snapshot_count := 0
+var _health_fallback_count := 0
 
 
 func _ready() -> void:
@@ -122,6 +124,46 @@ func advance_time(seconds: float, emit_events: bool = true) -> Dictionary:
 
 func get_domain(domain_id: StringName) -> Node:
 	return _domains.get(domain_id) as Node
+
+
+func get_health_snapshot() -> Dictionary:
+	_health_snapshot_count += 1
+	var machine_count := 0
+	var active_machine_count := 0
+	var tracked_machine_count := 0
+	var fallback_domain_count := 0
+	for domain_id: StringName in _domain_order:
+		var domain: Node = _domains.get(domain_id) as Node
+		if domain == null or not is_instance_valid(domain):
+			continue
+		var raw_snapshot: Variant
+		if domain.has_method("get_health_snapshot"):
+			raw_snapshot = domain.call("get_health_snapshot")
+		else:
+			fallback_domain_count += 1
+			_health_fallback_count += 1
+			raw_snapshot = domain.call("get_runtime_snapshot")
+		var snapshot: Dictionary = raw_snapshot if raw_snapshot is Dictionary else {}
+		machine_count += maxi(0, int(snapshot.get("machine_count", 0)))
+		active_machine_count += maxi(0, int(snapshot.get("active_machine_count", 0)))
+		tracked_machine_count += maxi(0, int(snapshot.get("tracked_machine_count", 0)))
+	return {
+		"schema_version": 1,
+		"active": _active,
+		"shutdown": _shutdown,
+		"domain_count": _domain_order.size(),
+		"domain_limit": MAX_DOMAINS,
+		"machine_count": machine_count,
+		"active_machine_count": active_machine_count,
+		"tracked_machine_count": tracked_machine_count,
+		"tick_count": _tick_count,
+		"total_domain_advances": _total_domain_advances,
+		"total_changed_machines": _total_changed_machines,
+		"max_domains_per_tick": _max_domains_per_tick,
+		"health_snapshot_count": _health_snapshot_count,
+		"fallback_domain_count": fallback_domain_count,
+		"total_health_fallback_count": _health_fallback_count,
+	}
 
 
 func get_snapshot() -> Dictionary:
