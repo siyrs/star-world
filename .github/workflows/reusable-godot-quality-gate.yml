@@ -1,0 +1,239 @@
+name: Reusable Godot quality gate
+
+on:
+  workflow_call:
+    inputs:
+      godot_version:
+        description: Godot version installed for the called gate.
+        required: false
+        type: string
+        default: 4.7.0
+      domain_job_name:
+        description: Display name for the strict import and domain job.
+        required: true
+        type: string
+      domain_timeout_minutes:
+        description: Hard timeout for the domain job.
+        required: false
+        type: number
+        default: 40
+      static_validators:
+        description: Newline-delimited PowerShell validator paths.
+        required: false
+        type: string
+        default: ''
+      primary_headless_script:
+        description: Optional primary Godot script executed with captured stdout and stderr.
+        required: false
+        type: string
+        default: ''
+      primary_headless_output_base:
+        description: Output base path for the captured primary headless script.
+        required: false
+        type: string
+        default: ''
+      primary_headless_timeout_milliseconds:
+        description: Timeout for the captured primary headless script.
+        required: false
+        type: number
+        default: 360000
+      domain_scripts:
+        description: Newline-delimited Godot scripts executed through the awaited wrapper.
+        required: false
+        type: string
+        default: ''
+      domain_artifact_name:
+        description: Optional domain artifact name prefix.
+        required: false
+        type: string
+        default: ''
+      domain_artifact_paths:
+        description: Optional newline-delimited domain artifact paths.
+        required: false
+        type: string
+        default: ''
+      domain_artifact_if_no_files:
+        description: upload-artifact behavior when domain evidence is absent.
+        required: false
+        type: string
+        default: warn
+      desktop_job_name:
+        description: Display name for the optional desktop job.
+        required: false
+        type: string
+        default: Real desktop acceptance
+      desktop_timeout_minutes:
+        description: Hard timeout for the optional desktop job.
+        required: false
+        type: number
+        default: 60
+      desktop_script:
+        description: Optional Godot desktop acceptance script.
+        required: false
+        type: string
+        default: ''
+      desktop_output_path:
+        description: Screenshot path passed to the desktop runner.
+        required: false
+        type: string
+        default: ''
+      desktop_timeout_milliseconds:
+        description: Timeout passed to the desktop runner.
+        required: false
+        type: number
+        default: 420000
+      desktop_artifact_name:
+        description: Optional desktop artifact name prefix.
+        required: false
+        type: string
+        default: ''
+      desktop_artifact_paths:
+        description: Optional newline-delimited desktop artifact paths.
+        required: false
+        type: string
+        default: ''
+      desktop_artifact_if_no_files:
+        description: upload-artifact behavior when desktop evidence is absent.
+        required: false
+        type: string
+        default: error
+      retention_days:
+        description: Artifact retention for domain and desktop evidence.
+        required: false
+        type: number
+        default: 14
+
+permissions:
+  contents: read
+
+jobs:
+  domain:
+    name: ${{ inputs.domain_job_name }}
+    runs-on: windows-latest
+    timeout-minutes: ${{ inputs.domain_timeout_minutes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ inputs.godot_version }}
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Run static validators
+        if: ${{ inputs.static_validators != '' }}
+        shell: pwsh
+        env:
+          STATIC_VALIDATORS: ${{ inputs.static_validators }}
+        run: |
+          $validators = @(
+            $env:STATIC_VALIDATORS -split '\r?\n' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+          foreach ($validator in $validators) {
+            $validatorPath = $validator.Replace('/', '\')
+            if (-not $validatorPath.StartsWith('.\')) {
+              $validatorPath = ".\$validatorPath"
+            }
+            if (-not (Test-Path -LiteralPath $validatorPath)) {
+              throw "Static validator is missing: $validator"
+            }
+            & $validatorPath
+            if (-not $?) {
+              throw "Static validator failed: $validator"
+            }
+          }
+
+      - name: Run primary headless script with captured logs
+        if: ${{ inputs.primary_headless_script != '' }}
+        shell: pwsh
+        env:
+          PRIMARY_HEADLESS_SCRIPT: ${{ inputs.primary_headless_script }}
+          PRIMARY_HEADLESS_OUTPUT_BASE: ${{ inputs.primary_headless_output_base }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PRIMARY_HEADLESS_OUTPUT_BASE)) {
+            throw 'primary_headless_output_base is required when primary_headless_script is set'
+          }
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_headless_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath $env:PRIMARY_HEADLESS_SCRIPT `
+            -OutputBasePath $env:PRIMARY_HEADLESS_OUTPUT_BASE `
+            -TimeoutMilliseconds ${{ inputs.primary_headless_timeout_milliseconds }}
+
+      - name: Run awaited domain scripts
+        if: ${{ inputs.domain_scripts != '' }}
+        shell: pwsh
+        env:
+          DOMAIN_SCRIPTS: ${{ inputs.domain_scripts }}
+        run: |
+          $scripts = @(
+            $env:DOMAIN_SCRIPTS -split '\r?\n' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+          foreach ($script in $scripts) {
+            .\tests\ci\Invoke-Godot.ps1 `
+              -Arguments "--headless --path . --script $script -- --disable-update-check"
+          }
+
+      - name: Upload domain evidence
+        if: ${{ always() && inputs.domain_artifact_paths != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.domain_artifact_name }}-${{ github.run_number }}
+          path: ${{ inputs.domain_artifact_paths }}
+          if-no-files-found: ${{ inputs.domain_artifact_if_no_files }}
+          retention-days: ${{ inputs.retention_days }}
+
+  desktop:
+    if: ${{ inputs.desktop_script != '' }}
+    needs: domain
+    name: ${{ inputs.desktop_job_name }}
+    runs-on: windows-latest
+    timeout-minutes: ${{ inputs.desktop_timeout_minutes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ inputs.godot_version }}
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production desktop journey
+        shell: pwsh
+        env:
+          DESKTOP_SCRIPT: ${{ inputs.desktop_script }}
+          DESKTOP_OUTPUT_PATH: ${{ inputs.desktop_output_path }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DESKTOP_OUTPUT_PATH)) {
+            throw 'desktop_output_path is required when desktop_script is set'
+          }
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath $env:DESKTOP_SCRIPT `
+            -OutputPath $env:DESKTOP_OUTPUT_PATH `
+            -TimeoutMilliseconds ${{ inputs.desktop_timeout_milliseconds }}
+
+      - name: Upload desktop visualization and benchmark evidence
+        if: ${{ always() && inputs.desktop_artifact_paths != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.desktop_artifact_name }}-${{ github.run_number }}
+          path: ${{ inputs.desktop_artifact_paths }}
+          if-no-files-found: ${{ inputs.desktop_artifact_if_no_files }}
+          retention-days: ${{ inputs.retention_days }}
