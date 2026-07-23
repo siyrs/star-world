@@ -87,9 +87,9 @@ func _test_read_only_aggregation_and_f3_surface() -> void:
 	var save := FakeSaveService.new()
 	var world := FakeSnapshotNode.new()
 	world.snapshot = {
-		"loaded": 90,
+		"loaded": 30,
 		"building": 4,
-		"pending": 120,
+		"pending": 12,
 		"last_work_usec": 2400,
 		"internal_chunks": {"must_not_escape": true},
 	}
@@ -216,9 +216,15 @@ func _test_read_only_aggregation_and_f3_surface() -> void:
 		telemetry.record_frame(0.016)
 	var snapshot: Dictionary = telemetry.sample_now()
 	_check(snapshot.get("operations", {}) is Dictionary, "telemetry carries the unified operations projection")
+	var combined_health: Dictionary = snapshot.get("health", {})
 	_check(
-		str(snapshot.get("health", {}).get("status", "")) == "critical",
+		str(combined_health.get("status", "")) == "critical",
 		"top-level runtime health includes operations severity",
+	)
+	_check(
+		int(combined_health.get("runtime_severity", -1)) == 0
+		and int(combined_health.get("operations_severity", -1)) == 2,
+		"runtime and operations severity remain independently observable",
 	)
 	overlay.setup(telemetry)
 	await process_frame
