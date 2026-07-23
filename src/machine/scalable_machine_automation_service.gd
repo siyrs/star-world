@@ -21,6 +21,22 @@ func clear() -> void:
 	_candidate_event_count = 0
 
 
+func get_health_snapshot() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"machine_count": 0,
+		"tracked_machine_count": _candidate_order.size(),
+		"active": world != null and is_instance_valid(world) and not _shutdown,
+		"shutdown": _shutdown,
+		"externally_scheduled": _externally_scheduled,
+		"cycle_count": _cycle_count,
+		"max_machines_per_cycle": ScaleAutomationPolicyScript.MAX_MACHINES_PER_CYCLE,
+		"max_items_per_cycle": ScaleAutomationPolicyScript.MAX_ITEMS_PER_CYCLE,
+		"candidate_order_dirty": _candidate_order_dirty,
+		"candidate_sort_count": _candidate_sort_count,
+	}
+
+
 func get_runtime_snapshot() -> Dictionary:
 	var result: Dictionary = super.get_runtime_snapshot()
 	result["candidate_order_dirty"] = _candidate_order_dirty
