@@ -52,8 +52,11 @@ if ($text.Coordinator -notmatch 'child_entered_tree' -or $text.Coordinator -notm
 if ($text.Coordinator -notmatch '_pending_pickups' -or $text.Coordinator -notmatch '_queue_pending') {
   throw 'Pickup node pressure must defer excess items instead of deleting them'
 }
-if ($text.Coordinator -match 'Timer\.new\(' -or $text.Coordinator -match 'func\s+_process\s*\(' -or $text.Coordinator -match 'func\s+serialize\s*\(' -or $text.Coordinator -match 'FileAccess') {
-  throw 'Pickup stacking must not create another timer, frame scheduler, persistence owner, or file'
+if ($text.Coordinator -match 'Timer\.new\(' -or $text.Coordinator -match 'func\s+serialize\s*\(' -or $text.Coordinator -match 'FileAccess') {
+  throw 'Pickup stacking must not create another timer, persistence owner, or file'
+}
+if ($text.Pickup -notmatch 'configure_shared_runtime' -or $text.Pickup -notmatch 'set_process\(false\)') {
+  throw 'Production pickup stacking must disable per-node processing under the shared runtime'
 }
 if ($text.Participant -notmatch 'extends\s+"res://src/exploration/exploration_runtime_participant\.gd"' -or $text.Participant -notmatch 'bounded_pickup_stack_coordinator\.gd') {
   throw 'Pickup runtime must extend the stable exploration participant and own the bounded coordinator'
@@ -107,4 +110,4 @@ if ($text.Audit -notmatch 'Area3D' -or $text.Audit -notmatch '180' -or $text.Aud
   throw 'Architecture audit must record the original physical-drop accumulation problem and mixed validation'
 }
 
-Write-Host 'PASS pickup_stacks nodes=128 trigger=8 scan=64 pending_types=256 materialize=16 exact_items=1 lifecycle=exploration_runtime persistence=none'
+Write-Host 'PASS pickup_stacks nodes=128 trigger=8 scan=64 pending_types=256 materialize=16 exact_items=1 lifecycle=exploration_runtime shared_runtime=1 persistence=none'
