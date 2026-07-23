@@ -105,6 +105,30 @@ func _run() -> void:
 		and int(operations.get("catalog", {}).get("last_repair_count", 0)) >= 1,
 		"one bounded telemetry snapshot combines save and catalog repair evidence",
 	)
+	var source_methods: Dictionary = operations.get("source_methods", {})
+	_check(
+		str(source_methods.get("machines", "")) == "get_health_snapshot",
+		"production health aggregation uses the dedicated machine source port",
+	)
+	_check(
+		str(source_methods.get("agriculture", "")) == "get_health_snapshot",
+		"production health aggregation uses the dedicated agriculture source port",
+	)
+	_check(
+		int(operations.get("fallback_source_count", -1)) == 0
+		and int(operations.get("unavailable_source_count", -1)) == 0,
+		"production health aggregation requires zero source fallback",
+	)
+	var machine_runtime := hub.get("machine_runtime") as Node
+	var machine_health: Dictionary = (
+		machine_runtime.call("get_health_snapshot")
+		if machine_runtime != null and machine_runtime.has_method("get_health_snapshot")
+		else {}
+	)
+	_check(
+		int(machine_health.get("fallback_domain_count", -1)) == 0,
+		"production machine scheduler requires zero legacy domain fallback",
+	)
 	var primary: Dictionary = operations.get("primary_bottleneck", {})
 	_check(
 		str(primary.get("id", "")) == "catalog",
@@ -164,12 +188,13 @@ func _run() -> void:
 	)
 
 	_report = {
-		"schema_version": 1,
+		"schema_version": 2,
 		"world_id": _world_id,
 		"save": save_snapshot,
 		"catalog_warning": catalog_warning,
 		"warning_operations": operations,
 		"steady_operations": steady_operations,
+		"machine_health": machine_health,
 		"panel_rect": {
 			"x": panel_rect.position.x,
 			"y": panel_rect.position.y,
