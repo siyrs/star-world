@@ -31,11 +31,13 @@ static func format(report: Dictionary) -> String:
 	)
 	lines.append("")
 	lines.append(
-		"保存会话：成功 %d / 尝试 %d  |  失败 %d  |  恢复 %d" % [
+		"保存会话：成功 %d / 尝试 %d  |  失败 %d  |  恢复 %d  |  主文件修复 %d / 失败 %d" % [
 			maxi(0, int(save.get("success_count", 0))),
 			maxi(0, int(save.get("attempt_count", 0))),
 			maxi(0, int(save.get("failure_count", 0))),
 			maxi(0, int(save.get("recovery_count", 0))),
+			maxi(0, int(save.get("repair_success_count", 0))),
+			maxi(0, int(save.get("repair_failure_count", 0))),
 		]
 	)
 	lines.append(
