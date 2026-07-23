@@ -6,6 +6,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 const OUTPUT_PATH := "user://world-catalog-desktop.png"
 const WORLD_COUNT := 12
 const OVERRIDES_PER_WORLD := 2048
+const MAX_CATALOG_BYTES := 4096
 const MAX_CATALOG_LIST_MILLISECONDS := 2500.0
 const MIN_AVOIDED_WORLD_BYTES := 750000
 const READY_FRAMES := 600
@@ -17,6 +18,7 @@ var _capture_path := ""
 var _report_path := ""
 var _prefix := ""
 var _world_ids: Array[String] = []
+var _world_id_by_name: Dictionary = {}
 var _report: Dictionary = {}
 
 
@@ -46,6 +48,7 @@ func _run() -> void:
 	_prefix = "Catalog-Bench-%d" % Time.get_ticks_msec()
 	var total_world_bytes := 0
 	var total_override_count := 0
+	var max_catalog_bytes := 0
 	for index in WORLD_COUNT:
 		var state: Dictionary = save.call(
 			"create_world",
@@ -56,8 +59,12 @@ func _run() -> void:
 		_check(not state.is_empty(), "desktop catalog creates world %d" % (index + 1))
 		if state.is_empty():
 			continue
-		var world_id := str(state.get("metadata", {}).get("id", ""))
+		var raw_metadata: Variant = state.get("metadata", {})
+		var metadata: Dictionary = raw_metadata if raw_metadata is Dictionary else {}
+		var world_id := str(metadata.get("id", ""))
+		var world_name := str(metadata.get("name", world_id))
 		_world_ids.append(world_id)
+		_world_id_by_name[world_name] = world_id
 		var overrides: Dictionary = {}
 		for offset in OVERRIDES_PER_WORLD:
 			var x := index * 512 + offset % 32
@@ -70,15 +77,32 @@ func _run() -> void:
 			"block_overrides": overrides,
 			"loaded_chunks": _legacy_loaded_chunks(),
 		}
-		state["metadata"]["play_seconds"] = index * 300
+		metadata["play_seconds"] = index * 300
+		metadata["map_profile"] = _large_metadata_extension(index)
+		state["metadata"] = metadata
 		_check(
 			bool(save.call("save_world", world_id, state)),
 			"desktop catalog persists world %d through the production atomic store" % (index + 1),
 		)
 		var world_bytes := _file_length(_world_path(world_id))
+		var catalog_bytes := _file_length(_catalog_path(world_id))
+		max_catalog_bytes = maxi(max_catalog_bytes, catalog_bytes)
 		total_world_bytes += world_bytes
 		total_override_count += overrides.size()
 		_check(world_bytes > 0, "desktop world %d produces a measurable payload" % (index + 1))
+		_check(
+			catalog_bytes > 0 and catalog_bytes <= MAX_CATALOG_BYTES,
+			"desktop world %d keeps its catalog below four kilobytes" % (index + 1),
+		)
+		var catalog_payload := _read_dictionary(_catalog_path(world_id))
+		var raw_catalog_metadata: Variant = catalog_payload.get("metadata", {})
+		var catalog_metadata: Dictionary = (
+			raw_catalog_metadata if raw_catalog_metadata is Dictionary else {}
+		)
+		_check(
+			not catalog_metadata.has("map_profile"),
+			"desktop world %d excludes unbounded metadata extensions from the catalog" % (index + 1),
+		)
 
 	_check(_world_ids.size() == WORLD_COUNT, "desktop catalog creates all benchmark worlds")
 	_check(
@@ -170,11 +194,13 @@ func _run() -> void:
 						or select_button.text.contains("MB")
 					)
 				)
+				var world_name := _world_name_from_row(select_button.text)
 				target_load_button = load_button
-				target_world_id = _world_id_from_row(select_button.text)
+				target_world_id = str(_world_id_by_name.get(world_name, ""))
 				break
 	_check(size_label_found, "real save row shows a human-readable authoritative file size")
 	_check(target_load_button != null, "desktop acceptance locates a real continue button")
+	_check(not target_world_id.is_empty(), "desktop acceptance resolves the selected row without full world reads")
 
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
@@ -188,33 +214,30 @@ func _run() -> void:
 			"world catalog screenshot is saved",
 		)
 
-	# Resolve the target id from the row's display name because the UI intentionally
-	# keeps its button signal closure private. This still presses the real product button.
-	if not target_world_id.is_empty():
-		for world_id: String in _world_ids:
-			var payload: Dictionary = save.call("load_world", world_id)
-			if str(payload.get("metadata", {}).get("name", "")) == target_world_id:
-				target_world_id = world_id
-				break
 	if target_load_button != null and not target_world_id.is_empty():
 		target_load_button.pressed.emit()
 		_check(
 			await _wait_for_world_ready(game, hub, target_world_id),
 			"save browser continue button starts the selected full world",
 		)
-		var loaded_world: Node = game.get("world") as Node
+		var loaded_world_node: Node = game.get("world") as Node
 		_check(
-			loaded_world != null and bool(loaded_world.get("is_started")),
+			loaded_world_node != null and bool(loaded_world_node.get("is_started")),
 			"catalog-backed selection reaches a playable production world",
 		)
 		var loaded_payload: Dictionary = save.call("load_world", target_world_id)
+		var raw_loaded_world: Variant = loaded_payload.get("world", {})
+		var loaded_world: Dictionary = raw_loaded_world if raw_loaded_world is Dictionary else {}
+		var raw_loaded_overrides: Variant = loaded_world.get("block_overrides", {})
+		var loaded_overrides: Dictionary = (
+			raw_loaded_overrides if raw_loaded_overrides is Dictionary else {}
+		)
 		_check(
-			(loaded_payload.get("world", {}) as Dictionary).get("block_overrides", {}).size()
-			== OVERRIDES_PER_WORLD,
+			loaded_overrides.size() == OVERRIDES_PER_WORLD,
 			"full load restores every large-world override after catalog selection",
 		)
 		_check(
-			not (loaded_payload.get("world", {}) as Dictionary).has("loaded_chunks"),
+			not loaded_world.has("loaded_chunks"),
 			"catalog selection never restores transient loaded Chunk coordinates",
 		)
 
@@ -224,6 +247,7 @@ func _run() -> void:
 		"overrides_per_world": OVERRIDES_PER_WORLD,
 		"total_override_count": total_override_count,
 		"total_world_bytes": total_world_bytes,
+		"max_catalog_bytes": max_catalog_bytes,
 		"catalog_list_milliseconds": catalog_list_ms,
 		"repair_diagnostics": repair_diagnostics,
 		"steady_diagnostics": steady_diagnostics,
@@ -241,6 +265,17 @@ func _legacy_loaded_chunks() -> Array:
 	return result
 
 
+func _large_metadata_extension(index: int) -> Dictionary:
+	var markers: Array[String] = []
+	for marker in 128:
+		markers.append("map-profile-%d-%03d" % [index, marker])
+	return {
+		"id": "star_continent",
+		"display_name": "Benchmark profile %d" % index,
+		"markers": markers,
+	}
+
+
 func _matching_worlds(worlds: Array) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for raw_metadata: Variant in worlds:
@@ -252,9 +287,8 @@ func _matching_worlds(worlds: Array) -> Array[Dictionary]:
 	return result
 
 
-func _world_id_from_row(text: String) -> String:
-	var first_line := text.get_slice("\n", 0).strip_edges()
-	return first_line
+func _world_name_from_row(text: String) -> String:
+	return text.get_slice("\n", 0).strip_edges()
 
 
 func _wait_for_world_ready(game: Node, hub: Node, world_id: String) -> bool:
@@ -293,6 +327,7 @@ func _finish(game: Node, hub: Node, save: Node) -> void:
 		for world_id: String in _world_ids:
 			save.call("delete_world", world_id)
 	_world_ids.clear()
+	_world_id_by_name.clear()
 	if hub != null and is_instance_valid(hub):
 		var audio: Node = hub.get("audio_service") as Node
 		if audio != null and audio.has_method("shutdown"):
@@ -304,7 +339,13 @@ func _finish(game: Node, hub: Node, save: Node) -> void:
 	if failures.is_empty():
 		print(
 			"QA WORLD CATALOG DESKTOP PASS | checks=%d | worlds=%d | bytes=%d | catalog_ms=%.3f | capture=%s"
-			% [checks, WORLD_COUNT, int(_report.get("total_world_bytes", 0)), float(_report.get("catalog_list_milliseconds", 0.0)), _capture_path]
+			% [
+				checks,
+				WORLD_COUNT,
+				int(_report.get("total_world_bytes", 0)),
+				float(_report.get("catalog_list_milliseconds", 0.0)),
+				_capture_path,
+			]
 		)
 		quit(0)
 	else:
