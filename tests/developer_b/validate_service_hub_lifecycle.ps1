@@ -7,6 +7,7 @@ $toolHubPath = Join-Path $root 'src\ui\tool_progression_service_hub.gd'
 $characterHubPath = Join-Path $root 'src\ui\character_progression_service_hub.gd'
 $husbandryHubPath = Join-Path $root 'src\ui\husbandry_progression_service_hub.gd'
 $ranchHubPath = Join-Path $root 'src\ui\ranch_progression_service_hub.gd'
+$runtimeHealthHubPath = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
 $explorationHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
 $coordinatorPath = Join-Path $root 'src\core\service_hub_feature_coordinator.gd'
 $machineParticipantPath = Join-Path $root 'src\machine\machine_runtime_participant.gd'
@@ -21,9 +22,10 @@ $runAllPath = Join-Path $root 'tests\run_all.ps1'
 
 foreach ($path in @(
   $scenePath,$gameplayHubPath,$toolHubPath,$characterHubPath,$husbandryHubPath,
-  $ranchHubPath,$explorationHubPath,$coordinatorPath,$machineParticipantPath,
-  $machineSchedulerPath,$agricultureParticipantPath,$husbandryParticipantPath,
-  $ranchParticipantPath,$runtimeParticipantPath,$journalParticipantPath,$doorServicePath,$runAllPath
+  $ranchHubPath,$runtimeHealthHubPath,$explorationHubPath,$coordinatorPath,
+  $machineParticipantPath,$machineSchedulerPath,$agricultureParticipantPath,
+  $husbandryParticipantPath,$ranchParticipantPath,$runtimeParticipantPath,
+  $journalParticipantPath,$doorServicePath,$runAllPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Lifecycle file is missing: $path" }
 }
@@ -34,6 +36,7 @@ $toolHubText = Get-Content -Raw -Encoding UTF8 $toolHubPath
 $characterHubText = Get-Content -Raw -Encoding UTF8 $characterHubPath
 $husbandryHubText = Get-Content -Raw -Encoding UTF8 $husbandryHubPath
 $ranchHubText = Get-Content -Raw -Encoding UTF8 $ranchHubPath
+$runtimeHealthHubText = Get-Content -Raw -Encoding UTF8 $runtimeHealthHubPath
 $explorationHubText = Get-Content -Raw -Encoding UTF8 $explorationHubPath
 $coordinatorText = Get-Content -Raw -Encoding UTF8 $coordinatorPath
 $machineText = Get-Content -Raw -Encoding UTF8 $machineParticipantPath
@@ -58,8 +61,11 @@ if ($husbandryHubText -match 'service_hub_feature_coordinator\.gd') {
 if ($ranchHubText -notmatch 'extends\s+"res://src/ui/husbandry_progression_service_hub\.gd"') {
   throw 'Ranch hub must retain its current public inheritance entry point'
 }
-if ($explorationHubText -notmatch 'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"') {
-  throw 'Exploration hub must retain its current public inheritance entry point'
+if ($runtimeHealthHubText -notmatch 'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"') {
+  throw 'Runtime health hub must insert below exploration and above ranch'
+}
+if ($explorationHubText -notmatch 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"') {
+  throw 'Exploration hub must retain its public scene entry while inheriting runtime health'
 }
 if ($toolHubText -notmatch 'func\s+_exit_tree\s*\([\s\S]{0,700}super\._exit_tree') {
   throw 'Tool hub must propagate deterministic shutdown to the Gameplay composition root'
@@ -70,7 +76,7 @@ if ($toolHubText -notmatch 'unregister_extension",\s*door_interaction_service' -
 foreach ($method in @('try_place_block','try_interact','remove_block_structure','clear','shutdown')) {
   if ($doorText -notmatch "func\s+$method\s*\(") { throw "Door structure service is missing deterministic lifecycle method: $method" }
 }
-$combinedHubs = $gameplayHubText + "`n" + $characterHubText + "`n" + $husbandryHubText + "`n" + $ranchHubText + "`n" + $explorationHubText
+$combinedHubs = $gameplayHubText + "`n" + $characterHubText + "`n" + $husbandryHubText + "`n" + $ranchHubText + "`n" + $runtimeHealthHubText + "`n" + $explorationHubText
 foreach ($participantPath in @(
   'machine_runtime_participant\.gd',
   'agriculture_runtime_participant\.gd',
@@ -105,6 +111,9 @@ foreach ($legacyField in @('animal_attraction_service','animal_product_service')
 foreach ($legacyField in @('prospecting_service','exploration_danger_service','exploration_journal_service','exploration_reward_service')) {
   if ($explorationHubText -notmatch "var\s+$legacyField\s*:\s*Node") { throw "Exploration hub removed compatible public field: $legacyField" }
 }
+if ($runtimeHealthHubText -notmatch 'var\s+runtime_health_report_service\s*:\s*Node') {
+  throw 'Runtime health hub must expose the stable read-only report service port'
+}
 foreach ($ownedScript in @(
   'FertilizableAgricultureService','AgricultureInteractionAdapterScript',
   'HusbandryServiceScript','HusbandryInteractionScript','AttractionServiceScript',
@@ -116,7 +125,7 @@ foreach ($ownedScript in @(
 if ($characterHubText -match 'current_state\["agriculture"\]' -or $characterHubText -match 'agriculture_service\.call\("deserialize"') {
   throw 'Character inheritance must not duplicate agriculture persistence or begin-world ownership'
 }
-if ($husbandryHubText -match 'FeatureCoordinatorScript' -or $ranchHubText -match 'FeatureCoordinatorScript' -or $explorationHubText -match 'FeatureCoordinatorScript') {
+if ($husbandryHubText -match 'FeatureCoordinatorScript' -or $ranchHubText -match 'FeatureCoordinatorScript' -or $runtimeHealthHubText -match 'FeatureCoordinatorScript' -or $explorationHubText -match 'FeatureCoordinatorScript') {
   throw 'Coordinator ownership must remain at the Gameplay composition root'
 }
 
@@ -184,4 +193,4 @@ foreach ($scriptName in @(
   if ($runAllText -notmatch $scriptName) { throw "Full regression entry point must include: $scriptName" }
 }
 
-Write-Host 'PASS service_hub_lifecycle participants=6 root=gameplay agriculture=participant door=structured dependencies=ranch->husbandry,journal->exploration history=48 machine_domains=16'
+Write-Host 'PASS service_hub_lifecycle participants=6 root=gameplay health=readonly entry=exploration chain=ranch->health->exploration dependencies=ranch->husbandry,journal->exploration history=48 machine_domains=16'

@@ -6,11 +6,16 @@ signal overlay_visibility_changed(visible: bool)
 const Actions = preload("res://src/input/gameplay_input_actions.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
+const HealthFormatter = preload(
+	"res://src/diagnostics/runtime_health_report_formatter.gd"
+)
+const PASSTHROUGH_MOUSE_FILTER := Control.MOUSE_FILTER_IGNORE
 
 var telemetry: Node
 var gameplay_input: Node
 var _panel: PanelContainer
 var _label: Label
+var _health_label: Label
 var _overlay_visible := false
 
 
@@ -60,7 +65,16 @@ func is_overlay_visible() -> bool:
 
 
 func get_display_text() -> String:
-	return _label.text if _label != null else ""
+	var sections: Array[String] = []
+	if _label != null:
+		sections.append(_label.text)
+	if _health_label != null:
+		sections.append(_health_label.text)
+	return "\n\n".join(sections)
+
+
+func get_panel_rect() -> Rect2:
+	return _panel.get_global_rect() if _panel != null else Rect2()
 
 
 func _build_ui() -> void:
@@ -69,20 +83,35 @@ func _build_ui() -> void:
 	add_child(root)
 	_panel = PanelContainer.new()
 	_panel.theme = ThemeFactory.create_theme()
-	_panel.anchor_left = 1.0
+	_panel.anchor_left = 0.0
 	_panel.anchor_right = 1.0
 	_panel.anchor_top = 0.0
-	_panel.anchor_bottom = 0.0
-	_panel.offset_left = -620.0
+	_panel.anchor_bottom = 1.0
+	_panel.offset_left = 18.0
 	_panel.offset_right = -18.0
 	_panel.offset_top = 18.0
-	_panel.offset_bottom = 500.0
+	_panel.offset_bottom = -18.0
 	root.add_child(_panel)
-	_label = Label.new()
-	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	_label.text = "F3 运行诊断\n等待采样…"
-	_panel.add_child(_label)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 18)
+	_panel.add_child(columns)
+	_label = _create_column_label("F3 运行诊断\n等待采样…")
+	columns.add_child(_label)
+	_health_label = _create_column_label("F3 运行与保存健康\n等待领域快照…")
+	columns.add_child(_health_label)
+
+
+func _create_column_label(initial_text: String) -> Label:
+	var label := Label.new()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	label.mouse_filter = PASSTHROUGH_MOUSE_FILTER
+	label.focus_mode = Control.FOCUS_NONE
+	label.add_theme_font_size_override("font_size", 13)
+	label.text = initial_text
+	return label
 
 
 func _event_toggles_diagnostics(event: InputEvent) -> bool:
@@ -92,9 +121,15 @@ func _event_toggles_diagnostics(event: InputEvent) -> bool:
 
 
 func _on_snapshot_updated(snapshot: Dictionary) -> void:
-	if _label == null:
-		return
-	_label.text = _format_snapshot(snapshot)
+	if _label != null:
+		_label.text = _format_snapshot(snapshot)
+	if _health_label != null:
+		var operations: Dictionary = (
+			snapshot.get("operations", {})
+			if snapshot.get("operations", {}) is Dictionary
+			else {}
+		)
+		_health_label.text = HealthFormatter.format(operations)
 
 
 func _format_snapshot(snapshot: Dictionary) -> String:

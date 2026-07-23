@@ -65,7 +65,7 @@ Game Runtime
    ├─ UI / Feedback / Audio
    ├─ First-person Viewmodel
    ├─ Input Contexts / Guidance
-   ├─ Runtime Diagnostics
+   ├─ Runtime Diagnostics / Unified Runtime & Save Health
    └─ Feature Lifecycle Participants
 ```
 
@@ -77,6 +77,9 @@ Game Runtime
 - 世界启动保护、非空白画面和安全出生；
 - 渐进 Chunk 加载/卸载、自适应预算和最近 64 个卸载 Chunk 快照；
 - F3 诊断、多轮生命周期 soak 和资源泄漏门禁；
+- 统一运行与保存健康报告：机器、农业、畜牧、牧场、生态、Chunk、掉落、结构、目录和保存证据进入同一 Telemetry 时间线；
+- 健康投影最多 12 行、8 条问题，75% 警告、90% 严重，并确定性显示主要瓶颈；
+- F3 双栏显示保留原运行诊断，同时呈现最近保存字节/耗时、目录回退/自愈和共享预算；
 - 原子 JSON、临时文件、备份恢复和严格存档迁移；
 - 轻量世界目录：`world.json` 保持唯一权威，`catalog.json` 缺失或损坏时按需自愈；
 - 主菜单显示存档大小和目录耗时，稳态不再读取所有世界完整 payload；
@@ -87,6 +90,7 @@ Game Runtime
 
 合同见：
 
+- [RUNTIME_HEALTH_REPORT.md](RUNTIME_HEALTH_REPORT.md)
 - [WORLD_CATALOG.md](WORLD_CATALOG.md)
 - [GITHUB_RELEASE_AUTO_UPDATE.md](GITHUB_RELEASE_AUTO_UPDATE.md)
 - [RECENT_CHUNK_SNAPSHOT_CACHE.md](RECENT_CHUNK_SNAPSHOT_CACHE.md)
@@ -169,41 +173,28 @@ Game Runtime
 - 128 个物理掉落共享一个可暂停运行时，碰撞锚点与视觉浮动解耦；
 - 物理掉落节点上限、无损堆叠、混合机器/作物/敌对/Chunk 耐久验收；
 - 结构完整性使用一个事件驱动、可暂停运行时，并向角色/F3 Snapshot 暴露有界诊断；
+- 最终 ServiceHub 拥有稳定 `RuntimeHealthReport` 节点，聚合层和 F3 均不反向修改领域状态；
 - 六个规模专项已迁移到 reusable Godot quality gate；
 - 严格导入、静态验证、等待式领域脚本、真实桌面和 Artifact 语义统一；
 - 总 Runtime、完整桌面矩阵和 Windows Release 仍由单一权威工作流显式拥有。
 
 ## 下一阶段重点
 
-### 1. 统一运行与保存健康报告
-
-把已有机器、农业、畜牧、牧场、危险、Chunk、掉落、轻量世界目录和结构完整性诊断聚合到 F3：
-
-```text
-共享预算使用率
-队列 / 活跃对象 / 批次峰值
-最近保存字节与耗时
-目录命中率 / 回退 / 自愈
-结构候选 / 清理 / 物品回退
-当前健康等级与最主要瓶颈
-```
-
-聚合层只读取有界 Snapshot，不复制完整领域 Dictionary；显示层不得反向修改领域状态。
-
-### 2. 长期规模与恢复
+### 1. 长期规模与恢复
 
 - 多小时运行 soak 与周期性真实保存；
 - 多世界、大存档目录长期增长；
 - 存档损坏、备份恢复和目录重建组合测试；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
-- Release 环境下的加载时间和退出资源报告。
+- Release 环境下的加载时间和退出资源报告；
+- 统一健康历史与真实保存事件关联，但仍保持固定历史和白名单投影。
 
-### 3. 内容扩展前置条件
+### 2. 内容扩展前置条件
 
 新生物、远程攻击、Boss、更多机器或结构方块必须先形成可玩的闭环，并复用现有状态、预算、保存和桌面验收合同。不得通过复制 Timer、平行存档领域或全世界扫描快速堆内容。
 
-### 4. 自动化扩展前置条件
+### 3. 自动化扩展前置条件
 
 在以下证据出现前，不引入管道、电网或跨 Chunk 物流：
 

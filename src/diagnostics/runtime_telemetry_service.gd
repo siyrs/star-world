@@ -17,6 +17,7 @@ var _input_context: Node
 var _gameplay_input: Node
 var _creature_spawner: Node
 var _streaming_controller: Node
+var _service_hub: Node
 var _health_policy = HealthPolicyScript.new()
 var _sample_accumulator := 0.0
 var _frame_sample_count := 0
@@ -37,12 +38,14 @@ func setup(
 	p_input_context: Node = null,
 	p_creature_spawner: Node = null,
 	p_streaming_controller: Node = null,
-	p_gameplay_input: Node = null
+	p_gameplay_input: Node = null,
+	p_service_hub: Node = null
 ) -> void:
 	_input_context = p_input_context
 	_creature_spawner = p_creature_spawner
 	_streaming_controller = p_streaming_controller
 	_gameplay_input = p_gameplay_input
+	_service_hub = p_service_hub
 
 
 func attach_runtime(world: Node, player: Node3D) -> void:
@@ -147,6 +150,7 @@ func sample_now() -> Dictionary:
 		"gameplay_input": _get_gameplay_input_status(),
 		"world_attached": is_instance_valid(_world),
 		"player_attached": is_instance_valid(_player),
+		"operations": _get_runtime_health_snapshot(),
 	}
 	snapshot["health"] = _health_policy.evaluate(snapshot)
 	_latest_snapshot = snapshot.duplicate(true)
@@ -187,7 +191,7 @@ func write_report(path: String) -> bool:
 	if file == null:
 		return false
 	var payload := {
-		"version": 2,
+		"version": 3,
 		"generated_at": Time.get_datetime_string_from_system(),
 		"latest": get_latest_snapshot(),
 		"history": get_history(),
@@ -213,6 +217,16 @@ func _get_adaptive_streaming_status() -> Dictionary:
 		return {"enabled": false, "attached": false, "level_name": "unavailable"}
 	var status = _streaming_controller.call("get_status")
 	return status.duplicate(true) if status is Dictionary else {}
+
+
+func _get_runtime_health_snapshot() -> Dictionary:
+	if (
+		not is_instance_valid(_service_hub)
+		or not _service_hub.has_method("get_runtime_health_snapshot")
+	):
+		return {}
+	var raw_snapshot: Variant = _service_hub.call("get_runtime_health_snapshot")
+	return raw_snapshot.duplicate(true) if raw_snapshot is Dictionary else {}
 
 
 func _count_creatures() -> int:
