@@ -2,7 +2,7 @@
 
 ## 范围
 
-本轮审计双格木门、方向梯子、跨 Chunk 世界修改、结构物品返回和生产生命周期。目标不是再增加一种结构方块，而是补齐现有结构在支撑变化后的真实完整性闭环，并证明大规模清理不会退化为全世界扫描或逐格重建。
+本轮审计双格木门、方向梯子、跨 Chunk 世界修改、结构物品返回和生产生命周期。目标不是再增加一种结构方块，而是补齐现有结构在支撑变化后的真实完整性闭环，并证明大规模清理不会退化为全世界扫描、逐格重建或同一脏 Chunk 的重复重建。
 
 ## 审计发现
 
@@ -54,7 +54,28 @@
 - 单元 fixture 必须断言门支撑、门上下半、梯子支撑和梯子坐标互不重叠；
 - 大规模跨 Chunk 场地必须由纯策略生成并报告坐标冲突数；
 - 桌面脚本必须在领域层通过 Headless 显式加载；
-- 正式桌面旅程只保留一个独立入口，不依赖未执行基类的隐式解析。
+- 完整基础旅程和优化验收入口都必须能独立解析。
+
+### 7. 规则批处理不等于网格重建已经最优
+
+第一版共享服务已把 384 个结构和 512 个依赖方块合并为一个结构修改批次，但真实 Windows 软件渲染证据仍显示：
+
+```text
+删除 384 个支撑       → 重建 32 个 Chunk
+清理 512 个结构方块   → 再重建同一 32 个 Chunk
+总 Flush               2
+实际 Chunk 重建        64
+总清理时间             约 15.95 秒
+结构规则阶段           约 78 毫秒
+```
+
+真正瓶颈不是结构规则，而是外层支撑删除在依赖结构清理前过早关闭了世界重建事务。同一脏 Chunk 集合被完整重建两遍。
+
+### 8. Soak 测试不能把异步清理等同于固定帧数
+
+总 Runtime 首次执行出现一次 soak 波动，同一 SHA 重跑成功。审计发现测试在返回菜单后固定等待三个帧就立即检查节点数量；`queue_free()`、Chunk 释放和资源回收在不同 Runner 负载下不保证恰好三帧完成。
+
+测试应保持原有节点、Chunk、引用、输入和 Pause 边界，但使用最多 60 帧的有界收敛等待。超时仍失败，不能通过无限等待隐藏泄漏。
 
 ## 决策
 
@@ -97,9 +118,17 @@ block_changed
 
 服务使用 `PROCESS_MODE_PAUSABLE`，队列为空时关闭 Process。内部删除事件由 `_applying_cleanup` 抑制，避免递归。
 
-### 批处理世界修改
+### 世界 pre-flush 扩展点
 
-所有失效门和梯子先汇总到一个修改数组，再调用生产 `BatchedVoxelWorld.apply_block_mutations()`。因此跨 Chunk 清理只重建实际脏 Chunk，并继续提供 request、execution、coalesced、max dirty 和耗时证据。
+`BatchedVoxelWorld.apply_block_mutations()` 在最外层修改完成、真正执行网格重建前同步发出：
+
+```text
+block_mutation_batch_pre_flush(reason, summary)
+```
+
+摘要只有请求、接受、改变、拒绝、截断、批次深度和脏 Chunk 数，不发布完整修改数组。
+
+生产 `BatchedBlockStructureIntegrityService` 在这一边界消费候选并提交嵌套结构修改。由于外层批次仍然开启，嵌套修改只扩展同一个脏 Chunk 集合；最外层结束时统一执行一次网格 Flush。嵌套 pre-flush 会留下诊断，但 `_applying_cleanup` 阻止递归进入第二轮清理。
 
 ### 规范、无损物品返回
 
@@ -121,7 +150,7 @@ structural_integrity_service
 StructuralIntegrity
 ```
 
-服务在 `attach_game` 绑定生产世界，在 `_begin_world` 清空并检查持久覆盖，在菜单和退出路径清理。角色/F3 Snapshot 只接收有界聚合诊断。
+服务在 `attach_game` 绑定生产世界和可选 pre-flush 信号，在 `_begin_world` 清空并检查持久覆盖，在菜单和退出路径清理。角色/F3 Snapshot 只接收有界聚合诊断。
 
 ### 可验证的规模 fixture
 
@@ -132,9 +161,22 @@ StructuralIntegrity
 - 返回目标坐标总数和冲突计数；
 - 不拥有 SceneTree、文件、Timer 或产品状态。
 
-`structural_integrity_desktop_import_regression.gd` 在领域层显式加载 fixture 与正式桌面脚本。只有解析和资源路径均通过后，才启动真实桌面 Job。
+`structural_integrity_desktop_import_regression.gd` 在领域层显式加载 fixture、完整基础旅程和单 Flush 验收入口。只有解析和资源路径均通过后，才启动真实桌面 Job。
 
-## 真实规模设计
+### 有界生命周期收敛测试
+
+`runtime_soak_regression.gd` 不再假设所有菜单清理恰好三帧结束。每轮返回菜单后最多等待 60 帧，直到以下条件同时成立：
+
+- 世界停止且已加载 Chunk 为零；
+- 自适应流式引用已释放；
+- 输入恢复菜单上下文；
+- SceneTree 与模拟服务均未暂停；
+- 生物和瞬时掉落容器为空；
+- 总节点数回到基线加 40 的既有预算。
+
+任何条件超出窗口仍立即失败。
+
+## 真实规模设计与结果
 
 真实 Windows 桌面旅程创建：
 
@@ -153,23 +195,43 @@ StructuralIntegrity
 2. 等待事件队列验证所有结构仍有效；
 3. 清空结构诊断并重置世界重建统计；
 4. 一个生产批次移除 384 个支撑；
-5. 共享运行时在一个 Flush 中清理 384 个结构和 512 个结构方块；
-6. 验证物品、候选、重建和耗时；
-7. 原子保存、菜单清理、完整重载；
-8. 背包填满后再清理 6 扇门和 10 个梯子；
-9. 验证 16 件物品聚合为至多两个物理掉落节点；
-10. 输出 1024×576 截图、JSON、stdout/stderr。
+5. pre-flush 中清理 384 个结构和 512 个结构方块；
+6. 最外层事务统一重建脏 Chunk；
+7. 验证物品、候选、重建和耗时；
+8. 原子保存、菜单清理、完整重载；
+9. 背包填满后再清理 6 扇门和 10 个梯子；
+10. 验证 16 件物品聚合为至多两个物理掉落节点；
+11. 输出 1024×576 截图、JSON、stdout/stderr。
+
+最终固定候选的真实 Windows Server 2025 / ANGLE 软件渲染证据：
+
+```text
+结构清理结果            384 / 384
+结构方块删除            512 / 512
+候选溢出                0
+规则与事务耗时          66.449 ms
+网格 Flush              1
+实际 Chunk 重建         32
+脏 Chunk 峰值           32
+总清理时间              7.177 s
+保存                    9.987 ms / 14,584 bytes
+加载                    2.070 ms
+满背包物理回退          16 items / 2 nodes
+```
 
 真实门禁要求：
 
-- 支撑移除和结构清理总共只有两个世界重建 Flush；
-- 结构清理在 5 秒内完成；
+- 支撑移除和结构清理共享一个世界网格 Flush；
+- 结构规则阶段不超过 1 秒；
+- Windows 软件渲染总清理时间不超过 12 秒；
+- 实际重建、最后 Flush 和脏 Chunk 峰值均不超过 32；
 - 不留下浮空半门或不可攀爬梯子；
 - 控制结构保持完整；
 - 返回物品总数精确且重载不重复；
 - 候选队列不溢出；
-- 世界重建数按 Chunk 数增长，不能接近 896 次方块变化；
 - 瞬时状态不进入存档。
+
+与第一版真实实现相比，网格 Flush 和实际 Chunk 重建均减少 50%，总耗时从约 15.95 秒降低到 7.177 秒，降低约 55%。
 
 ## 实现结果
 
@@ -178,20 +240,27 @@ StructuralIntegrity
 ```text
 src/interaction/block_structure_integrity_policy.gd
 src/interaction/block_structure_integrity_service.gd
+src/interaction/batched_block_structure_integrity_service.gd
 tests/qa/structural_integrity_regression.gd
 tests/qa/structural_integrity_batched_regression.gd
+tests/qa/world_mutation_pre_flush_regression.gd
 tests/qa/support/structural_integrity_scale_fixture.gd
 tests/qa/structural_integrity_desktop_import_regression.gd
 tests/qa/structural_integrity_scale_desktop_acceptance.gd
+tests/qa/structural_integrity_single_flush_desktop_acceptance.gd
 tests/developer_b/validate_structural_integrity.ps1
+tests/developer_b/validate_structural_single_flush.ps1
 .github/workflows/structural-integrity-tests.yml
 docs/BOUNDED_STRUCTURAL_INTEGRITY.md
+docs/STRUCTURAL_SINGLE_FLUSH_OPTIMIZATION.md
 ```
 
 升级：
 
 ```text
+src/world/batched_voxel_world.gd
 src/ui/tool_progression_service_hub.gd
+tests/qa/runtime_soak_regression.gd
 tests/run_all.ps1
 docs/PRODUCT_ROADMAP.md
 ```
