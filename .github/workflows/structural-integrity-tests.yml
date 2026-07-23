@@ -26,7 +26,7 @@ jobs:
         tests/developer_b/validate_world_mutation_batch.ps1
         tests/developer_b/validate_pickup_stacks.ps1
         tests/developer_b/validate_service_hub_lifecycle.ps1
-      primary_headless_script: res://tests/qa/structural_integrity_regression.gd
+      primary_headless_script: res://tests/qa/structural_integrity_batched_regression.gd
       primary_headless_output_base: build\structural-integrity-regression
       primary_headless_timeout_milliseconds: 300000
       domain_scripts: |
