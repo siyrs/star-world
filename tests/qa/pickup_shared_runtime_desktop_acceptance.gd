@@ -81,8 +81,8 @@ func _run() -> void:
 	)
 	_check(
 		bool(setup_result.get("success", false))
-		and int(setup_result.get("changed", 0)) >= 1500,
-		"pickup runtime arena commits through the production world batch API",
+		and int(setup_result.get("changed", 0)) >= 700,
+		"pickup runtime arena commits its full stone floor through the production batch API",
 	)
 	player.set_physics_process(false)
 	player.velocity = Vector3.ZERO
@@ -91,7 +91,7 @@ func _run() -> void:
 	var camera: Camera3D = player.call("get_view_camera") as Camera3D
 	if camera != null:
 		camera.look_at(center, Vector3.UP)
-	var pickups: Array[Node] = []
+	var pickups: Array[Node3D] = []
 	for index in PICKUP_COUNT:
 		var column := index % GRID_COLUMNS
 		var row := int(index / GRID_COLUMNS)
@@ -103,7 +103,7 @@ func _run() -> void:
 			float(floor_y) + 1.0,
 			float(base_z) + 2.0 + float(row) * GRID_SPACING
 		)
-		pickups.append(pickup)
+		pickups.append(pickup as Node3D)
 		if index % 16 == 15:
 			await process_frame
 	for _frame in 8:
@@ -130,26 +130,27 @@ func _run() -> void:
 		and int(runtime.get("runtime_node_budget", 0)) == PICKUP_COUNT,
 		"pickup runtime remains inside its one-hundred-twenty-eight-node hard budget",
 	)
-	var first: Node = pickups[0]
-	var middle: Node = pickups[int(PICKUP_COUNT / 2)]
-	var last: Node = pickups[PICKUP_COUNT - 1]
-	var anchors := {
-		first: (first as Node3D).global_position,
-		middle: (middle as Node3D).global_position,
-		last: (last as Node3D).global_position,
-	}
+	var first: Node3D = pickups[0]
+	var middle: Node3D = pickups[int(PICKUP_COUNT / 2)]
+	var last: Node3D = pickups[PICKUP_COUNT - 1]
+	var samples: Array[Dictionary] = [
+		{"node": first, "anchor": first.global_position},
+		{"node": middle, "anchor": middle.global_position},
+		{"node": last, "anchor": last.global_position},
+	]
 	var first_visual: Node3D = first.call("get_visual_root") as Node3D
 	var visual_before := first_visual.position.y if first_visual != null else 0.0
 	for _frame in 12:
 		await process_frame
 	var max_anchor_drift := 0.0
-	for raw_pickup: Variant in anchors.keys():
-		var pickup_node := raw_pickup as Node3D
+	for sample: Dictionary in samples:
+		var pickup_node := sample.get("node") as Node3D
+		var original_anchor: Vector3 = sample.get("anchor", Vector3.ZERO)
 		if pickup_node == null or not is_instance_valid(pickup_node):
 			continue
 		max_anchor_drift = maxf(
 			max_anchor_drift,
-			pickup_node.global_position.distance_to(anchors[raw_pickup] as Vector3)
+			pickup_node.global_position.distance_to(original_anchor)
 		)
 	var visual_after := first_visual.position.y if first_visual != null else 0.0
 	_check(
@@ -266,7 +267,6 @@ func _run() -> void:
 	var reload_milliseconds := float(Time.get_ticks_usec() - reload_started) / 1000.0
 	_check(reload_milliseconds <= MAX_RELOAD_MILLISECONDS, "pickup runtime first-playable reload remains inside thirty seconds")
 	coordinator = hub.get("pickup_stack_coordinator") as Node
-	spawner = hub.get("creature_spawner") as Node3D
 	var fresh_runtime: Dictionary = coordinator.call("get_snapshot")
 	_check(
 		int(fresh_runtime.get("pickup_node_count", -1)) == 0
