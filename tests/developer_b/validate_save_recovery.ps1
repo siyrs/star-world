@@ -92,9 +92,12 @@ foreach ($token in @('已自愈 %d 个存档','主文件修复失败 %d','get_re
   Assert-Match $text.browser ([regex]::Escape($token)) "Save browser is missing visible recovery evidence: $token"
 }
 foreach ($token in @('get_recovery_diagnostics','repair_success_count','repair_failure_count','last_recovery_source','last_recovery_elapsed_milliseconds')) {
-  Assert-Match $text.health_service $token "Runtime health service is missing save repair projection: $token"
-  Assert-Match $text.health_policy $token "Runtime health policy is missing save repair projection: $token"
+  Assert-Match $text.health_service $token "Runtime health service is missing save repair aggregation: $token"
 }
+foreach ($token in @('repair_success_count','repair_failure_count','last_recovery_source','last_recovery_elapsed_milliseconds')) {
+  Assert-Match $text.health_policy $token "Runtime health policy is missing bounded save repair projection: $token"
+}
+Assert-NoMatch $text.health_policy 'get_recovery_diagnostics|save_service\.call' 'Pure runtime health policy must not reach back into SaveService'
 Assert-Match $text.health_policy '主文件重建失败' 'F3 health must treat a failed primary repair as critical'
 Assert-Match $text.health_policy '恢复并重建主存档' 'F3 health must surface successful self-healing'
 Assert-Match $text.formatter '主文件修复 %d / 失败 %d' 'F3 formatter must display primary repair totals'
