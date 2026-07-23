@@ -1,5 +1,5 @@
 class_name RuntimeHealthServiceHub
-extends "res://src/ui/exploration_progression_service_hub.gd"
+extends "res://src/ui/ranch_progression_service_hub.gd"
 
 const RuntimeHealthReportServiceScript = preload(
 	"res://src/diagnostics/runtime_health_report_service.gd"
