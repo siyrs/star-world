@@ -166,6 +166,10 @@ _exit_tree → 断开信号并 shutdown
 - 旧覆盖扫描修复孤立梯子且保留有效门；
 - 无平行存档和空闲 Process。
 
+规模场地由纯 `StructuralIntegrityScaleFixture` 生成。它显式统计支撑与结构坐标冲突，并用奇偶 Chunk 错位布局防止跨边界支撑覆盖相邻梯子。该 fixture 不拥有 SceneTree、文件或计时器，可独立接受静态合同验证。
+
+在启动昂贵的 Windows 桌面 Job 前，`structural_integrity_desktop_import_regression.gd` 会在 Headless 阶段显式加载规模 fixture 和单一桌面旅程。测试脚本解析、类型或资源路径错误会在领域层提前失败，而不是到桌面 Runner 才暴露。正式桌面验收只保留一个独立入口 `structural_integrity_scale_desktop_acceptance.gd`，不依赖未执行的基类/子类组合。
+
 真实桌面验收使用正式 `GameScene`：
 
 ```text
