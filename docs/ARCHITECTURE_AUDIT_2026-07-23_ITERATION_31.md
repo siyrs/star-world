@@ -57,7 +57,7 @@
 - agriculture `crop_counts`；
 - ecology `species_counts`；
 - lifecycle participants；
--最近批次的逐领域摘要。
+- 最近批次的逐领域摘要。
 
 即使这些来源本身有边界，F3 也不应复制它们。最终报告只保留 12 行和 8 条问题，并使用固定字段白名单。
 
@@ -72,6 +72,20 @@
 ```
 
 因此同一快照在测试、桌面和 Release 中得到同一主要瓶颈。
+
+### 7. ServiceHub 脚本路径已经成为兼容接口
+
+第一版组合把 `service_hub.tscn` 直接切到新的最终脚本。新专项本身可以工作，但探矿、生态和生命周期等既有回归都把生产场景的 `exploration_progression_service_hub.gd` 资源路径当成兼容 API。
+
+不能通过修改所有旧断言掩盖这一破坏。健康层必须插入继承链，同时保持场景入口稳定：
+
+```text
+RanchProgressionServiceHub
+→ RuntimeHealthServiceHub
+→ ExplorationProgressionServiceHub
+```
+
+这样旧扩展、测试和场景无需迁移，新健康层仍拥有完整保存包装和生命周期。
 
 ## 决策
 
@@ -106,17 +120,25 @@ save evidence
 
 服务没有 `_process` 或 Timer，不创建历史，也不序列化状态。
 
-### 最终 Hub 组合
+### 兼容 Hub 组合
 
-新增 `RuntimeHealthServiceHub` 作为 `service_hub.tscn` 的最终脚本：
+新增 `RuntimeHealthServiceHub`，但不直接替换生产场景脚本。它继承 Ranch 层，稳定 Exploration 层再继承健康层：
 
-- 在所有既有参与者安装后创建稳定 `RuntimeHealthReport` 节点；
+```text
+RanchProgressionServiceHub
+  └─ RuntimeHealthServiceHub
+       └─ ExplorationProgressionServiceHub  ← service_hub.tscn
+```
+
+健康层负责：
+
+- 在既有参与者基础上创建稳定 `RuntimeHealthReport` 节点；
 - 世界启动时记录 ID；
 - attach 时只绑定当前世界引用；
 - 保存时包装完整 `super.save_current()`；
 - 菜单、失败和退出时释放引用并断开信号。
 
-原 `ExplorationProgressionServiceHub` 和所有领域参与者保持兼容，不需要知道健康报告存在。
+`ExplorationProgressionServiceHub` 的类名、资源路径、探索 feature ID 和所有领域端口保持兼容。
 
 ### 同一 Telemetry 时间线
 
@@ -144,7 +166,7 @@ Telemetry history 上限仍为 120，没有第二个采样循环。
 
 ## 真实验收设计
 
-Windows 桌面旅程使用正式 `GameScene`、最终 ServiceHub、正式 SaveService 和正式 F3：
+Windows 桌面旅程使用正式 `GameScene`、兼容 Exploration ServiceHub、正式 SaveService 和正式 F3：
 
 ```text
 创建世界
@@ -169,6 +191,7 @@ Windows 桌面旅程使用正式 `GameScene`、最终 ServiceHub、正式 SaveSe
 - 报告不含 `block_overrides`、`crop_counts`、`species_counts`、participant dependencies 或 domain summaries；
 - 第二次目录扫描回到纯命中；
 - UI 不抢鼠标；
+- 生产场景仍报告 Exploration ServiceHub 资源路径；
 - stderr 无脚本、解析或资源泄漏错误。
 
 ## 测试沉淀
@@ -191,7 +214,7 @@ docs/RUNTIME_HEALTH_REPORT.md
 升级：
 
 ```text
-scenes/ui/service_hub.tscn
+src/ui/exploration_progression_service_hub.gd
 src/diagnostics/runtime_diagnostics_coordinator.gd
 src/diagnostics/runtime_telemetry_service.gd
 src/diagnostics/runtime_health_policy.gd
