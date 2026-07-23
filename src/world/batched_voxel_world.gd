@@ -1,6 +1,8 @@
 class_name BatchedVoxelWorld
 extends "res://src/world/voxel_world.gd"
 
+signal block_mutation_batch_pre_flush(reason: String, summary: Dictionary)
+
 const BatchBlockRegistryScript = preload("res://src/block/block_registry.gd")
 const MAX_REBUILD_BATCH_DEPTH := 8
 const MAX_DIRTY_REBUILD_CHUNKS := 256
@@ -19,6 +21,7 @@ var _max_dirty_rebuild_chunks := 0
 var _last_rebuild_flush_usec := 0
 var _last_rebuild_flush_chunk_count := 0
 var _last_rebuild_reason := ""
+var _batch_pre_flush_emit_count := 0
 
 
 func clear_world() -> void:
@@ -135,6 +138,23 @@ func apply_block_mutations(
 			changed += 1
 		else:
 			unchanged += 1
+	var bounded_reason := reason.strip_edges().left(MAX_BATCH_REASON_LENGTH)
+	var pre_flush_summary := {
+		"reason": bounded_reason,
+		"requested": requested,
+		"accepted": accepted,
+		"changed": changed,
+		"unchanged": unchanged,
+		"rejected": rejected,
+		"truncated": truncated,
+		"batch_depth": _rebuild_batch_depth,
+		"pending_chunks": _dirty_rebuild_chunks.size(),
+	}
+	_batch_pre_flush_emit_count += 1
+	block_mutation_batch_pre_flush.emit(
+		bounded_reason,
+		pre_flush_summary.duplicate(true),
+	)
 	var flush_result := end_chunk_rebuild_batch(true)
 	return {
 		"success": true,
@@ -163,6 +183,7 @@ func get_chunk_rebuild_stats() -> Dictionary:
 		"last_flush_usec": _last_rebuild_flush_usec,
 		"last_flush_chunk_count": _last_rebuild_flush_chunk_count,
 		"last_reason": _last_rebuild_reason,
+		"pre_flush_emit_count": _batch_pre_flush_emit_count,
 		"max_batch_depth": MAX_REBUILD_BATCH_DEPTH,
 		"max_dirty_chunk_budget": MAX_DIRTY_REBUILD_CHUNKS,
 		"max_mutations_per_batch": MAX_BLOCK_MUTATIONS_PER_BATCH,
@@ -179,6 +200,7 @@ func reset_chunk_rebuild_stats() -> void:
 	_last_rebuild_flush_usec = 0
 	_last_rebuild_flush_chunk_count = 0
 	_last_rebuild_reason = ""
+	_batch_pre_flush_emit_count = 0
 
 
 func get_streaming_stats() -> Dictionary:
@@ -238,6 +260,7 @@ func _reset_rebuild_runtime() -> void:
 	_last_rebuild_flush_usec = 0
 	_last_rebuild_flush_chunk_count = 0
 	_last_rebuild_reason = ""
+	_batch_pre_flush_emit_count = 0
 
 
 func _mutation_position(value: Variant) -> Vector3i:
