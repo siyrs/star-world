@@ -2,7 +2,7 @@
 
 ## 范围
 
-本轮审计世界保存、主菜单存档列表、生产世界序列化和大存档桌面行为，目标是在不改变权威存档与恢复语义的前提下，让世界数量和世界体积可以独立增长。
+本轮审计世界保存、主菜单存档列表、生产世界序列化、大存档桌面行为和可复用 Headless 证据判断，目标是在不改变权威存档与恢复语义的前提下，让世界数量和世界体积可以独立增长，并确保退出码 0 不会掩盖资源问题。
 
 ## 审计发现
 
@@ -42,6 +42,23 @@
 
 若世界文件已原子提交，仅目录写入失败，向玩家返回“保存失败”会阻止安全退出并误导用户。非权威缓存错误应进入诊断，不能改变权威提交结果。
 
+### 捕获 Headless 日志仍可能假绿
+
+新目录领域回归第一次真实运行打印：
+
+```text
+QA WORLD CATALOG PASS | checks=38 | worlds=3
+```
+
+进程退出码为 0，但同一 Artifact 的 stderr 同时包含：
+
+```text
+18 ObjectDB instances were leaked at exit
+8 resources still in use at exit
+```
+
+`run_godot_headless_test.ps1` 当时只检查超时与退出码，不像桌面包装器那样扫描致命 Godot 诊断。这意味着带 stdout/stderr 证据的主领域脚本仍可在资源泄漏时假绿。
+
 ## 决策
 
 ### 新增轻量目录
@@ -80,6 +97,20 @@ PersistentCachedBatchedVoxelWorld  ← 稀疏持久化投影
 
 这样保存路径不再构造 `loaded_chunks`，同时不会让缓存层成为持久化所有者。`SaveService` 仍二次擦除该字段，以兼容旧世界和非生产测试替身。
 
+### Headless 与 Desktop 使用同一成功标准
+
+`run_godot_headless_test.ps1` 与 `run_godot_desktop_test.ps1` 现在都在 PASS 前扫描 stdout/stderr：
+
+```text
+SCRIPT ERROR
+Parse Error
+ObjectDB instances were leaked
+Leaked instance:
+Resources still in use at exit
+```
+
+目录回归主动释放未挂入 SceneTree 的生产世界节点。共享静态合同同时验证两个包装器的扫描函数和实际调用，防止后续重构删除该门禁。
+
 ### 可观测性
 
 目录刷新记录：
@@ -115,7 +146,10 @@ tests/developer_b/validate_world_catalog.ps1
 src/save/save_service.gd
 src/core/batched_game.gd
 src/ui/save_browser_panel.gd
+tests/ci/run_godot_headless_test.ps1
+tests/developer_b/validate_reusable_ci_workflows.ps1
 tests/run_all.ps1
+docs/REUSABLE_GODOT_QUALITY_GATES.md
 docs/PRODUCT_ROADMAP.md
 README.md
 ```
@@ -132,7 +166,7 @@ README.md
 
 每个世界还写入大体积 `map_profile` 扩展，但 `catalog.json` 必须保持在 4 KiB 以内。验收会主动删除一个目录并破坏另一个目录，要求两个世界都保持可见、目录均自动修复；随后再次刷新，要求所有测试世界由目录命中，并记录避免读取的权威总字节数和实际耗时。
 
-最后保存面板必须真实渲染世界大小和目录耗时，真实“继续”按钮必须进入选中的完整世界，2,048 条修改必须全部恢复，截图和 JSON 报告必须上传。
+最后保存面板必须真实渲染世界大小和目录耗时，真实“继续”按钮必须进入选中的完整世界，2,048 条修改必须全部恢复，截图和 JSON 报告必须上传。领域和桌面日志同时必须没有脚本错误、解析错误和资源泄漏。
 
 ## 后续建议
 
