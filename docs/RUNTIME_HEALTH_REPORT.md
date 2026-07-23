@@ -93,6 +93,20 @@ Chunk 已加载
 
 主要瓶颈按严重度、预算利用率和稳定 ID 排序，结果具有确定性。
 
+### 运行分量与运营分量
+
+顶层健康保留两个可独立检查的分量：
+
+```text
+runtime_severity    帧时间、卡顿、Chunk 排队、内存和节点
+operations_severity 机器、农业、畜牧、牧场、生态、掉落、结构、目录和保存
+severity            max(runtime_severity, operations_severity)
+```
+
+F3 仍展示合并后的最终状态，但测试和自动化可以区分“帧/流式异常”与“领域预算压力”。例如生态或已加载 Chunk 接近受控容量时，运营分量可以提示压力；只要 Chunk、节点、引用、Pause 和输入仍在硬边界内，lifecycle soak 不应把它误报成资源泄漏。
+
+三轮 soak 因此继续严格验证原运行分量，并独立保留运营分量采样数、Chunk 上限、节点回落、世界引用释放、输入恢复、Pause 清理和生物容器归零。
+
 ## 兼容组合与保存证据
 
 为保留已发布的生产入口，ServiceHub 继承链为：
@@ -156,8 +170,10 @@ _exit_tree         断开恢复信号并 shutdown
 - 保存失败、结构溢出、掉落拒绝、目录自愈；
 - 完整领域 Dictionary 不逃逸；
 - Telemetry 与顶层 Runtime Health 合并；
+- 运行分量与运营分量可独立观察；
 - 真实 F3 输入和鼠标穿透；
-- 生产场景仍使用稳定 Exploration ServiceHub 入口。
+- 生产场景仍使用稳定 Exploration ServiceHub 入口；
+- 三轮 soak 只把原帧/流式分量作为持续严重判定，同时继续验证全部生命周期硬边界。
 
 真实 Windows 桌面旅程：
 
