@@ -1,7 +1,7 @@
 extends SceneTree
 
-const BASE_DESKTOP_PATH := "res://tests/qa/structural_integrity_desktop_acceptance.gd"
-const BATCHED_DESKTOP_PATH := "res://tests/qa/structural_integrity_batched_desktop_acceptance.gd"
+const FIXTURE_PATH := "res://tests/qa/support/structural_integrity_scale_fixture.gd"
+const DESKTOP_PATH := "res://tests/qa/structural_integrity_scale_desktop_acceptance.gd"
 
 var checks := 0
 var failures: Array[String] = []
@@ -12,10 +12,16 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	var base_script: Script = load(BASE_DESKTOP_PATH)
-	_check(base_script != null, "base structural desktop journey loads as a valid script")
-	var batched_script: Script = load(BATCHED_DESKTOP_PATH)
-	_check(batched_script != null, "collision-free structural desktop journey loads as a valid script")
+	var fixture_script := load(FIXTURE_PATH) as Script
+	_check(
+		fixture_script != null,
+		"structural scale fixture loads as a valid pure script",
+	)
+	var desktop_script := load(DESKTOP_PATH) as Script
+	_check(
+		desktop_script != null,
+		"standalone structural desktop journey loads as a valid script",
+	)
 	if failures.is_empty():
 		print("QA STRUCTURAL DESKTOP IMPORT PASS | checks=%d" % checks)
 		quit(0)
