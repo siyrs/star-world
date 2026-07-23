@@ -72,9 +72,20 @@ catalog.json 主文件可正常解析
 
 因此旧世界无需一次性迁移，第一次打开存档列表即可按需自愈；损坏目录不会隐藏或删除世界。
 
-## 瞬时世界状态
+## 瞬时世界状态与生产投影
 
-`loaded_chunks` 只是当前渲染距离内的运行快照，世界启动并不读取它。生产 `CachedBatchedVoxelWorld.serialize_state()` 现在只返回：
+`loaded_chunks` 只是当前渲染距离内的运行快照，世界启动并不读取它。最近 Chunk 缓存和重建批处理必须继续保持瞬时，不拥有保存接口。
+
+正式 `GameScene` 使用 `PersistentCachedBatchedVoxelWorld` 作为窄持久化投影：
+
+```text
+PersistentCachedBatchedVoxelWorld
+└─ CachedBatchedVoxelWorld
+   └─ BatchedVoxelWorld
+      └─ VoxelWorld
+```
+
+投影只返回：
 
 ```text
 version
@@ -84,7 +95,7 @@ world_id
 block_overrides
 ```
 
-`SaveService` 仍在持久化边界再次移除旧 payload 中的 `loaded_chunks`，兼容历史调用方和旧存档。Chunk 缓存、重建计数、流式队列和目录诊断均不得进入世界保存。
+因此保存路径不会先遍历或构造 `loaded_chunks`。`SaveService` 仍在磁盘边界再次移除旧 payload 中的该字段，兼容历史调用方和旧存档。Chunk 缓存、重建计数、流式队列和目录诊断均不得进入世界保存。
 
 ## 目录诊断
 
@@ -115,6 +126,6 @@ block_overrides
 - 缺失和损坏目录回退并自愈；
 - 完整世界加载保持不变；
 - `loaded_chunks` 不进入磁盘或迁移结果；
-- 生产世界序列化不构造瞬时 Chunk 列表。
+- 缓存层不定义保存接口，生产投影不构造瞬时 Chunk 列表。
 
 真实桌面验收创建 12 个世界、每个 2,048 条稀疏修改和大体积 `map_profile` 扩展。每个 `catalog.json` 必须保持在 4 KiB 以内；测试破坏两个目录后验证自愈，再通过正式存档面板显示大小、截图、点击“继续”、进入可玩世界并恢复全部修改。最终还必须通过总 Runtime、完整桌面矩阵和 Windows Release 实际导出与启动。
