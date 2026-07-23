@@ -8,7 +8,7 @@ const DoorInteractionServiceScript = preload(
 	"res://src/interaction/block_door_interaction_service.gd"
 )
 const StructuralIntegrityServiceScript = preload(
-	"res://src/interaction/block_structure_integrity_service.gd"
+	"res://src/interaction/batched_block_structure_integrity_service.gd"
 )
 
 # Compatibility ports are declared on the first inherited layer so the base
