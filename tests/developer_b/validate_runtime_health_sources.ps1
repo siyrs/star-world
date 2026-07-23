@@ -119,9 +119,10 @@ foreach ($token in @('validate_runtime_health_sources\.ps1','runtime_health_sour
   Assert-Match $text.run_all $token "Full regression entry point is missing lightweight source gate: $token"
 }
 
-foreach ($token in @('专用轻量端口','最多 16 个机器领域','0 fallback','成熟作物缓存','不构造 `crop_counts`','调用计数')) {
+foreach ($token in @('专用轻量端口','0 fallback','成熟作物缓存','不构造 `crop_counts`','调用计数')) {
   Assert-Match $text.contract ([regex]::Escape($token)) "Runtime health source contract is missing boundary: $token"
 }
+Assert-Match $text.contract '最多(?:读取)?\s*16 个机器领域' 'Runtime health source contract is missing the bounded 16-domain limit'
 foreach ($token in @('完整快照后丢弃','每 0.5 秒','O\(1\)','兼容 fallback','真实桌面')) {
   Assert-Match $text.audit $token "Architecture audit is missing source optimization finding: $token"
 }
