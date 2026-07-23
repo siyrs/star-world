@@ -28,10 +28,10 @@ catalog.json
 
 - `catalog_version`；
 - `save_version`；
-- 受限长度的世界 metadata；
-- 当前权威 `world.json` 字节数。
+- 当前权威 `world.json` 字节数；
+- 严格白名单 metadata：`id`、`name`、`map_id`、`seed`、`created_at`、`updated_at`、`play_seconds`。
 
-目录不保存玩家、背包、机器、农业、实体、探索记录或方块修改，不成为第二套玩法状态来源。
+所有字符串限制为 128 个字符。`map_profile`、自定义 metadata、玩家、背包、机器、农业、实体、探索记录和方块修改都不得进入目录，避免扩展字段把派生侧车重新膨胀成第二个世界存档。
 
 ## 保存事务
 
@@ -65,7 +65,7 @@ catalog.json 主文件可正常解析
 
 ```text
 读取并迁移 world.json
-→ 从权威 payload 派生 metadata
+→ 从权威 payload 派生白名单 metadata
 → 重写 catalog.json
 → 返回同一个世界条目
 ```
@@ -107,9 +107,9 @@ block_overrides
 
 领域与单元测试覆盖：
 
-- 目录策略字段规范化；
+- 目录策略字段规范化和严格 metadata 白名单；
+- 未知、嵌套和大体积 metadata 扩展被排除；
 - 世界 ID 和文件长度不匹配拒绝；
-- metadata 兼容字段保留；
 - 新世界立即写入目录；
 - 稳态列表只命中目录；
 - 缺失和损坏目录回退并自愈；
@@ -117,4 +117,4 @@ block_overrides
 - `loaded_chunks` 不进入磁盘或迁移结果；
 - 生产世界序列化不构造瞬时 Chunk 列表。
 
-真实桌面验收创建 12 个世界、每个 2,048 条稀疏修改，破坏两个目录后验证自愈，再通过正式存档面板显示大小、截图、点击“继续”、进入可玩世界并恢复全部修改。最终还必须通过总 Runtime、完整桌面矩阵和 Windows Release 实际导出与启动。
+真实桌面验收创建 12 个世界、每个 2,048 条稀疏修改和大体积 `map_profile` 扩展。每个 `catalog.json` 必须保持在 4 KiB 以内；测试破坏两个目录后验证自愈，再通过正式存档面板显示大小、截图、点击“继续”、进入可玩世界并恢复全部修改。最终还必须通过总 Runtime、完整桌面矩阵和 Windows Release 实际导出与启动。
