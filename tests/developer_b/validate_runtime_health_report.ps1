@@ -6,6 +6,7 @@ $policyPath = Join-Path $root 'src\diagnostics\runtime_health_report_policy.gd'
 $servicePath = Join-Path $root 'src\diagnostics\runtime_health_report_service.gd'
 $formatterPath = Join-Path $root 'src\diagnostics\runtime_health_report_formatter.gd'
 $hubPath = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
+$explorationHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
 $scenePath = Join-Path $root 'scenes\ui\service_hub.tscn'
 $coordinatorPath = Join-Path $root 'src\diagnostics\runtime_diagnostics_coordinator.gd'
 $telemetryPath = Join-Path $root 'src\diagnostics\runtime_telemetry_service.gd'
@@ -21,9 +22,10 @@ $auditPath = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-23_ITERATION_31.md
 $roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 
 foreach ($path in @(
-  $policyPath,$servicePath,$formatterPath,$hubPath,$scenePath,$coordinatorPath,
-  $telemetryPath,$healthPath,$overlayPath,$policyTestPath,$integrationTestPath,
-  $desktopTestPath,$workflowPath,$runAllPath,$contractPath,$auditPath,$roadmapPath
+  $policyPath,$servicePath,$formatterPath,$hubPath,$explorationHubPath,$scenePath,
+  $coordinatorPath,$telemetryPath,$healthPath,$overlayPath,$policyTestPath,
+  $integrationTestPath,$desktopTestPath,$workflowPath,$runAllPath,$contractPath,
+  $auditPath,$roadmapPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) {
     throw "Missing runtime health contract file: $path"
@@ -34,6 +36,7 @@ $policy = Get-Content -Raw -Encoding UTF8 $policyPath
 $service = Get-Content -Raw -Encoding UTF8 $servicePath
 $formatter = Get-Content -Raw -Encoding UTF8 $formatterPath
 $hub = Get-Content -Raw -Encoding UTF8 $hubPath
+$explorationHub = Get-Content -Raw -Encoding UTF8 $explorationHubPath
 $scene = Get-Content -Raw -Encoding UTF8 $scenePath
 $coordinator = Get-Content -Raw -Encoding UTF8 $coordinatorPath
 $telemetry = Get-Content -Raw -Encoding UTF8 $telemetryPath
@@ -121,7 +124,7 @@ if ($formatter -match 'extends\s+Node' -or $formatter -match 'FileAccess' -or $f
 
 foreach ($token in @(
   'class_name\s+RuntimeHealthServiceHub',
-  'extends\s+"res://src/ui/exploration_progression_service_hub\.gd"',
+  'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"',
   'RuntimeHealthReportServiceScript\.new\(\),\s*"RuntimeHealthReport"',
   'func\s+save_current\s*\(',
   'super\.save_current',
@@ -131,11 +134,14 @@ foreach ($token in @(
   'shutdown'
 )) {
   if ($hub -notmatch $token) {
-    throw "Final runtime health service hub is missing composition: $token"
+    throw "Runtime health composition layer is missing behavior: $token"
   }
 }
-if ($scene -notmatch 'runtime_health_service_hub\.gd' -or $scene -notmatch 'exploration_progression_service_hub\.gd') {
-  throw 'Production scene must mount runtime health while retaining its compatible exploration entry contract'
+if ($explorationHub -notmatch 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"') {
+  throw 'Stable exploration ServiceHub must inherit the runtime health composition layer'
+}
+if ($scene -notmatch 'exploration_progression_service_hub\.gd' -or $scene -match 'runtime_health_service_hub\.gd') {
+  throw 'Production scene must preserve the stable exploration ServiceHub entry point'
 }
 
 if ($coordinator -notmatch 'telemetry\.call\([\s\S]{0,240}_service_hub') {
@@ -258,4 +264,4 @@ if ($roadmap -notmatch '统一运行与保存健康报告' -or $roadmap -notmatc
   throw 'Product roadmap must record completed unified health and the next recovery priority'
 }
 
-Write-Host 'PASS runtime_health_report sources=11 rows=12 issues=8 warning=75% critical=90% telemetry=shared save=measured catalog=self-healing ui=readonly'
+Write-Host 'PASS runtime_health_report sources=11 rows=12 issues=8 warning=75% critical=90% telemetry=shared save=measured catalog=self-healing ui=readonly entry=exploration-compatible'
