@@ -22,72 +22,72 @@ var critical_node_count := 9000
 
 
 func evaluate(snapshot: Dictionary) -> Dictionary:
-	var runtime_severity := 0
 	var issues: Array[String] = []
 	var frame_sample_count := int(snapshot.get("frame_sample_count", 0))
 	var frame_metrics_ready: bool = frame_sample_count >= maxi(1, minimum_frame_samples)
+	var average_frame_severity := 0
+	var peak_frame_severity := 0
+	var stutter_severity := 0
 	if frame_metrics_ready:
-		runtime_severity = maxi(
-			runtime_severity,
-			_evaluate_upper_bound(
-				float(snapshot.get("frame_ms_avg", 0.0)),
-				warning_average_frame_ms,
-				critical_average_frame_ms,
-				"平均帧时间偏高",
-				issues
-			)
+		average_frame_severity = _evaluate_upper_bound(
+			float(snapshot.get("frame_ms_avg", 0.0)),
+			warning_average_frame_ms,
+			critical_average_frame_ms,
+			"平均帧时间偏高",
+			issues
 		)
-		runtime_severity = maxi(
-			runtime_severity,
-			_evaluate_upper_bound(
-				float(snapshot.get("frame_ms_peak", 0.0)),
-				warning_peak_frame_ms,
-				critical_peak_frame_ms,
-				"峰值帧时间偏高",
-				issues
-			)
+		peak_frame_severity = _evaluate_upper_bound(
+			float(snapshot.get("frame_ms_peak", 0.0)),
+			warning_peak_frame_ms,
+			critical_peak_frame_ms,
+			"峰值帧时间偏高",
+			issues
 		)
-		runtime_severity = maxi(
-			runtime_severity,
-			_evaluate_upper_bound(
-				float(snapshot.get("stutter_count", 0)),
-				float(warning_stutters_per_window),
-				float(critical_stutters_per_window),
-				"采样窗口内卡顿次数偏多",
-				issues
-			)
+		stutter_severity = _evaluate_upper_bound(
+			float(snapshot.get("stutter_count", 0)),
+			float(warning_stutters_per_window),
+			float(critical_stutters_per_window),
+			"采样窗口内卡顿次数偏多",
+			issues
 		)
 	var streaming: Dictionary = snapshot.get("streaming", {})
-	runtime_severity = maxi(
-		runtime_severity,
-		_evaluate_upper_bound(
-			float(streaming.get("pending", 0)),
-			float(warning_pending_chunks),
-			float(critical_pending_chunks),
-			"区块构建队列积压",
-			issues
+	var pending_chunk_severity := _evaluate_upper_bound(
+		float(streaming.get("pending", 0)),
+		float(warning_pending_chunks),
+		float(critical_pending_chunks),
+		"区块构建队列积压",
+		issues
+	)
+	var memory_severity := _evaluate_upper_bound(
+		float(snapshot.get("memory_mib", 0.0)),
+		warning_memory_mib,
+		critical_memory_mib,
+		"静态内存占用偏高",
+		issues
+	)
+	var node_severity := _evaluate_upper_bound(
+		float(snapshot.get("node_count", 0)),
+		float(warning_node_count),
+		critical_node_count,
+		"场景节点数量偏高",
+		issues
+	)
+	var sustained_runtime_severity := maxi(
+		average_frame_severity,
+		maxi(
+			stutter_severity,
+			maxi(pending_chunk_severity, maxi(memory_severity, node_severity))
 		)
 	)
-	runtime_severity = maxi(
-		runtime_severity,
-		_evaluate_upper_bound(
-			float(snapshot.get("memory_mib", 0.0)),
-			warning_memory_mib,
-			critical_memory_mib,
-			"静态内存占用偏高",
-			issues
-		)
-	)
-	runtime_severity = maxi(
-		runtime_severity,
-		_evaluate_upper_bound(
-			float(snapshot.get("node_count", 0)),
-			float(warning_node_count),
-			critical_node_count,
-			"场景节点数量偏高",
-			issues
-		)
-	)
+	var runtime_severity := maxi(sustained_runtime_severity, peak_frame_severity)
+	var runtime_components := {
+		"average_frame": average_frame_severity,
+		"peak_frame": peak_frame_severity,
+		"stutters": stutter_severity,
+		"pending_chunks": pending_chunk_severity,
+		"memory": memory_severity,
+		"nodes": node_severity,
+	}
 	var operations: Dictionary = (
 		snapshot.get("operations", {})
 		if snapshot.get("operations", {}) is Dictionary
@@ -115,6 +115,9 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		"frame_sample_count": frame_sample_count,
 		"runtime_status": _status_for_severity(runtime_severity),
 		"runtime_severity": runtime_severity,
+		"sustained_runtime_status": _status_for_severity(sustained_runtime_severity),
+		"sustained_runtime_severity": sustained_runtime_severity,
+		"runtime_components": runtime_components,
 		"operations_status": _status_for_severity(operations_severity),
 		"operations_severity": operations_severity,
 		"operations_issue_count": operation_issue_count,
