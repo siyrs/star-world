@@ -26,6 +26,8 @@ jobs:
         tests/developer_b/validate_world_mutation_batch.ps1
         tests/developer_b/validate_pickup_stacks.ps1
         tests/developer_b/validate_service_hub_lifecycle.ps1
+      # Parse the pure scale fixture and standalone desktop journey in Headless
+      # before any adjacent domain regression or expensive Windows desktop job.
       primary_headless_script: res://tests/qa/structural_integrity_desktop_import_regression.gd
       primary_headless_output_base: build\structural-integrity-import
       primary_headless_timeout_milliseconds: 300000
