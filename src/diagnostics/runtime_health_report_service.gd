@@ -19,6 +19,9 @@ var _last_save_bytes := 0
 var _last_save_elapsed_usec := 0
 var _last_save_timestamp_msec := 0
 var _last_source_count := 0
+var _last_source_methods: Dictionary = {}
+var _fallback_source_count := 0
+var _unavailable_source_count := 0
 var _shutdown := false
 
 
@@ -76,38 +79,75 @@ func record_save_result(
 func get_snapshot() -> Dictionary:
 	if _shutdown:
 		return PolicyScript.build({})
+	_last_source_methods.clear()
+	_fallback_source_count = 0
+	_unavailable_source_count = 0
 	var sources := {
-		"streaming": _snapshot(world, "get_streaming_stats"),
-		"machines": _snapshot(_hub_node("machine_runtime"), "get_snapshot"),
-		"agriculture": _snapshot(
-			_hub_node("agriculture_service"), "get_runtime_snapshot"
+		"streaming": _snapshot_preferred(
+			"streaming", world, ["get_streaming_stats"]
 		),
-		"husbandry": _snapshot(_hub_node("husbandry_service"), "get_snapshot"),
-		"animal_attraction": _snapshot(
-			_hub_node("animal_attraction_service"), "get_snapshot"
+		"machines": _snapshot_preferred(
+			"machines",
+			_hub_node("machine_runtime"),
+			["get_health_snapshot", "get_snapshot"]
 		),
-		"animal_products": _snapshot(
-			_hub_node("animal_product_service"), "get_snapshot"
+		"agriculture": _snapshot_preferred(
+			"agriculture",
+			_hub_node("agriculture_service"),
+			["get_health_snapshot", "get_runtime_snapshot"]
 		),
-		"ecology": _snapshot(_hub_node("creature_spawner"), "get_ecology_snapshot"),
-		"pickups": _snapshot(_hub_node("pickup_stack_coordinator"), "get_snapshot"),
-		"structural_integrity": _snapshot(
-			_hub_node("structural_integrity_service"), "get_snapshot"
+		"husbandry": _snapshot_preferred(
+			"husbandry", _hub_node("husbandry_service"), ["get_snapshot"]
 		),
-		"catalog": _snapshot(save_service, "get_catalog_diagnostics"),
+		"animal_attraction": _snapshot_preferred(
+			"animal_attraction", _hub_node("animal_attraction_service"), ["get_snapshot"]
+		),
+		"animal_products": _snapshot_preferred(
+			"animal_products", _hub_node("animal_product_service"), ["get_snapshot"]
+		),
+		"ecology": _snapshot_preferred(
+			"ecology", _hub_node("creature_spawner"), ["get_ecology_snapshot"]
+		),
+		"pickups": _snapshot_preferred(
+			"pickups", _hub_node("pickup_stack_coordinator"), ["get_snapshot"]
+		),
+		"structural_integrity": _snapshot_preferred(
+			"structural_integrity",
+			_hub_node("structural_integrity_service"),
+			["get_snapshot"]
+		),
+		"catalog": _snapshot_preferred(
+			"catalog", save_service, ["get_catalog_diagnostics"]
+		),
 		"save": _save_snapshot(),
 	}
+	_last_source_methods["save"] = "session_snapshot"
 	_last_source_count = sources.size()
 	var result: Dictionary = PolicyScript.build(sources)
 	result["world_attached"] = world != null and is_instance_valid(world)
 	result["current_world_id"] = _current_world_id
 	result["source_count"] = _last_source_count
 	result["source_limit"] = sources.size()
+	result["source_methods"] = _last_source_methods.duplicate(true)
+	result["fallback_source_count"] = _fallback_source_count
+	result["unavailable_source_count"] = _unavailable_source_count
+	result["preferred_source_count"] = maxi(
+		0, _last_source_count - _fallback_source_count - _unavailable_source_count
+	)
 	return result
 
 
 func get_save_snapshot() -> Dictionary:
 	return _save_snapshot()
+
+
+func get_source_contract_snapshot() -> Dictionary:
+	return {
+		"source_count": _last_source_count,
+		"source_methods": _last_source_methods.duplicate(true),
+		"fallback_source_count": _fallback_source_count,
+		"unavailable_source_count": _unavailable_source_count,
+	}
 
 
 func clear_session_counters() -> void:
@@ -131,6 +171,9 @@ func shutdown() -> void:
 	save_service = null
 	hub = null
 	_current_world_id = ""
+	_last_source_methods.clear()
+	_fallback_source_count = 0
+	_unavailable_source_count = 0
 
 
 func _save_snapshot() -> Dictionary:
@@ -148,15 +191,25 @@ func _save_snapshot() -> Dictionary:
 	}
 
 
-func _snapshot(target: Node, method_name: String) -> Dictionary:
-	if (
-		target == null
-		or not is_instance_valid(target)
-		or not target.has_method(method_name)
-	):
+func _snapshot_preferred(
+	source_id: String, target: Node, methods: Array
+) -> Dictionary:
+	if target == null or not is_instance_valid(target):
+		_last_source_methods[source_id] = "unavailable"
+		_unavailable_source_count += 1
 		return {}
-	var raw_snapshot: Variant = target.call(method_name)
-	return raw_snapshot if raw_snapshot is Dictionary else {}
+	for method_index: int in range(methods.size()):
+		var method_name := str(methods[method_index])
+		if not target.has_method(method_name):
+			continue
+		_last_source_methods[source_id] = method_name
+		if method_index > 0:
+			_fallback_source_count += 1
+		var raw_snapshot: Variant = target.call(method_name)
+		return raw_snapshot if raw_snapshot is Dictionary else {}
+	_last_source_methods[source_id] = "unavailable"
+	_unavailable_source_count += 1
+	return {}
 
 
 func _hub_node(property_name: StringName) -> Node:

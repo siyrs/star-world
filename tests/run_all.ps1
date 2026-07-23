@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_reusable_ci_workflows.ps1"
 & "$PSScriptRoot\developer_b\validate_world_catalog.ps1"
 & "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"
+& "$PSScriptRoot\developer_b\validate_runtime_health_sources.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
@@ -132,6 +133,7 @@ Invoke-GodotTest 'res://tests/qa/ranch_products_regression.gd'
 Invoke-GodotTest 'res://tests/qa/tutorial_placement_regression.gd'
 Invoke-GodotTest 'res://tests/qa/placement_preview_regression.gd'
 Invoke-GodotTest 'res://tests/qa/desktop_input_contract_regression.gd'
+Invoke-GodotTest 'res://tests/qa/runtime_health_source_projection_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_health_report_policy_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_health_report_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_diagnostics_regression.gd'
@@ -144,4 +146,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: unified runtime and save health + reusable Godot CI + single-flush structural integrity + lightweight world catalog + shared pickup runtime + machine/agriculture scale + bounded world mutations + lifecycle + release-safe runtime checks'
+Write-Host 'PASS: lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + shared pickup runtime + machine/agriculture scale + lifecycle + Windows release checks'

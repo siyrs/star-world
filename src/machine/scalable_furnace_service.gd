@@ -131,6 +131,21 @@ func advance_time(seconds: float, emit_events: bool = true) -> Array[String]:
 	return result
 
 
+func get_health_snapshot() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"machine_type": MACHINE_TYPE,
+		"machine_count": _machines.size(),
+		"active_machine_count": _activity_index.size(),
+		"idle_machine_count": maxi(0, _machines.size() - _activity_index.size()),
+		"externally_scheduled": _external_scheduler,
+		"scheduler_call_count": _scheduler_call_count,
+		"evaluation_batch_count": _evaluation_batch_count,
+		"avoided_idle_evaluation_count": _avoided_idle_evaluation_count,
+		"simulation_iteration_limit_hits": _simulation_iteration_limit_hits,
+	}
+
+
 func get_runtime_snapshot() -> Dictionary:
 	var result: Dictionary = super.get_runtime_snapshot()
 	result["active_machine_count"] = _activity_index.size()
