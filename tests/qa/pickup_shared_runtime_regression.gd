@@ -32,8 +32,8 @@ func _test_shared_visual_runtime_and_resources() -> void:
 	var host := fixture.get("host") as Node3D
 	var spawner := fixture.get("spawner") as Node3D
 	var coordinator := fixture.get("coordinator") as Node
-	var first = _spawn_pickup(spawner, "rotten_flesh", 2, Vector3(0.0, 4.0, 0.0))
-	var second = _spawn_pickup(spawner, "rotten_flesh", 3, Vector3(3.0, 4.0, 0.0))
+	var first: Node3D = _spawn_pickup(spawner, "rotten_flesh", 2, Vector3(0.0, 4.0, 0.0))
+	var second: Node3D = _spawn_pickup(spawner, "rotten_flesh", 3, Vector3(3.0, 4.0, 0.0))
 	for _frame in 3:
 		await process_frame
 	var first_anchor := first.position
@@ -95,7 +95,7 @@ func _test_scene_pause_freezes_pickup_runtime() -> void:
 	var host := fixture.get("host") as Node3D
 	var spawner := fixture.get("spawner") as Node3D
 	var coordinator := fixture.get("coordinator") as Node
-	var pickup = _spawn_pickup(spawner, "coal", 1, Vector3(0.0, 3.0, 0.0))
+	var pickup: Node3D = _spawn_pickup(spawner, "coal", 1, Vector3(0.0, 3.0, 0.0))
 	for _frame in 5:
 		await process_frame
 	var before_pause: Dictionary = coordinator.call("get_snapshot")
@@ -131,11 +131,11 @@ func _test_runtime_budget_and_expiration() -> void:
 	var host := fixture.get("host") as Node3D
 	var spawner := fixture.get("spawner") as Node3D
 	var coordinator := fixture.get("coordinator") as Node
-	var pickups: Array[Node] = []
+	var pickups: Array[Node3D] = []
 	for index in CoordinatorScript.MAX_RUNTIME_NODES:
 		var column := index % 16
 		var row := int(index / 16)
-		var pickup = _spawn_pickup(
+		var pickup: Node3D = _spawn_pickup(
 			spawner,
 			"qa_runtime_item_%03d" % index,
 			1,
@@ -156,7 +156,7 @@ func _test_runtime_budget_and_expiration() -> void:
 		int(before.get("individual_process_count", -1)) == 0,
 		"one hundred twenty-eight production pickups still use zero individual process callbacks",
 	)
-	for pickup: Node in pickups:
+	for pickup: Node3D in pickups:
 		if pickup != null and is_instance_valid(pickup):
 			pickup.set("life_seconds", 0.05)
 	var step: Dictionary = coordinator.call("advance_shared_runtime", 1.0)
@@ -199,12 +199,12 @@ func _make_fixture() -> Dictionary:
 	return {"host": host, "spawner": spawner, "coordinator": coordinator}
 
 
-func _spawn_pickup(spawner: Node3D, item_id: String, count: int, position: Vector3) -> Node:
+func _spawn_pickup(spawner: Node3D, item_id: String, count: int, position: Vector3) -> Node3D:
 	var pickup = PickupScript.new()
 	pickup.setup(item_id, count, null)
 	spawner.add_child(pickup)
 	pickup.global_position = position
-	return pickup
+	return pickup as Node3D
 
 
 func _check(condition: bool, description: String) -> void:
