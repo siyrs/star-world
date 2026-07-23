@@ -11,6 +11,7 @@ $paths = @{
   Regression = Join-Path $root 'tests\qa\pickup_stack_regression.gd'
   Desktop = Join-Path $root 'tests\qa\mixed_runtime_endurance_desktop_acceptance.gd'
   Workflow = Join-Path $root '.github\workflows\mixed-runtime-endurance-tests.yml'
+  Reusable = Join-Path $root '.github\workflows\reusable-godot-quality-gate.yml'
   RunAll = Join-Path $root 'tests\run_all.ps1'
   Contract = Join-Path $root 'docs\BOUNDED_PICKUP_STACKS.md'
   Audit = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-22_ITERATION_26.md'
@@ -79,9 +80,7 @@ foreach ($phrase in @(
   'the one-hundred-twenty-ninth pickup is deferred at the hard node budget',
   'freeing one node materializes the deferred item through the bounded flush path'
 )) {
-  if ($text.Regression -notmatch [regex]::Escape($phrase)) {
-    throw "Pickup stack regression is missing assertion: $phrase"
-  }
+  if ($text.Regression -notmatch [regex]::Escape($phrase)) { throw "Pickup stack regression is missing assertion: $phrase" }
 }
 foreach ($phrase in @(
   'mixed endurance keeps physical pickup nodes inside the hard budget',
@@ -90,15 +89,16 @@ foreach ($phrase in @(
   'full mixed-session reload reaches a bounded playable state',
   'new world session resets pickup stack diagnostics and pending items'
 )) {
-  if ($text.Desktop -notmatch [regex]::Escape($phrase)) {
-    throw "Mixed runtime desktop acceptance is missing assertion: $phrase"
-  }
+  if ($text.Desktop -notmatch [regex]::Escape($phrase)) { throw "Mixed runtime desktop acceptance is missing assertion: $phrase" }
 }
-if ($text.Workflow -notmatch 'Invoke-Godot\.ps1' -or $text.Workflow -notmatch 'pickup_stack_regression\.gd') {
-  throw 'Mixed endurance workflow must run real awaited pickup-domain tests'
+if ($text.Workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml' -or $text.Workflow -notmatch 'pickup_stack_regression\.gd') {
+  throw 'Mixed endurance caller must declare the pickup-domain tests through the reusable gate'
+}
+if ($text.Reusable -notmatch 'tests\\ci\\Invoke-Godot\.ps1' -or $text.Reusable -notmatch 'tests\\ci\\run_godot_desktop_test\.ps1') {
+  throw 'Reusable Godot gate must own awaited domain and desktop execution'
 }
 if ($text.Workflow -notmatch 'mixed_runtime_endurance_desktop_acceptance\.gd' -or $text.Workflow -notmatch 'mixed-runtime-endurance-desktop\.json') {
-  throw 'Mixed endurance workflow must upload visualization and machine-readable evidence'
+  throw 'Mixed endurance caller must retain visualization and machine-readable evidence declarations'
 }
 if ($text.RunAll -notmatch 'validate_pickup_stacks\.ps1' -or $text.RunAll -notmatch 'pickup_stack_regression\.gd') {
   throw 'Full regression entry point must permanently include pickup stacking'
@@ -110,4 +110,4 @@ if ($text.Audit -notmatch 'Area3D' -or $text.Audit -notmatch '180' -or $text.Aud
   throw 'Architecture audit must record the original physical-drop accumulation problem and mixed validation'
 }
 
-Write-Host 'PASS pickup_stacks nodes=128 trigger=8 scan=64 pending_types=256 materialize=16 exact_items=1 lifecycle=exploration_runtime shared_runtime=1 persistence=none'
+Write-Host 'PASS pickup_stacks nodes=128 trigger=8 scan=64 pending_types=256 materialize=16 exact_items=1 lifecycle=exploration_runtime shared_runtime=1 persistence=none ci=reusable'
