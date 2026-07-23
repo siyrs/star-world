@@ -39,12 +39,14 @@ jobs:
         run: |
           .\tests\developer_b\validate_ecology_danger.ps1
           .\tests\developer_b\validate_multi_hostile_danger.ps1
+          .\tests\developer_b\validate_multi_hostile_arena_batch.ps1
           .\tests\developer_b\validate_hostile_attacks.ps1
 
       - name: Run batching and attack readability regressions
         shell: pwsh
         run: |
           $scripts = @(
+            'res://tests/qa/multi_hostile_arena_batch_regression.gd',
             'res://tests/qa/multi_hostile_danger_batch_regression.gd',
             'res://tests/qa/ecology_danger_regression.gd',
             'res://tests/qa/hostile_attack_windup_regression.gd',
@@ -77,9 +79,9 @@ jobs:
           .\tests\ci\run_godot_desktop_test.ps1 `
             -Godot $godotPath `
             -ProjectRoot . `
-            -ScriptPath 'res://tests/qa/multi_hostile_danger_desktop_acceptance.gd' `
+            -ScriptPath 'res://tests/qa/multi_hostile_danger_batched_desktop_acceptance.gd' `
             -OutputPath 'build\multi-hostile-danger-desktop.png' `
-            -TimeoutMilliseconds 135000
+            -TimeoutMilliseconds 180000
 
       - name: Upload multi-hostile danger evidence
         if: always()

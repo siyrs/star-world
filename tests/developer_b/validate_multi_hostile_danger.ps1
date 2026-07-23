@@ -10,6 +10,8 @@ $hudPath = Join-Path $root 'src\ui\hud.gd'
 $dangerDataPath = Join-Path $root 'data\exploration_danger.json'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $workflowPath = Join-Path $root '.github\workflows\multi-hostile-danger-tests.yml'
+$desktopBasePath = Join-Path $root 'tests\qa\multi_hostile_danger_desktop_acceptance.gd'
+$desktopBatchedPath = Join-Path $root 'tests\qa\multi_hostile_danger_batched_desktop_acceptance.gd'
 
 $participantText = Get-Content -Raw -Encoding UTF8 $participantPath
 $batchPolicyText = Get-Content -Raw -Encoding UTF8 $batchPolicyPath
@@ -20,10 +22,11 @@ $hudText = Get-Content -Raw -Encoding UTF8 $hudPath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
 $dangerData = Get-Content -Raw -Encoding UTF8 $dangerDataPath | ConvertFrom-Json
 
-if (-not (Test-Path -LiteralPath $workflowPath)) {
-  throw 'Multi-hostile danger workflow is missing'
+foreach ($path in @($workflowPath,$desktopBasePath,$desktopBatchedPath)) {
+  if (-not (Test-Path -LiteralPath $path)) { throw "Multi-hostile danger contract file is missing: $path" }
 }
 $workflowText = Get-Content -Raw -Encoding UTF8 $workflowPath
+$desktopBatchedText = Get-Content -Raw -Encoding UTF8 $desktopBatchedPath
 
 if ($batchPolicyText -notmatch 'MAX_VISIBLE_TRIGGERS\s*:=\s*4') {
   throw 'Danger refresh batch policy must bound visible trigger diagnostics to four'
@@ -102,8 +105,14 @@ if ($hudText -notmatch '来袭攻击') {
 if ($runAllText -notmatch 'multi_hostile_danger_batch_regression\.gd') {
   throw 'Full regression entry point must include the multi-hostile danger batch regression'
 }
-foreach ($script in @('multi_hostile_danger_batch_regression\.gd','multi_hostile_danger_desktop_acceptance\.gd')) {
-  if ($workflowText -notmatch $script) { throw "Multi-hostile workflow is missing test: $script" }
+if ($workflowText -notmatch 'multi_hostile_danger_batch_regression\.gd') {
+  throw 'Multi-hostile workflow is missing the danger batch regression'
+}
+if ($workflowText -notmatch 'multi_hostile_danger_batched_desktop_acceptance\.gd') {
+  throw 'Multi-hostile workflow must run the optimized real desktop journey'
+}
+if ($desktopBatchedText -notmatch 'extends\s+"res://tests/qa/multi_hostile_danger_desktop_acceptance\.gd"') {
+  throw 'Optimized desktop journey must preserve the original full acceptance through inheritance'
 }
 
-Write-Host 'PASS multi_hostile_danger pending=64 triggers=3 sample_budget=125 hostile_query=64 drops=preserved lifecycle=full-clear'
+Write-Host 'PASS multi_hostile_danger pending=64 triggers=3 sample_budget=125 hostile_query=64 drops=preserved lifecycle=full-clear desktop=batched'

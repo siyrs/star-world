@@ -14,87 +14,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  world-mutation-regression:
-    name: Rebuild batching, limits, diagnostics and adjacent domain regression
-    runs-on: windows-latest
-    timeout-minutes: 32
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Godot
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: false
-
-      - name: Validate strict project import
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
-
-      - name: Validate bounded world mutation contracts
-        shell: pwsh
-        run: |
-          .\tests\developer_b\validate_world_mutation_batch.ps1
-
-      - name: Run bounded world mutation regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/world_mutation_batch_regression.gd -- --disable-update-check'
-
-      - name: Re-run connected shape regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/connected_block_shapes_regression.gd -- --disable-update-check'
-
-      - name: Re-run agriculture lifecycle regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/agriculture_runtime_lifecycle_regression.gd -- --disable-update-check'
-
-      - name: Re-run adaptive streaming regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/adaptive_streaming_regression.gd -- --disable-update-check'
-
-  world-scale-desktop:
-    name: Real 3000-mutation build, visualization, save, load and playable reload
-    needs: world-mutation-regression
-    runs-on: windows-latest
-    timeout-minutes: 48
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Godot
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: false
-
-      - name: Exercise production world-scale journey
-        shell: pwsh
-        run: |
-          $godotPath = (Get-Command godot).Source
-          .\tests\ci\run_godot_desktop_test.ps1 `
-            -Godot $godotPath `
-            -ProjectRoot . `
-            -ScriptPath 'res://tests/qa/world_scale_desktop_acceptance.gd' `
-            -OutputPath 'build\world-scale-desktop.png' `
-            -TimeoutMilliseconds 300000
-
-      - name: Upload scale visualization and benchmark evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: world-scale-evidence-${{ github.run_number }}
-          path: |
-            build/world-scale-desktop.png
-            build/world-scale-desktop.json
-            build/world-scale-desktop.stdout.log
-            build/world-scale-desktop.stderr.log
-          if-no-files-found: error
-          retention-days: 14
+  quality-gate:
+    # Reusable runner contract: tests/ci/Invoke-Godot.ps1 and
+    # tests/ci/run_godot_desktop_test.ps1 remain the awaited execution boundaries.
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Rebuild batching, limits, diagnostics and adjacent domain regression
+      domain_timeout_minutes: 32
+      static_validators: |
+        tests/developer_b/validate_world_mutation_batch.ps1
+      domain_scripts: |
+        res://tests/qa/world_mutation_batch_regression.gd
+        res://tests/qa/connected_block_shapes_regression.gd
+        res://tests/qa/agriculture_runtime_lifecycle_regression.gd
+        res://tests/qa/adaptive_streaming_regression.gd
+      desktop_job_name: Real 3000-mutation build, visualization, save, load and playable reload
+      desktop_timeout_minutes: 48
+      desktop_script: res://tests/qa/world_scale_desktop_acceptance.gd
+      desktop_output_path: build\world-scale-desktop.png
+      desktop_timeout_milliseconds: 300000
+      desktop_artifact_name: world-scale-evidence
+      desktop_artifact_paths: |
+        build/world-scale-desktop.png
+        build/world-scale-desktop.json
+        build/world-scale-desktop.stdout.log
+        build/world-scale-desktop.stderr.log

@@ -11,6 +11,7 @@ $files = @{
   Regression = 'tests\qa\agriculture_scale_batch_regression.gd'
   Desktop = 'tests\qa\agriculture_scale_desktop_acceptance.gd'
   Workflow = '.github\workflows\agriculture-scale-tests.yml'
+  Reusable = '.github\workflows\reusable-godot-quality-gate.yml'
   RunAll = 'tests\run_all.ps1'
   Contract = 'docs\AGRICULTURE_SCALE_BATCHING.md'
   Audit = 'docs\ARCHITECTURE_AUDIT_2026-07-22_ITERATION_23.md'
@@ -49,10 +50,17 @@ foreach ($phrase in @('one hundred twenty-eight crops mature through one loaded-
 foreach ($phrase in @('production field contains two thousand forty-eight crops','all mature crops are reported in one accurate player batch','large-field growth rebuilds each dirty chunk at most once','agriculture scale evidence uses 1024x576 product resolution','full farm reload reaches a bounded playable state')) {
   if ($text.Desktop -notmatch [regex]::Escape($phrase)) { throw "Missing desktop assertion: $phrase" }
 }
-if ($text.Workflow -notmatch 'agriculture_scale_batch_regression\.gd' -or $text.Workflow -notmatch 'agriculture_scale_desktop_acceptance\.gd') { throw 'Workflow coverage missing' }
-if ($text.Workflow -notmatch 'Invoke-Godot\.ps1' -or $text.Workflow -notmatch 'run_godot_desktop_test\.ps1') { throw 'Workflow must await Godot' }
+if ($text.Workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml' -or $text.Workflow -notmatch 'agriculture_scale_batch_regression\.gd' -or $text.Workflow -notmatch 'agriculture_scale_desktop_acceptance\.gd') {
+  throw 'Agriculture scale caller coverage is missing'
+}
+if ($text.Reusable -notmatch 'tests\\ci\\run_godot_headless_test\.ps1' -or $text.Reusable -notmatch 'tests\\ci\\run_godot_desktop_test\.ps1') {
+  throw 'Reusable Godot gate must await captured agriculture and desktop execution'
+}
+if ($text.Workflow -notmatch 'agriculture-scale-regression\.stdout\.log' -or $text.Workflow -notmatch 'agriculture-scale-desktop\.json') {
+  throw 'Agriculture scale caller must retain domain logs and desktop benchmark evidence'
+}
 if ($text.RunAll -notmatch 'validate_agriculture_scale\.ps1' -or $text.RunAll -notmatch 'agriculture_scale_batch_regression\.gd') { throw 'Full suite wiring missing' }
 if ($text.Contract -notmatch '2,048' -or $text.Contract -notmatch '65,536') { throw 'Contract budgets missing' }
 if ($text.Audit -notmatch 'refresh_all' -or $text.Audit -notmatch '64') { throw 'Audit findings missing' }
 
-Write-Host 'PASS agriculture_scale crops=4096 evidence=2048 position_samples=64 types=16 cache=65536 exact_counts=true'
+Write-Host 'PASS agriculture_scale crops=4096 evidence=2048 position_samples=64 types=16 cache=65536 exact_counts=true ci=reusable'

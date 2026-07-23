@@ -24,6 +24,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 
 & "$PSScriptRoot\developer_b\validate_data.ps1"
 & "$PSScriptRoot\developer_b\validate_catalog_integrity.ps1"
+& "$PSScriptRoot\developer_b\validate_reusable_ci_workflows.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
@@ -34,6 +35,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_ecology_danger.ps1"
 & "$PSScriptRoot\developer_b\validate_multi_hostile_danger.ps1"
+& "$PSScriptRoot\developer_b\validate_multi_hostile_arena_batch.ps1"
 & "$PSScriptRoot\developer_b\validate_pickup_stacks.ps1"
 & "$PSScriptRoot\developer_b\validate_pickup_shared_runtime.ps1"
 & "$PSScriptRoot\developer_b\validate_hostile_attacks.ps1"
@@ -85,6 +87,7 @@ Invoke-GodotTest 'res://tests/qa/auto_update_regression.gd'
 Invoke-GodotTest 'res://tests/qa/resource_distribution_regression.gd'
 Invoke-GodotTest 'res://tests/qa/prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ecology_danger_regression.gd'
+Invoke-GodotTest 'res://tests/qa/multi_hostile_arena_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/multi_hostile_danger_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_journal_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
@@ -131,4 +134,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: shared pickup runtime + bounded stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'
+Write-Host 'PASS: reusable Godot CI + batched hostile arena + shared pickup runtime + bounded stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'

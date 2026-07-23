@@ -14,105 +14,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pickup-shared-runtime-regression:
-    name: Shared lifetime, stable anchors, resource reuse and adjacent regressions
-    runs-on: windows-latest
-    timeout-minutes: 42
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Godot
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: false
-
-      - name: Validate strict project import
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
-
-      - name: Validate pickup stacking and shared runtime contracts
-        shell: pwsh
-        run: |
-          .\tests\developer_b\validate_pickup_stacks.ps1
-          .\tests\developer_b\validate_pickup_shared_runtime.ps1
-
-      - name: Run shared pickup runtime regression
-        shell: pwsh
-        run: |
-          $godotPath = (Get-Command godot).Source
-          .\tests\ci\run_godot_headless_test.ps1 `
-            -Godot $godotPath `
-            -ProjectRoot . `
-            -ScriptPath 'res://tests/qa/pickup_shared_runtime_regression.gd' `
-            -OutputBasePath 'build\pickup-shared-runtime-regression' `
-            -TimeoutMilliseconds 360000
-
-      - name: Re-run pickup stack regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/pickup_stack_regression.gd -- --disable-update-check'
-
-      - name: Re-run physics interaction regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/physics_interaction_regression.gd -- --disable-update-check'
-
-      - name: Re-run runtime stability regression
-        shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/runtime_stability_regression.gd -- --disable-update-check'
-
-      - name: Upload shared pickup headless regression evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pickup-shared-runtime-regression-${{ github.run_number }}
-          path: |
-            build/pickup-shared-runtime-regression.stdout.log
-            build/pickup-shared-runtime-regression.stderr.log
-          if-no-files-found: warn
-          retention-days: 14
-
-  pickup-shared-runtime-desktop:
-    name: Real 128-pickup animation, pause, visualization, save and reload
-    needs: pickup-shared-runtime-regression
-    runs-on: windows-latest
-    timeout-minutes: 62
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Godot
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: false
-
-      - name: Exercise production shared pickup runtime journey
-        shell: pwsh
-        run: |
-          $godotPath = (Get-Command godot).Source
-          .\tests\ci\run_godot_desktop_test.ps1 `
-            -Godot $godotPath `
-            -ProjectRoot . `
-            -ScriptPath 'res://tests/qa/pickup_shared_runtime_desktop_acceptance.gd' `
-            -OutputPath 'build\pickup-shared-runtime-desktop.png' `
-            -TimeoutMilliseconds 420000
-
-      - name: Upload shared pickup runtime visualization and benchmark evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pickup-shared-runtime-evidence-${{ github.run_number }}
-          path: |
-            build/pickup-shared-runtime-desktop.png
-            build/pickup-shared-runtime-desktop.json
-            build/pickup-shared-runtime-desktop.stdout.log
-            build/pickup-shared-runtime-desktop.stderr.log
-          if-no-files-found: error
-          retention-days: 14
+  quality-gate:
+    # Reusable runner contract: tests/ci/Invoke-Godot.ps1, run_godot_headless_test.ps1,
+    # and tests/ci/run_godot_desktop_test.ps1 remain the awaited execution boundaries.
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Shared lifetime, stable anchors, resource reuse and adjacent regressions
+      domain_timeout_minutes: 42
+      static_validators: |
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+        tests/developer_b/validate_pickup_stacks.ps1
+        tests/developer_b/validate_pickup_shared_runtime.ps1
+      primary_headless_script: res://tests/qa/pickup_shared_runtime_regression.gd
+      primary_headless_output_base: build\pickup-shared-runtime-regression
+      primary_headless_timeout_milliseconds: 360000
+      domain_scripts: |
+        res://tests/qa/pickup_stack_regression.gd
+        res://tests/qa/physics_interaction_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: pickup-shared-runtime-regression
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/pickup-shared-runtime-regression.stdout.log
+        build/pickup-shared-runtime-regression.stderr.log
+      domain_artifact_if_no_files: warn
+      desktop_job_name: Real 128-pickup animation, pause, visualization, save and reload
+      desktop_timeout_minutes: 62
+      desktop_script: res://tests/qa/pickup_shared_runtime_desktop_acceptance.gd
+      desktop_output_path: build\pickup-shared-runtime-desktop.png
+      desktop_timeout_milliseconds: 420000
+      desktop_artifact_name: pickup-shared-runtime-evidence
+      desktop_artifact_paths: |
+        build/pickup-shared-runtime-desktop.png
+        build/pickup-shared-runtime-desktop.json
+        build/pickup-shared-runtime-desktop.stdout.log
+        build/pickup-shared-runtime-desktop.stderr.log
