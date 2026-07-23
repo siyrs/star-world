@@ -17,10 +17,11 @@ jobs:
   quality-gate:
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
-      domain_job_name: Read-only health projection, split soak semantics, save evidence and adjacent regressions
+      domain_job_name: Lightweight source ports, split soak semantics, save evidence and adjacent regressions
       domain_timeout_minutes: 50
       static_validators: |
         tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_runtime_health_sources.ps1
         tests/developer_b/validate_world_catalog.ps1
         tests/developer_b/validate_reusable_ci_workflows.ps1
         tests/developer_b/validate_service_hub_lifecycle.ps1
@@ -28,13 +29,14 @@ jobs:
         tests/developer_b/validate_pickup_shared_runtime.ps1
         tests/developer_b/validate_machine_scale.ps1
         tests/developer_b/validate_agriculture_scale.ps1
-      # Capture the three-cycle lifecycle soak. It now prints runtime and
-      # operations severity separately, so any remaining hard-boundary failure
-      # has durable stdout/stderr evidence instead of only a red workflow step.
+      # Capture the three-cycle lifecycle soak. It prints runtime, sustained and
+      # operations severity separately, so any hard-boundary failure has durable
+      # stdout/stderr evidence instead of only a red workflow step.
       primary_headless_script: res://tests/qa/runtime_soak_regression.gd
       primary_headless_output_base: build\runtime-health-soak
       primary_headless_timeout_milliseconds: 420000
       domain_scripts: |
+        res://tests/qa/runtime_health_source_projection_regression.gd
         res://tests/qa/runtime_health_report_regression.gd
         res://tests/qa/runtime_health_report_policy_regression.gd
         res://tests/qa/runtime_diagnostics_regression.gd
@@ -50,7 +52,7 @@ jobs:
         build/runtime-health-soak.stdout.log
         build/runtime-health-soak.stderr.log
       domain_artifact_if_no_files: error
-      desktop_job_name: Real save, catalog self-heal, unified F3 visualization and steady-state recovery
+      desktop_job_name: Real save, zero-fallback sources, catalog self-heal and unified F3 visualization
       desktop_timeout_minutes: 60
       desktop_script: res://tests/qa/runtime_health_report_desktop_acceptance.gd
       desktop_output_path: build\runtime-health-report-desktop.png
