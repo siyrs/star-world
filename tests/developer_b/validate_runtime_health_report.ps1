@@ -65,6 +65,7 @@ foreach ($token in @(
   'structural_integrity',
   'catalog',
   'save',
+  'candidate_queue_budget',
   'primary_bottleneck',
   '_project_save',
   '_project_catalog'
@@ -88,7 +89,6 @@ foreach ($token in @(
   'get_runtime_snapshot',
   'get_ecology_snapshot',
   'get_catalog_diagnostics',
-  'candidate_queue_budget',
   '_world_file_size',
   'save_recovered',
   'source_count'
@@ -134,8 +134,8 @@ foreach ($token in @(
     throw "Final runtime health service hub is missing composition: $token"
   }
 }
-if ($scene -notmatch 'runtime_health_service_hub\.gd') {
-  throw 'Production service_hub.tscn must mount the final runtime health composition layer'
+if ($scene -notmatch 'runtime_health_service_hub\.gd' -or $scene -notmatch 'exploration_progression_service_hub\.gd') {
+  throw 'Production scene must mount runtime health while retaining its compatible exploration entry contract'
 }
 
 if ($coordinator -notmatch 'telemetry\.call\([\s\S]{0,240}_service_hub') {
@@ -159,7 +159,7 @@ if ($health -notmatch 'operations' -or $health -notmatch 'MAX_OPERATION_ISSUES\s
 }
 
 foreach ($token in @(
-  'RuntimeHealthReportFormatter',
+  'runtime_health_report_formatter\.gd',
   'HBoxContainer\.new\(\)',
   '_health_label',
   'get_panel_rect',
