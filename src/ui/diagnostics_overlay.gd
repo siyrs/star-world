@@ -9,6 +9,7 @@ const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 const HealthFormatter = preload(
 	"res://src/diagnostics/runtime_health_report_formatter.gd"
 )
+const PASSTHROUGH_MOUSE_FILTER := Control.MOUSE_FILTER_IGNORE
 
 var telemetry: Node
 var gameplay_input: Node
@@ -106,6 +107,8 @@ func _create_column_label(initial_text: String) -> Label:
 	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	label.mouse_filter = PASSTHROUGH_MOUSE_FILTER
+	label.focus_mode = Control.FOCUS_NONE
 	label.add_theme_font_size_override("font_size", 13)
 	label.text = initial_text
 	return label
