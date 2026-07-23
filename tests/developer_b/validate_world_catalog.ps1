@@ -37,13 +37,20 @@ $readme = Get-Content -Raw -Encoding UTF8 $readmePath
 
 foreach ($token in @(
   'CATALOG_VERSION\s*:=\s*1',
+  'MAX_TEXT_LENGTH\s*:=\s*128',
+  'METADATA_FIELDS',
   'static\s+func\s+build_entry\s*\(',
   'static\s+func\s+normalize_entry\s*\(',
   'static\s+func\s+metadata_for_list\s*\(',
+  'static\s+func\s+_normalize_metadata\s*\(',
   'expected_save_bytes',
-  'catalog_source'
+  'catalog_source',
+  'map_profile'
 )) {
   if ($policy -notmatch $token) { throw "World catalog policy is missing bounded contract: $token" }
+}
+if ($policy -match 'metadata\s*=\s*raw_metadata\.duplicate\(true\)') {
+  throw 'World catalog policy must not copy arbitrary full metadata into the sidecar'
 }
 
 foreach ($token in @(
@@ -83,6 +90,7 @@ foreach ($token in @('save_bytes','func\s+_format_bytes','last_elapsed_milliseco
 }
 
 foreach ($phrase in @(
+  'catalog policy whitelists required fields and excludes unbounded metadata',
   'fresh world listing reads sidecars without parsing authoritative payloads',
   'missing catalog falls back once and self-heals',
   'corrupt catalog uses authoritative fallback and repairs itself',
@@ -91,15 +99,23 @@ foreach ($phrase in @(
 )) {
   if ($regression -notmatch [regex]::Escape($phrase)) { throw "World catalog regression is missing assertion: $phrase" }
 }
-foreach ($token in @('WORLD_COUNT\s*:=\s*12','OVERRIDES_PER_WORLD\s*:=\s*2048','MIN_AVOIDED_WORLD_BYTES','world-catalog-desktop\.json')) {
+foreach ($token in @(
+  'WORLD_COUNT\s*:=\s*12',
+  'OVERRIDES_PER_WORLD\s*:=\s*2048',
+  'MAX_CATALOG_BYTES\s*:=\s*4096',
+  'MIN_AVOIDED_WORLD_BYTES',
+  'world-catalog-desktop\.json'
+)) {
   if ($desktop -notmatch $token -and -not ($token -eq 'world-catalog-desktop\.json' -and $desktop -match 'get_basename\(\)\s*\+\s*"\.json"')) {
     throw "World catalog desktop acceptance is missing scale evidence: $token"
   }
 }
 foreach ($phrase in @(
+  'excludes unbounded metadata extensions from the catalog',
   'missing and corrupt sidecars never hide real worlds',
   'steady-state diagnostics account for every avoided benchmark payload byte',
   'real save row shows a human-readable authoritative file size',
+  'desktop acceptance resolves the selected row without full world reads',
   'save browser continue button starts the selected full world',
   'full load restores every large-world override after catalog selection'
 )) {
@@ -116,7 +132,7 @@ if ($runAll -notmatch 'validate_world_catalog\.ps1' -or $runAll -notmatch 'world
   throw 'Full regression entry point must retain world catalog validation and domain regression'
 }
 
-foreach ($token in @('world\.json','catalog\.json','派生','自愈','loaded_chunks','避免读取')) {
+foreach ($token in @('world\.json','catalog\.json','派生','自愈','严格白名单','loaded_chunks','避免读取')) {
   if ($contract -notmatch $token) { throw "World catalog contract is missing boundary documentation: $token" }
 }
 foreach ($token in @('list_worlds','完整 JSON','loaded_chunks','第二权威来源','12 个世界')) {
@@ -132,4 +148,4 @@ if ($readme -notmatch '轻量世界目录' -or $readme -notmatch '存档大小')
   throw 'README must expose the faster world browser and save-size feedback'
 }
 
-Write-Host 'PASS world_catalog authority=world.json cache=catalog.json worlds=12 overrides=24576 fallback=self-healing loaded_chunks=transient ui=size+latency ci=reusable'
+Write-Host 'PASS world_catalog authority=world.json cache=catalog.json whitelist=7 worlds=12 overrides=24576 fallback=self-healing loaded_chunks=transient ui=size+latency ci=reusable'
