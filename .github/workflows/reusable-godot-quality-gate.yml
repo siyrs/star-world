@@ -115,6 +115,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Run static validators
+        if: ${{ inputs.static_validators != '' }}
+        shell: pwsh
+        env:
+          STATIC_VALIDATORS: ${{ inputs.static_validators }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          $logPath = 'build\reusable-ci-static-validators.log'
+          Set-Content -LiteralPath $logPath -Value 'Reusable Godot gate static validators' -Encoding utf8
+          $validators = @(
+            $env:STATIC_VALIDATORS -split '\r?\n' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+          foreach ($validator in $validators) {
+            $validatorPath = $validator.Replace('/', '\')
+            if (-not $validatorPath.StartsWith('.\')) {
+              $validatorPath = ".\$validatorPath"
+            }
+            "START $validator" | Tee-Object -FilePath $logPath -Append
+            try {
+              if (-not (Test-Path -LiteralPath $validatorPath)) {
+                throw "Static validator is missing: $validator"
+              }
+              & $validatorPath *>&1 | Tee-Object -FilePath $logPath -Append
+              if (-not $?) {
+                throw "Static validator failed: $validator"
+              }
+              "PASS $validator" | Tee-Object -FilePath $logPath -Append
+            } catch {
+              "FAIL $validator" | Tee-Object -FilePath $logPath -Append
+              ($_ | Out-String) | Tee-Object -FilePath $logPath -Append
+              throw
+            }
+          }
+
       - name: Setup Godot
         uses: chickensoft-games/setup-godot@v2
         with:
@@ -126,31 +163,6 @@ jobs:
         shell: pwsh
         run: |
           .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
-
-      - name: Run static validators
-        if: ${{ inputs.static_validators != '' }}
-        shell: pwsh
-        env:
-          STATIC_VALIDATORS: ${{ inputs.static_validators }}
-        run: |
-          $validators = @(
-            $env:STATIC_VALIDATORS -split '\r?\n' |
-              ForEach-Object { $_.Trim() } |
-              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-          )
-          foreach ($validator in $validators) {
-            $validatorPath = $validator.Replace('/', '\')
-            if (-not $validatorPath.StartsWith('.\')) {
-              $validatorPath = ".\$validatorPath"
-            }
-            if (-not (Test-Path -LiteralPath $validatorPath)) {
-              throw "Static validator is missing: $validator"
-            }
-            & $validatorPath
-            if (-not $?) {
-              throw "Static validator failed: $validator"
-            }
-          }
 
       - name: Run primary headless script with captured logs
         if: ${{ inputs.primary_headless_script != '' }}
