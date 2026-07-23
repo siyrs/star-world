@@ -43,6 +43,7 @@ jobs:
         res://tests/qa/pickup_shared_runtime_regression.gd
         res://tests/qa/structural_integrity_batched_regression.gd
         res://tests/qa/runtime_stability_regression.gd
+        res://tests/qa/runtime_soak_regression.gd
       domain_artifact_name: runtime-health-report-domain
       domain_artifact_paths: |
         build/runtime-health-report-integration.stdout.log
