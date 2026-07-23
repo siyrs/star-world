@@ -52,6 +52,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_double_doors.ps1"
 & "$PSScriptRoot\developer_b\validate_directional_ladders.ps1"
 & "$PSScriptRoot\developer_b\validate_structural_integrity.ps1"
+& "$PSScriptRoot\developer_b\validate_structural_single_flush.ps1"
 & "$PSScriptRoot\developer_b\validate_world_mutation_batch.ps1"
 & "$PSScriptRoot\developer_b\validate_recent_chunk_cache.ps1"
 & "$PSScriptRoot\developer_b\validate_fertilizers.ps1"
@@ -104,6 +105,7 @@ Invoke-GodotTest 'res://tests/qa/connected_block_shapes_regression.gd'
 Invoke-GodotTest 'res://tests/qa/double_door_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_ladder_regression.gd'
 Invoke-GodotTest 'res://tests/qa/structural_integrity_desktop_import_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_mutation_pre_flush_regression.gd'
 Invoke-GodotTest 'res://tests/qa/structural_integrity_batched_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_mutation_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/recent_chunk_snapshot_cache_regression.gd'
@@ -139,4 +141,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: reusable Godot CI + structural integrity + lightweight world catalog + batched hostile arena + shared pickup runtime + bounded stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'
+Write-Host 'PASS: reusable Godot CI + single-flush structural integrity + lightweight world catalog + batched hostile arena + shared pickup runtime + bounded stacks + recent chunk snapshots + machine scale + agriculture scale + bounded world mutations + directional building + lifecycle + release-safe runtime checks'
