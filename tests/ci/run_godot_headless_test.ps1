@@ -17,6 +17,31 @@ $stderrPath = "$outputBaseFullPath.stderr.log"
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 
+function Assert-NoFatalGodotLog {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    $fatalPatterns = @(
+        'SCRIPT ERROR',
+        'Parse Error',
+        'ObjectDB instances were leaked',
+        'Leaked instance:',
+        'Resources still in use at exit'
+    )
+    foreach ($path in $Paths) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        $matches = @(Select-String -LiteralPath $path -Pattern $fatalPatterns -SimpleMatch)
+        if ($matches.Count -eq 0) {
+            continue
+        }
+        $details = ($matches | ForEach-Object {
+            "$($_.Path):$($_.LineNumber): $($_.Line)"
+        }) -join [Environment]::NewLine
+        throw "Fatal Godot headless diagnostics were found:$([Environment]::NewLine)$details"
+    }
+}
+
 if (-not [System.IO.Path]::IsPathRooted($Godot)) {
     $command = Get-Command $Godot -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -74,6 +99,7 @@ if (-not [string]::IsNullOrWhiteSpace($stderr)) {
 if ($timedOut) {
     throw "Godot headless test timed out after $TimeoutMilliseconds ms: $ScriptPath"
 }
+Assert-NoFatalGodotLog -Paths @($stdoutPath, $stderrPath)
 if ($process.ExitCode -ne 0) {
     throw "Godot headless test failed: $ScriptPath (exit $($process.ExitCode)); logs=$stdoutPath,$stderrPath"
 }
