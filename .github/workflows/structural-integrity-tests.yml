@@ -17,21 +17,23 @@ jobs:
   quality-gate:
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
-      domain_job_name: Structural support, batched cleanup, no-loss returns and adjacent regressions
+      domain_job_name: Structural support, single-flush cleanup, no-loss returns and adjacent regressions
       domain_timeout_minutes: 45
       static_validators: |
         tests/developer_b/validate_structural_integrity.ps1
+        tests/developer_b/validate_structural_single_flush.ps1
         tests/developer_b/validate_double_doors.ps1
         tests/developer_b/validate_directional_ladders.ps1
         tests/developer_b/validate_world_mutation_batch.ps1
         tests/developer_b/validate_pickup_stacks.ps1
         tests/developer_b/validate_service_hub_lifecycle.ps1
-      # Parse the pure scale fixture and standalone desktop journey in Headless
-      # before any adjacent domain regression or expensive Windows desktop job.
+      # Parse the pure scale fixture, complete base journey and optimized desktop
+      # entry point before adjacent regressions or the expensive Windows job.
       primary_headless_script: res://tests/qa/structural_integrity_desktop_import_regression.gd
       primary_headless_output_base: build\structural-integrity-import
       primary_headless_timeout_milliseconds: 300000
       domain_scripts: |
+        res://tests/qa/world_mutation_pre_flush_regression.gd
         res://tests/qa/structural_integrity_batched_regression.gd
         res://tests/qa/double_door_regression.gd
         res://tests/qa/directional_ladder_regression.gd
@@ -44,9 +46,9 @@ jobs:
         build/structural-integrity-import.stdout.log
         build/structural-integrity-import.stderr.log
       domain_artifact_if_no_files: error
-      desktop_job_name: Real 384-structure support loss, visualization, persistence and pickup fallback
+      desktop_job_name: Real 384-structure single-flush support loss, persistence and pickup fallback
       desktop_timeout_minutes: 60
-      desktop_script: res://tests/qa/structural_integrity_scale_desktop_acceptance.gd
+      desktop_script: res://tests/qa/structural_integrity_single_flush_desktop_acceptance.gd
       desktop_output_path: build\structural-integrity-desktop.png
       desktop_timeout_milliseconds: 480000
       desktop_artifact_name: structural-integrity-evidence
