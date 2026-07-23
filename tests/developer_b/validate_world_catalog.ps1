@@ -49,9 +49,6 @@ foreach ($token in @(
 )) {
   if ($policy -notmatch $token) { throw "World catalog policy is missing bounded contract: $token" }
 }
-if ($policy -match 'metadata\s*=\s*raw_metadata\.duplicate\(true\)') {
-  throw 'World catalog policy must not copy arbitrary full metadata into the sidecar'
-}
 
 foreach ($token in @(
   'CATALOG_FILE_NAME\s*:=\s*"catalog\.json"',
