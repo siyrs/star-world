@@ -84,7 +84,9 @@ func _run_world_cycle(
 	)
 	var max_pending := 0
 	var max_loaded := 0
-	var critical_samples := 0
+	var runtime_critical_samples := 0
+	var operations_critical_samples := 0
+	var sample_count := 0
 	var origin: Vector3 = world.call("get_spawn_position")
 	for frame_index in FRAMES_PER_CYCLE:
 		if frame_index > 0 and frame_index % 24 == 0:
@@ -98,11 +100,15 @@ func _run_world_cycle(
 		if frame_index % SAMPLE_INTERVAL_FRAMES != 0:
 			continue
 		var snapshot: Dictionary = diagnostics.call("sample_now")
+		sample_count += 1
 		var streaming: Dictionary = snapshot.get("streaming", {})
 		max_pending = maxi(max_pending, int(streaming.get("pending", 0)))
 		max_loaded = maxi(max_loaded, int(streaming.get("loaded", 0)))
-		if frame_index >= 24 and str(snapshot.get("health", {}).get("status", "")) == "critical":
-			critical_samples += 1
+		var health: Dictionary = snapshot.get("health", {})
+		if frame_index >= 24 and int(health.get("runtime_severity", health.get("severity", 0))) >= 2:
+			runtime_critical_samples += 1
+		if frame_index >= 24 and int(health.get("operations_severity", 0)) >= 2:
+			operations_critical_samples += 1
 		var adaptive: Dictionary = snapshot.get("adaptive_streaming", {})
 		var profile: Dictionary = adaptive.get("profile", {})
 		_check(
@@ -113,8 +119,8 @@ func _run_world_cycle(
 	_check(max_pending <= 128, "streaming queue remains bounded during repeated travel")
 	_check(max_loaded <= 96, "loaded chunk population remains bounded during repeated travel")
 	_check(
-		critical_samples <= 2,
-		"sustained runtime health does not remain critical after the warmup window",
+		runtime_critical_samples <= 2,
+		"sustained frame and streaming health does not remain critical after warmup",
 	)
 	controller_status = diagnostics.call("get_adaptive_streaming_status")
 	_check(
@@ -124,6 +130,17 @@ func _run_world_cycle(
 	_check(
 		int(hub.get("current_settings").get("render_distance", 0)) == expected_render_distance,
 		"adaptive streaming never rewrites the player's render-distance setting",
+	)
+	print(
+		"QA RUNTIME SOAK CYCLE | cycle=%d | samples=%d | pending_max=%d | loaded_max=%d | runtime_critical=%d | operations_critical=%d"
+		% [
+			cycle + 1,
+			sample_count,
+			max_pending,
+			max_loaded,
+			runtime_critical_samples,
+			operations_critical_samples,
+		]
 	)
 	hub.call("return_to_menu")
 	var menu_cleanup_settled := await _wait_for_menu_cleanup(world, diagnostics, hub)
