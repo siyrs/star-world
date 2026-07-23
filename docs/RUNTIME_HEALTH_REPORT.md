@@ -17,7 +17,7 @@ F3 原先只展示帧率、Chunk、内存、输入和角色状态。机器、农
 ```text
 领域服务
   └─ get_snapshot / get_runtime_snapshot / get_streaming_stats
-       └─ RuntimeHealthReportService（只读投影）
+       └─ RuntimeHealthReportService（只读聚合）
             └─ RuntimeHealthReportPolicy（纯评估）
                  └─ RuntimeTelemetryService.operations
                       └─ DiagnosticsOverlay（纯格式化）
@@ -93,9 +93,17 @@ Chunk 已加载
 
 主要瓶颈按严重度、预算利用率和稳定 ID 排序，结果具有确定性。
 
-## 保存证据
+## 兼容组合与保存证据
 
-最终 `RuntimeHealthServiceHub` 包装正式 `save_current()`：
+为保留已发布的生产入口，ServiceHub 继承链为：
+
+```text
+RanchProgressionServiceHub
+  └─ RuntimeHealthServiceHub
+       └─ ExplorationProgressionServiceHub  ← service_hub.tscn 继续使用此入口
+```
+
+`RuntimeHealthServiceHub` 包装正式 `save_current()`：
 
 ```text
 调用原保存事务
@@ -105,7 +113,7 @@ Chunk 已加载
 → 更新会话级聚合证据
 ```
 
-该包装不替换 `SaveService`，不修改原子写入、备份恢复、迁移或目录自愈逻辑。
+该包装不替换 `SaveService`，不修改原子写入、备份恢复、迁移或目录自愈逻辑。旧测试、场景和扩展仍看到稳定的 `exploration_progression_service_hub.gd` 资源路径；健康层通过继承插入，不要求调用方迁移。
 
 会话只保留：
 
@@ -125,7 +133,7 @@ F3 继续使用同一个 `RuntimeTelemetryService`：
 
 ## 生命周期与持久化
 
-`RuntimeHealthReport` 是最终 ServiceHub 的稳定子节点：
+`RuntimeHealthReport` 是生产 Exploration ServiceHub 继承得到的稳定子节点：
 
 ```text
 _ready             创建并绑定 SaveService
@@ -148,12 +156,13 @@ _exit_tree         断开恢复信号并 shutdown
 - 保存失败、结构溢出、掉落拒绝、目录自愈；
 - 完整领域 Dictionary 不逃逸；
 - Telemetry 与顶层 Runtime Health 合并；
-- 真实 F3 输入和鼠标穿透。
+- 真实 F3 输入和鼠标穿透；
+- 生产场景仍使用稳定 Exploration ServiceHub 入口。
 
 真实 Windows 桌面旅程：
 
 1. 创建并启动正式世界；
-2. 通过最终 ServiceHub 执行真实保存；
+2. 通过生产 ServiceHub 执行真实保存；
 3. 删除 `catalog.json`；
 4. 调用正式 `list_worlds()` 触发权威回退和自愈；
 5. 采样统一健康并要求目录成为主要瓶颈；
