@@ -1,5 +1,5 @@
 class_name ExplorationProgressionServiceHub
-extends "res://src/ui/ranch_progression_service_hub.gd"
+extends "res://src/ui/runtime_health_service_hub.gd"
 
 # The production implementation extends the stable exploration participant at
 # res://src/exploration/exploration_runtime_participant.gd without changing the
