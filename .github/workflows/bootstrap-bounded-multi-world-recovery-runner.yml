@@ -21,15 +21,15 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import textwrap
           import traceback
 
           workflow_path = Path('.github/workflows/bootstrap-bounded-multi-world-recovery.yml')
           workflow = workflow_path.read_text(encoding='utf-8')
-          script = workflow.split("python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+          raw = workflow.split("python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+          script = "\n".join(line[10:] if line.startswith("          ") else line for line in raw.splitlines())
           diagnostic = Path('docs/BOUNDED_RECOVERY_BOOTSTRAP_RESULT.txt')
           try:
-              exec(compile(textwrap.dedent(script), 'bounded-recovery-bootstrap.py', 'exec'))
+              exec(compile(script, 'bounded-recovery-bootstrap.py', 'exec'))
               diagnostic.write_text('SUCCESS\n', encoding='utf-8')
           except Exception:
               diagnostic.write_text('FAILURE\n' + traceback.format_exc(), encoding='utf-8')
