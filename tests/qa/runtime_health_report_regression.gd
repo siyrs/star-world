@@ -183,7 +183,7 @@ func _test_read_only_aggregation_and_f3_surface() -> void:
 	save.save_recovered.emit("qa-runtime-health", "backup")
 	var report: Dictionary = report_service.get_snapshot()
 	_check(bool(report.get("world_attached", false)), "aggregation reports the production world attachment")
-	_check(int(report.get("source_count", 0)) == 10, "aggregation reads exactly ten bounded source snapshots")
+	_check(int(report.get("source_count", 0)) == 11, "aggregation reads exactly eleven bounded source snapshots")
 	_check(str(report.get("status", "")) == "critical", "critical operational pressure reaches the report")
 	_check(
 		int(report.get("save", {}).get("last_bytes", 0)) == 14590
