@@ -37,7 +37,12 @@ func _ready() -> void:
 		gameplay_input = _service_hub.get("gameplay_input")
 	streaming_controller.call("setup", telemetry)
 	telemetry.call(
-		"setup", input_context, creature_spawner, streaming_controller, gameplay_input
+		"setup",
+		input_context,
+		creature_spawner,
+		streaming_controller,
+		gameplay_input,
+		_service_hub
 	)
 	overlay.call("setup", telemetry, gameplay_input)
 
@@ -66,6 +71,12 @@ func get_latest_snapshot() -> Dictionary:
 	if telemetry == null:
 		return {}
 	return telemetry.call("get_latest_snapshot")
+
+
+func get_runtime_health_snapshot() -> Dictionary:
+	var latest := get_latest_snapshot()
+	var value: Variant = latest.get("operations", {})
+	return value.duplicate(true) if value is Dictionary else {}
 
 
 func get_adaptive_streaming_status() -> Dictionary:
