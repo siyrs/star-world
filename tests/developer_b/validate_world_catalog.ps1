@@ -4,7 +4,9 @@ Set-StrictMode -Version Latest
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $policyPath = Join-Path $root 'src\save\world_catalog_policy.gd'
 $savePath = Join-Path $root 'src\save\save_service.gd'
-$worldPath = Join-Path $root 'src\world\cached_batched_voxel_world.gd'
+$cacheWorldPath = Join-Path $root 'src\world\cached_batched_voxel_world.gd'
+$worldPath = Join-Path $root 'src\world\persistent_cached_batched_voxel_world.gd'
+$gamePath = Join-Path $root 'src\core\batched_game.gd'
 $browserPath = Join-Path $root 'src\ui\save_browser_panel.gd'
 $regressionPath = Join-Path $root 'tests\qa\world_catalog_regression.gd'
 $desktopPath = Join-Path $root 'tests\qa\world_catalog_desktop_acceptance.gd'
@@ -16,15 +18,18 @@ $roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 $readmePath = Join-Path $root 'README.md'
 
 foreach ($path in @(
-  $policyPath,$savePath,$worldPath,$browserPath,$regressionPath,$desktopPath,
-  $workflowPath,$runAllPath,$contractPath,$auditPath,$roadmapPath,$readmePath
+  $policyPath,$savePath,$cacheWorldPath,$worldPath,$gamePath,$browserPath,
+  $regressionPath,$desktopPath,$workflowPath,$runAllPath,$contractPath,
+  $auditPath,$roadmapPath,$readmePath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing world catalog contract file: $path" }
 }
 
 $policy = Get-Content -Raw -Encoding UTF8 $policyPath
 $save = Get-Content -Raw -Encoding UTF8 $savePath
+$cacheWorld = Get-Content -Raw -Encoding UTF8 $cacheWorldPath
 $world = Get-Content -Raw -Encoding UTF8 $worldPath
+$game = Get-Content -Raw -Encoding UTF8 $gamePath
 $browser = Get-Content -Raw -Encoding UTF8 $browserPath
 $regression = Get-Content -Raw -Encoding UTF8 $regressionPath
 $desktop = Get-Content -Raw -Encoding UTF8 $desktopPath
@@ -73,13 +78,22 @@ if ($save -notmatch 'if\s+not\s+_write_catalog_entry[\s\S]*?_catalog_write_failu
   throw 'Derived catalog failure must be diagnostic-only after an authoritative world save'
 }
 
+if ($cacheWorld -match 'func\s+serialize\s*\(') {
+  throw 'Recent Chunk cache composition must remain transient and must not own persistence'
+}
+if ($world -notmatch 'extends\s+"res://src/world/cached_batched_voxel_world\.gd"') {
+  throw 'Production persistence projection must preserve cached and batched world behavior'
+}
 $serializeMatch = [regex]::Match($world, 'func\s+serialize\s*\(\)\s*->\s*Dictionary\s*:[\s\S]*?(?=\n\nfunc\s+)')
-if (-not $serializeMatch.Success) { throw 'Production cached world must own its persistence surface' }
+if (-not $serializeMatch.Success) { throw 'Production world projection must own its sparse persistence surface' }
 if ($serializeMatch.Value -notmatch '"block_overrides"\s*:\s*serialize_sparse_overrides\(\)') {
   throw 'Production world serialization must retain sparse block overrides'
 }
-if ($serializeMatch.Value -match '"loaded_chunks"') {
-  throw 'Production world serialization must not construct transient loaded Chunk coordinates'
+if ($serializeMatch.Value -match '"loaded_chunks"|recent_chunk_cache|rebuild|pending') {
+  throw 'Production world serialization must not construct transient streaming or cache state'
+}
+if ($game -notmatch 'persistent_cached_batched_voxel_world\.gd') {
+  throw 'Production GameScene must compose the sparse persistence projection'
 }
 
 foreach ($token in @('save_bytes','func\s+_format_bytes','last_elapsed_milliseconds','已修复')) {
@@ -145,4 +159,4 @@ if ($readme -notmatch '轻量世界目录' -or $readme -notmatch '存档大小')
   throw 'README must expose the faster world browser and save-size feedback'
 }
 
-Write-Host 'PASS world_catalog authority=world.json cache=catalog.json whitelist=7 worlds=12 overrides=24576 fallback=self-healing loaded_chunks=transient ui=size+latency ci=reusable'
+Write-Host 'PASS world_catalog authority=world.json cache=catalog.json whitelist=7 worlds=12 overrides=24576 fallback=self-healing persistence=projection cache=transient ui=size+latency ci=reusable'
