@@ -27,6 +27,23 @@ func set_block(block_position: Vector3i, block_id: String) -> bool:
 	return true
 
 
+func serialize() -> Dictionary:
+	# Loaded Chunk coordinates, cache entries, rebuild counters and streaming state
+	# are runtime diagnostics. Persisting them made every save scale with render
+	# distance even though start_world only restores sparse block overrides.
+	return {
+		"version": 1,
+		"profile_id": profile_id,
+		"seed": seed_value,
+		"world_id": world_id,
+		"block_overrides": serialize_sparse_overrides(),
+	}
+
+
+func serialize_state() -> Dictionary:
+	return serialize()
+
+
 func get_recent_chunk_cache_stats() -> Dictionary:
 	return _recent_chunk_cache.get_stats()
 
