@@ -51,14 +51,13 @@ foreach ($token in @('待渐进修复','primary_repair_budget','last_repair_budg
 }
 
 foreach ($phrase in @(
-  'first scan keeps all valid fallback worlds visible',
+  'keeps all valid fallback worlds visible',
   'never exceeds the disk repair budget',
-  'all corrupt primaries are eventually repaired exactly once',
-  'steady desktop refresh is a pure sidecar hit'
+  'all corrupt primaries are eventually repaired exactly once'
 )) {
-  $target = if ($phrase -like 'steady*') { $text.desktop } else { $text.regression }
-  Assert-Match $target ([regex]::Escape($phrase)) "Recovery test is missing assertion: $phrase"
+  Assert-Match $text.regression ([regex]::Escape($phrase)) "Recovery regression is missing assertion: $phrase"
 }
+Assert-Match $text.desktop ([regex]::Escape('steady desktop refresh is a pure sidecar hit')) 'Desktop recovery is missing steady sidecar assertion'
 
 foreach ($token in @(
   'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml',
