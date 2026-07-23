@@ -29,6 +29,7 @@ jobs:
         tests/developer_b/validate_service_hub_lifecycle.ps1
       # Parse the pure scale fixture, complete base journey and optimized desktop
       # entry point before adjacent regressions or the expensive Windows job.
+      # Complete base journey: res://tests/qa/structural_integrity_scale_desktop_acceptance.gd
       primary_headless_script: res://tests/qa/structural_integrity_desktop_import_regression.gd
       primary_headless_output_base: build\structural-integrity-import
       primary_headless_timeout_milliseconds: 300000
