@@ -2,56 +2,64 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $root = Resolve-Path "$PSScriptRoot\..\.."
-$policyPath = Join-Path $root 'src\diagnostics\runtime_health_report_policy.gd'
-$servicePath = Join-Path $root 'src\diagnostics\runtime_health_report_service.gd'
-$formatterPath = Join-Path $root 'src\diagnostics\runtime_health_report_formatter.gd'
-$hubPath = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
-$explorationHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
-$scenePath = Join-Path $root 'scenes\ui\service_hub.tscn'
-$coordinatorPath = Join-Path $root 'src\diagnostics\runtime_diagnostics_coordinator.gd'
-$telemetryPath = Join-Path $root 'src\diagnostics\runtime_telemetry_service.gd'
-$healthPath = Join-Path $root 'src\diagnostics\runtime_health_policy.gd'
-$overlayPath = Join-Path $root 'src\ui\diagnostics_overlay.gd'
-$policyTestPath = Join-Path $root 'tests\qa\runtime_health_report_policy_regression.gd'
-$integrationTestPath = Join-Path $root 'tests\qa\runtime_health_report_regression.gd'
-$desktopTestPath = Join-Path $root 'tests\qa\runtime_health_report_desktop_acceptance.gd'
-$soakTestPath = Join-Path $root 'tests\qa\runtime_soak_regression.gd'
-$workflowPath = Join-Path $root '.github\workflows\runtime-health-report-tests.yml'
-$runAllPath = Join-Path $root 'tests\run_all.ps1'
-$contractPath = Join-Path $root 'docs\RUNTIME_HEALTH_REPORT.md'
-$auditPath = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-23_ITERATION_31.md'
-$roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 
-foreach ($path in @(
-  $policyPath,$servicePath,$formatterPath,$hubPath,$explorationHubPath,$scenePath,
-  $coordinatorPath,$telemetryPath,$healthPath,$overlayPath,$policyTestPath,
-  $integrationTestPath,$desktopTestPath,$soakTestPath,$workflowPath,$runAllPath,
-  $contractPath,$auditPath,$roadmapPath
-)) {
-  if (-not (Test-Path -LiteralPath $path)) {
-    throw "Missing runtime health contract file: $path"
+function Assert-FileExists {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "Missing runtime health contract file: $Path"
   }
 }
 
-$policy = Get-Content -Raw -Encoding UTF8 $policyPath
-$service = Get-Content -Raw -Encoding UTF8 $servicePath
-$formatter = Get-Content -Raw -Encoding UTF8 $formatterPath
-$hub = Get-Content -Raw -Encoding UTF8 $hubPath
-$explorationHub = Get-Content -Raw -Encoding UTF8 $explorationHubPath
-$scene = Get-Content -Raw -Encoding UTF8 $scenePath
-$coordinator = Get-Content -Raw -Encoding UTF8 $coordinatorPath
-$telemetry = Get-Content -Raw -Encoding UTF8 $telemetryPath
-$health = Get-Content -Raw -Encoding UTF8 $healthPath
-$overlay = Get-Content -Raw -Encoding UTF8 $overlayPath
-$policyTest = Get-Content -Raw -Encoding UTF8 $policyTestPath
-$integrationTest = Get-Content -Raw -Encoding UTF8 $integrationTestPath
-$desktopTest = Get-Content -Raw -Encoding UTF8 $desktopTestPath
-$soakTest = Get-Content -Raw -Encoding UTF8 $soakTestPath
-$workflow = Get-Content -Raw -Encoding UTF8 $workflowPath
-$runAll = Get-Content -Raw -Encoding UTF8 $runAllPath
-$contract = Get-Content -Raw -Encoding UTF8 $contractPath
-$audit = Get-Content -Raw -Encoding UTF8 $auditPath
-$roadmap = Get-Content -Raw -Encoding UTF8 $roadmapPath
+function Assert-Matches {
+  param(
+    [Parameter(Mandatory = $true)][string]$Text,
+    [Parameter(Mandatory = $true)][string]$Pattern,
+    [Parameter(Mandatory = $true)][string]$Message
+  )
+  if ($Text -notmatch $Pattern) { throw $Message }
+}
+
+function Assert-NotMatches {
+  param(
+    [Parameter(Mandatory = $true)][string]$Text,
+    [Parameter(Mandatory = $true)][string]$Pattern,
+    [Parameter(Mandatory = $true)][string]$Message
+  )
+  if ($Text -match $Pattern) { throw $Message }
+}
+
+function Read-ContractText {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  Assert-FileExists -Path $Path
+  return Get-Content -Raw -Encoding UTF8 $Path
+}
+
+$paths = [ordered]@{
+  policy = Join-Path $root 'src\diagnostics\runtime_health_report_policy.gd'
+  service = Join-Path $root 'src\diagnostics\runtime_health_report_service.gd'
+  formatter = Join-Path $root 'src\diagnostics\runtime_health_report_formatter.gd'
+  hub = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
+  exploration_hub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
+  scene = Join-Path $root 'scenes\ui\service_hub.tscn'
+  coordinator = Join-Path $root 'src\diagnostics\runtime_diagnostics_coordinator.gd'
+  telemetry = Join-Path $root 'src\diagnostics\runtime_telemetry_service.gd'
+  health = Join-Path $root 'src\diagnostics\runtime_health_policy.gd'
+  overlay = Join-Path $root 'src\ui\diagnostics_overlay.gd'
+  policy_test = Join-Path $root 'tests\qa\runtime_health_report_policy_regression.gd'
+  integration_test = Join-Path $root 'tests\qa\runtime_health_report_regression.gd'
+  desktop_test = Join-Path $root 'tests\qa\runtime_health_report_desktop_acceptance.gd'
+  soak_test = Join-Path $root 'tests\qa\runtime_soak_regression.gd'
+  workflow = Join-Path $root '.github\workflows\runtime-health-report-tests.yml'
+  run_all = Join-Path $root 'tests\run_all.ps1'
+  contract = Join-Path $root 'docs\RUNTIME_HEALTH_REPORT.md'
+  audit = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-23_ITERATION_31.md'
+  roadmap = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
+}
+
+$text = @{}
+foreach ($name in $paths.Keys) {
+  $text[$name] = Read-ContractText -Path $paths[$name]
+}
 
 foreach ($token in @(
   'class_name\s+RuntimeHealthReportPolicy',
@@ -75,16 +83,10 @@ foreach ($token in @(
   '_project_save',
   '_project_catalog'
 )) {
-  if ($policy -notmatch $token) {
-    throw "Runtime health policy is missing bounded projection: $token"
-  }
+  Assert-Matches $text.policy $token "Runtime health policy is missing bounded projection: $token"
 }
-if ($policy -match 'extends\s+Node' -or $policy -match 'Timer\.new\(' -or $policy -match 'FileAccess') {
-  throw 'Runtime health policy must remain pure and must not own nodes, timers or files'
-}
-if ($policy -match 'block_overrides' -or $policy -match 'crop_counts' -or $policy -match 'species_counts') {
-  throw 'Runtime health policy must not project full domain dictionaries'
-}
+Assert-NotMatches $text.policy 'extends\s+Node|Timer\.new\(|FileAccess' 'Runtime health policy must remain a pure read-only evaluator'
+Assert-NotMatches $text.policy 'block_overrides|crop_counts|species_counts' 'Runtime health policy must not project full domain dictionaries'
 
 foreach ($token in @(
   'class_name\s+RuntimeHealthReportService',
@@ -98,31 +100,15 @@ foreach ($token in @(
   'save_recovered',
   'source_count'
 )) {
-  if ($service -notmatch $token) {
-    throw "Runtime health service is missing read-only aggregation: $token"
-  }
+  Assert-Matches $text.service $token "Runtime health service is missing read-only aggregation: $token"
 }
-if ($service -match 'func\s+_process\s*\(' -or $service -match 'Timer\.new\(' -or $service -match 'func\s+serialize\s*\(') {
-  throw 'Runtime health service must not own another sampling loop or persistence domain'
-}
-if ($service -match '\.call\("set_' -or $service -match '\.call\("clear"' -or $service -match '\.call\("save_') {
-  throw 'Runtime health aggregation must not mutate source domains'
-}
+Assert-NotMatches $text.service 'func\s+_process\s*\(|Timer\.new\(|func\s+serialize\s*\(' 'Runtime health service must not own a sampling loop or persistence domain'
+Assert-NotMatches $text.service '\.call\("set_|\.call\("clear"|\.call\("save_' 'Runtime health aggregation must not mutate source domains'
 
-foreach ($token in @(
-  'class_name\s+RuntimeHealthReportFormatter',
-  'F3 运行与保存健康',
-  '主要压力',
-  '保存会话',
-  '目录累计'
-)) {
-  if ($formatter -notmatch [regex]::Escape($token) -and $formatter -notmatch $token) {
-    throw "Runtime health formatter is missing visible output: $token"
-  }
+foreach ($token in @('class_name\s+RuntimeHealthReportFormatter','F3 运行与保存健康','主要压力','保存会话','目录累计')) {
+  Assert-Matches $text.formatter $token "Runtime health formatter is missing visible output: $token"
 }
-if ($formatter -match 'extends\s+Node' -or $formatter -match 'FileAccess' -or $formatter -match 'Input\.') {
-  throw 'Runtime health formatter must remain a pure presentation function'
-}
+Assert-NotMatches $text.formatter 'extends\s+Node|FileAccess|Input\.' 'Runtime health formatter must remain a pure presentation helper'
 
 foreach ($token in @(
   'class_name\s+RuntimeHealthServiceHub',
@@ -135,160 +121,100 @@ foreach ($token in @(
   'detach_runtime',
   'shutdown'
 )) {
-  if ($hub -notmatch $token) {
-    throw "Runtime health composition layer is missing behavior: $token"
-  }
+  Assert-Matches $text.hub $token "Runtime health composition layer is missing behavior: $token"
 }
-if ($explorationHub -notmatch 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"') {
-  throw 'Stable exploration ServiceHub must inherit the runtime health composition layer'
-}
-if ($scene -notmatch 'exploration_progression_service_hub\.gd' -or $scene -match 'runtime_health_service_hub\.gd') {
-  throw 'Production scene must preserve the stable exploration ServiceHub entry point'
+Assert-Matches $text.exploration_hub 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"' 'Stable exploration ServiceHub must inherit the runtime health composition layer'
+Assert-Matches $text.scene 'exploration_progression_service_hub\.gd' 'Production scene must preserve the stable exploration ServiceHub entry point'
+Assert-NotMatches $text.scene 'runtime_health_service_hub\.gd' 'Production scene must not bypass the stable exploration ServiceHub entry point'
+
+Assert-Matches $text.coordinator 'telemetry\.call\([\s\S]{0,240}_service_hub' 'Diagnostics coordinator must pass the final ServiceHub into telemetry'
+Assert-Matches $text.coordinator 'func\s+get_runtime_health_snapshot' 'Diagnostics coordinator must expose the operations projection'
+foreach ($token in @('p_service_hub','"operations"\s*:\s*_get_runtime_health_snapshot\(\)','func\s+_get_runtime_health_snapshot\s*\(','"version"\s*:\s*3')) {
+  Assert-Matches $text.telemetry $token "Telemetry is missing unified operations evidence: $token"
 }
 
-if ($coordinator -notmatch 'telemetry\.call\([\s\S]{0,240}_service_hub') {
-  throw 'Diagnostics coordinator must pass the final ServiceHub into the existing telemetry service'
-}
-if ($coordinator -notmatch 'func\s+get_runtime_health_snapshot') {
-  throw 'Diagnostics coordinator must expose the latest operations projection'
-}
-foreach ($token in @(
-  'p_service_hub',
-  '"operations"\s*:\s*_get_runtime_health_snapshot\(\)',
-  'func\s+_get_runtime_health_snapshot\s*\(',
-  '"version"\s*:\s*3'
-)) {
-  if ($telemetry -notmatch $token) {
-    throw "Telemetry is missing unified operations evidence: $token"
-  }
-}
 foreach ($token in @(
   'MAX_OPERATION_ISSUES\s*:=\s*8',
   'runtime_severity',
   'runtime_status',
+  'sustained_runtime_severity',
+  'sustained_runtime_status',
+  'runtime_components',
+  'average_frame',
+  'peak_frame',
+  'stutters',
+  'pending_chunks',
+  'memory',
+  'nodes',
   'operations_severity',
   'operations_status',
   'maxi\(runtime_severity,\s*operations_severity\)'
 )) {
-  if ($health -notmatch $token) {
-    throw "Top-level runtime health is missing split severity evidence: $token"
-  }
+  Assert-Matches $text.health $token "Top-level runtime health is missing split component evidence: $token"
 }
 
+foreach ($token in @('runtime_health_report_formatter\.gd','HBoxContainer\.new\(\)','_health_label','get_panel_rect','HealthFormatter\.format','MOUSE_FILTER_IGNORE')) {
+  Assert-Matches $text.overlay $token "F3 overlay is missing the two-column read-only health display: $token"
+}
+Assert-NotMatches $text.overlay '\.call\("set_|\.call\("save_|block_overrides' 'F3 overlay must never mutate or inspect full domain state'
+
+foreach ($token in @('MAX_ROWS','MAX_ISSUES','primary_bottleneck','bounded projection excludes','save and catalog evidence survive the whitelist projection')) {
+  Assert-Matches $text.policy_test ([regex]::Escape($token)) "Runtime health policy regression is missing coverage: $token"
+}
 foreach ($token in @(
-  'runtime_health_report_formatter\.gd',
-  'HBoxContainer\.new\(\)',
-  '_health_label',
-  'get_panel_rect',
-  'HealthFormatter\.format',
-  'MOUSE_FILTER_IGNORE'
-)) {
-  if ($overlay -notmatch $token) {
-    throw "F3 overlay is missing two-column read-only health display: $token"
-  }
-}
-if ($overlay -match '\.call\("set_' -or $overlay -match '\.call\("save_' -or $overlay -match 'block_overrides') {
-  throw 'F3 overlay must never mutate or inspect full domain state'
-}
-
-foreach ($phrase in @(
-  'report retains exactly the bounded twelve health rows',
-  'report identifies one deterministic critical bottleneck',
-  'bounded projection excludes',
-  'save and catalog evidence survive the whitelist projection'
-)) {
-  if ($policyTest -notmatch [regex]::Escape($phrase)) {
-    throw "Runtime health policy regression is missing assertion: $phrase"
-  }
-}
-foreach ($phrase in @(
   'aggregation reads exactly eleven bounded source snapshots',
   'top-level runtime health includes operations severity',
   'runtime and operations severity remain independently observable',
   'a real F3 event opens the combined health surface',
   'failed save is retained as critical operational evidence'
 )) {
-  if ($integrationTest -notmatch [regex]::Escape($phrase)) {
-    throw "Runtime health integration regression is missing assertion: $phrase"
-  }
+  Assert-Matches $text.integration_test ([regex]::Escape($token)) "Runtime health integration regression is missing coverage: $token"
 }
-foreach ($phrase in @(
+foreach ($token in @(
   'real service-hub save transaction succeeds',
   'missing sidecar triggers real fallback and self-healing repair',
   'catalog self-healing becomes the deterministic primary operational bottleneck',
   'real F3 input opens the unified health report',
   'next catalog scan returns to steady sidecar hits without another fallback'
 )) {
-  if ($desktopTest -notmatch [regex]::Escape($phrase)) {
-    throw "Runtime health desktop acceptance is missing assertion: $phrase"
-  }
+  Assert-Matches $text.desktop_test ([regex]::Escape($token)) "Runtime health desktop acceptance is missing coverage: $token"
 }
-foreach ($phrase in @(
-  'sustained frame and streaming health does not remain critical after warmup',
-  'runtime_critical_samples',
-  'operations_critical_samples',
+foreach ($token in @(
+  'sustained_runtime_critical_samples',
+  'sustained_runtime_severity',
+  'runtime_components',
+  'runtime health recovers after bounded travel pressure',
+  'QA RUNTIME SOAK SAMPLE',
   'QA RUNTIME SOAK CYCLE'
 )) {
-  if ($soakTest -notmatch [regex]::Escape($phrase)) {
-    throw "Runtime soak is missing split health diagnostics: $phrase"
-  }
+  Assert-Matches $text.soak_test ([regex]::Escape($token)) "Runtime soak is missing sustained component diagnostics: $token"
 }
+Assert-Matches $text.soak_test 'sustained_runtime_critical_samples\s*<=\s*2' 'Runtime soak must gate sustained component pressure with a bounded allowance'
+Assert-Matches $text.soak_test 'last_runtime_severity\s*<\s*2' 'Runtime soak must prove recovery by the final sample'
 
 foreach ($token in @(
+  'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml',
   'validate_runtime_health_report\.ps1',
+  'runtime_soak_regression\.gd',
   'runtime_health_report_policy_regression\.gd',
   'runtime_health_report_regression\.gd',
   'runtime_health_report_desktop_acceptance\.gd',
+  'runtime-health-soak\.stdout\.log',
   'runtime-health-report-desktop\.json'
 )) {
-  if ($workflow -notmatch $token) {
-    throw "Runtime health workflow is missing validation or evidence: $token"
-  }
+  Assert-Matches $text.workflow $token "Runtime health workflow is missing validation or evidence: $token"
 }
-if ($workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml') {
-  throw 'Runtime health workflow must use the reusable Godot quality gate'
-}
-foreach ($token in @(
-  'validate_runtime_health_report\.ps1',
-  'runtime_health_report_policy_regression\.gd',
-  'runtime_health_report_regression\.gd',
-  'runtime_soak_regression\.gd'
-)) {
-  if ($runAll -notmatch $token) {
-    throw "Full regression entry point is missing runtime health coverage: $token"
-  }
+foreach ($token in @('validate_runtime_health_report\.ps1','runtime_health_report_policy_regression\.gd','runtime_health_report_regression\.gd','runtime_soak_regression\.gd')) {
+  Assert-Matches $text.run_all $token "Full regression entry point is missing runtime health coverage: $token"
 }
 
-foreach ($token in @(
-  '11 个固定来源',
-  '最多 12 行、8 条问题',
-  '75%',
-  '90%',
-  '运行分量',
-  '运营分量',
-  '主要瓶颈',
-  '最近保存字节与耗时',
-  '不进入存档'
-)) {
-  if ($contract -notmatch [regex]::Escape($token)) {
-    throw "Runtime health contract is missing a boundary: $token"
-  }
+foreach ($token in @('11 个固定来源','最多 12 行、8 条问题','75%','90%','运行分量','运营分量','主要瓶颈','最近保存字节与耗时','不进入存档')) {
+  Assert-Matches $text.contract ([regex]::Escape($token)) "Runtime health contract is missing a boundary: $token"
 }
-foreach ($token in @(
-  '平行监控域',
-  '第二个 Timer',
-  '固定大小',
-  '运行分量',
-  '运营分量',
-  '确定',
-  '真实验收'
-)) {
-  if ($audit -notmatch [regex]::Escape($token)) {
-    throw "Architecture audit is missing finding or decision: $token"
-  }
+foreach ($token in @('平行监控域','第二个 Timer','固定大小','运行分量','运营分量','确定','真实验收','兼容接口')) {
+  Assert-Matches $text.audit ([regex]::Escape($token)) "Architecture audit is missing a finding or decision: $token"
 }
-if ($roadmap -notmatch '统一运行与保存健康报告' -or $roadmap -notmatch '长期规模与恢复') {
-  throw 'Product roadmap must record completed unified health and the next recovery priority'
-}
+Assert-Matches $text.roadmap '统一运行与保存健康报告' 'Product roadmap must record the completed unified health report'
+Assert-Matches $text.roadmap '长期规模与恢复' 'Product roadmap must retain the next recovery priority'
 
-Write-Host 'PASS runtime_health_report sources=11 rows=12 issues=8 warning=75% critical=90% runtime=split operations=split telemetry=shared save=measured catalog=self-healing ui=readonly entry=exploration-compatible'
+Write-Host 'PASS runtime_health_report sources=11 rows=12 issues=8 warning=75% critical=90% runtime=componentized sustained=separate operations=split telemetry=shared save=measured catalog=self-healing ui=readonly entry=exploration-compatible'
