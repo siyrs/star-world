@@ -23,7 +23,7 @@ func _run() -> void:
 	var desktop_base_script := load(DESKTOP_BASE_PATH) as Script
 	_check(
 		desktop_base_script != null,
-		"complete structural desktop journey loads as a valid script",
+		"standalone structural desktop journey loads as a valid script",
 	)
 	var desktop_script := load(DESKTOP_PATH) as Script
 	_check(
