@@ -4,6 +4,7 @@ $root = Resolve-Path "$PSScriptRoot\..\.."
 $gameplayHubPath = Join-Path $root 'src\ui\service_hub.gd'
 $husbandryHubPath = Join-Path $root 'src\ui\husbandry_progression_service_hub.gd'
 $ranchHubPath = Join-Path $root 'src\ui\ranch_progression_service_hub.gd'
+$runtimeHealthHubPath = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
 $explorationHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
 $participantPath = Join-Path $root 'src\husbandry\ranch_runtime_participant.gd'
 $policyPath = Join-Path $root 'src\husbandry\ranch_notification_policy.gd'
@@ -14,6 +15,7 @@ $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $gameplayHubText = Get-Content -Raw -Encoding UTF8 $gameplayHubPath
 $husbandryHubText = Get-Content -Raw -Encoding UTF8 $husbandryHubPath
 $ranchHubText = Get-Content -Raw -Encoding UTF8 $ranchHubPath
+$runtimeHealthHubText = Get-Content -Raw -Encoding UTF8 $runtimeHealthHubPath
 $explorationHubText = Get-Content -Raw -Encoding UTF8 $explorationHubPath
 $participantText = Get-Content -Raw -Encoding UTF8 $participantPath
 $policyText = Get-Content -Raw -Encoding UTF8 $policyPath
@@ -43,8 +45,17 @@ foreach ($legacyLifecycle in @('_begin_world','attach_game','activate_gameplay',
   if ($ranchHubText -match "func\s+$legacyLifecycle\s*\(") { throw "Ranch hub must remain a thin registration layer: $legacyLifecycle" }
 }
 
-if ($explorationHubText -notmatch 'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"') {
-  throw 'Exploration hub must preserve the ranch inheritance entry point'
+if ($runtimeHealthHubText -notmatch 'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"') {
+  throw 'Runtime health layer must inherit ranch without moving ranch ownership'
+}
+if ($runtimeHealthHubText -match 'service_hub_feature_coordinator\.gd' -or $runtimeHealthHubText -match 'ranch_runtime_participant\.gd') {
+  throw 'Runtime health layer must not duplicate ranch lifecycle or coordinator ownership'
+}
+if ($runtimeHealthHubText -notmatch 'func\s+save_current\s*\(' -or $runtimeHealthHubText -notmatch 'super\.save_current') {
+  throw 'Runtime health layer must observe the complete inherited save transaction'
+}
+if ($explorationHubText -notmatch 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"') {
+  throw 'Exploration public entry must preserve ranch through the runtime health layer'
 }
 if ($explorationHubText -match 'service_hub_feature_coordinator\.gd') {
   throw 'Exploration hub must reuse the coordinator inherited from Gameplay'
@@ -101,4 +112,4 @@ if ($runAllText -notmatch 'ranch_runtime_lifecycle_regression\.gd') {
   throw 'Full regression entry point must include the ranch runtime lifecycle regression'
 }
 
-Write-Host 'PASS ranch_lifecycle root=gameplay participant=ranch_runtime dependency=husbandry_runtime batch_types=3 public_fields=3'
+Write-Host 'PASS ranch_lifecycle root=gameplay participant=ranch_runtime dependency=husbandry_runtime chain=ranch->health->exploration health=read-only batch_types=3 public_fields=3'
