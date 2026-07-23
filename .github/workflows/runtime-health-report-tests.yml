@@ -1,0 +1,60 @@
+name: Unified runtime and save health quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-health-report-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Read-only health projection, save evidence, catalog recovery and adjacent regressions
+      domain_timeout_minutes: 50
+      static_validators: |
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+        tests/developer_b/validate_service_hub_lifecycle.ps1
+        tests/developer_b/validate_structural_integrity.ps1
+        tests/developer_b/validate_pickup_shared_runtime.ps1
+        tests/developer_b/validate_machine_scale.ps1
+        tests/developer_b/validate_agriculture_scale.ps1
+      primary_headless_script: res://tests/qa/runtime_health_report_policy_regression.gd
+      primary_headless_output_base: build\runtime-health-report-policy
+      primary_headless_timeout_milliseconds: 300000
+      domain_scripts: |
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/runtime_diagnostics_regression.gd
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/service_hub_feature_lifecycle_regression.gd
+        res://tests/qa/machine_scale_runtime_regression.gd
+        res://tests/qa/agriculture_scale_batch_regression.gd
+        res://tests/qa/pickup_shared_runtime_regression.gd
+        res://tests/qa/structural_integrity_batched_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: runtime-health-report-domain
+      domain_artifact_paths: |
+        build/runtime-health-report-policy.stdout.log
+        build/runtime-health-report-policy.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real save, catalog self-heal, unified F3 visualization and steady-state recovery
+      desktop_timeout_minutes: 60
+      desktop_script: res://tests/qa/runtime_health_report_desktop_acceptance.gd
+      desktop_output_path: build\runtime-health-report-desktop.png
+      desktop_timeout_milliseconds: 480000
+      desktop_artifact_name: runtime-health-report-evidence
+      desktop_artifact_paths: |
+        build/runtime-health-report-desktop.png
+        build/runtime-health-report-desktop.json
+        build/runtime-health-report-desktop.stdout.log
+        build/runtime-health-report-desktop.stderr.log
+      desktop_artifact_if_no_files: error
