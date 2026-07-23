@@ -28,6 +28,7 @@ jobs:
 
           workflow = Path('.github/workflows/apply-self-healing-save-recovery-patch.yml').read_text(encoding='utf-8')
           script = workflow.split("python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+          script = script.replace("'''& \"$PSScriptRoot", "r'''& \"$PSScriptRoot")
           exec(compile(textwrap.dedent(script), 'staged-save-recovery-patch.py', 'exec'))
           PY
           status=$?
