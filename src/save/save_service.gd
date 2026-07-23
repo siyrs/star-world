@@ -30,6 +30,18 @@ var _last_catalog_fallback_count := 0
 var _last_catalog_repair_count := 0
 var _last_catalog_avoided_world_bytes := 0
 var _last_catalog_elapsed_usec := 0
+var _recovery_count := 0
+var _recovery_repair_attempt_count := 0
+var _recovery_repair_success_count := 0
+var _recovery_repair_failure_count := 0
+var _recovery_primary_rejection_count := 0
+var _last_recovery_world_id := ""
+var _last_recovery_source := ""
+var _last_recovery_repaired := false
+var _last_recovery_candidate_bytes := 0
+var _last_recovery_primary_bytes := 0
+var _last_recovery_elapsed_usec := 0
+var _last_recovery_rejected_sources: Array[String] = []
 
 
 func _ready() -> void:
@@ -160,10 +172,13 @@ func list_worlds() -> Array:
 			avoided_world_bytes += int(catalog_read.get("world_bytes", 0))
 		else:
 			fallback_count += 1
-			var payload := _read_world_payload(world_id, false)
+			var world_read := _read_world_result(world_id, false)
+			var payload: Dictionary = world_read.get("payload", {})
 			if payload.is_empty():
 				continue
-			var world_bytes := _file_size(_world_path(world_id))
+			var world_bytes := maxi(0, int(world_read.get("authoritative_bytes", 0)))
+			if world_bytes <= 0:
+				world_bytes = maxi(0, int(world_read.get("candidate_bytes", 0)))
 			var entry := WorldCatalogPolicyScript.build_entry(
 				world_id,
 				payload,
@@ -173,10 +188,14 @@ func list_worlds() -> Array:
 				entry,
 				"world_fallback"
 			)
-			if _write_catalog_entry(world_id, payload, world_bytes):
-				repair_count += 1
-			else:
-				_catalog_write_failure_count += 1
+			# Never bless a corrupt primary with a fresh sidecar. If promotion
+			# failed, keep the world visible from its valid recovery candidate
+			# and retry authoritative repair on the next scan.
+			if bool(world_read.get("primary_ready", false)):
+				if _write_catalog_entry(world_id, payload, world_bytes):
+					repair_count += 1
+				else:
+					_catalog_write_failure_count += 1
 		if not metadata.is_empty():
 			result.append(metadata)
 	result.sort_custom(
@@ -228,6 +247,39 @@ func reset_catalog_diagnostics() -> void:
 	_last_catalog_repair_count = 0
 	_last_catalog_avoided_world_bytes = 0
 	_last_catalog_elapsed_usec = 0
+
+
+func get_recovery_diagnostics() -> Dictionary:
+	return {
+		"recovery_count": _recovery_count,
+		"repair_attempt_count": _recovery_repair_attempt_count,
+		"repair_success_count": _recovery_repair_success_count,
+		"repair_failure_count": _recovery_repair_failure_count,
+		"primary_rejection_count": _recovery_primary_rejection_count,
+		"last_world_id": _last_recovery_world_id,
+		"last_source": _last_recovery_source,
+		"last_repaired": _last_recovery_repaired,
+		"last_candidate_bytes": _last_recovery_candidate_bytes,
+		"last_primary_bytes": _last_recovery_primary_bytes,
+		"last_elapsed_usec": _last_recovery_elapsed_usec,
+		"last_elapsed_milliseconds": float(_last_recovery_elapsed_usec) / 1000.0,
+		"last_rejected_sources": _last_recovery_rejected_sources.duplicate(),
+	}
+
+
+func reset_recovery_diagnostics() -> void:
+	_recovery_count = 0
+	_recovery_repair_attempt_count = 0
+	_recovery_repair_success_count = 0
+	_recovery_repair_failure_count = 0
+	_recovery_primary_rejection_count = 0
+	_last_recovery_world_id = ""
+	_last_recovery_source = ""
+	_last_recovery_repaired = false
+	_last_recovery_candidate_bytes = 0
+	_last_recovery_primary_bytes = 0
+	_last_recovery_elapsed_usec = 0
+	_last_recovery_rejected_sources.clear()
 
 
 func delete_world(world_id: String) -> bool:
@@ -284,16 +336,98 @@ func load_settings(defaults: Dictionary = {}) -> Dictionary:
 
 
 func _read_world_payload(world_id: String, emit_recovery: bool) -> Dictionary:
+	return _read_world_result(world_id, emit_recovery).get("payload", {})
+
+
+func _read_world_result(world_id: String, emit_recovery: bool) -> Dictionary:
 	if not _is_safe_id(world_id):
-		return {}
-	var result := _store.read_dictionary(_world_path(world_id))
+		return {
+			"payload": {},
+			"source": "invalid_world_id",
+			"primary_ready": false,
+			"candidate_bytes": 0,
+			"authoritative_bytes": 0,
+		}
+	var world_path := _world_path(world_id)
+	var result := _store.read_dictionary_validated(
+		world_path,
+		Callable(self, "_is_valid_world_payload").bind(world_id),
+		true
+	)
 	if not bool(result.get("ok", false)):
-		return {}
+		return {
+			"payload": {},
+			"source": str(result.get("source", "missing_or_invalid")),
+			"primary_ready": false,
+			"candidate_bytes": 0,
+			"authoritative_bytes": 0,
+		}
 	var source := str(result.get("source", "primary"))
-	if emit_recovery and source != "primary":
-		save_recovered.emit(world_id, source)
-	var payload: Dictionary = result.get("data", {}).duplicate(true)
-	return _migrate(payload)
+	var primary_ready := source == "primary" or bool(result.get("repair_success", false))
+	if source != "primary":
+		_record_recovery_result(world_id, source, result, world_path)
+		if emit_recovery:
+			save_recovered.emit(world_id, source)
+	var raw_payload: Variant = result.get("data", {})
+	var payload: Dictionary = raw_payload.duplicate(true) if raw_payload is Dictionary else {}
+	return {
+		"payload": _migrate(payload),
+		"source": source,
+		"primary_ready": primary_ready,
+		"candidate_bytes": maxi(0, int(result.get("candidate_bytes", 0))),
+		"authoritative_bytes": _file_size(world_path) if primary_ready else 0,
+		"repair_success": bool(result.get("repair_success", false)),
+	}
+
+
+func _is_valid_world_payload(payload: Dictionary, expected_world_id: String) -> bool:
+	var raw_metadata: Variant = payload.get("metadata", null)
+	var raw_player: Variant = payload.get("player", null)
+	var raw_world: Variant = payload.get("world", null)
+	if (
+		raw_metadata is not Dictionary
+		or raw_player is not Dictionary
+		or raw_world is not Dictionary
+	):
+		return false
+	var metadata: Dictionary = raw_metadata
+	var stored_world_id := str(metadata.get("id", ""))
+	if not stored_world_id.is_empty() and stored_world_id != expected_world_id:
+		return false
+	var world: Dictionary = raw_world
+	return world.get("block_overrides", {}) is Dictionary
+
+
+func _record_recovery_result(
+	world_id: String,
+	source: String,
+	result: Dictionary,
+	world_path: String
+) -> void:
+	_recovery_count += 1
+	var repair_attempted := bool(result.get("repair_attempted", false))
+	var repair_success := bool(result.get("repair_success", false))
+	if repair_attempted:
+		_recovery_repair_attempt_count += 1
+		if repair_success:
+			_recovery_repair_success_count += 1
+		else:
+			_recovery_repair_failure_count += 1
+	_last_recovery_rejected_sources.clear()
+	var raw_rejected: Variant = result.get("rejected_sources", [])
+	if raw_rejected is Array:
+		for raw_source: Variant in raw_rejected:
+			if _last_recovery_rejected_sources.size() >= 3:
+				break
+			_last_recovery_rejected_sources.append(str(raw_source))
+	if _last_recovery_rejected_sources.has("primary"):
+		_recovery_primary_rejection_count += 1
+	_last_recovery_world_id = world_id.left(128)
+	_last_recovery_source = source.left(32)
+	_last_recovery_repaired = repair_success
+	_last_recovery_candidate_bytes = maxi(0, int(result.get("candidate_bytes", 0)))
+	_last_recovery_primary_bytes = _file_size(world_path) if repair_success else 0
+	_last_recovery_elapsed_usec = maxi(0, int(result.get("repair_elapsed_usec", 0)))
 
 
 func _read_catalog_entry(world_id: String) -> Dictionary:

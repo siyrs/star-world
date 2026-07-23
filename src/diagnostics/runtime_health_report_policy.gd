@@ -276,15 +276,36 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 
 static func _save_row(save: Dictionary) -> Dictionary:
 	var attempts := maxi(0, int(save.get("attempt_count", 0)))
-	if attempts <= 0:
-		return _informational_row("save", "保存", "本会话尚未保存")
-	var success := bool(save.get("last_success", false))
-	var detail := "%s · %.2f ms · %s" % [
-		_format_bytes(maxi(0, int(save.get("last_bytes", 0)))),
-		float(save.get("last_elapsed_milliseconds", 0.0)),
-		str(save.get("last_world_id", "")),
-	]
-	if not success:
+	var recovery_count := maxi(0, int(save.get("recovery_count", 0)))
+	var repair_successes := maxi(0, int(save.get("repair_success_count", 0)))
+	var repair_failures := maxi(0, int(save.get("repair_failure_count", 0)))
+	if attempts <= 0 and recovery_count <= 0:
+		return _informational_row("save", "保存", "本会话尚未保存或恢复")
+	var detail_parts: Array[String] = []
+	if attempts > 0:
+		detail_parts.append("%s · %.2f ms · %s" % [
+			_format_bytes(maxi(0, int(save.get("last_bytes", 0)))),
+			float(save.get("last_elapsed_milliseconds", 0.0)),
+			str(save.get("last_world_id", "")),
+		])
+	if recovery_count > 0:
+		detail_parts.append("恢复 %d · 主文件修复 %d/%d · %s · %.2f ms" % [
+			recovery_count,
+			repair_successes,
+			repair_failures,
+			str(save.get("last_recovery_source", "unknown")),
+			float(save.get("last_recovery_elapsed_milliseconds", 0.0)),
+		])
+	var detail := " · ".join(detail_parts)
+	if repair_failures > 0:
+		return _informational_row(
+			"save",
+			"保存",
+			detail,
+			2,
+			"存档已从恢复候选读取，但主文件重建失败 %d 次" % repair_failures
+		)
+	if attempts > 0 and not bool(save.get("last_success", false)):
 		return _informational_row(
 			"save",
 			"保存",
@@ -292,6 +313,14 @@ static func _save_row(save: Dictionary) -> Dictionary:
 			2,
 			"最近一次世界保存失败"
 		)
+	if recovery_count > 0:
+		var source := str(save.get("last_recovery_source", "恢复候选"))
+		var issue := (
+			"已从 %s 恢复并重建主存档" % source
+			if repair_successes > 0
+			else "本会话发生 %d 次存档恢复" % recovery_count
+		)
+		return _informational_row("save", "保存", detail, 1, issue)
 	return _informational_row("save", "保存", detail)
 
 
@@ -369,6 +398,18 @@ static func _project_save(snapshot: Dictionary) -> Dictionary:
 		"success_count": maxi(0, int(snapshot.get("success_count", 0))),
 		"failure_count": maxi(0, int(snapshot.get("failure_count", 0))),
 		"recovery_count": maxi(0, int(snapshot.get("recovery_count", 0))),
+		"repair_attempt_count": maxi(0, int(snapshot.get("repair_attempt_count", 0))),
+		"repair_success_count": maxi(0, int(snapshot.get("repair_success_count", 0))),
+		"repair_failure_count": maxi(0, int(snapshot.get("repair_failure_count", 0))),
+		"primary_rejection_count": maxi(
+			0, int(snapshot.get("primary_rejection_count", 0))
+		),
+		"last_recovery_source": str(snapshot.get("last_recovery_source", "")).left(32),
+		"last_recovery_repaired": bool(snapshot.get("last_recovery_repaired", false)),
+		"last_recovery_bytes": maxi(0, int(snapshot.get("last_recovery_bytes", 0))),
+		"last_recovery_elapsed_milliseconds": maxf(
+			0.0, float(snapshot.get("last_recovery_elapsed_milliseconds", 0.0))
+		),
 		"last_success": bool(snapshot.get("last_success", false)),
 		"last_world_id": str(snapshot.get("last_world_id", "")).left(128),
 		"last_bytes": maxi(0, int(snapshot.get("last_bytes", 0))),

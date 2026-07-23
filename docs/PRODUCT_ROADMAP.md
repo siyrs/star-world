@@ -81,6 +81,8 @@ Game Runtime
 - 健康投影最多 12 行、8 条问题，75% 警告、90% 严重，并确定性显示主要瓶颈；
 - F3 双栏显示保留原运行诊断，同时呈现最近保存字节/耗时、目录回退/自愈和共享预算；
 - 原子 JSON、临时文件、备份恢复和严格存档迁移；
+- `world.json` 语法损坏或核心结构失效时，会从有效 `.tmp` / `.bak` 恢复并原子重建主文件，同时保留有效备份；
+- 存档浏览器和 F3 显示恢复、主文件修复与失败证据，目录只在权威主文件重新可用后自愈；
 - 轻量世界目录：`world.json` 保持唯一权威，`catalog.json` 缺失或损坏时按需自愈；
 - 主菜单显示存档大小和目录耗时，稳态不再读取所有世界完整 payload；
 - 生产世界不再保存或构造无用的 `loaded_chunks`；
@@ -91,6 +93,7 @@ Game Runtime
 合同见：
 
 - [RUNTIME_HEALTH_REPORT.md](RUNTIME_HEALTH_REPORT.md)
+- [SELF_HEALING_SAVE_RECOVERY.md](SELF_HEALING_SAVE_RECOVERY.md)
 - [WORLD_CATALOG.md](WORLD_CATALOG.md)
 - [GITHUB_RELEASE_AUTO_UPDATE.md](GITHUB_RELEASE_AUTO_UPDATE.md)
 - [RECENT_CHUNK_SNAPSHOT_CACHE.md](RECENT_CHUNK_SNAPSHOT_CACHE.md)
@@ -184,7 +187,7 @@ Game Runtime
 
 - 多小时运行 soak 与周期性真实保存；
 - 多世界、大存档目录长期增长；
-- 存档损坏、备份恢复和目录重建组合测试；
+- 多世界连续损坏、跨会话恢复和更长周期目录重建压力；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；
