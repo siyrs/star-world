@@ -20,6 +20,7 @@ jobs:
       domain_job_name: Catalog authority, self-healing fallback and transient persistence regression
       domain_timeout_minutes: 42
       static_validators: |
+        tests/developer_b/validate_reusable_ci_workflows.ps1
         tests/developer_b/validate_world_catalog.ps1
         tests/developer_b/validate_recent_chunk_cache.ps1
       primary_headless_script: res://tests/qa/world_catalog_regression.gd
