@@ -88,6 +88,7 @@ func _run_world_cycle(
 	var sustained_runtime_critical_samples := 0
 	var operations_critical_samples := 0
 	var sample_count := 0
+	var last_runtime_severity := 0
 	var origin: Vector3 = world.call("get_spawn_position")
 	for frame_index in FRAMES_PER_CYCLE:
 		if frame_index > 0 and frame_index % 24 == 0:
@@ -107,6 +108,7 @@ func _run_world_cycle(
 		max_loaded = maxi(max_loaded, int(streaming.get("loaded", 0)))
 		var health: Dictionary = snapshot.get("health", {})
 		var runtime_severity := int(health.get("runtime_severity", health.get("severity", 0)))
+		last_runtime_severity = runtime_severity
 		var sustained_severity := int(
 			health.get("sustained_runtime_severity", runtime_severity)
 		)
@@ -144,8 +146,12 @@ func _run_world_cycle(
 	_check(max_pending <= 128, "streaming queue remains bounded during repeated travel")
 	_check(max_loaded <= 96, "loaded chunk population remains bounded during repeated travel")
 	_check(
-		runtime_critical_samples <= 2,
-		"sustained frame and streaming health does not remain critical after warmup",
+		sustained_runtime_critical_samples <= 2,
+		"sustained average, stutter and streaming health does not remain critical after warmup",
+	)
+	_check(
+		last_runtime_severity < 2,
+		"runtime health recovers after bounded travel pressure",
 	)
 	controller_status = diagnostics.call("get_adaptive_streaming_status")
 	_check(
@@ -157,7 +163,7 @@ func _run_world_cycle(
 		"adaptive streaming never rewrites the player's render-distance setting",
 	)
 	print(
-		"QA RUNTIME SOAK CYCLE | cycle=%d | samples=%d | pending_max=%d | loaded_max=%d | runtime_critical=%d | sustained_critical=%d | operations_critical=%d"
+		"QA RUNTIME SOAK CYCLE | cycle=%d | samples=%d | pending_max=%d | loaded_max=%d | runtime_critical=%d | sustained_critical=%d | operations_critical=%d | final_runtime=%d"
 		% [
 			cycle + 1,
 			sample_count,
@@ -166,6 +172,7 @@ func _run_world_cycle(
 			runtime_critical_samples,
 			sustained_runtime_critical_samples,
 			operations_critical_samples,
+			last_runtime_severity,
 		]
 	)
 	hub.call("return_to_menu")
