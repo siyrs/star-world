@@ -28,11 +28,13 @@ jobs:
         tests/developer_b/validate_pickup_shared_runtime.ps1
         tests/developer_b/validate_machine_scale.ps1
         tests/developer_b/validate_agriculture_scale.ps1
-      primary_headless_script: res://tests/qa/runtime_health_report_policy_regression.gd
-      primary_headless_output_base: build\runtime-health-report-policy
+      # Capture the multi-layer integration journey so any aggregation, telemetry
+      # or F3 input failure is preserved as stdout/stderr evidence.
+      primary_headless_script: res://tests/qa/runtime_health_report_regression.gd
+      primary_headless_output_base: build\runtime-health-report-integration
       primary_headless_timeout_milliseconds: 300000
       domain_scripts: |
-        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/runtime_health_report_policy_regression.gd
         res://tests/qa/runtime_diagnostics_regression.gd
         res://tests/qa/world_catalog_regression.gd
         res://tests/qa/service_hub_feature_lifecycle_regression.gd
@@ -43,8 +45,8 @@ jobs:
         res://tests/qa/runtime_stability_regression.gd
       domain_artifact_name: runtime-health-report-domain
       domain_artifact_paths: |
-        build/runtime-health-report-policy.stdout.log
-        build/runtime-health-report-policy.stderr.log
+        build/runtime-health-report-integration.stdout.log
+        build/runtime-health-report-integration.stderr.log
       domain_artifact_if_no_files: error
       desktop_job_name: Real save, catalog self-heal, unified F3 visualization and steady-state recovery
       desktop_timeout_minutes: 60
