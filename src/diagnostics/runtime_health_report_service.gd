@@ -160,6 +160,9 @@ func clear_session_counters() -> void:
 	_last_save_bytes = 0
 	_last_save_elapsed_usec = 0
 	_last_save_timestamp_msec = 0
+	if save_service != null and is_instance_valid(save_service):
+		if save_service.has_method("reset_recovery_diagnostics"):
+			save_service.call("reset_recovery_diagnostics")
 
 
 func shutdown() -> void:
@@ -177,11 +180,37 @@ func shutdown() -> void:
 
 
 func _save_snapshot() -> Dictionary:
+	var recovery: Dictionary = {}
+	if (
+		save_service != null
+		and is_instance_valid(save_service)
+		and save_service.has_method("get_recovery_diagnostics")
+	):
+		var raw_recovery: Variant = save_service.call("get_recovery_diagnostics")
+		if raw_recovery is Dictionary:
+			recovery = raw_recovery
 	return {
 		"attempt_count": _save_attempt_count,
 		"success_count": _save_success_count,
 		"failure_count": _save_failure_count,
-		"recovery_count": _save_recovery_count,
+		"recovery_count": maxi(
+			_save_recovery_count, maxi(0, int(recovery.get("recovery_count", 0)))
+		),
+		"repair_attempt_count": maxi(0, int(recovery.get("repair_attempt_count", 0))),
+		"repair_success_count": maxi(0, int(recovery.get("repair_success_count", 0))),
+		"repair_failure_count": maxi(0, int(recovery.get("repair_failure_count", 0))),
+		"primary_rejection_count": maxi(
+			0, int(recovery.get("primary_rejection_count", 0))
+		),
+		"last_recovery_source": str(recovery.get("last_source", "")).left(32),
+		"last_recovery_repaired": bool(recovery.get("last_repaired", false)),
+		"last_recovery_bytes": maxi(0, int(recovery.get("last_primary_bytes", 0))),
+		"last_recovery_elapsed_usec": maxi(
+			0, int(recovery.get("last_elapsed_usec", 0))
+		),
+		"last_recovery_elapsed_milliseconds": maxf(
+			0.0, float(recovery.get("last_elapsed_milliseconds", 0.0))
+		),
 		"last_success": _last_save_success,
 		"last_world_id": _last_save_world_id,
 		"last_bytes": _last_save_bytes,
