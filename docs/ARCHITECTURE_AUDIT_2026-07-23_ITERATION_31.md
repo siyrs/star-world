@@ -87,6 +87,17 @@ RanchProgressionServiceHub
 
 这样旧扩展、测试和场景无需迁移，新健康层仍拥有完整保存包装和生命周期。
 
+### 8. 顶层健康不能让 soak 混淆两种严重度
+
+统一报告加入后，顶层 `health.severity` 同时包含：
+
+- 帧时间、卡顿、Chunk 排队、内存和节点；
+- 机器、生态、掉落、结构、目录和保存等运营压力。
+
+同一固定 SHA 的权威 Runtime 连续两次只在 lifecycle soak 失败，而 30 个前置运行与领域步骤全部成功。原因是旧 soak 把合并后的顶层严重度当作纯帧/流式健康；受控领域接近容量时可以产生运营严重提示，却不代表 Chunk、节点或世界引用泄漏。
+
+不能删除运营严重度，也不能放宽生命周期硬边界。应把顶层结果拆成可独立观察的运行分量和运营分量，再由顶层取最大值。
+
 ## 决策
 
 ### 纯健康策略
@@ -147,10 +158,37 @@ RanchProgressionServiceHub
 ```text
 frame / memory / streaming / input
 operations
-health（包含 operations 严重度）
+health
 ```
 
 Telemetry history 上限仍为 120，没有第二个采样循环。
+
+### 分离运行分量与运营分量
+
+`RuntimeHealthPolicy` 明确输出：
+
+```text
+runtime_severity
+runtime_status
+operations_severity
+operations_status
+severity = max(runtime_severity, operations_severity)
+```
+
+F3 和告警仍使用合并结果，因此玩家不会失去运营压力提示。生命周期 soak 只使用 `runtime_severity` 判断“持续帧/流式严重”，同时继续独立验证：
+
+- pending Chunk <= 128；
+- loaded Chunk <= 96；
+- 自适应控制不抖动；
+- 世界停止且 Chunk 归零；
+- 自适应引用释放；
+- 输入回菜单；
+- SceneTree 与模拟服务解除 Pause；
+- 生物/瞬时容器清空；
+- 节点回到基线 + 40；
+- Telemetry history <= 120。
+
+每轮还打印样本数、pending/loaded 峰值、运行严重样本和运营严重样本，未来失败不再只有一个合并状态。
 
 ### 双栏 F3
 
@@ -219,6 +257,9 @@ src/diagnostics/runtime_diagnostics_coordinator.gd
 src/diagnostics/runtime_telemetry_service.gd
 src/diagnostics/runtime_health_policy.gd
 src/ui/diagnostics_overlay.gd
+tests/qa/runtime_soak_regression.gd
+tests/developer_b/validate_service_hub_lifecycle.ps1
+tests/developer_b/validate_ranch_lifecycle.ps1
 tests/run_all.ps1
 docs/PRODUCT_ROADMAP.md
 ```
