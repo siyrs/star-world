@@ -9,7 +9,8 @@ $doorPolicyPath = Join-Path $root 'src\block\block_door_policy.gd'
 $ladderPolicyPath = Join-Path $root 'src\block\block_ladder_policy.gd'
 $worldPath = Join-Path $root 'src\world\batched_voxel_world.gd'
 $pickupPath = Join-Path $root 'src\entity\pickup_stack_coordinator.gd'
-$regressionPath = Join-Path $root 'tests\qa\structural_integrity_regression.gd'
+$regressionBasePath = Join-Path $root 'tests\qa\structural_integrity_regression.gd'
+$regressionPath = Join-Path $root 'tests\qa\structural_integrity_batched_regression.gd'
 $desktopPath = Join-Path $root 'tests\qa\structural_integrity_desktop_acceptance.gd'
 $batchedDesktopPath = Join-Path $root 'tests\qa\structural_integrity_batched_desktop_acceptance.gd'
 $workflowPath = Join-Path $root '.github\workflows\structural-integrity-tests.yml'
@@ -20,8 +21,8 @@ $roadmapPath = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
 
 foreach ($path in @(
   $policyPath,$servicePath,$toolHubPath,$doorPolicyPath,$ladderPolicyPath,$worldPath,
-  $pickupPath,$regressionPath,$desktopPath,$batchedDesktopPath,$workflowPath,
-  $runAllPath,$contractPath,$auditPath,$roadmapPath
+  $pickupPath,$regressionBasePath,$regressionPath,$desktopPath,$batchedDesktopPath,
+  $workflowPath,$runAllPath,$contractPath,$auditPath,$roadmapPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing structural integrity contract file: $path" }
 }
@@ -33,7 +34,8 @@ $doorPolicy = Get-Content -Raw -Encoding UTF8 $doorPolicyPath
 $ladderPolicy = Get-Content -Raw -Encoding UTF8 $ladderPolicyPath
 $world = Get-Content -Raw -Encoding UTF8 $worldPath
 $pickup = Get-Content -Raw -Encoding UTF8 $pickupPath
-$regression = Get-Content -Raw -Encoding UTF8 $regressionPath
+$regressionBase = Get-Content -Raw -Encoding UTF8 $regressionBasePath
+$regression = $regressionBase + "`n" + (Get-Content -Raw -Encoding UTF8 $regressionPath)
 $desktop = Get-Content -Raw -Encoding UTF8 $desktopPath
 $batchedDesktop = Get-Content -Raw -Encoding UTF8 $batchedDesktopPath
 $workflow = Get-Content -Raw -Encoding UTF8 $workflowPath
@@ -122,12 +124,16 @@ if ($pickup -notmatch 'MAX_PICKUP_NODES\s*:=\s*128' -or $pickup -notmatch 'picku
 
 foreach ($phrase in @(
   'one changed cell produces seven bounded structural candidates',
+  'unit fixture keeps every support and structural cell distinct',
   'door and ladder cleanup share one production mutation batch',
   'orphan upper door half self-cleans',
   'full inventory produces one bounded physical fallback node',
   'world-start scan repairs an old unsupported ladder'
 )) {
   if ($regression -notmatch [regex]::Escape($phrase)) { throw "Structural integrity regression is missing assertion: $phrase" }
+}
+if ($regression -notmatch 'extends\s+"res://tests/qa/structural_integrity_regression\.gd"') {
+  throw 'Collision-free domain fixture must preserve the complete structural regression journey'
 }
 foreach ($token in @(
   'TARGET_DOOR_COUNT\s*:=\s*128',
@@ -169,7 +175,7 @@ if ($workflow -notmatch 'uses:\s*\./\.github/workflows/reusable-godot-quality-ga
 }
 foreach ($token in @(
   'validate_structural_integrity\.ps1',
-  'structural_integrity_regression\.gd',
+  'structural_integrity_batched_regression\.gd',
   'double_door_regression\.gd',
   'directional_ladder_regression\.gd',
   'world_mutation_batch_regression\.gd',
@@ -179,8 +185,8 @@ foreach ($token in @(
 )) {
   if ($workflow -notmatch $token) { throw "Structural integrity workflow is missing validation or evidence: $token" }
 }
-if ($runAll -notmatch 'validate_structural_integrity\.ps1' -or $runAll -notmatch 'structural_integrity_regression\.gd') {
-  throw 'Full regression entry point must permanently include structural integrity validation and domain regression'
+if ($runAll -notmatch 'validate_structural_integrity\.ps1' -or $runAll -notmatch 'structural_integrity_batched_regression\.gd') {
+  throw 'Full regression entry point must permanently include structural integrity validation and corrected domain regression'
 }
 
 foreach ($token in @('65,536','4,096','1,024','2,048','浮空半门','物理掉落','不进入存档')) {
