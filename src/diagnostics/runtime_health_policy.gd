@@ -4,6 +4,7 @@ extends RefCounted
 const STATUS_HEALTHY := "healthy"
 const STATUS_WARNING := "warning"
 const STATUS_CRITICAL := "critical"
+const MAX_OPERATION_ISSUES := 8
 
 var minimum_frame_samples := 10
 var warning_average_frame_ms := 25.0
@@ -82,11 +83,28 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		_evaluate_upper_bound(
 			float(snapshot.get("node_count", 0)),
 			float(warning_node_count),
-			float(critical_node_count),
+			critical_node_count,
 			"场景节点数量偏高",
 			issues
 		)
 	)
+	var operations: Dictionary = (
+		snapshot.get("operations", {})
+		if snapshot.get("operations", {}) is Dictionary
+		else {}
+	)
+	severity = maxi(severity, clampi(int(operations.get("severity", 0)), 0, 2))
+	var operation_issue_count := 0
+	var raw_operation_issues: Variant = operations.get("issues", [])
+	if raw_operation_issues is Array:
+		for raw_issue: Variant in raw_operation_issues:
+			if operation_issue_count >= MAX_OPERATION_ISSUES:
+				break
+			var issue := str(raw_issue).strip_edges()
+			if issue.is_empty():
+				continue
+			issues.append("运行与保存：%s" % issue)
+			operation_issue_count += 1
 	var status := STATUS_HEALTHY
 	if severity >= 2:
 		status = STATUS_CRITICAL
@@ -99,6 +117,8 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		"issues": issues,
 		"frame_metrics_ready": frame_metrics_ready,
 		"frame_sample_count": frame_sample_count,
+		"operations_status": str(operations.get("status", STATUS_HEALTHY)),
+		"operations_issue_count": operation_issue_count,
 	}
 
 
