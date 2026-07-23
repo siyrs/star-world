@@ -42,7 +42,8 @@ func _test_catalog_policy() -> void:
 			"created_at": "2026-07-23T00:00:00",
 			"updated_at": "2026-07-23T01:00:00",
 			"play_seconds": -7,
-			"custom_scalar": "preserved",
+			"custom_scalar": "must-not-escape",
+			"map_profile": {"large_nested_payload": [1, 2, 3]},
 		},
 	}
 	var entry: Dictionary = CatalogPolicyScript.build_entry("catalog-world", state, 4096)
@@ -58,8 +59,10 @@ func _test_catalog_policy() -> void:
 	)
 	_check(
 		int(metadata.get("play_seconds", -1)) == 0
-		and str(metadata.get("custom_scalar", "")) == "preserved",
-		"catalog policy normalizes required fields without discarding compatible metadata",
+		and metadata.size() == CatalogPolicyScript.METADATA_FIELDS.size()
+		and not metadata.has("custom_scalar")
+		and not metadata.has("map_profile"),
+		"catalog policy whitelists required fields and excludes unbounded metadata",
 	)
 	var normalized := CatalogPolicyScript.normalize_entry(entry, "catalog-world", 4096)
 	_check(not normalized.is_empty(), "matching catalog id and byte length normalize successfully")
@@ -134,8 +137,10 @@ func _test_catalog_round_trip_and_self_healing() -> void:
 		expected_world_bytes += bytes
 		_check(bytes > 0, "world %d authoritative payload has a measurable byte length" % index)
 		var raw_payload := _read_dictionary(world_path)
+		var raw_world: Variant = raw_payload.get("world", {})
+		var persisted_world: Dictionary = raw_world if raw_world is Dictionary else {}
 		_check(
-			not (raw_payload.get("world", {}) as Dictionary).has("loaded_chunks"),
+			not persisted_world.has("loaded_chunks"),
 			"world %d strips transient loaded Chunk coordinates before disk persistence" % index,
 		)
 
@@ -160,10 +165,10 @@ func _test_catalog_round_trip_and_self_healing() -> void:
 		int(first_diagnostics.get("last_avoided_world_bytes", 0)) >= expected_world_bytes,
 		"catalog diagnostics prove that full world bytes were avoided",
 	)
-	for metadata: Dictionary in first_matches:
+	for listed_metadata: Dictionary in first_matches:
 		_check(
-			int(metadata.get("save_bytes", 0)) > 0
-			and str(metadata.get("catalog_source", "")) == "catalog",
+			int(listed_metadata.get("save_bytes", 0)) > 0
+			and str(listed_metadata.get("catalog_source", "")) == "catalog",
 			"world list exposes size through the catalog path",
 		)
 
@@ -202,13 +207,16 @@ func _test_catalog_round_trip_and_self_healing() -> void:
 	)
 
 	var loaded: Dictionary = save.load_world(_world_ids[2])
+	var raw_loaded_world: Variant = loaded.get("world", {})
+	var loaded_world: Dictionary = raw_loaded_world if raw_loaded_world is Dictionary else {}
+	var raw_overrides: Variant = loaded_world.get("block_overrides", {})
+	var loaded_overrides: Dictionary = raw_overrides if raw_overrides is Dictionary else {}
 	_check(
-		(loaded.get("world", {}) as Dictionary).get("block_overrides", {}).size()
-		== OVERRIDES_PER_WORLD,
+		loaded_overrides.size() == OVERRIDES_PER_WORLD,
 		"catalog optimization leaves full world loading unchanged",
 	)
 	_check(
-		not (loaded.get("world", {}) as Dictionary).has("loaded_chunks"),
+		not loaded_world.has("loaded_chunks"),
 		"legacy transient Chunk coordinates are removed during load migration",
 	)
 
