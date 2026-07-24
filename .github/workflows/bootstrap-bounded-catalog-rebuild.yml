@@ -1,1 +1,141 @@
-PLACEHOLDER
+name: Bootstrap bounded catalog rebuild
+
+on:
+  push:
+    branches:
+      - agent/bounded-catalog-rebuild
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bounded-catalog-rebuild
+          fetch-depth: 0
+
+      - name: Apply bounded catalog rebuild implementation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path(".")
+
+          def replace_once(path: str, old: str, new: str, label: str) -> None:
+              p = ROOT / path
+              text = p.read_text(encoding="utf-8")
+              if old not in text:
+                  raise RuntimeError(f"missing anchor {label} in {path}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          def replace_method(path: str, name: str, body: str, static: bool = False) -> None:
+              p = ROOT / path
+              text = p.read_text(encoding="utf-8")
+              prefix = r"static\s+" if static else ""
+              pattern = re.compile(
+                  rf"(?ms)^{prefix}func\s+{re.escape(name)}\s*\(.*?(?=^(?:static\s+)?func\s+|\Z)"
+              )
+              match = pattern.search(text)
+              if not match:
+                  raise RuntimeError(f"method {name} not found in {path}")
+              replacement = body.rstrip() + "\n\n\n"
+              p.write_text(text[:match.start()] + replacement + text[match.end():], encoding="utf-8")
+
+          save_path = "src/save/save_service.gd"
+          replace_once(
+              save_path,
+              'const MAX_PRIMARY_REPAIRS_PER_LIST := 8\n',
+              'const MAX_PRIMARY_REPAIRS_PER_LIST := 8\nconst MAX_CATALOG_REBUILDS_PER_LIST := 16\n',
+              "catalog rebuild constant",
+          )
+          replace_once(
+              save_path,
+              'var _last_catalog_repair_budget_used := 0\n',
+              'var _last_catalog_repair_budget_used := 0\n'
+              'var _catalog_deferred_rebuild_count := 0\n'
+              'var _last_catalog_deferred_rebuild_count := 0\n'
+              'var _last_catalog_rebuild_budget_used := 0\n',
+              "catalog rebuild diagnostics",
+          )
+          replace_method(save_path, "list_worlds", 'func list_worlds() -> Array:\n\t_ensure_directory(WORLDS_DIR)\n\tvar started_at := Time.get_ticks_usec()\n\tvar result: Array = []\n\tvar hit_count := 0\n\tvar fallback_count := 0\n\tvar repair_count := 0\n\tvar deferred_recovery_count := 0\n\tvar repair_budget_used := 0\n\tvar deferred_catalog_rebuild_count := 0\n\tvar catalog_rebuild_budget_used := 0\n\tvar avoided_world_bytes := 0\n\tvar directory := DirAccess.open(WORLDS_DIR)\n\tif directory == null:\n\t\t_record_catalog_list(\n\t\t\t0, 0, 0, 0, 0, 0, 0, 0, 0,\n\t\t\tTime.get_ticks_usec() - started_at\n\t\t)\n\t\treturn result\n\tvar world_ids: PackedStringArray = directory.get_directories()\n\tworld_ids.sort()\n\tfor raw_world_id: String in world_ids:\n\t\tvar world_id := str(raw_world_id)\n\t\tvar metadata: Dictionary = {}\n\t\tvar catalog_read: Dictionary = _read_catalog_entry(world_id)\n\t\tif not catalog_read.is_empty():\n\t\t\tvar entry: Dictionary = catalog_read.get("entry", {})\n\t\t\tmetadata = WorldCatalogPolicyScript.metadata_for_list(entry, "catalog")\n\t\t\thit_count += 1\n\t\t\tavoided_world_bytes += int(catalog_read.get("world_bytes", 0))\n\t\telse:\n\t\t\tfallback_count += 1\n\t\t\tvar allow_primary_repair := (\n\t\t\t\trepair_budget_used < MAX_PRIMARY_REPAIRS_PER_LIST\n\t\t\t)\n\t\t\tvar world_read := _read_world_result(\n\t\t\t\tworld_id, false, allow_primary_repair\n\t\t\t)\n\t\t\tif bool(world_read.get("repair_attempted", false)):\n\t\t\t\trepair_budget_used += 1\n\t\t\tvar source := str(world_read.get("source", "primary"))\n\t\t\tvar primary_ready := bool(world_read.get("primary_ready", false))\n\t\t\tif source != "primary" and not primary_ready:\n\t\t\t\tdeferred_recovery_count += 1\n\t\t\tvar payload: Dictionary = world_read.get("payload", {})\n\t\t\tif payload.is_empty():\n\t\t\t\tcontinue\n\t\t\tvar world_bytes := maxi(\n\t\t\t\t0, int(world_read.get("authoritative_bytes", 0))\n\t\t\t)\n\t\t\tif world_bytes <= 0:\n\t\t\t\tworld_bytes = maxi(\n\t\t\t\t\t0, int(world_read.get("candidate_bytes", 0))\n\t\t\t\t)\n\t\t\tvar entry := WorldCatalogPolicyScript.build_entry(\n\t\t\t\tworld_id, payload, world_bytes\n\t\t\t)\n\t\t\tmetadata = WorldCatalogPolicyScript.metadata_for_list(\n\t\t\t\tentry, "world_fallback"\n\t\t\t)\n\t\t\tmetadata["recovery_deferred"] = source != "primary" and not primary_ready\n\t\t\tvar allow_catalog_rebuild := (\n\t\t\t\tcatalog_rebuild_budget_used < MAX_CATALOG_REBUILDS_PER_LIST\n\t\t\t)\n\t\t\tmetadata["catalog_rebuild_deferred"] = (\n\t\t\t\tprimary_ready and not allow_catalog_rebuild\n\t\t\t)\n\t\t\tif primary_ready:\n\t\t\t\tif allow_catalog_rebuild:\n\t\t\t\t\tcatalog_rebuild_budget_used += 1\n\t\t\t\t\tif _write_catalog_entry(world_id, payload, world_bytes):\n\t\t\t\t\t\trepair_count += 1\n\t\t\t\t\telse:\n\t\t\t\t\t\t_catalog_write_failure_count += 1\n\t\t\t\telse:\n\t\t\t\t\tdeferred_catalog_rebuild_count += 1\n\t\tif not metadata.is_empty():\n\t\t\tresult.append(metadata)\n\tresult.sort_custom(\n\t\tfunc(a: Dictionary, b: Dictionary) -> bool:\n\t\t\treturn str(a.get("updated_at", "")) > str(b.get("updated_at", ""))\n\t)\n\t_record_catalog_list(\n\t\tresult.size(),\n\t\thit_count,\n\t\tfallback_count,\n\t\trepair_count,\n\t\tdeferred_recovery_count,\n\t\trepair_budget_used,\n\t\tdeferred_catalog_rebuild_count,\n\t\tcatalog_rebuild_budget_used,\n\t\tavoided_world_bytes,\n\t\tTime.get_ticks_usec() - started_at\n\t)\n\treturn result\n')
+          replace_method(save_path, "get_catalog_diagnostics", 'func get_catalog_diagnostics() -> Dictionary:\n\tvar hit_ratio := 0.0\n\tif _last_catalog_world_count > 0:\n\t\thit_ratio = (\n\t\t\tfloat(_last_catalog_hit_count) / float(_last_catalog_world_count)\n\t\t)\n\treturn {\n\t\t"catalog_version": WorldCatalogPolicyScript.CATALOG_VERSION,\n\t\t"list_count": _catalog_list_count,\n\t\t"hit_count": _catalog_hit_count,\n\t\t"fallback_count": _catalog_fallback_count,\n\t\t"repair_count": _catalog_repair_count,\n\t\t"write_failure_count": _catalog_write_failure_count,\n\t\t"last_world_count": _last_catalog_world_count,\n\t\t"last_hit_count": _last_catalog_hit_count,\n\t\t"last_fallback_count": _last_catalog_fallback_count,\n\t\t"last_repair_count": _last_catalog_repair_count,\n\t\t"last_avoided_world_bytes": _last_catalog_avoided_world_bytes,\n\t\t"last_elapsed_usec": _last_catalog_elapsed_usec,\n\t\t"last_elapsed_milliseconds": (\n\t\t\tfloat(_last_catalog_elapsed_usec) / 1000.0\n\t\t),\n\t\t"last_hit_ratio": hit_ratio,\n\t\t"primary_repair_budget": MAX_PRIMARY_REPAIRS_PER_LIST,\n\t\t"deferred_recovery_count": _catalog_deferred_recovery_count,\n\t\t"last_deferred_recovery_count": (\n\t\t\t_last_catalog_deferred_recovery_count\n\t\t),\n\t\t"last_repair_budget_used": _last_catalog_repair_budget_used,\n\t\t"catalog_rebuild_budget": MAX_CATALOG_REBUILDS_PER_LIST,\n\t\t"deferred_catalog_rebuild_count": (\n\t\t\t_catalog_deferred_rebuild_count\n\t\t),\n\t\t"last_deferred_catalog_rebuild_count": (\n\t\t\t_last_catalog_deferred_rebuild_count\n\t\t),\n\t\t"last_catalog_rebuild_budget_used": (\n\t\t\t_last_catalog_rebuild_budget_used\n\t\t),\n\t}\n')
+          replace_method(save_path, "reset_catalog_diagnostics", 'func reset_catalog_diagnostics() -> void:\n\t_catalog_list_count = 0\n\t_catalog_hit_count = 0\n\t_catalog_fallback_count = 0\n\t_catalog_repair_count = 0\n\t_catalog_write_failure_count = 0\n\t_last_catalog_world_count = 0\n\t_last_catalog_hit_count = 0\n\t_last_catalog_fallback_count = 0\n\t_last_catalog_repair_count = 0\n\t_last_catalog_avoided_world_bytes = 0\n\t_last_catalog_elapsed_usec = 0\n\t_catalog_deferred_recovery_count = 0\n\t_last_catalog_deferred_recovery_count = 0\n\t_last_catalog_repair_budget_used = 0\n\t_catalog_deferred_rebuild_count = 0\n\t_last_catalog_deferred_rebuild_count = 0\n\t_last_catalog_rebuild_budget_used = 0\n')
+          replace_method(save_path, "_record_catalog_list", 'func _record_catalog_list(\n\tworld_count: int,\n\thit_count: int,\n\tfallback_count: int,\n\trepair_count: int,\n\tdeferred_recovery_count: int,\n\trepair_budget_used: int,\n\tdeferred_catalog_rebuild_count: int,\n\tcatalog_rebuild_budget_used: int,\n\tavoided_world_bytes: int,\n\telapsed_usec: int\n) -> void:\n\t_catalog_list_count += 1\n\t_catalog_hit_count += hit_count\n\t_catalog_fallback_count += fallback_count\n\t_catalog_repair_count += repair_count\n\t_catalog_deferred_recovery_count += deferred_recovery_count\n\t_catalog_deferred_rebuild_count += deferred_catalog_rebuild_count\n\t_last_catalog_world_count = world_count\n\t_last_catalog_hit_count = hit_count\n\t_last_catalog_fallback_count = fallback_count\n\t_last_catalog_repair_count = repair_count\n\t_last_catalog_deferred_recovery_count = maxi(\n\t\t0, deferred_recovery_count\n\t)\n\t_last_catalog_repair_budget_used = clampi(\n\t\trepair_budget_used, 0, MAX_PRIMARY_REPAIRS_PER_LIST\n\t)\n\t_last_catalog_deferred_rebuild_count = maxi(\n\t\t0, deferred_catalog_rebuild_count\n\t)\n\t_last_catalog_rebuild_budget_used = clampi(\n\t\tcatalog_rebuild_budget_used, 0, MAX_CATALOG_REBUILDS_PER_LIST\n\t)\n\t_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)\n\t_last_catalog_elapsed_usec = maxi(0, elapsed_usec)\n')
+          replace_method("src/ui/save_browser_panel.gd", "_catalog_status", 'func _catalog_status(world_count: int) -> String:\n\tif (\n\t\tsave_service == null\n\t\tor not save_service.has_method("get_catalog_diagnostics")\n\t):\n\t\treturn "共 %d 个世界" % world_count\n\tvar diagnostics: Dictionary = save_service.call("get_catalog_diagnostics")\n\tvar elapsed_ms := float(\n\t\tdiagnostics.get("last_elapsed_milliseconds", 0.0)\n\t)\n\tvar repairs := int(diagnostics.get("last_repair_count", 0))\n\tvar deferred := maxi(\n\t\t0, int(diagnostics.get("last_deferred_recovery_count", 0))\n\t)\n\tvar repair_budget := maxi(\n\t\t0, int(diagnostics.get("primary_repair_budget", 0))\n\t)\n\tvar deferred_catalogs := maxi(\n\t\t0, int(diagnostics.get("last_deferred_catalog_rebuild_count", 0))\n\t)\n\tvar catalog_budget := maxi(\n\t\t0, int(diagnostics.get("catalog_rebuild_budget", 0))\n\t)\n\tvar status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]\n\tif repairs > 0:\n\t\tstatus += " · 已修复 %d 个旧目录" % repairs\n\tif deferred > 0:\n\t\tstatus += " · 待渐进修复 %d（每次最多 %d）" % [\n\t\t\tdeferred, repair_budget\n\t\t]\n\tif deferred_catalogs > 0:\n\t\tstatus += " · 待建目录 %d（每次最多 %d）" % [\n\t\t\tdeferred_catalogs, catalog_budget\n\t\t]\n\tif save_service.has_method("get_recovery_diagnostics"):\n\t\tvar recovery: Dictionary = save_service.call(\n\t\t\t"get_recovery_diagnostics"\n\t\t)\n\t\tvar repaired := maxi(\n\t\t\t0, int(recovery.get("repair_success_count", 0))\n\t\t)\n\t\tvar failures := maxi(\n\t\t\t0, int(recovery.get("repair_failure_count", 0))\n\t\t)\n\t\tif repaired > 0:\n\t\t\tstatus += " · 已自愈 %d 个存档" % repaired\n\t\tif failures > 0:\n\t\t\tstatus += " · 主文件修复失败 %d" % failures\n\treturn status\n')
+          replace_method("src/diagnostics/runtime_health_report_policy.gd", "_catalog_row", 'static func _catalog_row(catalog: Dictionary) -> Dictionary:\n\tvar severity := 0\n\tvar issue := ""\n\tvar write_failures := maxi(\n\t\t0, int(catalog.get("write_failure_count", 0))\n\t)\n\tvar fallback_count := maxi(\n\t\t0, int(catalog.get("last_fallback_count", 0))\n\t)\n\tvar repair_count := maxi(\n\t\t0, int(catalog.get("last_repair_count", 0))\n\t)\n\tvar deferred_recovery := maxi(\n\t\t0, int(catalog.get("last_deferred_recovery_count", 0))\n\t)\n\tvar primary_budget := maxi(\n\t\t0, int(catalog.get("primary_repair_budget", 0))\n\t)\n\tvar deferred_catalogs := maxi(\n\t\t0, int(catalog.get("last_deferred_catalog_rebuild_count", 0))\n\t)\n\tvar catalog_budget := maxi(\n\t\t0, int(catalog.get("catalog_rebuild_budget", 0))\n\t)\n\tif write_failures > 0:\n\t\tseverity = 1\n\t\tissue = "轻量世界目录写入失败累计 %d 次" % write_failures\n\telif deferred_recovery > 0 or deferred_catalogs > 0:\n\t\tseverity = 1\n\t\tissue = (\n\t\t\t"主文件待修复 %d（预算 %d）· 待建目录 %d（目录写入预算 %d）"\n\t\t\t% [\n\t\t\t\tdeferred_recovery,\n\t\t\t\tprimary_budget,\n\t\t\t\tdeferred_catalogs,\n\t\t\t\tcatalog_budget,\n\t\t\t]\n\t\t)\n\telif fallback_count > 0:\n\t\tseverity = 1\n\t\tissue = "世界目录本次回退 %d 个并自愈 %d 个" % [\n\t\t\tfallback_count, repair_count\n\t\t]\n\treturn _informational_row(\n\t\t"catalog",\n\t\t"世界目录",\n\t\t(\n\t\t\t"命中 %d/%d · 回退 %d · 修复目录 %d · "\n\t\t\t+ "待修复 %d · 待建目录 %d · %.2f ms"\n\t\t) % [\n\t\t\tmaxi(0, int(catalog.get("last_hit_count", 0))),\n\t\t\tmaxi(0, int(catalog.get("last_world_count", 0))),\n\t\t\tfallback_count,\n\t\t\trepair_count,\n\t\t\tdeferred_recovery,\n\t\t\tdeferred_catalogs,\n\t\t\tfloat(catalog.get("last_elapsed_milliseconds", 0.0)),\n\t\t],\n\t\tseverity,\n\t\tissue\n\t)\n', static=True)
+          replace_method("src/diagnostics/runtime_health_report_policy.gd", "_project_catalog", 'static func _project_catalog(snapshot: Dictionary) -> Dictionary:\n\treturn {\n\t\t"list_count": maxi(0, int(snapshot.get("list_count", 0))),\n\t\t"hit_count": maxi(0, int(snapshot.get("hit_count", 0))),\n\t\t"fallback_count": maxi(\n\t\t\t0, int(snapshot.get("fallback_count", 0))\n\t\t),\n\t\t"repair_count": maxi(0, int(snapshot.get("repair_count", 0))),\n\t\t"write_failure_count": maxi(\n\t\t\t0, int(snapshot.get("write_failure_count", 0))\n\t\t),\n\t\t"last_world_count": maxi(\n\t\t\t0, int(snapshot.get("last_world_count", 0))\n\t\t),\n\t\t"last_hit_count": maxi(\n\t\t\t0, int(snapshot.get("last_hit_count", 0))\n\t\t),\n\t\t"last_fallback_count": maxi(\n\t\t\t0, int(snapshot.get("last_fallback_count", 0))\n\t\t),\n\t\t"last_repair_count": maxi(\n\t\t\t0, int(snapshot.get("last_repair_count", 0))\n\t\t),\n\t\t"last_avoided_world_bytes": maxi(\n\t\t\t0, int(snapshot.get("last_avoided_world_bytes", 0))\n\t\t),\n\t\t"last_elapsed_milliseconds": maxf(\n\t\t\t0.0, float(snapshot.get("last_elapsed_milliseconds", 0.0))\n\t\t),\n\t\t"last_hit_ratio": clampf(\n\t\t\tfloat(snapshot.get("last_hit_ratio", 0.0)), 0.0, 1.0\n\t\t),\n\t\t"primary_repair_budget": maxi(\n\t\t\t0, int(snapshot.get("primary_repair_budget", 0))\n\t\t),\n\t\t"last_deferred_recovery_count": maxi(\n\t\t\t0, int(snapshot.get("last_deferred_recovery_count", 0))\n\t\t),\n\t\t"last_repair_budget_used": maxi(\n\t\t\t0, int(snapshot.get("last_repair_budget_used", 0))\n\t\t),\n\t\t"catalog_rebuild_budget": maxi(\n\t\t\t0, int(snapshot.get("catalog_rebuild_budget", 0))\n\t\t),\n\t\t"last_deferred_catalog_rebuild_count": maxi(\n\t\t\t0,\n\t\t\tint(snapshot.get("last_deferred_catalog_rebuild_count", 0))\n\t\t),\n\t\t"last_catalog_rebuild_budget_used": maxi(\n\t\t\t0, int(snapshot.get("last_catalog_rebuild_budget_used", 0))\n\t\t),\n\t}\n', static=True)
+
+          replace_once(
+              "tests/run_all.ps1",
+              '& "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"\n',
+              '& "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"\n'
+              '& "$PSScriptRoot\developer_b\validate_bounded_catalog_rebuild.ps1"\n',
+              "full static suite",
+          )
+          replace_once(
+              "tests/run_all.ps1",
+              "Invoke-GodotTest 'res://tests/qa/bounded_multi_world_recovery_regression.gd'\n",
+              "Invoke-GodotTest 'res://tests/qa/bounded_multi_world_recovery_regression.gd'\n"
+              "Invoke-GodotTest 'res://tests/qa/bounded_catalog_rebuild_regression.gd'\n",
+              "full Godot suite",
+          )
+          replace_once(
+              "docs/WORLD_CATALOG.md",
+              "因此旧世界无需一次性迁移，第一次打开存档列表即可按需自愈；损坏目录不会隐藏或删除世界。\n",
+              "因此旧世界无需一次性迁移，第一次打开存档列表即可按需自愈；损坏目录不会隐藏或删除世界。\n\n"
+              "### 有界目录 sidecar 重建\n\n"
+              "主文件原子修复与目录 sidecar 写入使用独立预算。健康 `world.json` 缺少目录时，每次列表扫描最多重建 16 个 `catalog.json`；预算外世界仍立即可见，并显示为待建目录。48 个缺失 sidecar 的世界按 16 → 16 → 16 确定性收敛，避免主菜单写盘成本随世界数量无界增长。目录重建不修改权威主文件。\n",
+              "world catalog bounded rebuild section",
+          )
+          replace_once(
+              "docs/WORLD_CATALOG.md",
+              "- 最近一次目录刷新微秒、毫秒和命中率。\n",
+              "- 最近一次目录刷新微秒、毫秒和命中率；\n"
+              "- 主文件修复预算、目录写入预算、各自使用量和待处理数量。\n",
+              "world catalog diagnostics",
+          )
+          replace_once(
+              "docs/WORLD_CATALOG.md",
+              "发生旧目录自愈时显示修复数量。\n",
+              "发生旧目录自愈时显示修复数量；目录写入预算耗尽时显示待建目录数量和每次最多 16 的边界。\n",
+              "world catalog UI",
+          )
+          replace_once(
+              "docs/PRODUCT_ROADMAP.md",
+              "- 轻量世界目录：`world.json` 保持唯一权威，`catalog.json` 缺失或损坏时按需自愈；\n",
+              "- 轻量世界目录：`world.json` 保持唯一权威，`catalog.json` 缺失或损坏时按需自愈；\n"
+              "- 目录 sidecar 重建拥有独立的每次最多 16 个写入预算，世界始终可见并确定性收敛；\n",
+              "completed roadmap catalog budget",
+          )
+          replace_once(
+              "docs/PRODUCT_ROADMAP.md",
+              "- [WORLD_CATALOG.md](WORLD_CATALOG.md)\n",
+              "- [WORLD_CATALOG.md](WORLD_CATALOG.md)\n"
+              "- [BOUNDED_CATALOG_REBUILD.md](BOUNDED_CATALOG_REBUILD.md)\n",
+              "roadmap contract link",
+          )
+          replace_once(
+              "docs/PRODUCT_ROADMAP.md",
+              "- 跨会话恢复和更长周期目录重建压力；\n",
+              "- 跨会话恢复和更长周期目录读取、缓存命中与大存档压力；\n",
+              "next roadmap catalog item",
+          )
+
+          bootstrap = ROOT / ".github/workflows/bootstrap-bounded-catalog-rebuild.yml"
+          if bootstrap.exists():
+              bootstrap.unlink()
+
+          PY
+
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "perf: bound catalog sidecar rebuilds per scan"
+          git push origin HEAD:agent/bounded-catalog-rebuild
