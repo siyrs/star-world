@@ -17,6 +17,7 @@ const WORLD_FILE_NAME := "world.json"
 const CATALOG_FILE_NAME := "catalog.json"
 const MAX_PRIMARY_REPAIRS_PER_LIST := 8
 const MAX_CATALOG_REBUILDS_PER_LIST := 16
+const MAX_AUTHORITATIVE_READS_PER_LIST := 32
 const AtomicJsonStoreScript = preload("res://src/save/atomic_json_store.gd")
 const WorldCatalogPolicyScript = preload("res://src/save/world_catalog_policy.gd")
 
@@ -38,6 +39,9 @@ var _last_catalog_repair_budget_used := 0
 var _catalog_deferred_rebuild_count := 0
 var _last_catalog_deferred_rebuild_count := 0
 var _last_catalog_rebuild_budget_used := 0
+var _catalog_deferred_authoritative_read_count := 0
+var _last_catalog_deferred_authoritative_read_count := 0
+var _last_catalog_authoritative_read_budget_used := 0
 var _recovery_count := 0
 var _recovery_repair_attempt_count := 0
 var _recovery_repair_success_count := 0
@@ -168,11 +172,13 @@ func list_worlds() -> Array:
 	var repair_budget_used := 0
 	var deferred_catalog_rebuild_count := 0
 	var catalog_rebuild_budget_used := 0
+	var deferred_authoritative_read_count := 0
+	var authoritative_read_budget_used := 0
 	var avoided_world_bytes := 0
 	var directory := DirAccess.open(WORLDS_DIR)
 	if directory == null:
 		_record_catalog_list(
-			0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 			Time.get_ticks_usec() - started_at
 		)
 		return result
@@ -189,6 +195,18 @@ func list_worlds() -> Array:
 			avoided_world_bytes += int(catalog_read.get("world_bytes", 0))
 		else:
 			fallback_count += 1
+			var allow_authoritative_read := (
+				authoritative_read_budget_used
+				< MAX_AUTHORITATIVE_READS_PER_LIST
+			)
+			if not allow_authoritative_read:
+				deferred_authoritative_read_count += 1
+				deferred_catalog_rebuild_count += 1
+				metadata = _deferred_world_metadata(world_id)
+				if not metadata.is_empty():
+					result.append(metadata)
+				continue
+			authoritative_read_budget_used += 1
 			var allow_primary_repair := (
 				repair_budget_used < MAX_PRIMARY_REPAIRS_PER_LIST
 			)
@@ -248,6 +266,8 @@ func list_worlds() -> Array:
 		repair_budget_used,
 		deferred_catalog_rebuild_count,
 		catalog_rebuild_budget_used,
+		deferred_authoritative_read_count,
+		authoritative_read_budget_used,
 		avoided_world_bytes,
 		Time.get_ticks_usec() - started_at
 	)
@@ -293,6 +313,16 @@ func get_catalog_diagnostics() -> Dictionary:
 		"last_catalog_rebuild_budget_used": (
 			_last_catalog_rebuild_budget_used
 		),
+		"authoritative_read_budget": MAX_AUTHORITATIVE_READS_PER_LIST,
+		"deferred_authoritative_read_count": (
+			_catalog_deferred_authoritative_read_count
+		),
+		"last_deferred_authoritative_read_count": (
+			_last_catalog_deferred_authoritative_read_count
+		),
+		"last_authoritative_read_budget_used": (
+			_last_catalog_authoritative_read_budget_used
+		),
 	}
 
 
@@ -314,6 +344,9 @@ func reset_catalog_diagnostics() -> void:
 	_catalog_deferred_rebuild_count = 0
 	_last_catalog_deferred_rebuild_count = 0
 	_last_catalog_rebuild_budget_used = 0
+	_catalog_deferred_authoritative_read_count = 0
+	_last_catalog_deferred_authoritative_read_count = 0
+	_last_catalog_authoritative_read_budget_used = 0
 
 
 func get_recovery_diagnostics() -> Dictionary:
@@ -534,6 +567,8 @@ func _record_catalog_list(
 	repair_budget_used: int,
 	deferred_catalog_rebuild_count: int,
 	catalog_rebuild_budget_used: int,
+	deferred_authoritative_read_count: int,
+	authoritative_read_budget_used: int,
 	avoided_world_bytes: int,
 	elapsed_usec: int
 ) -> void:
@@ -543,6 +578,9 @@ func _record_catalog_list(
 	_catalog_repair_count += repair_count
 	_catalog_deferred_recovery_count += deferred_recovery_count
 	_catalog_deferred_rebuild_count += deferred_catalog_rebuild_count
+	_catalog_deferred_authoritative_read_count += (
+		deferred_authoritative_read_count
+	)
 	_last_catalog_world_count = world_count
 	_last_catalog_hit_count = hit_count
 	_last_catalog_fallback_count = fallback_count
@@ -559,8 +597,54 @@ func _record_catalog_list(
 	_last_catalog_rebuild_budget_used = clampi(
 		catalog_rebuild_budget_used, 0, MAX_CATALOG_REBUILDS_PER_LIST
 	)
+	_last_catalog_deferred_authoritative_read_count = maxi(
+		0, deferred_authoritative_read_count
+	)
+	_last_catalog_authoritative_read_budget_used = clampi(
+		authoritative_read_budget_used, 0, MAX_AUTHORITATIVE_READS_PER_LIST
+	)
 	_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)
 	_last_catalog_elapsed_usec = maxi(0, elapsed_usec)
+
+
+func _deferred_world_metadata(world_id: String) -> Dictionary:
+	if not _is_safe_id(world_id):
+		return {}
+	var world_path := _world_path(world_id)
+	var candidate_paths: Array[String] = [
+		world_path,
+		"%s.tmp" % world_path,
+		"%s.bak" % world_path,
+	]
+	var save_bytes := 0
+	var modified_unix := 0
+	for candidate_path: String in candidate_paths:
+		if not FileAccess.file_exists(candidate_path):
+			continue
+		save_bytes = maxi(save_bytes, _file_size(candidate_path))
+		modified_unix = maxi(
+			modified_unix, int(FileAccess.get_modified_time(candidate_path))
+		)
+	if save_bytes <= 0:
+		return {}
+	var updated_at := (
+		Time.get_datetime_string_from_unix_time(modified_unix)
+		if modified_unix > 0
+		else ""
+	)
+	return {
+		"id": world_id,
+		"name": world_id.left(128),
+		"map_id": "metadata_pending",
+		"seed": 0,
+		"created_at": "",
+		"updated_at": updated_at,
+		"play_seconds": 0,
+		"save_bytes": save_bytes,
+		"catalog_source": "authoritative_read_deferred",
+		"authoritative_read_deferred": true,
+		"catalog_rebuild_deferred": true,
+	}
 
 
 func _strip_transient_world_state(payload: Dictionary) -> void:

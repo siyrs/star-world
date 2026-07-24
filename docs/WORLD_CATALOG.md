@@ -119,6 +119,12 @@ block_overrides
 
 点击“继续”后仍通过 `load_world()` 读取、恢复和迁移完整权威世界，目录优化不改变真正的加载语义。
 
+## 完整 JSON 读取预算
+
+当大量世界缺失 sidecar 时，目录扫描每次最多解析 32 个完整 `world.json`。预算外世界仍以固定大小占位行显示，保留真实 world ID、候选字节数和继续按钮。下一次刷新按稳定世界 ID 顺序补齐 metadata。
+
+因此目录恢复拥有三个独立边界：primary 修复 8、权威读取 32、sidecar 写入 16。占位行和读取诊断不进入世界存档，完整加载不受列表预算限制。详细合同见 [BOUNDED_AUTHORITATIVE_READS.md](BOUNDED_AUTHORITATIVE_READS.md)。
+
 ## 永久验收
 
 领域与单元测试覆盖：
