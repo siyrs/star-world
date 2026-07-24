@@ -31,7 +31,7 @@ function Assert-NoMatch([string]$Text, [string]$Pattern, [string]$Message) {
 foreach ($token in @(
   'MAX_PRIMARY_REPAIRS_PER_LIST\s*:=\s*8',
   'repair_budget_used\s*<\s*MAX_PRIMARY_REPAIRS_PER_LIST',
-  '_read_world_result\(world_id,\s*false,\s*allow_primary_repair\)',
+  '_read_world_result\(\s*world_id,\s*false,\s*allow_primary_repair\s*\)',
   'world_ids\.sort\(\)',
   'last_deferred_recovery_count',
   'last_repair_budget_used',
