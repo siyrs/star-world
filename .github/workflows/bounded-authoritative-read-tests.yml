@@ -15,8 +15,8 @@ concurrency:
 
 jobs:
   quality-gate:
-    # Full world parsing is costlier than a catalog write, so this gate owns a
-    # larger fixture and validates the budgets independently.
+    # The 96-world fixture proves read and write budgets converge independently;
+    # the 40-world desktop journey verifies placeholder rows remain actionable.
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
       domain_job_name: Independent full-read budget, visible placeholders and adjacent persistence regressions
