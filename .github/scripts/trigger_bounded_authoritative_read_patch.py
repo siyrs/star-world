@@ -8,6 +8,9 @@ tail = "\n          PY\n"
 if marker not in text or tail not in text:
     raise RuntimeError('PATCH_ERROR: unable to extract committed patch script')
 script = text.split(marker, 1)[1].split(tail, 1)[0]
+# The committed YAML contains PowerShell paths inside Python string literals.
+# Double the only escape sequence that Python would reinterpret as vertical-tab.
+script = script.replace('\\validate_', '\\\\validate_')
 try:
     exec(compile(textwrap.dedent(script), str(workflow_path), 'exec'))
 except Exception as error:
