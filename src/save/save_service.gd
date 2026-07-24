@@ -17,7 +17,6 @@ const WORLD_FILE_NAME := "world.json"
 const CATALOG_FILE_NAME := "catalog.json"
 const MAX_PRIMARY_REPAIRS_PER_LIST := 8
 const MAX_CATALOG_REBUILDS_PER_LIST := 16
-const MAX_CATALOG_REBUILDS_PER_LIST := 16
 const AtomicJsonStoreScript = preload("res://src/save/atomic_json_store.gd")
 const WorldCatalogPolicyScript = preload("res://src/save/world_catalog_policy.gd")
 
@@ -36,9 +35,6 @@ var _last_catalog_elapsed_usec := 0
 var _catalog_deferred_recovery_count := 0
 var _last_catalog_deferred_recovery_count := 0
 var _last_catalog_repair_budget_used := 0
-var _catalog_deferred_rebuild_count := 0
-var _last_catalog_deferred_rebuild_count := 0
-var _last_catalog_rebuild_budget_used := 0
 var _catalog_deferred_rebuild_count := 0
 var _last_catalog_deferred_rebuild_count := 0
 var _last_catalog_rebuild_budget_used := 0
