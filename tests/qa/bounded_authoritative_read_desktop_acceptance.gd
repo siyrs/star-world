@@ -236,7 +236,7 @@ func _visible_fixture_rows(list_node: VBoxContainer) -> int:
 	for row: Node in list_node.get_children():
 		if row.get_child_count() > 0:
 			var button := row.get_child(0) as Button
-			if button != null and button.text.contains("Authoritative-Read"):
+			if button != null and button.text.to_lower().contains("authoritative-read"):
 				count += 1
 	return count
 
@@ -248,7 +248,7 @@ func _pending_fixture_rows(list_node: VBoxContainer) -> int:
 			var button := row.get_child(0) as Button
 			if (
 				button != null
-				and button.text.contains("Authoritative-Read")
+				and button.text.to_lower().contains("authoritative-read")
 				and button.text.contains("世界信息待读取")
 			):
 				count += 1
