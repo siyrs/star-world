@@ -22,6 +22,14 @@ jobs:
       - name: Apply committed production patch
         shell: bash
         run: python .github/scripts/trigger_bounded_authoritative_read_patch.py
+      - name: Upload patch diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounded-authoritative-read-patch-error
+          path: build/bounded-authoritative-read-patch-error.txt
+          if-no-files-found: error
+          retention-days: 1
       - name: Commit production patch
         shell: bash
         run: |
