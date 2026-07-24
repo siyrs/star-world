@@ -46,9 +46,10 @@ Assert-NoMatch $text.save 'MAX_PRIMARY_REPAIRS_PER_LIST\s*:=\s*(?:0|[1-7]|[9-9][
 foreach ($token in @('待渐进修复 %d','每次最多 %d','last_deferred_recovery_count')) {
   Assert-Match $text.browser ([regex]::Escape($token)) "Save browser is missing progressive recovery evidence: $token"
 }
-foreach ($token in @('待渐进修复','primary_repair_budget','last_repair_budget_used','last_deferred_recovery_count')) {
+foreach ($token in @('primary_repair_budget','last_repair_budget_used','last_deferred_recovery_count')) {
   Assert-Match $text.health ([regex]::Escape($token)) "F3 health is missing bounded recovery evidence: $token"
 }
+Assert-Match $text.health '待渐进修复|主文件待修复' 'F3 health must visibly distinguish authoritative primary recovery backlog'
 
 foreach ($phrase in @(
   'keeps all valid fallback worlds visible',
