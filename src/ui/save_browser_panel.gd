@@ -68,9 +68,13 @@ func _catalog_status(world_count: int) -> String:
 	var diagnostics: Dictionary = save_service.call("get_catalog_diagnostics")
 	var elapsed_ms := float(diagnostics.get("last_elapsed_milliseconds", 0.0))
 	var repairs := int(diagnostics.get("last_repair_count", 0))
+	var deferred := maxi(0, int(diagnostics.get("last_deferred_recovery_count", 0)))
+	var repair_budget := maxi(0, int(diagnostics.get("primary_repair_budget", 0)))
 	var status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]
 	if repairs > 0:
 		status += " · 已修复 %d 个旧目录" % repairs
+	if deferred > 0:
+		status += " · 待渐进修复 %d（每次最多 %d）" % [deferred, repair_budget]
 	if save_service.has_method("get_recovery_diagnostics"):
 		var recovery: Dictionary = save_service.call("get_recovery_diagnostics")
 		var repaired := maxi(0, int(recovery.get("repair_success_count", 0)))

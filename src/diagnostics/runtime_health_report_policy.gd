@@ -253,20 +253,26 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 	var write_failures := maxi(0, int(catalog.get("write_failure_count", 0)))
 	var fallback_count := maxi(0, int(catalog.get("last_fallback_count", 0)))
 	var repair_count := maxi(0, int(catalog.get("last_repair_count", 0)))
+	var deferred_count := maxi(0, int(catalog.get("last_deferred_recovery_count", 0)))
+	var repair_budget := maxi(0, int(catalog.get("primary_repair_budget", 0)))
 	if write_failures > 0:
 		severity = 1
 		issue = "轻量世界目录写入失败累计 %d 次" % write_failures
+	elif deferred_count > 0:
+		severity = 1
+		issue = "世界目录仍有 %d 个存档待渐进修复（每次最多 %d）" % [deferred_count, repair_budget]
 	elif fallback_count > 0:
 		severity = 1
 		issue = "世界目录本次回退 %d 个并自愈 %d 个" % [fallback_count, repair_count]
 	return _informational_row(
 		"catalog",
 		"世界目录",
-		"命中 %d/%d · 回退 %d · 修复 %d · %.2f ms" % [
+		"命中 %d/%d · 回退 %d · 修复 %d · 待修复 %d · %.2f ms" % [
 			maxi(0, int(catalog.get("last_hit_count", 0))),
 			maxi(0, int(catalog.get("last_world_count", 0))),
 			fallback_count,
 			repair_count,
+			deferred_count,
 			float(catalog.get("last_elapsed_milliseconds", 0.0)),
 		],
 		severity,
@@ -439,6 +445,9 @@ static func _project_catalog(snapshot: Dictionary) -> Dictionary:
 			0.0, float(snapshot.get("last_elapsed_milliseconds", 0.0))
 		),
 		"last_hit_ratio": clampf(float(snapshot.get("last_hit_ratio", 0.0)), 0.0, 1.0),
+		"primary_repair_budget": maxi(0, int(snapshot.get("primary_repair_budget", 0))),
+		"last_deferred_recovery_count": maxi(0, int(snapshot.get("last_deferred_recovery_count", 0))),
+		"last_repair_budget_used": maxi(0, int(snapshot.get("last_repair_budget_used", 0))),
 	}
 
 

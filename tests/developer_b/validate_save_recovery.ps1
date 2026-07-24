@@ -81,7 +81,8 @@ foreach ($token in @(
   Assert-Match $text.save $token "SaveService lost self-healing recovery behavior: $token"
 }
 $listBody = Get-MethodBody $text.save 'list_worlds'
-Assert-Match $listBody 'if\s+bool\(world_read\.get\("primary_ready",\s*false\)\)' 'Catalog repair must be gated on a healthy authoritative primary'
+Assert-Match $listBody 'var\s+primary_ready\s*:=\s*bool\(world_read\.get\("primary_ready",\s*false\)\)' 'Catalog scan must derive authoritative-primary readiness from the recovery result'
+Assert-Match $listBody 'if\s+primary_ready\s*:[\s\S]*_write_catalog_entry' 'Catalog repair must remain gated on a healthy authoritative primary'
 $validatorBody = Get-MethodBody $text.save '_is_valid_world_payload'
 foreach ($token in @('raw_metadata','raw_player','raw_world','block_overrides','stored_world_id')) {
   Assert-Match $validatorBody $token "World recovery validator is missing core structural check: $token"

@@ -15,6 +15,7 @@ const WORLDS_DIR := "user://worlds"
 const SETTINGS_PATH := "user://settings.json"
 const WORLD_FILE_NAME := "world.json"
 const CATALOG_FILE_NAME := "catalog.json"
+const MAX_PRIMARY_REPAIRS_PER_LIST := 8
 const AtomicJsonStoreScript = preload("res://src/save/atomic_json_store.gd")
 const WorldCatalogPolicyScript = preload("res://src/save/world_catalog_policy.gd")
 
@@ -30,6 +31,9 @@ var _last_catalog_fallback_count := 0
 var _last_catalog_repair_count := 0
 var _last_catalog_avoided_world_bytes := 0
 var _last_catalog_elapsed_usec := 0
+var _catalog_deferred_recovery_count := 0
+var _last_catalog_deferred_recovery_count := 0
+var _last_catalog_repair_budget_used := 0
 var _recovery_count := 0
 var _recovery_repair_attempt_count := 0
 var _recovery_repair_success_count := 0
@@ -156,12 +160,16 @@ func list_worlds() -> Array:
 	var hit_count := 0
 	var fallback_count := 0
 	var repair_count := 0
+	var deferred_recovery_count := 0
+	var repair_budget_used := 0
 	var avoided_world_bytes := 0
 	var directory := DirAccess.open(WORLDS_DIR)
 	if directory == null:
-		_record_catalog_list(0, 0, 0, 0, 0, Time.get_ticks_usec() - started_at)
+		_record_catalog_list(0, 0, 0, 0, 0, 0, 0, Time.get_ticks_usec() - started_at)
 		return result
-	for raw_world_id: String in directory.get_directories():
+	var world_ids: PackedStringArray = directory.get_directories()
+	world_ids.sort()
+	for raw_world_id: String in world_ids:
 		var world_id := str(raw_world_id)
 		var metadata: Dictionary = {}
 		var catalog_read: Dictionary = _read_catalog_entry(world_id)
@@ -172,44 +180,32 @@ func list_worlds() -> Array:
 			avoided_world_bytes += int(catalog_read.get("world_bytes", 0))
 		else:
 			fallback_count += 1
-			var world_read := _read_world_result(world_id, false)
+			var allow_primary_repair := repair_budget_used < MAX_PRIMARY_REPAIRS_PER_LIST
+			var world_read := _read_world_result(world_id, false, allow_primary_repair)
+			if bool(world_read.get("repair_attempted", false)):
+				repair_budget_used += 1
+			var source := str(world_read.get("source", "primary"))
+			var primary_ready := bool(world_read.get("primary_ready", false))
+			if source != "primary" and not primary_ready:
+				deferred_recovery_count += 1
 			var payload: Dictionary = world_read.get("payload", {})
 			if payload.is_empty():
 				continue
 			var world_bytes := maxi(0, int(world_read.get("authoritative_bytes", 0)))
 			if world_bytes <= 0:
 				world_bytes = maxi(0, int(world_read.get("candidate_bytes", 0)))
-			var entry := WorldCatalogPolicyScript.build_entry(
-				world_id,
-				payload,
-				world_bytes
-			)
-			metadata = WorldCatalogPolicyScript.metadata_for_list(
-				entry,
-				"world_fallback"
-			)
-			# Never bless a corrupt primary with a fresh sidecar. If promotion
-			# failed, keep the world visible from its valid recovery candidate
-			# and retry authoritative repair on the next scan.
-			if bool(world_read.get("primary_ready", false)):
+			var entry := WorldCatalogPolicyScript.build_entry(world_id, payload, world_bytes)
+			metadata = WorldCatalogPolicyScript.metadata_for_list(entry, "world_fallback")
+			metadata["recovery_deferred"] = source != "primary" and not primary_ready
+			if primary_ready:
 				if _write_catalog_entry(world_id, payload, world_bytes):
 					repair_count += 1
 				else:
 					_catalog_write_failure_count += 1
 		if not metadata.is_empty():
 			result.append(metadata)
-	result.sort_custom(
-		func(a: Dictionary, b: Dictionary) -> bool:
-			return str(a.get("updated_at", "")) > str(b.get("updated_at", ""))
-	)
-	_record_catalog_list(
-		result.size(),
-		hit_count,
-		fallback_count,
-		repair_count,
-		avoided_world_bytes,
-		Time.get_ticks_usec() - started_at
-	)
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("updated_at", "")) > str(b.get("updated_at", "")))
+	_record_catalog_list(result.size(), hit_count, fallback_count, repair_count, deferred_recovery_count, repair_budget_used, avoided_world_bytes, Time.get_ticks_usec() - started_at)
 	return result
 
 
@@ -232,6 +228,10 @@ func get_catalog_diagnostics() -> Dictionary:
 		"last_elapsed_usec": _last_catalog_elapsed_usec,
 		"last_elapsed_milliseconds": float(_last_catalog_elapsed_usec) / 1000.0,
 		"last_hit_ratio": hit_ratio,
+		"primary_repair_budget": MAX_PRIMARY_REPAIRS_PER_LIST,
+		"deferred_recovery_count": _catalog_deferred_recovery_count,
+		"last_deferred_recovery_count": _last_catalog_deferred_recovery_count,
+		"last_repair_budget_used": _last_catalog_repair_budget_used,
 	}
 
 
@@ -247,6 +247,9 @@ func reset_catalog_diagnostics() -> void:
 	_last_catalog_repair_count = 0
 	_last_catalog_avoided_world_bytes = 0
 	_last_catalog_elapsed_usec = 0
+	_catalog_deferred_recovery_count = 0
+	_last_catalog_deferred_recovery_count = 0
+	_last_catalog_repair_budget_used = 0
 
 
 func get_recovery_diagnostics() -> Dictionary:
@@ -339,29 +342,15 @@ func _read_world_payload(world_id: String, emit_recovery: bool) -> Dictionary:
 	return _read_world_result(world_id, emit_recovery).get("payload", {})
 
 
-func _read_world_result(world_id: String, emit_recovery: bool) -> Dictionary:
+func _read_world_result(
+	world_id: String, emit_recovery: bool, repair_primary: bool = true
+) -> Dictionary:
 	if not _is_safe_id(world_id):
-		return {
-			"payload": {},
-			"source": "invalid_world_id",
-			"primary_ready": false,
-			"candidate_bytes": 0,
-			"authoritative_bytes": 0,
-		}
+		return {"payload": {}, "source": "invalid_world_id", "primary_ready": false, "candidate_bytes": 0, "authoritative_bytes": 0, "repair_attempted": false}
 	var world_path := _world_path(world_id)
-	var result := _store.read_dictionary_validated(
-		world_path,
-		Callable(self, "_is_valid_world_payload").bind(world_id),
-		true
-	)
+	var result := _store.read_dictionary_validated(world_path, Callable(self, "_is_valid_world_payload").bind(world_id), repair_primary)
 	if not bool(result.get("ok", false)):
-		return {
-			"payload": {},
-			"source": str(result.get("source", "missing_or_invalid")),
-			"primary_ready": false,
-			"candidate_bytes": 0,
-			"authoritative_bytes": 0,
-		}
+		return {"payload": {}, "source": str(result.get("source", "missing_or_invalid")), "primary_ready": false, "candidate_bytes": 0, "authoritative_bytes": 0, "repair_attempted": false}
 	var source := str(result.get("source", "primary"))
 	var primary_ready := source == "primary" or bool(result.get("repair_success", false))
 	if source != "primary":
@@ -376,6 +365,7 @@ func _read_world_result(world_id: String, emit_recovery: bool) -> Dictionary:
 		"primary_ready": primary_ready,
 		"candidate_bytes": maxi(0, int(result.get("candidate_bytes", 0))),
 		"authoritative_bytes": _file_size(world_path) if primary_ready else 0,
+		"repair_attempted": bool(result.get("repair_attempted", false)),
 		"repair_success": bool(result.get("repair_success", false)),
 	}
 
@@ -476,6 +466,8 @@ func _record_catalog_list(
 	hit_count: int,
 	fallback_count: int,
 	repair_count: int,
+	deferred_recovery_count: int,
+	repair_budget_used: int,
 	avoided_world_bytes: int,
 	elapsed_usec: int
 ) -> void:
@@ -483,10 +475,13 @@ func _record_catalog_list(
 	_catalog_hit_count += hit_count
 	_catalog_fallback_count += fallback_count
 	_catalog_repair_count += repair_count
+	_catalog_deferred_recovery_count += deferred_recovery_count
 	_last_catalog_world_count = world_count
 	_last_catalog_hit_count = hit_count
 	_last_catalog_fallback_count = fallback_count
 	_last_catalog_repair_count = repair_count
+	_last_catalog_deferred_recovery_count = maxi(0, deferred_recovery_count)
+	_last_catalog_repair_budget_used = clampi(repair_budget_used, 0, MAX_PRIMARY_REPAIRS_PER_LIST)
 	_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)
 	_last_catalog_elapsed_usec = maxi(0, elapsed_usec)
 
