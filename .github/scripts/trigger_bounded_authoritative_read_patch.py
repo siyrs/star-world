@@ -11,6 +11,9 @@ script = text.split(marker, 1)[1].split(tail, 1)[0]
 try:
     exec(compile(textwrap.dedent(script), str(workflow_path), 'exec'))
 except Exception as error:
+    diagnostic = Path('build/bounded-authoritative-read-patch-error.txt')
+    diagnostic.parent.mkdir(parents=True, exist_ok=True)
+    diagnostic.write_text(f'PATCH_ERROR: {error}\n', encoding='utf-8')
     raise RuntimeError(f'PATCH_ERROR: {error}') from error
 Path('.github/workflows/trigger-bounded-authoritative-read-patch.yml').unlink()
 Path('.github/scripts/trigger_bounded_authoritative_read_patch.py').unlink()
