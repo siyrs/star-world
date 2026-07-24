@@ -19,9 +19,10 @@ jobs:
     # the 40-world desktop journey verifies placeholder rows remain actionable.
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
-      domain_job_name: Independent full-read budget, visible placeholders and adjacent persistence regressions
-      domain_timeout_minutes: 65
+      domain_job_name: Independent full-read budget, staged entries, visible placeholders and adjacent persistence regressions
+      domain_timeout_minutes: 70
       static_validators: |
+        tests/developer_b/validate_transient_catalog_stage.ps1
         tests/developer_b/validate_bounded_authoritative_reads.ps1
         tests/developer_b/validate_bounded_catalog_rebuild.ps1
         tests/developer_b/validate_bounded_multi_world_recovery.ps1
@@ -33,6 +34,7 @@ jobs:
       primary_headless_output_base: build\bounded-authoritative-read-regression
       primary_headless_timeout_milliseconds: 600000
       domain_scripts: |
+        res://tests/qa/catalog_stage_invalidation_regression.gd
         res://tests/qa/bounded_catalog_rebuild_regression.gd
         res://tests/qa/bounded_multi_world_recovery_regression.gd
         res://tests/qa/world_catalog_regression.gd
@@ -47,7 +49,7 @@ jobs:
         build/bounded-authoritative-read-regression.stdout.log
         build/bounded-authoritative-read-regression.stderr.log
       domain_artifact_if_no_files: error
-      desktop_job_name: Real 40-world sidecar loss, visible placeholders, F3 backlog and steady convergence
+      desktop_job_name: Real 40-world sidecar loss, staged metadata, F3 backlog and steady convergence
       desktop_timeout_minutes: 80
       desktop_script: res://tests/qa/bounded_authoritative_read_desktop_acceptance.gd
       desktop_output_path: build\bounded-authoritative-read-desktop.png
