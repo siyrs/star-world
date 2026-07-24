@@ -16,7 +16,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/bounded-authoritative-read
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: false
+          show-progress: false
       - name: Reuse and apply the committed patch script
         shell: bash
         run: |
@@ -31,7 +33,10 @@ jobs:
           if marker not in text or tail not in text:
               raise RuntimeError('Unable to extract the committed patch script')
           script = text.split(marker, 1)[1].split(tail, 1)[0]
-          exec(compile(textwrap.dedent(script), str(workflow_path), 'exec'))
+          try:
+              exec(compile(textwrap.dedent(script), str(workflow_path), 'exec'))
+          except Exception as error:
+              raise RuntimeError(f'PATCH_ERROR: {error}') from error
           Path('.github/workflows/trigger-bounded-authoritative-read-patch.yml').unlink()
           PY
       - name: Commit production patch
