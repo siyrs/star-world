@@ -53,7 +53,7 @@ if ($budgetMatches.Count -ne 1 -or [int]$budgetMatches[0].Groups[1].Value -ne 32
 }
 Assert-Match $text.save 'if\s+not\s+allow_authoritative_read[\s\S]*_deferred_world_metadata[\s\S]*continue' 'Budget exhaustion must return a visible placeholder without parsing the world payload'
 Assert-Match $text.save 'authoritative_read_budget_used\s*\+=\s*1[\s\S]*_read_world_result' 'Full reads must consume a slot before authoritative parsing'
-Assert-Match $text.save 'catalog_rebuild_deferred\s*"?\]?\s*=\s*true' 'Unread placeholders must remain eligible for sidecar convergence'
+Assert-Match $text.save '["'']catalog_rebuild_deferred["'']\s*[:=]\s*true' 'Unread placeholders must remain eligible for sidecar convergence'
 Assert-NoMatch $text.save 'MAX_PRIMARY_REPAIRS_PER_LIST\s*:=\s*32|MAX_CATALOG_REBUILDS_PER_LIST\s*:=\s*32' 'Read, repair and write budgets must remain independent'
 
 foreach ($token in @('世界信息待读取','待读世界 %d','每次最多 %d','last_deferred_authoritative_read_count','authoritative_read_budget')) {
