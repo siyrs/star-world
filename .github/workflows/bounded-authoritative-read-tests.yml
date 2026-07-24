@@ -1,0 +1,60 @@
+name: Bounded authoritative read quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-authoritative-read-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Independent full-read budget, visible placeholders and adjacent persistence regressions
+      domain_timeout_minutes: 65
+      static_validators: |
+        tests/developer_b/validate_bounded_authoritative_reads.ps1
+        tests/developer_b/validate_bounded_catalog_rebuild.ps1
+        tests/developer_b/validate_bounded_multi_world_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/bounded_authoritative_read_regression.gd
+      primary_headless_output_base: build\bounded-authoritative-read-regression
+      primary_headless_timeout_milliseconds: 600000
+      domain_scripts: |
+        res://tests/qa/bounded_catalog_rebuild_regression.gd
+        res://tests/qa/bounded_multi_world_recovery_regression.gd
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/save_recovery_regression.gd
+        res://tests/qa/runtime_health_report_policy_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: bounded-authoritative-read-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/bounded-authoritative-read-regression.stdout.log
+        build/bounded-authoritative-read-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 40-world sidecar loss, visible placeholders, F3 backlog and steady convergence
+      desktop_timeout_minutes: 80
+      desktop_script: res://tests/qa/bounded_authoritative_read_desktop_acceptance.gd
+      desktop_output_path: build\bounded-authoritative-read-desktop.png
+      desktop_timeout_milliseconds: 720000
+      desktop_artifact_name: bounded-authoritative-read-evidence
+      desktop_artifact_paths: |
+        build/bounded-authoritative-read-desktop.png
+        build/bounded-authoritative-read-desktop-health.png
+        build/bounded-authoritative-read-desktop.json
+        build/bounded-authoritative-read-desktop.stdout.log
+        build/bounded-authoritative-read-desktop.stderr.log
+      desktop_artifact_if_no_files: error
