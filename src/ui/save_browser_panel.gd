@@ -41,18 +41,20 @@ func refresh() -> void:
 		var metadata_pending := bool(
 			metadata.get("authoritative_read_deferred", false)
 		)
+		var catalog_staged := bool(metadata.get("catalog_staged", false))
 		if metadata_pending:
 			select_button.text = "%s\n世界信息待读取 · 存档 %s" % [
 				metadata.get("name", "未命名"),
 				_format_bytes(int(metadata.get("save_bytes", 0))),
 			]
 		else:
-			select_button.text = "%s\n%s  Seed %s  更新 %s  存档 %s" % [
+			select_button.text = "%s\n%s  Seed %s  更新 %s  存档 %s%s" % [
 				metadata.get("name", "未命名"),
 				metadata.get("map_id", ""),
 				metadata.get("seed", 0),
 				metadata.get("updated_at", ""),
 				_format_bytes(int(metadata.get("save_bytes", 0))),
+				" · 目录待写" if catalog_staged else "",
 			]
 		var world_id := str(metadata.get("id", ""))
 		select_button.pressed.connect(
@@ -100,6 +102,15 @@ func _catalog_status(world_count: int) -> String:
 	var read_budget := maxi(
 		0, int(diagnostics.get("authoritative_read_budget", 0))
 	)
+	var staged_catalogs := maxi(
+		0, int(diagnostics.get("staged_catalog_entry_count", 0))
+	)
+	var stage_capacity := maxi(
+		0, int(diagnostics.get("catalog_stage_capacity", 0))
+	)
+	var stage_hits := maxi(
+		0, int(diagnostics.get("last_stage_hit_count", 0))
+	)
 	var status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]
 	if repairs > 0:
 		status += " · 已修复 %d 个旧目录" % repairs
@@ -115,6 +126,10 @@ func _catalog_status(world_count: int) -> String:
 		status += " · 待建目录 %d（每次最多 %d）" % [
 			deferred_catalogs, catalog_budget
 		]
+	if staged_catalogs > 0:
+		status += " · 暂存目录 %d/%d" % [staged_catalogs, stage_capacity]
+	if stage_hits > 0:
+		status += " · 暂存命中 %d" % stage_hits
 	if save_service.has_method("get_recovery_diagnostics"):
 		var recovery: Dictionary = save_service.call(
 			"get_recovery_diagnostics"

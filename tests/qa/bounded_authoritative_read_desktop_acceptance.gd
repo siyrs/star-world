@@ -86,6 +86,11 @@ func _run() -> void:
 		"first desktop refresh independently writes sixteen sidecars"
 	)
 	_check(
+		int(first.get("staged_catalog_entry_count", -1)) == 16
+		and int(first.get("staged_catalog_peak_count", -1)) == 16,
+		"first desktop refresh stages sixteen exact catalog entries"
+	)
+	_check(
 		int(first.get("last_repair_budget_used", -1)) == 0,
 		"catalog-only metadata loading does not consume primary repair slots"
 	)
@@ -93,6 +98,10 @@ func _run() -> void:
 		status_label.text.contains("待读世界 8")
 		and status_label.text.contains("每次最多 32"),
 		"save browser visibly explains deferred authoritative metadata reads"
+	)
+	_check(
+		status_label.text.contains("暂存目录 16/64"),
+		"save browser visibly reports the transient catalog stage"
 	)
 	await _capture(capture_path, "save browser placeholder screenshot is saved")
 
@@ -104,6 +113,11 @@ func _run() -> void:
 		and int(projected_catalog.get("authoritative_read_budget", -1))
 		== AUTHORITATIVE_READ_BUDGET,
 		"runtime health keeps the bounded authoritative-read backlog"
+	)
+	_check(
+		int(projected_catalog.get("staged_catalog_entry_count", -1)) == 16
+		and int(projected_catalog.get("catalog_stage_capacity", -1)) == 64,
+		"runtime health keeps the bounded transient staging backlog"
 	)
 	_check(
 		str(operations.get("primary_bottleneck", {}).get("id", "")) == "catalog",
@@ -120,6 +134,10 @@ func _run() -> void:
 	_check(
 		display.contains("待读世界 8") and display.contains("权威读取预算 32"),
 		"F3 visibly reports deferred worlds and the full-read budget"
+	)
+	_check(
+		display.contains("暂存目录 16/64") and display.contains("暂存命中 0"),
+		"F3 visibly reports staged entries and stage hits"
 	)
 	await _capture(health_capture_path, "F3 authoritative-read health screenshot is saved")
 	await _press_f3()
@@ -138,9 +156,18 @@ func _run() -> void:
 		"second desktop refresh replaces all placeholders with exact metadata"
 	)
 	_check(
+		int(second.get("last_authoritative_read_budget_used", -1)) == 8
+		and int(second.get("last_stage_hit_count", -1)) == 16,
+		"second refresh reuses sixteen staged entries and reads only eight new worlds"
+	)
+	_check(
 		int(second.get("last_catalog_rebuild_budget_used", -1)) == 16
 		and int(second.get("last_deferred_catalog_rebuild_count", -1)) == 8,
 		"second refresh preserves the independent sidecar budget"
+	)
+	_check(
+		int(second.get("staged_catalog_entry_count", -1)) == 8,
+		"second refresh stages only the eight newly read entries waiting for writes"
 	)
 
 	save_panel.call("refresh")
@@ -149,9 +176,15 @@ func _run() -> void:
 	var third: Dictionary = save.get_catalog_diagnostics()
 	_check(
 		int(third.get("last_hit_count", -1)) == 32
+		and int(third.get("last_authoritative_read_budget_used", -1)) == 0
+		and int(third.get("last_stage_hit_count", -1)) == 8
 		and int(third.get("last_catalog_rebuild_budget_used", -1)) == 8
 		and int(third.get("last_deferred_catalog_rebuild_count", -1)) == 0,
-		"third refresh completes the final eight sidecars"
+		"third refresh flushes eight staged entries without another full read"
+	)
+	_check(
+		int(third.get("staged_catalog_entry_count", -1)) == 0,
+		"third refresh empties the transient catalog stage"
 	)
 
 	save_panel.call("refresh")
@@ -165,8 +198,14 @@ func _run() -> void:
 	)
 	_check(
 		int(steady.get("last_authoritative_read_budget_used", -1)) == 0
-		and int(steady.get("last_catalog_rebuild_budget_used", -1)) == 0,
+		and int(steady.get("last_catalog_rebuild_budget_used", -1)) == 0
+		and int(steady.get("staged_catalog_entry_count", -1)) == 0,
 		"steady desktop refresh performs zero full reads and zero sidecar writes"
+	)
+	_check(
+		int(steady.get("authoritative_read_count", -1)) == WORLD_COUNT
+		and int(steady.get("stage_hit_count", -1)) == 24,
+		"desktop convergence parses every authoritative world exactly once"
 	)
 	_check(
 		_visible_fixture_rows(list_node) == WORLD_COUNT,
@@ -185,10 +224,11 @@ func _run() -> void:
 		)
 
 	report = {
-		"schema_version": 1,
+		"schema_version": 2,
 		"world_count": WORLD_COUNT,
 		"authoritative_read_budget": AUTHORITATIVE_READ_BUDGET,
 		"catalog_rebuild_budget": CATALOG_REBUILD_BUDGET,
+		"catalog_stage_capacity": 64,
 		"first_scan": first,
 		"second_scan": second,
 		"third_scan": third,

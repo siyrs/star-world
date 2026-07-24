@@ -18,6 +18,7 @@ const CATALOG_FILE_NAME := "catalog.json"
 const MAX_PRIMARY_REPAIRS_PER_LIST := 8
 const MAX_CATALOG_REBUILDS_PER_LIST := 16
 const MAX_AUTHORITATIVE_READS_PER_LIST := 32
+const MAX_STAGED_CATALOG_ENTRIES := 64
 const AtomicJsonStoreScript = preload("res://src/save/atomic_json_store.gd")
 const WorldCatalogPolicyScript = preload("res://src/save/world_catalog_policy.gd")
 
@@ -42,6 +43,13 @@ var _last_catalog_rebuild_budget_used := 0
 var _catalog_deferred_authoritative_read_count := 0
 var _last_catalog_deferred_authoritative_read_count := 0
 var _last_catalog_authoritative_read_budget_used := 0
+var _catalog_authoritative_read_count := 0
+var _catalog_stage_hit_count := 0
+var _catalog_stage_invalidation_count := 0
+var _last_catalog_stage_hit_count := 0
+var _last_catalog_stage_invalidation_count := 0
+var _catalog_stage_peak_count := 0
+var _staged_catalog_entries: Dictionary = {}
 var _recovery_count := 0
 var _recovery_repair_attempt_count := 0
 var _recovery_repair_success_count := 0
@@ -149,6 +157,11 @@ func save_world(world_id: String, state: Dictionary) -> bool:
 		# The catalog is derived and self-healing. A catalog failure must never turn
 		# a successful authoritative world write into a false save failure.
 		_catalog_write_failure_count += 1
+		_stage_catalog_entry(
+			world_id,
+			WorldCatalogPolicyScript.build_entry(world_id, payload, save_bytes),
+			save_bytes
+		)
 	world_saved.emit(world_id)
 	return true
 
@@ -174,30 +187,66 @@ func list_worlds() -> Array:
 	var catalog_rebuild_budget_used := 0
 	var deferred_authoritative_read_count := 0
 	var authoritative_read_budget_used := 0
+	var stage_hit_count := 0
+	var stage_invalidations_before := _catalog_stage_invalidation_count
 	var avoided_world_bytes := 0
 	var directory := DirAccess.open(WORLDS_DIR)
 	if directory == null:
 		_record_catalog_list(
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 			Time.get_ticks_usec() - started_at
 		)
 		return result
 	var world_ids: PackedStringArray = directory.get_directories()
 	world_ids.sort()
+	_prune_staged_catalog_entries(world_ids)
 	for raw_world_id: String in world_ids:
 		var world_id := str(raw_world_id)
 		var metadata: Dictionary = {}
 		var catalog_read: Dictionary = _read_catalog_entry(world_id)
 		if not catalog_read.is_empty():
+			_staged_catalog_entries.erase(world_id)
 			var entry: Dictionary = catalog_read.get("entry", {})
 			metadata = WorldCatalogPolicyScript.metadata_for_list(entry, "catalog")
 			hit_count += 1
 			avoided_world_bytes += int(catalog_read.get("world_bytes", 0))
 		else:
 			fallback_count += 1
+			var staged_read: Dictionary = _read_staged_catalog_entry(world_id)
+			if not staged_read.is_empty():
+				stage_hit_count += 1
+				var staged_entry: Dictionary = staged_read.get("entry", {})
+				var staged_bytes := maxi(0, int(staged_read.get("world_bytes", 0)))
+				metadata = WorldCatalogPolicyScript.metadata_for_list(
+					staged_entry, "catalog_stage"
+				)
+				metadata["catalog_staged"] = true
+				var allow_staged_write := (
+					catalog_rebuild_budget_used < MAX_CATALOG_REBUILDS_PER_LIST
+				)
+				if allow_staged_write:
+					catalog_rebuild_budget_used += 1
+					if _write_catalog_value(world_id, staged_entry, staged_bytes):
+						repair_count += 1
+						metadata["catalog_staged"] = false
+						metadata["catalog_rebuild_deferred"] = false
+					else:
+						_catalog_write_failure_count += 1
+						deferred_catalog_rebuild_count += 1
+						metadata["catalog_rebuild_deferred"] = true
+				else:
+					deferred_catalog_rebuild_count += 1
+					metadata["catalog_rebuild_deferred"] = true
+				if not metadata.is_empty():
+					result.append(metadata)
+				continue
+			var can_retain_catalog := (
+				catalog_rebuild_budget_used < MAX_CATALOG_REBUILDS_PER_LIST
+				or _staged_catalog_entries.size() < MAX_STAGED_CATALOG_ENTRIES
+			)
 			var allow_authoritative_read := (
-				authoritative_read_budget_used
-				< MAX_AUTHORITATIVE_READS_PER_LIST
+				authoritative_read_budget_used < MAX_AUTHORITATIVE_READS_PER_LIST
+				and can_retain_catalog
 			)
 			if not allow_authoritative_read:
 				deferred_authoritative_read_count += 1
@@ -236,26 +285,37 @@ func list_worlds() -> Array:
 				entry, "world_fallback"
 			)
 			metadata["recovery_deferred"] = source != "primary" and not primary_ready
-			var allow_catalog_rebuild := (
-				catalog_rebuild_budget_used < MAX_CATALOG_REBUILDS_PER_LIST
-			)
-			metadata["catalog_rebuild_deferred"] = (
-				primary_ready and not allow_catalog_rebuild
-			)
+			metadata["catalog_staged"] = false
+			metadata["catalog_rebuild_deferred"] = false
 			if primary_ready:
+				var allow_catalog_rebuild := (
+					catalog_rebuild_budget_used < MAX_CATALOG_REBUILDS_PER_LIST
+				)
 				if allow_catalog_rebuild:
 					catalog_rebuild_budget_used += 1
-					if _write_catalog_entry(world_id, payload, world_bytes):
+					if _write_catalog_value(world_id, entry, world_bytes):
 						repair_count += 1
 					else:
 						_catalog_write_failure_count += 1
+						metadata["catalog_staged"] = _stage_catalog_entry(
+							world_id, entry, world_bytes
+						)
+						metadata["catalog_rebuild_deferred"] = true
+						deferred_catalog_rebuild_count += 1
 				else:
+					metadata["catalog_staged"] = _stage_catalog_entry(
+						world_id, entry, world_bytes
+					)
+					metadata["catalog_rebuild_deferred"] = true
 					deferred_catalog_rebuild_count += 1
 		if not metadata.is_empty():
 			result.append(metadata)
 	result.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:
 			return str(a.get("updated_at", "")) > str(b.get("updated_at", ""))
+	)
+	var stage_invalidation_count := maxi(
+		0, _catalog_stage_invalidation_count - stage_invalidations_before
 	)
 	_record_catalog_list(
 		result.size(),
@@ -268,6 +328,8 @@ func list_worlds() -> Array:
 		catalog_rebuild_budget_used,
 		deferred_authoritative_read_count,
 		authoritative_read_budget_used,
+		stage_hit_count,
+		stage_invalidation_count,
 		avoided_world_bytes,
 		Time.get_ticks_usec() - started_at
 	)
@@ -314,6 +376,7 @@ func get_catalog_diagnostics() -> Dictionary:
 			_last_catalog_rebuild_budget_used
 		),
 		"authoritative_read_budget": MAX_AUTHORITATIVE_READS_PER_LIST,
+		"authoritative_read_count": _catalog_authoritative_read_count,
 		"deferred_authoritative_read_count": (
 			_catalog_deferred_authoritative_read_count
 		),
@@ -322,6 +385,15 @@ func get_catalog_diagnostics() -> Dictionary:
 		),
 		"last_authoritative_read_budget_used": (
 			_last_catalog_authoritative_read_budget_used
+		),
+		"catalog_stage_capacity": MAX_STAGED_CATALOG_ENTRIES,
+		"staged_catalog_entry_count": _staged_catalog_entries.size(),
+		"staged_catalog_peak_count": _catalog_stage_peak_count,
+		"stage_hit_count": _catalog_stage_hit_count,
+		"last_stage_hit_count": _last_catalog_stage_hit_count,
+		"stage_invalidation_count": _catalog_stage_invalidation_count,
+		"last_stage_invalidation_count": (
+			_last_catalog_stage_invalidation_count
 		),
 	}
 
@@ -347,6 +419,12 @@ func reset_catalog_diagnostics() -> void:
 	_catalog_deferred_authoritative_read_count = 0
 	_last_catalog_deferred_authoritative_read_count = 0
 	_last_catalog_authoritative_read_budget_used = 0
+	_catalog_authoritative_read_count = 0
+	_catalog_stage_hit_count = 0
+	_catalog_stage_invalidation_count = 0
+	_last_catalog_stage_hit_count = 0
+	_last_catalog_stage_invalidation_count = 0
+	_catalog_stage_peak_count = _staged_catalog_entries.size()
 
 
 func get_recovery_diagnostics() -> Dictionary:
@@ -393,6 +471,7 @@ func delete_world(world_id: String) -> bool:
 		DirAccess.remove_absolute(absolute_dir.path_join(file_name))
 	var error := DirAccess.remove_absolute(absolute_dir)
 	if error == OK:
+		_staged_catalog_entries.erase(world_id)
 		world_deleted.emit(world_id)
 		return true
 	return false
@@ -451,6 +530,7 @@ func _read_world_result(
 	var source := str(result.get("source", "primary"))
 	var primary_ready := source == "primary" or bool(result.get("repair_success", false))
 	if source != "primary":
+		_invalidate_staged_catalog_entry(world_id)
 		_record_recovery_result(world_id, source, result, world_path)
 		if emit_recovery:
 			save_recovered.emit(world_id, source)
@@ -555,7 +635,113 @@ func _write_catalog_entry(
 	if safe_bytes <= 0:
 		return false
 	var entry := WorldCatalogPolicyScript.build_entry(world_id, payload, safe_bytes)
-	return _store.write_dictionary(_catalog_path(world_id), entry)
+	return _write_catalog_value(world_id, entry, safe_bytes)
+
+
+func _write_catalog_value(
+	world_id: String,
+	entry: Dictionary,
+	save_bytes: int
+) -> bool:
+	if not _is_safe_id(world_id):
+		return false
+	var safe_bytes := maxi(0, save_bytes)
+	if safe_bytes <= 0:
+		safe_bytes = _file_size(_world_path(world_id))
+	if safe_bytes <= 0:
+		return false
+	var normalized := WorldCatalogPolicyScript.normalize_entry(
+		entry, world_id, safe_bytes
+	)
+	if normalized.is_empty():
+		return false
+	var written := _store.write_dictionary(_catalog_path(world_id), normalized)
+	if written:
+		_staged_catalog_entries.erase(world_id)
+	return written
+
+
+func _read_staged_catalog_entry(world_id: String) -> Dictionary:
+	if not _is_safe_id(world_id) or not _staged_catalog_entries.has(world_id):
+		return {}
+	var raw_staged: Variant = _staged_catalog_entries.get(world_id, {})
+	if raw_staged is not Dictionary:
+		_invalidate_staged_catalog_entry(world_id)
+		return {}
+	var staged: Dictionary = raw_staged
+	var world_path := _world_path(world_id)
+	var world_bytes := _file_size(world_path)
+	var modified_unix := (
+		int(FileAccess.get_modified_time(world_path))
+		if FileAccess.file_exists(world_path)
+		else 0
+	)
+	if (
+		world_bytes <= 0
+		or world_bytes != int(staged.get("world_bytes", -1))
+		or modified_unix != int(staged.get("modified_unix", -1))
+	):
+		_invalidate_staged_catalog_entry(world_id)
+		return {}
+	var entry := WorldCatalogPolicyScript.normalize_entry(
+		staged.get("entry", {}), world_id, world_bytes
+	)
+	if entry.is_empty():
+		_invalidate_staged_catalog_entry(world_id)
+		return {}
+	return {
+		"entry": entry,
+		"world_bytes": world_bytes,
+	}
+
+
+func _stage_catalog_entry(
+	world_id: String,
+	entry: Dictionary,
+	save_bytes: int
+) -> bool:
+	if not _is_safe_id(world_id):
+		return false
+	var world_path := _world_path(world_id)
+	var safe_bytes := maxi(0, save_bytes)
+	if safe_bytes <= 0:
+		safe_bytes = _file_size(world_path)
+	if safe_bytes <= 0 or not FileAccess.file_exists(world_path):
+		return false
+	var normalized := WorldCatalogPolicyScript.normalize_entry(
+		entry, world_id, safe_bytes
+	)
+	if normalized.is_empty():
+		return false
+	if (
+		not _staged_catalog_entries.has(world_id)
+		and _staged_catalog_entries.size() >= MAX_STAGED_CATALOG_ENTRIES
+	):
+		return false
+	_staged_catalog_entries[world_id] = {
+		"entry": normalized,
+		"world_bytes": safe_bytes,
+		"modified_unix": int(FileAccess.get_modified_time(world_path)),
+	}
+	_catalog_stage_peak_count = maxi(
+		_catalog_stage_peak_count, _staged_catalog_entries.size()
+	)
+	return true
+
+
+func _invalidate_staged_catalog_entry(world_id: String) -> void:
+	if _staged_catalog_entries.erase(world_id):
+		_catalog_stage_invalidation_count += 1
+
+
+func _prune_staged_catalog_entries(world_ids: PackedStringArray) -> void:
+	var valid_world_ids: Dictionary = {}
+	for world_id: String in world_ids:
+		valid_world_ids[world_id] = true
+	for raw_world_id: Variant in _staged_catalog_entries.keys():
+		var world_id := str(raw_world_id)
+		if not valid_world_ids.has(world_id):
+			_invalidate_staged_catalog_entry(world_id)
 
 
 func _record_catalog_list(
@@ -569,6 +755,8 @@ func _record_catalog_list(
 	catalog_rebuild_budget_used: int,
 	deferred_authoritative_read_count: int,
 	authoritative_read_budget_used: int,
+	stage_hit_count: int,
+	stage_invalidation_count: int,
 	avoided_world_bytes: int,
 	elapsed_usec: int
 ) -> void:
@@ -581,6 +769,8 @@ func _record_catalog_list(
 	_catalog_deferred_authoritative_read_count += (
 		deferred_authoritative_read_count
 	)
+	_catalog_authoritative_read_count += authoritative_read_budget_used
+	_catalog_stage_hit_count += stage_hit_count
 	_last_catalog_world_count = world_count
 	_last_catalog_hit_count = hit_count
 	_last_catalog_fallback_count = fallback_count
@@ -603,6 +793,8 @@ func _record_catalog_list(
 	_last_catalog_authoritative_read_budget_used = clampi(
 		authoritative_read_budget_used, 0, MAX_AUTHORITATIVE_READS_PER_LIST
 	)
+	_last_catalog_stage_hit_count = maxi(0, stage_hit_count)
+	_last_catalog_stage_invalidation_count = maxi(0, stage_invalidation_count)
 	_last_catalog_avoided_world_bytes = maxi(0, avoided_world_bytes)
 	_last_catalog_elapsed_usec = maxi(0, elapsed_usec)
 

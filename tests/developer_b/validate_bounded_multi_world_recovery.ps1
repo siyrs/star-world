@@ -78,7 +78,7 @@ Assert-Match $text.audit '主菜单卡顿' 'Architecture audit must identify the
 Assert-Match $text.audit '渐进(?:恢复|修复|收敛)' 'Architecture audit must describe progressive recovery semantics'
 Assert-Match $text.audit '真实桌面' 'Architecture audit must require real desktop acceptance'
 Assert-Match $text.audit 'Windows Release' 'Architecture audit must require Windows Release acceptance'
-Assert-Match $text.roadmap '每次最多 8 个主文件修复' 'Roadmap must record bounded multi-world recovery'
+Assert-Match $text.roadmap '主文件修复[^\r\n]{0,24}(?:每次最多\s*)?8|(?:每次最多\s*)?8[^\r\n]{0,24}主文件修复' 'Roadmap must record bounded multi-world recovery'
 Assert-Match $text.run_all 'validate_bounded_multi_world_recovery\.ps1' 'Full suite is missing static recovery contract'
 Assert-Match $text.run_all 'bounded_multi_world_recovery_regression\.gd' 'Full suite is missing recovery regression'
 

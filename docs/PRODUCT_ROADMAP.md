@@ -58,6 +58,7 @@ Game Runtime
 ├─ Persistence & Release Domain
 │  ├─ Atomic Save Transaction / Backup Recovery
 │  ├─ Lightweight Self-healing World Catalog
+│  ├─ Bounded Read / Write / Transient Catalog Stage
 │  ├─ Domain Migration / Whitelist
 │  └─ Resumable GitHub Release Auto-update
 │
@@ -86,7 +87,8 @@ Game Runtime
 - 轻量世界目录：`world.json` 保持唯一权威，`catalog.json` 缺失或损坏时按需自愈；
 - 目录 sidecar 重建拥有独立的每次最多 16 个写入预算，世界始终可见并确定性收敛；
 - 缺失目录时完整存档读取每次最多 32 个，预算外世界使用可继续的占位行并渐进补齐 metadata；
-- 主菜单显示存档大小和目录耗时，稳态不再读取所有世界完整 payload；
+- 跨刷新目录暂存最多 64 项严格白名单 entry，96 世界完整读取由 176 次降为恰好 96 次；
+- 主菜单显示存档大小、目录耗时、待读世界、目录待写、暂存数量和暂存命中；
 - 生产世界不再保存或构造无用的 `loaded_chunks`；
 - Windows Release 实际导出、启动、截图、报告和退出资源检查；
 - Range / If-Range / ETag 跨重启续传、双重 SHA-256 和失败回滚；
@@ -98,6 +100,8 @@ Game Runtime
 - [SELF_HEALING_SAVE_RECOVERY.md](SELF_HEALING_SAVE_RECOVERY.md)
 - [WORLD_CATALOG.md](WORLD_CATALOG.md)
 - [BOUNDED_CATALOG_REBUILD.md](BOUNDED_CATALOG_REBUILD.md)
+- [BOUNDED_AUTHORITATIVE_READS.md](BOUNDED_AUTHORITATIVE_READS.md)
+- [TRANSIENT_CATALOG_STAGING.md](TRANSIENT_CATALOG_STAGING.md)
 - [GITHUB_RELEASE_AUTO_UPDATE.md](GITHUB_RELEASE_AUTO_UPDATE.md)
 - [RECENT_CHUNK_SNAPSHOT_CACHE.md](RECENT_CHUNK_SNAPSHOT_CACHE.md)
 
@@ -190,8 +194,8 @@ Game Runtime
 
 - 多小时运行 soak 与周期性真实保存；
 - 多世界、大存档目录长期增长；
-- 多世界恢复采用每次最多 8 个主文件修复的渐进预算，世界始终可见，后续刷新确定性收敛；
-- 跨会话恢复、占位 metadata 收敛和更长周期大存档压力；
+- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16 和目录暂存最多 64 的收敛与失效；
+- 应用重启后的目录命中、恢复证据和长周期大存档压力；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；

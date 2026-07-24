@@ -277,6 +277,18 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 	var catalog_budget := maxi(
 		0, int(catalog.get("catalog_rebuild_budget", 0))
 	)
+	var staged_catalogs := maxi(
+		0, int(catalog.get("staged_catalog_entry_count", 0))
+	)
+	var stage_capacity := maxi(
+		0, int(catalog.get("catalog_stage_capacity", 0))
+	)
+	var stage_hits := maxi(
+		0, int(catalog.get("last_stage_hit_count", 0))
+	)
+	var stage_invalidations := maxi(
+		0, int(catalog.get("last_stage_invalidation_count", 0))
+	)
 	if write_failures > 0:
 		severity = 1
 		issue = "轻量世界目录写入失败累计 %d 次" % write_failures
@@ -284,12 +296,14 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 		severity = 1
 		issue = (
 			"主文件待修复 %d（预算 %d）· 待读世界 %d（权威读取预算 %d）· "
-			+ "待建目录 %d（目录写入预算 %d）"
+			+ "暂存目录 %d/%d · 待建目录 %d（目录写入预算 %d）"
 		) % [
 			deferred_recovery,
 			primary_budget,
 			deferred_reads,
 			read_budget,
+			staged_catalogs,
+			stage_capacity,
 			deferred_catalogs,
 			catalog_budget,
 		]
@@ -302,15 +316,18 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 		"catalog",
 		"世界目录",
 		(
-			"命中 %d/%d · 回退 %d · 修复目录 %d · "
-			+ "待修复 %d · 待读世界 %d · 待建目录 %d · %.2f ms"
+			"命中 %d/%d · 回退 %d · 修复目录 %d · 待读 %d · "
+			+ "暂存目录 %d/%d · 暂存命中 %d · 失效 %d · 待建 %d · %.2f ms"
 		) % [
 			maxi(0, int(catalog.get("last_hit_count", 0))),
 			maxi(0, int(catalog.get("last_world_count", 0))),
 			fallback_count,
 			repair_count,
-			deferred_recovery,
 			deferred_reads,
+			staged_catalogs,
+			stage_capacity,
+			stage_hits,
+			stage_invalidations,
 			deferred_catalogs,
 			float(catalog.get("last_elapsed_milliseconds", 0.0)),
 		],
@@ -525,6 +542,30 @@ static func _project_catalog(snapshot: Dictionary) -> Dictionary:
 		),
 		"last_authoritative_read_budget_used": maxi(
 			0, int(snapshot.get("last_authoritative_read_budget_used", 0))
+		),
+		"authoritative_read_count": maxi(
+			0, int(snapshot.get("authoritative_read_count", 0))
+		),
+		"catalog_stage_capacity": maxi(
+			0, int(snapshot.get("catalog_stage_capacity", 0))
+		),
+		"staged_catalog_entry_count": maxi(
+			0, int(snapshot.get("staged_catalog_entry_count", 0))
+		),
+		"staged_catalog_peak_count": maxi(
+			0, int(snapshot.get("staged_catalog_peak_count", 0))
+		),
+		"stage_hit_count": maxi(
+			0, int(snapshot.get("stage_hit_count", 0))
+		),
+		"last_stage_hit_count": maxi(
+			0, int(snapshot.get("last_stage_hit_count", 0))
+		),
+		"stage_invalidation_count": maxi(
+			0, int(snapshot.get("stage_invalidation_count", 0))
+		),
+		"last_stage_invalidation_count": maxi(
+			0, int(snapshot.get("last_stage_invalidation_count", 0))
 		),
 	}
 
