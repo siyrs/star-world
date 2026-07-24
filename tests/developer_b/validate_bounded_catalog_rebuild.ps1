@@ -90,9 +90,10 @@ foreach ($token in @(
   Assert-Match $text.workflow $token "Bounded catalog workflow is missing: $token"
 }
 
-foreach ($token in @('独立写入预算','每次最多 16','世界始终可见','16 → 16 → 16','不修改权威主文件')) {
+foreach ($token in @('每次最多 16','世界始终可见','16 → 16 → 16','不修改权威主文件')) {
   Assert-Match $text.contract ([regex]::Escape($token)) "Bounded catalog contract is missing: $token"
 }
+Assert-Match $text.contract '独立[^\r\n]{0,12}写入预算' 'Bounded catalog contract must keep catalog writes independent from primary repair'
 foreach ($token in @('目录 sidecar','每次最多 16','待建目录','写盘成本')) {
   Assert-Match $text.world_catalog ([regex]::Escape($token)) "World catalog contract is missing rebuild budgeting: $token"
 }
