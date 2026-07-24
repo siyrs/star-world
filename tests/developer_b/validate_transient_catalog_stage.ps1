@@ -62,7 +62,8 @@ if ($capacityMatches.Count -ne 1 -or [int]$capacityMatches[0].Groups[1].Value -n
 }
 
 Assert-Match $text.save 'func\s+list_worlds[\s\S]*?_read_catalog_entry[\s\S]*?_read_staged_catalog_entry[\s\S]*?_read_world_result' 'World listing must prefer sidecar, then transient stage, then a bounded full read'
-Assert-Match $text.save 'authoritative_read_budget_used\s*<\s*MAX_AUTHORITATIVE_READS_PER_LIST[\s\S]*?_staged_catalog_entries\.size\(\)\s*<\s*MAX_STAGED_CATALOG_ENTRIES' 'Full reads must stop when neither write capacity nor stage capacity can retain the result'
+Assert-Match $text.save 'var\s+can_retain_catalog[\s\S]*?catalog_rebuild_budget_used\s*<\s*MAX_CATALOG_REBUILDS_PER_LIST[\s\S]*?_staged_catalog_entries\.size\(\)\s*<\s*MAX_STAGED_CATALOG_ENTRIES' 'Catalog retention must require either a write slot or transient stage capacity'
+Assert-Match $text.save 'var\s+allow_authoritative_read[\s\S]*?authoritative_read_budget_used\s*<\s*MAX_AUTHORITATIVE_READS_PER_LIST[\s\S]*?and\s+can_retain_catalog' 'Full reads must require both a read slot and a bounded retention path'
 Assert-Match $text.save 'func\s+_read_staged_catalog_entry[\s\S]*?_file_size[\s\S]*?FileAccess\.get_modified_time[\s\S]*?_invalidate_staged_catalog_entry' 'Staged entries must be invalidated by authoritative size or modification evidence'
 Assert-Match $text.save 'if\s+not\s+_write_catalog_entry[\s\S]*?_catalog_write_failure_count\s*\+=\s*1[\s\S]*?_stage_catalog_entry' 'A successful primary save with a failed sidecar write must retain one bounded derived entry'
 Assert-Match $text.save 'func\s+delete_world[\s\S]*?_staged_catalog_entries\.erase\(world_id\)' 'Deleting a world must remove its transient catalog entry'
