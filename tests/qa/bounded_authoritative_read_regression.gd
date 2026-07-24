@@ -6,6 +6,8 @@ const WORLD_COUNT := 96
 const AUTHORITATIVE_READ_BUDGET := 32
 const CATALOG_REBUILD_BUDGET := 16
 const OVERRIDES_PER_WORLD := 16
+const STAGE_CAPACITY := 64
+const LEGACY_FULL_READ_COUNT := 176
 
 var checks := 0
 var failures: Array[String] = []
@@ -77,11 +79,13 @@ func _run_progressive_scans(save: Node) -> void:
 	save.reset_recovery_diagnostics()
 	var expected_hits := [0, 16, 32, 48, 64, 80, 96]
 	var expected_fallbacks := [96, 80, 64, 48, 32, 16, 0]
-	var expected_reads := [32, 32, 32, 32, 32, 16, 0]
-	var expected_deferred_reads := [64, 48, 32, 16, 0, 0, 0]
+	var expected_reads := [32, 32, 32, 0, 0, 0, 0]
+	var expected_deferred_reads := [64, 32, 0, 0, 0, 0, 0]
 	var expected_rebuilds := [16, 16, 16, 16, 16, 16, 0]
 	var expected_deferred_catalogs := [80, 64, 48, 32, 16, 0, 0]
 	var expected_catalogs := [16, 32, 48, 64, 80, 96, 96]
+	var expected_stage_hits := [0, 16, 32, 48, 32, 16, 0]
+	var expected_staged_entries := [16, 32, 48, 32, 16, 0, 0]
 	for scan_index in 7:
 		var worlds: Array = save.list_worlds()
 		var catalog: Dictionary = save.get_catalog_diagnostics()
@@ -96,6 +100,10 @@ func _run_progressive_scans(save: Node) -> void:
 			"scan %d exposes the fixed authoritative read budget" % (scan_index + 1)
 		)
 		_check(
+			int(catalog.get("catalog_stage_capacity", 0)) == STAGE_CAPACITY,
+			"scan %d exposes the fixed transient stage capacity" % (scan_index + 1)
+		)
+		_check(
 			int(catalog.get("last_authoritative_read_budget_used", -1))
 			== expected_reads[scan_index],
 			"scan %d uses the exact expected full-read slots" % (scan_index + 1)
@@ -108,6 +116,16 @@ func _run_progressive_scans(save: Node) -> void:
 		_check(
 			_pending_metadata_count(worlds) == expected_deferred_reads[scan_index],
 			"scan %d exposes placeholders for every deferred full read" % (scan_index + 1)
+		)
+		_check(
+			int(catalog.get("last_stage_hit_count", -1))
+			== expected_stage_hits[scan_index],
+			"scan %d reuses the exact expected staged catalog entries" % (scan_index + 1)
+		)
+		_check(
+			int(catalog.get("staged_catalog_entry_count", -1))
+			== expected_staged_entries[scan_index],
+			"scan %d retains the exact bounded staging backlog" % (scan_index + 1)
 		)
 		_check(
 			int(catalog.get("last_catalog_rebuild_budget_used", -1))
@@ -133,6 +151,11 @@ func _run_progressive_scans(save: Node) -> void:
 			% (scan_index + 1)
 		)
 		_check(
+			int(catalog.get("staged_catalog_entry_count", 0)) <= STAGE_CAPACITY,
+			"scan %d never exceeds the transient catalog stage capacity"
+			% (scan_index + 1)
+		)
+		_check(
 			int(catalog.get("last_repair_budget_used", -1)) == 0
 			and int(catalog.get("last_deferred_recovery_count", -1)) == 0,
 			"scan %d never consumes primary repair capacity" % (scan_index + 1)
@@ -147,9 +170,29 @@ func _run_progressive_scans(save: Node) -> void:
 				str(report.get("status", "")) == "warning"
 				and int(report.get("catalog", {}).get(
 					"last_deferred_authoritative_read_count", -1
-				)) == 64,
-				"F3 projection preserves deferred full-read evidence"
+				)) == 64
+				and int(report.get("catalog", {}).get(
+					"staged_catalog_entry_count", -1
+				)) == 16,
+				"F3 projection preserves transient catalog staging evidence"
 			)
+	var final_catalog: Dictionary = save.get_catalog_diagnostics()
+	var actual_reads := int(final_catalog.get("authoritative_read_count", -1))
+	_check(
+		actual_reads == WORLD_COUNT
+		and LEGACY_FULL_READ_COUNT - actual_reads == 80,
+		"transient staging eliminates eighty redundant full reads"
+	)
+	_check(
+		int(final_catalog.get("staged_catalog_peak_count", -1)) == 48
+		and int(final_catalog.get("staged_catalog_peak_count", 0)) <= STAGE_CAPACITY,
+		"stage cache peak remains inside the fixed sixty-four entry capacity"
+	)
+	_check(
+		int(final_catalog.get("stage_hit_count", -1)) == 144
+		and int(final_catalog.get("stage_invalidation_count", -1)) == 0,
+		"unchanged primaries reuse staged entries without invalidation"
+	)
 	var recovery: Dictionary = save.get_recovery_diagnostics()
 	_check(
 		int(recovery.get("recovery_count", 0)) == 0
@@ -157,7 +200,7 @@ func _run_progressive_scans(save: Node) -> void:
 		"healthy primaries never enter backup recovery"
 	)
 	_check(
-		int(save.get_catalog_diagnostics().get("write_failure_count", 0)) == 0,
+		int(final_catalog.get("write_failure_count", 0)) == 0,
 		"all bounded sidecar writes succeed"
 	)
 	for world_id: String in world_ids:
