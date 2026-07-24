@@ -1,0 +1,6 @@
+FAILURE
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+  File "bounded-catalog-bootstrap.py", line 50, in <module>
+  File "bounded-catalog-bootstrap.py", line 10, in replace_once
+RuntimeError: missing anchor full static suite in tests/run_all.ps1
