@@ -106,10 +106,10 @@ func _exercise_staging_and_invalidation(save: Node) -> void:
 		"first scan leaves eight explicit metadata placeholders"
 	)
 
-	var ordered_ids := world_ids.duplicate()
+	var ordered_ids: Array[String] = world_ids.duplicate()
 	ordered_ids.sort()
-	var save_target := ordered_ids[16]
-	var invalidation_target := ordered_ids[17]
+	var save_target: String = str(ordered_ids[16])
+	var invalidation_target: String = str(ordered_ids[17])
 	var save_state := _read_dictionary(_world_path(save_target))
 	var save_metadata: Dictionary = save_state.get("metadata", {})
 	save_metadata["name"] = "Stage Save Refresh"
