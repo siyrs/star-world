@@ -1,0 +1,62 @@
+name: Transient catalog staging quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transient-catalog-stage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Bounded transient catalog entries, invalidation and exact-once authoritative reads
+      domain_timeout_minutes: 70
+      static_validators: |
+        tests/developer_b/validate_transient_catalog_stage.ps1
+        tests/developer_b/validate_bounded_authoritative_reads.ps1
+        tests/developer_b/validate_bounded_catalog_rebuild.ps1
+        tests/developer_b/validate_bounded_multi_world_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/catalog_stage_invalidation_regression.gd
+      primary_headless_output_base: build\catalog-stage-invalidation-regression
+      primary_headless_timeout_milliseconds: 600000
+      domain_scripts: |
+        res://tests/qa/bounded_authoritative_read_regression.gd
+        res://tests/qa/bounded_catalog_rebuild_regression.gd
+        res://tests/qa/bounded_multi_world_recovery_regression.gd
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/save_recovery_regression.gd
+        res://tests/qa/runtime_health_report_policy_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: transient-catalog-stage-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/catalog-stage-invalidation-regression.stdout.log
+        build/catalog-stage-invalidation-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 40-world exact metadata staging, F3 evidence and zero-reread convergence
+      desktop_timeout_minutes: 80
+      desktop_script: res://tests/qa/bounded_authoritative_read_desktop_acceptance.gd
+      desktop_output_path: build\transient-catalog-stage-desktop.png
+      desktop_timeout_milliseconds: 720000
+      desktop_artifact_name: transient-catalog-stage-evidence
+      desktop_artifact_paths: |
+        build/transient-catalog-stage-desktop.png
+        build/transient-catalog-stage-desktop-health.png
+        build/transient-catalog-stage-desktop.json
+        build/transient-catalog-stage-desktop.stdout.log
+        build/transient-catalog-stage-desktop.stderr.log
+      desktop_artifact_if_no_files: error
