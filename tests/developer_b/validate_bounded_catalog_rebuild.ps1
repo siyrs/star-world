@@ -43,7 +43,13 @@ foreach ($token in @(
 )) {
   Assert-Match $text.save $token "SaveService lost bounded catalog rebuilding: $token"
 }
-Assert-NoMatch $text.save 'MAX_CATALOG_REBUILDS_PER_LIST\s*:=\s*(?:0|[1-9]|1[0-5]|1[7-9]|[2-9][0-9]+)' 'Catalog rebuild budget must remain exactly sixteen'
+$budgetMatches = [regex]::Matches(
+  $text.save,
+  'MAX_CATALOG_REBUILDS_PER_LIST\s*:=\s*(\d+)'
+)
+if ($budgetMatches.Count -ne 1 -or [int]$budgetMatches[0].Groups[1].Value -ne 16) {
+  throw 'Catalog rebuild budget must be declared exactly once and remain sixteen'
+}
 Assert-Match $text.save 'if\s+primary_ready[\s\S]*catalog_rebuild_budget_used[\s\S]*_write_catalog_entry' 'Catalog writes must be gated by a dedicated budget after primary readiness'
 Assert-Match $text.save 'deferred_catalog_rebuild_count\s*\+=\s*1' 'Budget-exhausted healthy primaries must remain observable'
 Assert-Match $text.save '_catalog_write_failure_count\s*\+=\s*1' 'Catalog write failures must remain diagnostic'
