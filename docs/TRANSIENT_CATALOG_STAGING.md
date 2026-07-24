@@ -22,7 +22,7 @@ catalog.json 写入    16
 
 ## 决策
 
-`SaveService` 增加最多 **64** 项的瞬时目录暂存：
+`SaveService` 增加最多 64 项的瞬时目录暂存：
 
 ```text
 MAX_STAGED_CATALOG_ENTRIES := 64
