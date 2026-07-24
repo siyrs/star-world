@@ -84,6 +84,7 @@ Game Runtime
 - `world.json` 语法损坏或核心结构失效时，会从有效 `.tmp` / `.bak` 恢复并原子重建主文件，同时保留有效备份；
 - 存档浏览器和 F3 显示恢复、主文件修复与失败证据，目录只在权威主文件重新可用后自愈；
 - 轻量世界目录：`world.json` 保持唯一权威，`catalog.json` 缺失或损坏时按需自愈；
+- 目录 sidecar 重建拥有独立的每次最多 16 个写入预算，世界始终可见并确定性收敛；
 - 主菜单显示存档大小和目录耗时，稳态不再读取所有世界完整 payload；
 - 生产世界不再保存或构造无用的 `loaded_chunks`；
 - Windows Release 实际导出、启动、截图、报告和退出资源检查；
@@ -95,6 +96,7 @@ Game Runtime
 - [RUNTIME_HEALTH_REPORT.md](RUNTIME_HEALTH_REPORT.md)
 - [SELF_HEALING_SAVE_RECOVERY.md](SELF_HEALING_SAVE_RECOVERY.md)
 - [WORLD_CATALOG.md](WORLD_CATALOG.md)
+- [BOUNDED_CATALOG_REBUILD.md](BOUNDED_CATALOG_REBUILD.md)
 - [GITHUB_RELEASE_AUTO_UPDATE.md](GITHUB_RELEASE_AUTO_UPDATE.md)
 - [RECENT_CHUNK_SNAPSHOT_CACHE.md](RECENT_CHUNK_SNAPSHOT_CACHE.md)
 
@@ -188,7 +190,7 @@ Game Runtime
 - 多小时运行 soak 与周期性真实保存；
 - 多世界、大存档目录长期增长；
 - 多世界恢复采用每次最多 8 个主文件修复的渐进预算，世界始终可见，后续刷新确定性收敛；
-- 跨会话恢复和更长周期目录重建压力；
+- 跨会话恢复和更长周期目录读取、缓存命中与大存档压力；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；
