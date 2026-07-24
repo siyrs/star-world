@@ -38,13 +38,22 @@ func refresh() -> void:
 		var select_button := Button.new()
 		select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		select_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		select_button.text = "%s\n%s  Seed %s  更新 %s  存档 %s" % [
-			metadata.get("name", "未命名"),
-			metadata.get("map_id", ""),
-			metadata.get("seed", 0),
-			metadata.get("updated_at", ""),
-			_format_bytes(int(metadata.get("save_bytes", 0))),
-		]
+		var metadata_pending := bool(
+			metadata.get("authoritative_read_deferred", false)
+		)
+		if metadata_pending:
+			select_button.text = "%s\n世界信息待读取 · 存档 %s" % [
+				metadata.get("name", "未命名"),
+				_format_bytes(int(metadata.get("save_bytes", 0))),
+			]
+		else:
+			select_button.text = "%s\n%s  Seed %s  更新 %s  存档 %s" % [
+				metadata.get("name", "未命名"),
+				metadata.get("map_id", ""),
+				metadata.get("seed", 0),
+				metadata.get("updated_at", ""),
+				_format_bytes(int(metadata.get("save_bytes", 0))),
+			]
 		var world_id := str(metadata.get("id", ""))
 		select_button.pressed.connect(
 			func() -> void:
@@ -85,12 +94,22 @@ func _catalog_status(world_count: int) -> String:
 	var catalog_budget := maxi(
 		0, int(diagnostics.get("catalog_rebuild_budget", 0))
 	)
+	var deferred_reads := maxi(
+		0, int(diagnostics.get("last_deferred_authoritative_read_count", 0))
+	)
+	var read_budget := maxi(
+		0, int(diagnostics.get("authoritative_read_budget", 0))
+	)
 	var status := "共 %d 个世界 · 目录 %.1f ms" % [world_count, elapsed_ms]
 	if repairs > 0:
 		status += " · 已修复 %d 个旧目录" % repairs
 	if deferred > 0:
 		status += " · 待渐进修复 %d（每次最多 %d）" % [
 			deferred, repair_budget
+		]
+	if deferred_reads > 0:
+		status += " · 待读世界 %d（每次最多 %d）" % [
+			deferred_reads, read_budget
 		]
 	if deferred_catalogs > 0:
 		status += " · 待建目录 %d（每次最多 %d）" % [

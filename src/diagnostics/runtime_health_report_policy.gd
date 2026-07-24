@@ -265,6 +265,12 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 	var primary_budget := maxi(
 		0, int(catalog.get("primary_repair_budget", 0))
 	)
+	var deferred_reads := maxi(
+		0, int(catalog.get("last_deferred_authoritative_read_count", 0))
+	)
+	var read_budget := maxi(
+		0, int(catalog.get("authoritative_read_budget", 0))
+	)
 	var deferred_catalogs := maxi(
 		0, int(catalog.get("last_deferred_catalog_rebuild_count", 0))
 	)
@@ -274,17 +280,19 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 	if write_failures > 0:
 		severity = 1
 		issue = "轻量世界目录写入失败累计 %d 次" % write_failures
-	elif deferred_recovery > 0 or deferred_catalogs > 0:
+	elif deferred_recovery > 0 or deferred_reads > 0 or deferred_catalogs > 0:
 		severity = 1
 		issue = (
-			"主文件待修复 %d（预算 %d）· 待建目录 %d（目录写入预算 %d）"
-			% [
-				deferred_recovery,
-				primary_budget,
-				deferred_catalogs,
-				catalog_budget,
-			]
-		)
+			"主文件待修复 %d（预算 %d）· 待读世界 %d（权威读取预算 %d）· "
+			+ "待建目录 %d（目录写入预算 %d）"
+		) % [
+			deferred_recovery,
+			primary_budget,
+			deferred_reads,
+			read_budget,
+			deferred_catalogs,
+			catalog_budget,
+		]
 	elif fallback_count > 0:
 		severity = 1
 		issue = "世界目录本次回退 %d 个并自愈 %d 个" % [
@@ -295,13 +303,14 @@ static func _catalog_row(catalog: Dictionary) -> Dictionary:
 		"世界目录",
 		(
 			"命中 %d/%d · 回退 %d · 修复目录 %d · "
-			+ "待修复 %d · 待建目录 %d · %.2f ms"
+			+ "待修复 %d · 待读世界 %d · 待建目录 %d · %.2f ms"
 		) % [
 			maxi(0, int(catalog.get("last_hit_count", 0))),
 			maxi(0, int(catalog.get("last_world_count", 0))),
 			fallback_count,
 			repair_count,
 			deferred_recovery,
+			deferred_reads,
 			deferred_catalogs,
 			float(catalog.get("last_elapsed_milliseconds", 0.0)),
 		],
@@ -507,6 +516,15 @@ static func _project_catalog(snapshot: Dictionary) -> Dictionary:
 		),
 		"last_catalog_rebuild_budget_used": maxi(
 			0, int(snapshot.get("last_catalog_rebuild_budget_used", 0))
+		),
+		"authoritative_read_budget": maxi(
+			0, int(snapshot.get("authoritative_read_budget", 0))
+		),
+		"last_deferred_authoritative_read_count": maxi(
+			0, int(snapshot.get("last_deferred_authoritative_read_count", 0))
+		),
+		"last_authoritative_read_budget_used": maxi(
+			0, int(snapshot.get("last_authoritative_read_budget_used", 0))
 		),
 	}
 
