@@ -83,8 +83,11 @@ map_id
 seed
 save_bytes
 deleted_unix
+deleted_unix_usec
 deleted_at
 ```
+
+`deleted_unix_usec` 是跨会话可比较的 Unix 微秒时间戳。多个世界在同一秒内快速删除时，撤销顺序仍按真实操作时间确定；旧 Manifest 缺少该字段时回退到秒级时间，以保持兼容。
 
 如果 Manifest 写入失败，系统必须把目录重命名回原位置。回滚也失败时记录明确诊断，不能假装删除成功。
 
@@ -97,6 +100,8 @@ MAX_TRASH_ENTRIES := 32
 回收站已满时，新删除返回 `trash_full`，原世界保持活跃。
 
 系统不会为了腾出空间而自动永久清理旧存档。释放空间必须通过恢复或明确的维护级 `purge_trashed_world()`。
+
+物理回收站目录即使 Manifest 损坏也占用容量，并通过 `invalid_entry_count` 暴露；系统不会因损坏 Manifest 而绕过 32 条硬上限。
 
 ## 撤销恢复
 
@@ -142,6 +147,7 @@ MAX_TRASH_ENTRIES := 32
 ```text
 trash_capacity
 trash_entry_count
+invalid_entry_count
 trash_success_count
 restore_success_count
 purge_success_count
@@ -165,6 +171,7 @@ undo_available
 - 恢复后 Primary、Sidecar、Backup 逐字节一致；
 - 64 条稀疏修改完整加载；
 - 第 33 个删除因容量拒绝；
+- 同一秒内快速删除仍精确指向最新 Undo 条目；
 - 恢复一个条目后可接受原本被阻止的世界；
 - 不自动清理任何旧条目。
 
