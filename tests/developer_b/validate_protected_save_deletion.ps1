@@ -38,6 +38,9 @@ foreach ($token in @(
   'TRASH_DIR\s*:=\s*"user://world_trash"',
   'TRASH_FILE_NAME\s*:=\s*"trash\.json"',
   'MAX_TRASH_ENTRIES\s*:=\s*32',
+  'deleted_unix_usec',
+  'invalid_entry_count',
+  'naturalnocasecmp_to',
   'func\s+trash_world\s*\(',
   'func\s+restore_trashed_world\s*\(',
   'func\s+purge_trashed_world\s*\(',
@@ -56,6 +59,7 @@ Assert-NoMatch $text.service 'delete_world\s*\(' 'Protected service must not ove
 Assert-Match $text.service '_trash_entry_count\s*>=\s*MAX_TRASH_ENTRIES' 'Full trash must reject new deletion before moving files'
 Assert-Match $text.service '_store\.write_dictionary\(_trash_manifest_path' 'Trash must persist a bounded manifest after the atomic directory move'
 Assert-Match $text.service '_remove_trash_manifest_files\(_world_directory' 'Restore must remove internal trash metadata from the active world'
+Assert-Match $text.service 'Time\.get_unix_time_from_system\(\)\s*\*\s*1000000\.0' 'Rapid trash ordering must use a persistent epoch-microsecond timestamp'
 
 foreach ($token in @(
   'extends\s+"res://src/ui/save_browser_panel\.gd"',
@@ -85,6 +89,7 @@ foreach ($phrase in @(
   'restore refuses an occupied id without consuming the trash entry',
   'restore preserves primary, sidecar and backup bytes exactly',
   'thirty-third deletion is rejected instead of purging older worlds',
+  'rapid deletions retain the true latest undo entry',
   'freed slot accepts the previously blocked world without exceeding capacity'
 )) {
   Assert-Match $text.service_regression ([regex]::Escape($phrase)) "Protected service regression is missing assertion: $phrase"
@@ -124,10 +129,10 @@ foreach ($token in @(
   Assert-Match $text.workflow $token "Protected deletion workflow is missing: $token"
 }
 
-foreach ($token in @('二次确认','原子','回收站','32','撤销','Primary','Sidecar','备份','Windows Release')) {
+foreach ($token in @('二次确认','原子','回收站','32','微秒','撤销','Primary','Sidecar','备份','Windows Release')) {
   Assert-Match $text.contract ([regex]::Escape($token)) "Protected deletion contract is missing: $token"
 }
-foreach ($token in @('一键物理删除','不可撤销','误删','回收站','隐藏选择','真实桌面','Windows Release')) {
+foreach ($token in @('一键物理删除','不可撤销','误删','回收站','同一秒','隐藏选择','真实桌面','Windows Release')) {
   Assert-Match $text.audit ([regex]::Escape($token)) "Architecture audit is missing protected-deletion finding: $token"
 }
 Assert-Match $text.roadmap '回收站最多 32' 'Roadmap must record bounded save trash capacity'
@@ -137,4 +142,4 @@ Assert-Match $text.run_all 'validate_protected_save_deletion\.ps1' 'Full suite i
 Assert-Match $text.run_all 'protected_save_service_regression\.gd' 'Full suite is missing protected save service regression'
 Assert-Match $text.run_all 'protected_save_browser_regression\.gd' 'Full suite is missing protected save browser regression'
 
-Write-Host 'PASS protected_save_deletion confirmation=2-click trash=atomic capacity=32 auto-purge=off undo=on conflict=reject primary-sidecar-backup=preserved permanent-delete-ui=0 desktop=real release=required'
+Write-Host 'PASS protected_save_deletion confirmation=2-click trash=atomic capacity=32 auto-purge=off undo=on rapid-order=epoch-usec conflict=reject primary-sidecar-backup=preserved permanent-delete-ui=0 desktop=real release=required'
