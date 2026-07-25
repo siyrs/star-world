@@ -114,12 +114,12 @@ func _perform_refresh(reset_auto_budget: bool) -> void:
 	):
 		_selected_world_id = ""
 	_render_page()
-	_status.text = _catalog_status(_worlds.size())
 	if reset_auto_budget:
 		_auto_settle_pass_count = 0
 		_remaining_auto_settle_passes = MAX_AUTO_SETTLE_PASSES
 	_in_refresh = false
 	_sync_auto_settle_process()
+	_status.text = _catalog_status(_worlds.size())
 
 
 func _sync_auto_settle_process() -> void:
@@ -341,7 +341,7 @@ func _catalog_status(world_count: int) -> String:
 		status += " · 暂存目录 %d/%d" % [staged_catalogs, stage_capacity]
 	if stage_hits > 0:
 		status += " · 暂存命中 %d" % stage_hits
-	if _auto_settle_active or _remaining_auto_settle_passes > 0:
+	if _auto_settle_active:
 		status += " · 自动整理 %d/%d" % [
 			_auto_settle_pass_count, MAX_AUTO_SETTLE_PASSES
 		]
