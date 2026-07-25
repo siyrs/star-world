@@ -107,7 +107,7 @@ func _run() -> void:
 	)
 	_check(
 		int(settled_catalog.get("authoritative_read_count", -1)) == WORLD_COUNT
-		and int(settled_catalog.get("stage_hit_count", -1)) == 56,
+		and int(settled_catalog.get("stage_hit_count", -1)) == 80,
 		"automatic convergence parses every authoritative world once and reuses staged metadata"
 	)
 	_check(
