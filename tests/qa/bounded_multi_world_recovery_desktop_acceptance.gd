@@ -45,46 +45,62 @@ func _run() -> void:
 	save.reset_catalog_diagnostics()
 	save.reset_recovery_diagnostics()
 	save_panel.call("refresh")
-	main_menu.call("_show_panel", save_panel)
-	for _frame in 5:
-		await process_frame
 	var first: Dictionary = save.get_catalog_diagnostics()
 	_check(_visible_fixture_rows(list_node) == WORLD_COUNT, "first desktop refresh renders every damaged world")
 	_check(int(first.get("last_repair_budget_used", -1)) == REPAIR_BUDGET, "first desktop refresh uses exactly eight repair slots")
 	_check(int(first.get("last_deferred_recovery_count", -1)) == 12, "first desktop refresh defers the remaining twelve worlds")
 	_check(status_label.text.contains("待渐进修复 12") and status_label.text.contains("每次最多 8"), "save browser visibly explains progressive recovery")
-	await _capture(capture_path)
 
-	save_panel.call("refresh")
-	for _frame in 3:
-		await process_frame
+	main_menu.call("_show_panel", save_panel)
+	await _capture(capture_path)
+	_check(
+		await _wait_for_auto_pass(save_panel, 1),
+		"visible browser executes the first automatic repair pass"
+	)
 	var second: Dictionary = save.get_catalog_diagnostics()
 	_check(int(second.get("last_repair_budget_used", -1)) == 8 and int(second.get("last_deferred_recovery_count", -1)) == 4, "second refresh repairs eight more and leaves four")
-	save_panel.call("refresh")
-	for _frame in 3:
-		await process_frame
+	_check(
+		await _wait_for_auto_pass(save_panel, 2),
+		"visible browser executes the second automatic repair pass"
+	)
 	var third: Dictionary = save.get_catalog_diagnostics()
 	_check(int(third.get("last_repair_budget_used", -1)) == 4 and int(third.get("last_deferred_recovery_count", -1)) == 0, "third refresh completes the remaining four repairs")
+	var virtualized: Dictionary = save_panel.call("get_virtualization_snapshot")
+	_check(
+		int(virtualized.get("auto_settle_pass_count", -1)) == 2
+		and not bool(virtualized.get("auto_settle_active", true)),
+		"automatic recovery stops after the two required bounded passes"
+	)
+
 	save_panel.call("refresh")
-	for _frame in 3:
-		await process_frame
+	await process_frame
 	var steady: Dictionary = save.get_catalog_diagnostics()
 	_check(int(steady.get("last_hit_count", 0)) >= WORLD_COUNT and int(steady.get("last_fallback_count", -1)) == 0, "steady desktop refresh is a pure sidecar hit")
 	_check(_visible_fixture_rows(list_node) == WORLD_COUNT, "all rows remain visible after convergence")
 
 	var recovery: Dictionary = save.get_recovery_diagnostics()
 	report = {
-		"schema_version": 1,
+		"schema_version": 2,
 		"world_count": WORLD_COUNT,
 		"repair_budget": REPAIR_BUDGET,
 		"first_scan": first,
 		"second_scan": second,
 		"third_scan": third,
 		"steady_scan": steady,
+		"virtualization": virtualized,
 		"recovery": recovery,
 	}
 	_write_report()
 	await _finish(game, save)
+
+
+func _wait_for_auto_pass(save_panel: Control, expected_pass: int) -> bool:
+	for _frame in 12:
+		await process_frame
+		var snapshot: Dictionary = save_panel.call("get_virtualization_snapshot")
+		if int(snapshot.get("auto_settle_pass_count", -1)) >= expected_pass:
+			return true
+	return false
 
 
 func _create_fixture(save: Node) -> void:

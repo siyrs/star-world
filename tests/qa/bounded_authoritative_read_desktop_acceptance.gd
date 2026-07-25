@@ -6,6 +6,7 @@ const OUTPUT_PATH := "user://bounded-authoritative-read-desktop.png"
 const WORLD_COUNT := 40
 const AUTHORITATIVE_READ_BUDGET := 32
 const CATALOG_REBUILD_BUDGET := 16
+const ROW_POOL_LIMIT := 24
 const OVERRIDES_PER_WORLD := 32
 const CLEANUP_FRAMES := 24
 
@@ -50,7 +51,7 @@ func _run() -> void:
 	var list_node: VBoxContainer = save_panel.get("_list") if save_panel != null else null
 	_check(
 		save_panel != null and status_label != null and list_node != null,
-		"production save browser exposes status and world rows"
+		"production save browser exposes status and virtual world rows"
 	)
 	if save_panel == null or status_label == null or list_node == null:
 		await _finish(game, save)
@@ -59,17 +60,22 @@ func _run() -> void:
 	save.reset_catalog_diagnostics()
 	save.reset_recovery_diagnostics()
 	save_panel.call("refresh")
-	main_menu.call("_show_panel", save_panel)
-	for _frame in 5:
-		await process_frame
 	var first: Dictionary = save.get_catalog_diagnostics()
+	var first_virtual: Dictionary = save_panel.call("get_virtualization_snapshot")
+	var first_panel_worlds: Array = save_panel.get("_worlds")
 	_check(
-		_visible_fixture_rows(list_node) == WORLD_COUNT,
+		int(first_virtual.get("row_pool_size", -1)) == ROW_POOL_LIMIT
+		and list_node.get_child_count() == ROW_POOL_LIMIT,
+		"first desktop refresh uses the fixed twenty-four-row pool"
+	)
+	_check(
+		int(first_virtual.get("total_world_count", -1)) == WORLD_COUNT
+		and int(first_virtual.get("page_count", -1)) == 2,
 		"first desktop refresh renders every world before full metadata resolution"
 	)
 	_check(
-		_pending_fixture_rows(list_node) == 8,
-		"first desktop refresh renders eight explicit metadata placeholders"
+		_pending_metadata_count(first_panel_worlds) == 8,
+		"first desktop refresh retains eight explicit metadata placeholders"
 	)
 	_check(
 		int(first.get("last_authoritative_read_budget_used", -1))
@@ -103,7 +109,6 @@ func _run() -> void:
 		status_label.text.contains("暂存目录 16/64"),
 		"save browser visibly reports the transient catalog stage"
 	)
-	await _capture(capture_path, "save browser placeholder screenshot is saved")
 
 	var warning_snapshot: Dictionary = diagnostics.call("sample_now")
 	var operations: Dictionary = warning_snapshot.get("operations", {})
@@ -142,55 +147,58 @@ func _run() -> void:
 	await _capture(health_capture_path, "F3 authoritative-read health screenshot is saved")
 	await _press_f3()
 
-	save_panel.call("refresh")
-	for _frame in 4:
+	main_menu.call("_show_panel", save_panel)
+	for _frame in 10:
 		await process_frame
-	var second: Dictionary = save.get_catalog_diagnostics()
+		var current: Dictionary = save_panel.call("get_virtualization_snapshot")
+		if not bool(current.get("auto_settle_active", false)):
+			break
+	var settled: Dictionary = save.get_catalog_diagnostics()
+	var settled_virtual: Dictionary = save_panel.call("get_virtualization_snapshot")
 	_check(
-		int(second.get("last_hit_count", -1)) == 16
-		and int(second.get("last_deferred_authoritative_read_count", -1)) == 0,
-		"second refresh resolves every remaining world metadata payload"
+		int(settled_virtual.get("auto_settle_pass_count", -1)) == 2,
+		"visible save browser settles forty worlds in two automatic passes"
 	)
 	_check(
-		_pending_fixture_rows(list_node) == 0,
-		"second desktop refresh replaces all placeholders with exact metadata"
+		int(settled.get("authoritative_read_count", -1)) == WORLD_COUNT
+		and int(settled.get("stage_hit_count", -1)) == 24,
+		"desktop convergence parses every authoritative world exactly once"
 	)
 	_check(
-		int(second.get("last_authoritative_read_budget_used", -1)) == 8
-		and int(second.get("last_stage_hit_count", -1)) == 16,
-		"second refresh reuses sixteen staged entries and reads only eight new worlds"
+		int(settled.get("last_deferred_authoritative_read_count", -1)) == 0
+		and int(settled.get("last_deferred_catalog_rebuild_count", -1)) == 0
+		and int(settled.get("staged_catalog_entry_count", -1)) == 0,
+		"automatic desktop convergence clears metadata, staging and sidecar backlogs"
 	)
 	_check(
-		int(second.get("last_catalog_rebuild_budget_used", -1)) == 16
-		and int(second.get("last_deferred_catalog_rebuild_count", -1)) == 8,
-		"second refresh preserves the independent sidecar budget"
-	)
-	_check(
-		int(second.get("staged_catalog_entry_count", -1)) == 8,
-		"second refresh stages only the eight newly read entries waiting for writes"
+		int(settled_virtual.get("row_create_count", -1)) == ROW_POOL_LIMIT
+		and list_node.get_child_count() == ROW_POOL_LIMIT,
+		"automatic desktop convergence allocates no additional world rows"
 	)
 
-	save_panel.call("refresh")
-	for _frame in 4:
+	var paged_ids: Dictionary = {}
+	var list_count_before_pages := int(settled.get("list_count", -1))
+	for page_index in 2:
+		save_panel.call("show_page", page_index)
 		await process_frame
-	var third: Dictionary = save.get_catalog_diagnostics()
+		for raw_world_id: Variant in save_panel.call("get_visible_world_ids"):
+			paged_ids[str(raw_world_id)] = true
 	_check(
-		int(third.get("last_hit_count", -1)) == 32
-		and int(third.get("last_authoritative_read_budget_used", -1)) == 0
-		and int(third.get("last_stage_hit_count", -1)) == 8
-		and int(third.get("last_catalog_rebuild_budget_used", -1)) == 8
-		and int(third.get("last_deferred_catalog_rebuild_count", -1)) == 0,
-		"third refresh flushes eight staged entries without another full read"
+		paged_ids.size() == WORLD_COUNT,
+		"two virtual pages expose every forty-world fixture entry"
 	)
 	_check(
-		int(third.get("staged_catalog_entry_count", -1)) == 0,
-		"third refresh empties the transient catalog stage"
+		int(save.get_catalog_diagnostics().get("list_count", -1))
+		== list_count_before_pages,
+		"virtual page navigation performs no additional authoritative scan"
 	)
+	await _capture(capture_path, "save browser virtual-page screenshot is saved")
 
+	var rows_before_steady := int(settled_virtual.get("row_create_count", -1))
 	save_panel.call("refresh")
-	for _frame in 4:
-		await process_frame
+	await process_frame
 	var steady: Dictionary = save.get_catalog_diagnostics()
+	var steady_virtual: Dictionary = save_panel.call("get_virtualization_snapshot")
 	_check(
 		int(steady.get("last_hit_count", -1)) == WORLD_COUNT
 		and int(steady.get("last_fallback_count", -1)) == 0,
@@ -203,13 +211,8 @@ func _run() -> void:
 		"steady desktop refresh performs zero full reads and zero sidecar writes"
 	)
 	_check(
-		int(steady.get("authoritative_read_count", -1)) == WORLD_COUNT
-		and int(steady.get("stage_hit_count", -1)) == 24,
-		"desktop convergence parses every authoritative world exactly once"
-	)
-	_check(
-		_visible_fixture_rows(list_node) == WORLD_COUNT,
-		"all world rows remain visible after complete convergence"
+		int(steady_virtual.get("row_create_count", -1)) == rows_before_steady,
+		"steady desktop refresh reuses the original row pool"
 	)
 	var recovery: Dictionary = save.get_recovery_diagnostics()
 	_check(
@@ -224,15 +227,18 @@ func _run() -> void:
 		)
 
 	report = {
-		"schema_version": 2,
+		"schema_version": 3,
 		"world_count": WORLD_COUNT,
 		"authoritative_read_budget": AUTHORITATIVE_READ_BUDGET,
 		"catalog_rebuild_budget": CATALOG_REBUILD_BUDGET,
 		"catalog_stage_capacity": 64,
+		"row_pool_limit": ROW_POOL_LIMIT,
 		"first_scan": first,
-		"second_scan": second,
-		"third_scan": third,
+		"first_virtualization": first_virtual,
+		"settled_scan": settled,
+		"settled_virtualization": settled_virtual,
 		"steady_scan": steady,
+		"steady_virtualization": steady_virtual,
 		"warning_operations": operations,
 		"recovery": recovery,
 	}
@@ -271,27 +277,14 @@ func _create_fixture(save: Node) -> void:
 	await process_frame
 
 
-func _visible_fixture_rows(list_node: VBoxContainer) -> int:
+func _pending_metadata_count(worlds: Array) -> int:
 	var count := 0
-	for row: Node in list_node.get_children():
-		if row.get_child_count() > 0:
-			var button := row.get_child(0) as Button
-			if button != null and button.text.to_lower().contains("authoritative-read"):
-				count += 1
-	return count
-
-
-func _pending_fixture_rows(list_node: VBoxContainer) -> int:
-	var count := 0
-	for row: Node in list_node.get_children():
-		if row.get_child_count() > 0:
-			var button := row.get_child(0) as Button
-			if (
-				button != null
-				and button.text.to_lower().contains("authoritative-read")
-				and button.text.contains("世界信息待读取")
-			):
-				count += 1
+	for raw_metadata: Variant in worlds:
+		if (
+			raw_metadata is Dictionary
+			and bool(raw_metadata.get("authoritative_read_deferred", false))
+		):
+			count += 1
 	return count
 
 

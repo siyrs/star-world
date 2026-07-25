@@ -58,9 +58,6 @@ func _run() -> void:
 	save.reset_catalog_diagnostics()
 	save.reset_recovery_diagnostics()
 	save_panel.call("refresh")
-	main_menu.call("_show_panel", save_panel)
-	for _frame in 5:
-		await process_frame
 	var first: Dictionary = save.get_catalog_diagnostics()
 	_check(
 		_visible_fixture_rows(list_node) == WORLD_COUNT,
@@ -88,7 +85,6 @@ func _run() -> void:
 		_catalog_count() == 16,
 		"first desktop refresh writes only sixteen sidecars"
 	)
-	await _capture(capture_path, "save browser screenshot is saved")
 
 	var warning_snapshot: Dictionary = diagnostics.call("sample_now")
 	var operations: Dictionary = warning_snapshot.get("operations", {})
@@ -118,9 +114,12 @@ func _run() -> void:
 	await _capture(health_capture_path, "F3 catalog health screenshot is saved")
 	await _press_f3()
 
-	save_panel.call("refresh")
-	for _frame in 4:
-		await process_frame
+	main_menu.call("_show_panel", save_panel)
+	await _capture(capture_path, "save browser screenshot is saved")
+	_check(
+		await _wait_for_auto_pass(save_panel, 1),
+		"visible browser automatically advances the remaining sidecars"
+	)
 	var second: Dictionary = save.get_catalog_diagnostics()
 	_check(
 		int(second.get("last_hit_count", -1)) == 16
@@ -129,10 +128,15 @@ func _run() -> void:
 		"second refresh rebuilds the remaining eight sidecars"
 	)
 	_check(_catalog_count() == WORLD_COUNT, "second refresh completes all sidecars")
+	var virtualized: Dictionary = save_panel.call("get_virtualization_snapshot")
+	_check(
+		int(virtualized.get("auto_settle_pass_count", -1)) == 1
+		and not bool(virtualized.get("auto_settle_active", true)),
+		"automatic sidecar settlement stops after one required bounded pass"
+	)
 
 	save_panel.call("refresh")
-	for _frame in 4:
-		await process_frame
+	await process_frame
 	var steady: Dictionary = save.get_catalog_diagnostics()
 	_check(
 		int(steady.get("last_hit_count", -1)) == WORLD_COUNT
@@ -161,17 +165,27 @@ func _run() -> void:
 		)
 
 	report = {
-		"schema_version": 1,
+		"schema_version": 2,
 		"world_count": WORLD_COUNT,
 		"catalog_rebuild_budget": CATALOG_REBUILD_BUDGET,
 		"first_scan": first,
 		"second_scan": second,
 		"steady_scan": steady,
+		"virtualization": virtualized,
 		"warning_operations": operations,
 		"recovery": recovery,
 	}
 	_write_report()
 	await _finish(game, save)
+
+
+func _wait_for_auto_pass(save_panel: Control, expected_pass: int) -> bool:
+	for _frame in 12:
+		await process_frame
+		var snapshot: Dictionary = save_panel.call("get_virtualization_snapshot")
+		if int(snapshot.get("auto_settle_pass_count", -1)) >= expected_pass:
+			return true
+	return false
 
 
 func _create_fixture(save: Node) -> void:
