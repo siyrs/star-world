@@ -8,6 +8,7 @@ const ROW_POOL_LIMIT := 24
 
 var checks := 0
 var failures: Array[String] = []
+var back_count := 0
 
 
 class FakeTrashService:
@@ -197,8 +198,8 @@ func _run() -> void:
 		"trash manager never calls the active-world permanent delete API"
 	)
 
-	var back_count := 0
-	panel.back_requested.connect(func() -> void: back_count += 1)
+	back_count = 0
+	panel.back_requested.connect(_count_back_request)
 	var back_button := _find_button(panel, "返回存档")
 	_check(back_button != null, "manager exposes an explicit return-to-saves control")
 	if back_button != null:
@@ -223,6 +224,10 @@ func _run() -> void:
 			% [checks, failures.size()]
 		)
 		quit(1)
+
+
+func _count_back_request() -> void:
+	back_count += 1
 
 
 func _find_button(node: Node, text: String) -> Button:
