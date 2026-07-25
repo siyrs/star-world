@@ -109,6 +109,7 @@ func _exercise_atomic_round_trip() -> void:
 	var trash_diagnostics: Dictionary = service.call("get_trash_diagnostics")
 	_check(
 		int(trash_diagnostics.get("trash_entry_count", -1)) == 1
+		and int(trash_diagnostics.get("invalid_entry_count", -1)) == 0
 		and int(trash_diagnostics.get("trash_success_count", -1)) == 1
 		and bool(trash_diagnostics.get("undo_available", false)),
 		"trash diagnostics expose one reversible deletion"
@@ -211,6 +212,11 @@ func _exercise_bounded_capacity() -> void:
 		"full trash preserves the active overflow world and all thirty-two entries"
 	)
 	var newest: Dictionary = service.call("get_last_trashed_world")
+	_check(
+		str(newest.get("world_id", "")) == capacity_world_ids[31]
+		and int(newest.get("deleted_unix_usec", 0)) > 0,
+		"rapid deletions retain the true latest undo entry"
+	)
 	var newest_trash_id := str(newest.get("trash_id", ""))
 	var restored: Dictionary = service.call(
 		"restore_trashed_world", newest_trash_id
