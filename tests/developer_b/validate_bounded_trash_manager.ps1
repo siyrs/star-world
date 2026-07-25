@@ -138,9 +138,10 @@ foreach ($token in @(
 foreach ($token in @('指定恢复','损坏','32','64','24','二次确认','Primary','Sidecar','Backup','Windows Release')) {
   Assert-Match $text.contract ([regex]::Escape($token)) "Trash manager contract is missing: $token"
 }
-foreach ($token in @('容量死锁','损坏 Manifest','指定恢复','永久清理','严格单调','真实桌面','Windows Release')) {
+foreach ($token in @('损坏 Manifest','指定恢复','永久清理','严格单调','真实桌面','Windows Release')) {
   Assert-Match $text.audit ([regex]::Escape($token)) "Architecture audit is missing trash-manager finding: $token"
 }
+Assert-Match $text.audit '容量[^\r\n]{0,30}死锁' 'Architecture audit must identify the player-facing capacity deadlock'
 Assert-Match $text.roadmap '固定 24 行的回收站管理页' 'Roadmap must record bounded trash manager virtualization'
 Assert-Match $text.roadmap '指定恢复' 'Roadmap must record selected trash restore'
 Assert-Match $text.roadmap '损坏 Manifest' 'Roadmap must record damaged trash-slot governance'
