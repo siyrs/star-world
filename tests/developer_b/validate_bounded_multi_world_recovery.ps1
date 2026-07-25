@@ -58,7 +58,16 @@ foreach ($phrase in @(
 )) {
   Assert-Match $text.regression ([regex]::Escape($phrase)) "Recovery regression is missing assertion: $phrase"
 }
-Assert-Match $text.desktop ([regex]::Escape('steady desktop refresh is a pure sidecar hit')) 'Desktop recovery is missing steady sidecar assertion'
+foreach ($phrase in @(
+  'visible browser executes the first automatic repair pass',
+  'visible browser executes the second automatic repair pass',
+  'automatic recovery stops after the two required bounded passes',
+  'steady desktop refresh is a pure sidecar hit'
+)) {
+  Assert-Match $text.desktop ([regex]::Escape($phrase)) "Desktop recovery is missing automatic-settlement assertion: $phrase"
+}
+Assert-Match $text.desktop 'func\s+_wait_for_auto_pass\s*\(' 'Desktop recovery must await real cross-frame automatic passes'
+Assert-Match $text.desktop 'func\s+_check\s*\(' 'Desktop recovery must retain its assertion helper'
 
 foreach ($token in @(
   'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml',
@@ -82,4 +91,4 @@ Assert-Match $text.roadmap '主文件修复[^\r\n]{0,24}(?:每次最多\s*)?8|(?
 Assert-Match $text.run_all 'validate_bounded_multi_world_recovery\.ps1' 'Full suite is missing static recovery contract'
 Assert-Match $text.run_all 'bounded_multi_world_recovery_regression\.gd' 'Full suite is missing recovery regression'
 
-Write-Host 'PASS bounded_multi_world_recovery worlds-visible=on primary-repairs-per-scan=8 order=stable progressive=8-8-4 explicit-load=immediate diagnostics=bounded desktop=real release=required'
+Write-Host 'PASS bounded_multi_world_recovery worlds-visible=on primary-repairs-per-scan=8 order=stable progressive=8-8-4 automatic=2-passes explicit-load=immediate diagnostics=bounded desktop=real release=required'
