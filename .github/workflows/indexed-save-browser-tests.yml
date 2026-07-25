@@ -1,0 +1,63 @@
+name: Indexed save browser quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: indexed-save-browser-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Pure query policy, direct metadata index, zero-scan search and adjacent persistence regressions
+      domain_timeout_minutes: 75
+      static_validators: |
+        tests/developer_b/validate_indexed_save_browser.ps1
+        tests/developer_b/validate_virtualized_save_browser.ps1
+        tests/developer_b/validate_transient_catalog_stage.ps1
+        tests/developer_b/validate_bounded_authoritative_reads.ps1
+        tests/developer_b/validate_bounded_catalog_rebuild.ps1
+        tests/developer_b/validate_bounded_multi_world_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/save_browser_query_policy_regression.gd
+      primary_headless_output_base: build\save-browser-query-policy-regression
+      primary_headless_timeout_milliseconds: 600000
+      domain_scripts: |
+        res://tests/qa/indexed_save_browser_regression.gd
+        res://tests/qa/save_browser_virtualization_regression.gd
+        res://tests/qa/bounded_authoritative_read_regression.gd
+        res://tests/qa/catalog_stage_invalidation_regression.gd
+        res://tests/qa/bounded_catalog_rebuild_regression.gd
+        res://tests/qa/bounded_multi_world_recovery_regression.gd
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/save_recovery_regression.gd
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: indexed-save-browser-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/save-browser-query-policy-regression.stdout.log
+        build/save-browser-query-policy-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 256-world index, search, sorting, hidden-selection safety and steady sidecar refresh
+      desktop_timeout_minutes: 100
+      desktop_script: res://tests/qa/indexed_save_browser_desktop_acceptance.gd
+      desktop_output_path: build\indexed-save-browser-desktop.png
+      desktop_timeout_milliseconds: 1200000
+      desktop_artifact_name: indexed-save-browser-evidence
+      desktop_artifact_paths: |
+        build/indexed-save-browser-desktop.png
+        build/indexed-save-browser-desktop.json
+        build/indexed-save-browser-desktop.stdout.log
+        build/indexed-save-browser-desktop.stderr.log
+      desktop_artifact_if_no_files: error
