@@ -12,6 +12,7 @@ const MAX_TRASH_ENTRIES := 32
 const CatalogPolicy = preload("res://src/save/world_catalog_policy.gd")
 
 var _trash_entry_count := 0
+var _trash_invalid_entry_count := 0
 var _trash_success_count := 0
 var _trash_restore_count := 0
 var _trash_purge_count := 0
@@ -148,13 +149,13 @@ func list_trashed_worlds(limit: int = MAX_TRASH_ENTRIES) -> Array:
 			result.append(entry)
 	result.sort_custom(
 		func(left: Dictionary, right: Dictionary) -> bool:
-			var left_deleted := int(left.get("deleted_unix", 0))
-			var right_deleted := int(right.get("deleted_unix", 0))
+			var left_deleted := int(left.get("deleted_unix_usec", 0))
+			var right_deleted := int(right.get("deleted_unix_usec", 0))
 			if left_deleted != right_deleted:
 				return left_deleted > right_deleted
-			return str(left.get("trash_id", "")) > str(
-				right.get("trash_id", "")
-			)
+			return str(left.get("trash_id", "")).naturalnocasecmp_to(
+				str(right.get("trash_id", ""))
+			) > 0
 	)
 	var safe_limit := clampi(limit, 0, MAX_TRASH_ENTRIES)
 	if result.size() > safe_limit:
@@ -170,6 +171,7 @@ func get_trash_diagnostics() -> Dictionary:
 	return {
 		"trash_capacity": MAX_TRASH_ENTRIES,
 		"trash_entry_count": _trash_entry_count,
+		"invalid_entry_count": _trash_invalid_entry_count,
 		"trash_success_count": _trash_success_count,
 		"restore_success_count": _trash_restore_count,
 		"purge_success_count": _trash_purge_count,
@@ -198,10 +200,15 @@ func _build_trash_entry(world_id: String, trash_id: String) -> Dictionary:
 		metadata = CatalogPolicy.metadata_for_list(
 			catalog_read.get("entry", {}), "catalog"
 		)
-	var world_bytes := _file_size(_world_path(world_id))
+	var world_bytes := maxi(
+		_file_size(_world_path(world_id)),
+		maxi(0, int(metadata.get("save_bytes", 0)))
+	)
 	if metadata.is_empty() or world_bytes <= 0:
 		return {}
-	var deleted_unix := int(Time.get_unix_time_from_system())
+	var deleted_unix_value := Time.get_unix_time_from_system()
+	var deleted_unix := int(deleted_unix_value)
+	var deleted_unix_usec := int(deleted_unix_value * 1000000.0)
 	return {
 		"version": TRASH_VERSION,
 		"trash_id": trash_id,
@@ -211,6 +218,7 @@ func _build_trash_entry(world_id: String, trash_id: String) -> Dictionary:
 		"seed": int(metadata.get("seed", 0)),
 		"save_bytes": world_bytes,
 		"deleted_unix": deleted_unix,
+		"deleted_unix_usec": deleted_unix_usec,
 		"deleted_at": Time.get_datetime_string_from_unix_time(deleted_unix),
 	}
 
@@ -232,6 +240,11 @@ func _read_trash_entry(trash_id: String) -> Dictionary:
 		or not _is_safe_id(world_id)
 	):
 		return {}
+	var deleted_unix := maxi(0, int(entry.get("deleted_unix", 0)))
+	var deleted_unix_usec := maxi(
+		deleted_unix * 1000000,
+		int(entry.get("deleted_unix_usec", 0))
+	)
 	return {
 		"version": TRASH_VERSION,
 		"trash_id": trash_id,
@@ -240,14 +253,21 @@ func _read_trash_entry(trash_id: String) -> Dictionary:
 		"map_id": str(entry.get("map_id", "")).left(64),
 		"seed": int(entry.get("seed", 0)),
 		"save_bytes": maxi(0, int(entry.get("save_bytes", 0))),
-		"deleted_unix": maxi(0, int(entry.get("deleted_unix", 0))),
+		"deleted_unix": deleted_unix,
+		"deleted_unix_usec": deleted_unix_usec,
 		"deleted_at": str(entry.get("deleted_at", "")).left(64),
 	}
 
 
 func _rebuild_trash_state() -> void:
+	_ensure_directory(TRASH_DIR)
+	var directory := DirAccess.open(TRASH_DIR)
+	var physical_entry_count := 0
+	if directory != null:
+		physical_entry_count = directory.get_directories().size()
 	var entries := list_trashed_worlds(MAX_TRASH_ENTRIES)
-	_trash_entry_count = entries.size()
+	_trash_entry_count = physical_entry_count
+	_trash_invalid_entry_count = maxi(0, physical_entry_count - entries.size())
 	if entries.is_empty():
 		_last_trash_entry.clear()
 		_last_trash_id = ""
