@@ -31,11 +31,11 @@ jobs:
         tests/developer_b/validate_save_recovery.ps1
         tests/developer_b/validate_world_catalog.ps1
         tests/developer_b/validate_reusable_ci_workflows.ps1
-      primary_headless_script: res://tests/qa/trash_manager_service_regression.gd
-      primary_headless_output_base: build\trash-manager-service-regression
+      primary_headless_script: res://tests/qa/trash_manager_panel_regression.gd
+      primary_headless_output_base: build\trash-manager-panel-regression
       primary_headless_timeout_milliseconds: 900000
       domain_scripts: |
-        res://tests/qa/trash_manager_panel_regression.gd
+        res://tests/qa/trash_manager_service_regression.gd
         res://tests/qa/protected_save_service_regression.gd
         res://tests/qa/protected_save_browser_regression.gd
         res://tests/qa/indexed_save_browser_regression.gd
@@ -51,8 +51,8 @@ jobs:
       domain_artifact_name: bounded-trash-manager-domain
       domain_artifact_paths: |
         build/reusable-ci-static-validators.log
-        build/trash-manager-service-regression.stdout.log
-        build/trash-manager-service-regression.stderr.log
+        build/trash-manager-panel-regression.stdout.log
+        build/trash-manager-panel-regression.stderr.log
       domain_artifact_if_no_files: error
       desktop_job_name: Real 33-world full trash, selected restore, damaged-slot purge and released-capacity acceptance
       desktop_timeout_minutes: 120
