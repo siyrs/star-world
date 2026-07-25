@@ -59,7 +59,7 @@ Game Runtime
 │  ├─ Atomic Save Transaction / Backup Recovery
 │  ├─ Lightweight Self-healing World Catalog
 │  ├─ Bounded Read / Write / Transient Catalog Stage
-│  ├─ Protected Trash / Original-ID Restore
+│  ├─ Protected Trash / Bounded Slot Manager / Original-ID Restore
 │  ├─ Domain Migration / Whitelist
 │  └─ Resumable GitHub Release Auto-update
 │
@@ -69,6 +69,7 @@ Game Runtime
    ├─ Input Contexts / Guidance
    ├─ Virtualized & Indexed Save Browser / Query / Sort
    ├─ Two-step Delete Confirmation / Undo Restore
+   ├─ Virtualized Trash Manager / Selected Restore / Confirmed Purge
    ├─ Runtime Diagnostics / Unified Runtime & Save Health
    └─ Feature Lifecycle Participants
 ```
@@ -99,10 +100,15 @@ Game Runtime
 - 搜索、排序和分页只作用于内存索引，不增加 catalog `list_count`，隐藏选择会自动清空；
 - 玩家删除必须二次确认，首击不执行任何磁盘操作，选择、查询、刷新或隐藏面板会取消确认；
 - 完整世界目录通过原子重命名进入回收站，Primary、Sidecar、`.bak/.tmp` 与未来目录文件一起保留；
-- 回收站最多 32 个世界，满时拒绝新删除而不是自动清理旧数据；
+- 回收站最多 32 个物理目录，满时拒绝新删除而不是自动清理旧数据；
+- 删除时间使用跨会话严格单调 Unix 微秒序列，同一秒快速删除仍能确定真实最近条目；
 - 撤销恢复使用原 world ID，冲突时保留 Trash，成功后 Primary、Sidecar 和 Backup 不重写；
+- 固定 24 行的回收站管理页通过最多两页访问 32 个物理槽位，翻页不增加目录扫描；
+- 回收站支持指定恢复任意有效条目，损坏 Manifest 明确显示、禁止恢复但可经二次确认清理；
+- 永久清理只接受安全 Trash ID，释放精确一个容量单位，不调用活动世界 `delete_world()`；
+- 异常外部目录扫描最多 64 个，并通过损坏与溢出标量诊断保持有界；
 - 玩家 UI 永不调用维护级永久 `delete_world()`，测试和明确维护清理仍保留兼容 API；
-- 主菜单显示存档大小、目录耗时、待读世界、目录待写、暂存数量、暂存命中、搜索匹配、分页边界和可撤销删除状态；
+- 主菜单显示存档大小、目录耗时、待读世界、目录待写、暂存数量、暂存命中、搜索匹配、分页边界和可管理回收站状态；
 - 生产世界不再保存或构造无用的 `loaded_chunks`；
 - Windows Release 实际导出、启动、截图、报告和退出资源检查；
 - Range / If-Range / ETag 跨重启续传、双重 SHA-256 和失败回滚；
@@ -119,6 +125,7 @@ Game Runtime
 - [VIRTUALIZED_SAVE_BROWSER.md](VIRTUALIZED_SAVE_BROWSER.md)
 - [INDEXED_SAVE_BROWSER.md](INDEXED_SAVE_BROWSER.md)
 - [PROTECTED_SAVE_DELETION.md](PROTECTED_SAVE_DELETION.md)
+- [BOUNDED_TRASH_MANAGER.md](BOUNDED_TRASH_MANAGER.md)
 - [GITHUB_RELEASE_AUTO_UPDATE.md](GITHUB_RELEASE_AUTO_UPDATE.md)
 - [RECENT_CHUNK_SNAPSHOT_CACHE.md](RECENT_CHUNK_SNAPSHOT_CACHE.md)
 
@@ -211,9 +218,8 @@ Game Runtime
 
 - 多小时运行 soak 与周期性真实保存；
 - 多世界、大存档目录长期增长、跨会话索引重建和查询压力；
-- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16、目录暂存 64、UI 行池 24、自动整理 6 轮、查询 64 字符、8 token 和回收站 32 条的收敛与失效；
-- 应用重启后的目录命中、回收站撤销恢复证据和长周期大存档压力；
-- 后续回收站管理页必须复用现有 Manifest、容量和明确永久清理合同，不得自动清理玩家数据；
+- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16、目录暂存 64、活动 UI 行池 24、自动整理 6 轮、查询 64 字符、8 token、回收站物理 32、扫描 64 和管理行池 24 的收敛与失效；
+- 应用重启后的目录命中、指定回收站恢复、损坏槽位治理和长周期大存档压力；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；

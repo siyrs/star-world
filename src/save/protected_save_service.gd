@@ -3,20 +3,26 @@ extends "res://src/save/save_service.gd"
 
 signal world_trashed(world_id: String, trash_id: String)
 signal world_restored(world_id: String, trash_id: String)
+signal trash_slot_purged(trash_id: String, world_id: String, was_valid: bool)
 signal trash_operation_failed(operation: String, target_id: String, reason: String)
 
 const TRASH_DIR := "user://world_trash"
 const TRASH_FILE_NAME := "trash.json"
 const TRASH_VERSION := 1
 const MAX_TRASH_ENTRIES := 32
+const MAX_TRASH_SCAN_ENTRIES := 64
 const CatalogPolicy = preload("res://src/save/world_catalog_policy.gd")
 
 var _trash_entry_count := 0
+var _trash_valid_entry_count := 0
 var _trash_invalid_entry_count := 0
+var _trash_overflow_entry_count := 0
+var _trash_scan_count := 0
 var _trash_success_count := 0
 var _trash_restore_count := 0
 var _trash_purge_count := 0
 var _trash_failure_count := 0
+var _latest_trash_deleted_usec := 0
 var _last_trash_operation := ""
 var _last_trash_reason := ""
 var _last_trash_world_id := ""
@@ -51,9 +57,7 @@ func trash_world(world_id: String) -> Dictionary:
 			"trash", world_id, "rename_failed_%d" % int(rename_error)
 		)
 	if not _store.write_dictionary(_trash_manifest_path(trash_id), entry):
-		var rollback_error := DirAccess.rename_absolute(
-			trash_absolute, source_absolute
-		)
+		var rollback_error := DirAccess.rename_absolute(trash_absolute, source_absolute)
 		if rollback_error == OK:
 			_remove_trash_manifest_files(_world_directory(world_id))
 			return _trash_failure("trash", world_id, "manifest_write_failed")
@@ -118,45 +122,79 @@ func purge_trashed_world(trash_id: String) -> bool:
 	if not _is_safe_id(trash_id):
 		_trash_failure("purge", trash_id, "invalid_trash_id")
 		return false
-	var entry := _read_trash_entry(trash_id)
-	if entry.is_empty():
+	if _read_trash_entry(trash_id).is_empty():
 		_trash_failure("purge", trash_id, "trash_missing_or_invalid")
 		return false
-	if not _remove_directory_recursive(
-		ProjectSettings.globalize_path(_trash_directory(trash_id))
-	):
-		_trash_failure("purge", trash_id, "remove_failed")
+	return purge_trash_slot(trash_id)
+
+
+func purge_trash_slot(trash_id: String) -> bool:
+	if not _is_safe_id(trash_id):
+		_trash_failure("purge_slot", trash_id, "invalid_trash_id")
+		return false
+	var trash_absolute := ProjectSettings.globalize_path(_trash_directory(trash_id))
+	if not DirAccess.dir_exists_absolute(trash_absolute):
+		_trash_failure("purge_slot", trash_id, "trash_missing")
+		return false
+	var entry := _read_trash_entry(trash_id)
+	var was_valid := not entry.is_empty()
+	var world_id := str(entry.get("world_id", "")) if was_valid else ""
+	if not _remove_directory_recursive(trash_absolute):
+		_trash_failure("purge_slot", trash_id, "remove_failed")
 		return false
 	_trash_purge_count += 1
-	_record_trash_operation(
-		"purge", str(entry.get("world_id", "")), trash_id, "ok"
-	)
+	_record_trash_operation("purge_slot", world_id, trash_id, "ok")
 	_rebuild_trash_state()
+	trash_slot_purged.emit(trash_id, world_id, was_valid)
 	return true
 
 
-func list_trashed_worlds(limit: int = MAX_TRASH_ENTRIES) -> Array:
+func list_trash_slots(limit: int = MAX_TRASH_ENTRIES) -> Array:
 	_ensure_directory(TRASH_DIR)
 	var directory := DirAccess.open(TRASH_DIR)
 	var result: Array = []
 	if directory == null:
+		_record_trash_scan(0, 0, 0, 0, 0)
 		return result
 	var trash_ids: PackedStringArray = directory.get_directories()
 	trash_ids.sort()
-	for raw_trash_id: String in trash_ids:
-		var entry := _read_trash_entry(str(raw_trash_id))
-		if not entry.is_empty():
-			result.append(entry)
-	result.sort_custom(
-		func(left: Dictionary, right: Dictionary) -> bool:
-			var left_deleted := int(left.get("deleted_unix_usec", 0))
-			var right_deleted := int(right.get("deleted_unix_usec", 0))
-			if left_deleted != right_deleted:
-				return left_deleted > right_deleted
-			return str(left.get("trash_id", "")).naturalnocasecmp_to(
-				str(right.get("trash_id", ""))
-			) > 0
+	var physical_count := trash_ids.size()
+	var scan_limit := mini(physical_count, MAX_TRASH_SCAN_ENTRIES)
+	var valid_count := 0
+	var invalid_count := 0
+	var latest_deleted_usec := 0
+	for index in scan_limit:
+		var trash_id := str(trash_ids[index])
+		var entry := _read_trash_entry(trash_id)
+		if entry.is_empty():
+			entry = _invalid_trash_slot(trash_id)
+			invalid_count += 1
+		else:
+			valid_count += 1
+			latest_deleted_usec = maxi(
+				latest_deleted_usec,
+				int(entry.get("deleted_unix_usec", 0))
+			)
+		result.append(entry)
+	result.sort_custom(Callable(self, "_sort_trash_slots"))
+	_record_trash_scan(
+		physical_count,
+		valid_count,
+		invalid_count,
+		maxi(0, physical_count - scan_limit),
+		latest_deleted_usec
 	)
+	var safe_limit := clampi(limit, 0, MAX_TRASH_ENTRIES)
+	if result.size() > safe_limit:
+		result.resize(safe_limit)
+	return result
+
+
+func list_trashed_worlds(limit: int = MAX_TRASH_ENTRIES) -> Array:
+	var result: Array = []
+	for raw_entry: Variant in list_trash_slots(MAX_TRASH_ENTRIES):
+		if raw_entry is Dictionary and bool(raw_entry.get("valid", false)):
+			result.append(raw_entry)
 	var safe_limit := clampi(limit, 0, MAX_TRASH_ENTRIES)
 	if result.size() > safe_limit:
 		result.resize(safe_limit)
@@ -170,8 +208,12 @@ func get_last_trashed_world() -> Dictionary:
 func get_trash_diagnostics() -> Dictionary:
 	return {
 		"trash_capacity": MAX_TRASH_ENTRIES,
+		"trash_scan_capacity": MAX_TRASH_SCAN_ENTRIES,
 		"trash_entry_count": _trash_entry_count,
+		"valid_entry_count": _trash_valid_entry_count,
 		"invalid_entry_count": _trash_invalid_entry_count,
+		"overflow_entry_count": _trash_overflow_entry_count,
+		"scan_count": _trash_scan_count,
 		"trash_success_count": _trash_success_count,
 		"restore_success_count": _trash_restore_count,
 		"purge_success_count": _trash_purge_count,
@@ -180,6 +222,7 @@ func get_trash_diagnostics() -> Dictionary:
 		"last_reason": _last_trash_reason,
 		"last_world_id": _last_trash_world_id,
 		"last_trash_id": _last_trash_id,
+		"latest_deleted_unix_usec": _latest_trash_deleted_usec,
 		"undo_available": not _last_trash_entry.is_empty(),
 	}
 
@@ -207,8 +250,9 @@ func _build_trash_entry(world_id: String, trash_id: String) -> Dictionary:
 	if metadata.is_empty() or world_bytes <= 0:
 		return {}
 	var deleted_unix_value := Time.get_unix_time_from_system()
-	var deleted_unix := int(deleted_unix_value)
 	var deleted_unix_usec := int(deleted_unix_value * 1000000.0)
+	deleted_unix_usec = maxi(deleted_unix_usec, _latest_trash_deleted_usec + 1)
+	var deleted_unix := int(deleted_unix_usec / 1000000)
 	return {
 		"version": TRASH_VERSION,
 		"trash_id": trash_id,
@@ -256,24 +300,105 @@ func _read_trash_entry(trash_id: String) -> Dictionary:
 		"deleted_unix": deleted_unix,
 		"deleted_unix_usec": deleted_unix_usec,
 		"deleted_at": str(entry.get("deleted_at", "")).left(64),
+		"valid": true,
+		"restorable": true,
+		"purgeable": true,
+		"reason": "ok",
 	}
 
 
+func _invalid_trash_slot(trash_id: String) -> Dictionary:
+	var safe_id := _is_safe_id(trash_id)
+	if not safe_id:
+		return {
+			"version": TRASH_VERSION,
+			"trash_id": trash_id.left(192),
+			"world_id": "",
+			"name": "不安全的回收站目录",
+			"map_id": "unsafe_trash_id",
+			"seed": 0,
+			"save_bytes": 0,
+			"deleted_unix": 0,
+			"deleted_unix_usec": 0,
+			"deleted_at": "",
+			"valid": false,
+			"restorable": false,
+			"purgeable": false,
+			"reason": "unsafe_trash_id",
+		}
+	var world_path := "%s/%s" % [_trash_directory(trash_id), WORLD_FILE_NAME]
+	var catalog_path := "%s/%s" % [_trash_directory(trash_id), CATALOG_FILE_NAME]
+	var candidates: Array[String] = [
+		world_path,
+		"%s.tmp" % world_path,
+		"%s.bak" % world_path,
+		catalog_path,
+		_trash_manifest_path(trash_id),
+	]
+	var save_bytes := 0
+	var modified_unix := 0
+	for path: String in candidates:
+		if not FileAccess.file_exists(path):
+			continue
+		save_bytes = maxi(save_bytes, _file_size(path))
+		modified_unix = maxi(modified_unix, int(FileAccess.get_modified_time(path)))
+	return {
+		"version": TRASH_VERSION,
+		"trash_id": trash_id.left(192),
+		"world_id": "",
+		"name": "损坏的回收站条目",
+		"map_id": "invalid_manifest",
+		"seed": 0,
+		"save_bytes": save_bytes,
+		"deleted_unix": modified_unix,
+		"deleted_unix_usec": modified_unix * 1000000,
+		"deleted_at": (
+			Time.get_datetime_string_from_unix_time(modified_unix)
+			if modified_unix > 0
+			else ""
+		),
+		"valid": false,
+		"restorable": false,
+		"purgeable": true,
+		"reason": "manifest_missing_or_invalid",
+	}
+
+
+func _sort_trash_slots(left: Dictionary, right: Dictionary) -> bool:
+	var left_deleted := int(left.get("deleted_unix_usec", 0))
+	var right_deleted := int(right.get("deleted_unix_usec", 0))
+	if left_deleted != right_deleted:
+		return left_deleted > right_deleted
+	return str(left.get("trash_id", "")).naturalnocasecmp_to(
+		str(right.get("trash_id", ""))
+	) > 0
+
+
+func _record_trash_scan(
+	physical_count: int,
+	valid_count: int,
+	invalid_count: int,
+	overflow_count: int,
+	latest_deleted_usec: int
+) -> void:
+	_trash_scan_count += 1
+	_trash_entry_count = maxi(0, physical_count)
+	_trash_valid_entry_count = maxi(0, valid_count)
+	_trash_invalid_entry_count = maxi(0, invalid_count)
+	_trash_overflow_entry_count = maxi(0, overflow_count)
+	_latest_trash_deleted_usec = maxi(0, latest_deleted_usec)
+
+
 func _rebuild_trash_state() -> void:
-	_ensure_directory(TRASH_DIR)
-	var directory := DirAccess.open(TRASH_DIR)
-	var physical_entry_count := 0
-	if directory != null:
-		physical_entry_count = directory.get_directories().size()
-	var entries := list_trashed_worlds(MAX_TRASH_ENTRIES)
-	_trash_entry_count = physical_entry_count
-	_trash_invalid_entry_count = maxi(0, physical_entry_count - entries.size())
-	if entries.is_empty():
-		_last_trash_entry.clear()
-		_last_trash_id = ""
-		return
-	_last_trash_entry = (entries[0] as Dictionary).duplicate(true)
-	_last_trash_id = str(_last_trash_entry.get("trash_id", ""))
+	var slots := list_trash_slots(MAX_TRASH_ENTRIES)
+	_last_trash_entry.clear()
+	_last_trash_id = ""
+	for raw_entry: Variant in slots:
+		if raw_entry is not Dictionary or not bool(raw_entry.get("valid", false)):
+			continue
+		_last_trash_entry = (raw_entry as Dictionary).duplicate(true)
+		_last_trash_id = str(_last_trash_entry.get("trash_id", ""))
+		break
 
 
 func _next_trash_id(world_id: String) -> String:
