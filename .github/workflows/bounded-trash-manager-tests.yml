@@ -1,0 +1,70 @@
+name: Bounded trash manager quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-trash-manager-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Bounded physical slots, selected restore, damaged-manifest purge and adjacent persistence regressions
+      domain_timeout_minutes: 95
+      static_validators: |
+        tests/developer_b/validate_bounded_trash_manager.ps1
+        tests/developer_b/validate_protected_save_deletion.ps1
+        tests/developer_b/validate_indexed_save_browser.ps1
+        tests/developer_b/validate_virtualized_save_browser.ps1
+        tests/developer_b/validate_transient_catalog_stage.ps1
+        tests/developer_b/validate_bounded_authoritative_reads.ps1
+        tests/developer_b/validate_bounded_catalog_rebuild.ps1
+        tests/developer_b/validate_bounded_multi_world_recovery.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/trash_manager_service_regression.gd
+      primary_headless_output_base: build\trash-manager-service-regression
+      primary_headless_timeout_milliseconds: 900000
+      domain_scripts: |
+        res://tests/qa/trash_manager_panel_regression.gd
+        res://tests/qa/protected_save_service_regression.gd
+        res://tests/qa/protected_save_browser_regression.gd
+        res://tests/qa/indexed_save_browser_regression.gd
+        res://tests/qa/save_browser_virtualization_regression.gd
+        res://tests/qa/catalog_stage_invalidation_regression.gd
+        res://tests/qa/bounded_authoritative_read_regression.gd
+        res://tests/qa/bounded_catalog_rebuild_regression.gd
+        res://tests/qa/bounded_multi_world_recovery_regression.gd
+        res://tests/qa/save_recovery_regression.gd
+        res://tests/qa/world_catalog_regression.gd
+        res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_stability_regression.gd
+      domain_artifact_name: bounded-trash-manager-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/trash-manager-service-regression.stdout.log
+        build/trash-manager-service-regression.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 33-world full trash, selected restore, damaged-slot purge and released-capacity acceptance
+      desktop_timeout_minutes: 120
+      desktop_script: res://tests/qa/bounded_trash_manager_desktop_acceptance.gd
+      desktop_output_path: build\bounded-trash-manager-desktop.png
+      desktop_timeout_milliseconds: 1500000
+      desktop_artifact_name: bounded-trash-manager-evidence
+      desktop_artifact_paths: |
+        build/bounded-trash-manager-desktop.png
+        build/bounded-trash-manager-desktop-purge-confirm.png
+        build/bounded-trash-manager-desktop-after.png
+        build/bounded-trash-manager-desktop.json
+        build/bounded-trash-manager-desktop.stdout.log
+        build/bounded-trash-manager-desktop.stderr.log
+      desktop_artifact_if_no_files: error
