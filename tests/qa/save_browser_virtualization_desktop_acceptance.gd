@@ -97,7 +97,8 @@ func _run() -> void:
 	var settled_catalog: Dictionary = save.get_catalog_diagnostics()
 	_check(
 		int(settled_snapshot.get("auto_settle_pass_count", -1)) == 4
-		and int(settled_snapshot.get("refresh_count", -1)) == 5,
+		and int(settled_snapshot.get("refresh_count", -1))
+		== int(initial_snapshot.get("refresh_count", -1)) + 4,
 		"visible browser converges the seventy-two-world catalog in four automatic cross-frame passes"
 	)
 	_check(
