@@ -142,18 +142,18 @@ func _exercise_progressive_virtualization() -> void:
 	var first_page := panel.get_visible_world_ids()
 	_check(
 		first_page.size() == ROW_POOL_LIMIT
-		and first_page[0] == "virtual-world-000"
-		and first_page[23] == "virtual-world-023",
-		"first page binds the first twenty-four stable world ids"
+		and first_page[0] == "virtual-world-059"
+		and first_page[23] == "virtual-world-036",
+		"first page binds the newest twenty-four stable world ids"
 	)
 	var list_count_before_page_change := service.list_count
 	panel.show_page(2)
 	var final_page := panel.get_visible_world_ids()
 	_check(
 		final_page.size() == ROW_POOL_LIMIT
-		and final_page[0] == "virtual-world-048"
-		and final_page[23] == "virtual-world-071",
-		"last page reuses the same row pool for the final worlds"
+		and final_page[0] == "virtual-world-011"
+		and final_page[23] == "virtual-world-060",
+		"last page reuses the row pool with deterministic update and id ordering"
 	)
 	_check(
 		service.list_count == list_count_before_page_change,

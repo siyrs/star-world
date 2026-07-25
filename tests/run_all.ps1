@@ -32,6 +32,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_bounded_authoritative_reads.ps1"
 & "$PSScriptRoot\developer_b\validate_transient_catalog_stage.ps1"
 & "$PSScriptRoot\developer_b\validate_virtualized_save_browser.ps1"
+& "$PSScriptRoot\developer_b\validate_indexed_save_browser.ps1"
 & "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"
 & "$PSScriptRoot\developer_b\validate_runtime_health_sources.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
@@ -124,6 +125,8 @@ Invoke-GodotTest 'res://tests/qa/bounded_catalog_rebuild_regression.gd'
 Invoke-GodotTest 'res://tests/qa/bounded_authoritative_read_regression.gd'
 Invoke-GodotTest 'res://tests/qa/catalog_stage_invalidation_regression.gd'
 Invoke-GodotTest 'res://tests/qa/save_browser_virtualization_regression.gd'
+Invoke-GodotTest 'res://tests/qa/save_browser_query_policy_regression.gd'
+Invoke-GodotTest 'res://tests/qa/indexed_save_browser_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/non_cube_block_geometry_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_stair_regression.gd'
@@ -158,4 +161,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + lifecycle + Windows release checks'
+Write-Host 'PASS: indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + lifecycle + Windows release checks'
