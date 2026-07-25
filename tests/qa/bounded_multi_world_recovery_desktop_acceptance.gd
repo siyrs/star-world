@@ -193,3 +193,11 @@ func _catalog_path(world_id: String) -> String:
 func _remove_file(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _check(condition: bool, description: String) -> void:
+	checks += 1
+	if condition:
+		print("  PASS  %s" % description)
+	else:
+		failures.append(description)
