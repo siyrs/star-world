@@ -59,7 +59,8 @@ Assert-NoMatch $text.service 'delete_world\s*\(' 'Protected service must not ove
 Assert-Match $text.service '_trash_entry_count\s*>=\s*MAX_TRASH_ENTRIES' 'Full trash must reject new deletion before moving files'
 Assert-Match $text.service '_store\.write_dictionary\(_trash_manifest_path' 'Trash must persist a bounded manifest after the atomic directory move'
 Assert-Match $text.service '_remove_trash_manifest_files\(_world_directory' 'Restore must remove internal trash metadata from the active world'
-Assert-Match $text.service 'Time\.get_unix_time_from_system\(\)\s*\*\s*1000000\.0' 'Rapid trash ordering must use a persistent epoch-microsecond timestamp'
+Assert-Match $text.service 'deleted_unix_value\s*:=\s*Time\.get_unix_time_from_system\(\)' 'Trash must capture a persistent Unix epoch value'
+Assert-Match $text.service 'deleted_unix_usec\s*:=\s*int\(deleted_unix_value\s*\*\s*1000000\.0\)' 'Rapid trash ordering must derive epoch microseconds from the captured Unix value'
 
 foreach ($token in @(
   'extends\s+"res://src/ui/save_browser_panel\.gd"',
