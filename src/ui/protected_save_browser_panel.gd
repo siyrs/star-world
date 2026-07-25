@@ -1,11 +1,17 @@
 class_name ProtectedSaveBrowserPanel
 extends "res://src/ui/save_browser_panel.gd"
 
+const ProtectedSaveServiceScript = preload(
+	"res://src/save/protected_save_service.gd"
+)
+
 var _delete_button: Button
 var _undo_delete_button: Button
 var _pending_delete_world_id := ""
 var _last_trash_id := ""
 var _last_trashed_world_id := ""
+var _trash_service: Node
+var _owns_trash_service := false
 
 
 func _ready() -> void:
@@ -15,6 +21,7 @@ func _ready() -> void:
 
 
 func setup(p_save_service) -> void:
+	_configure_trash_service(p_save_service)
 	super.setup(p_save_service)
 	_sync_last_trash_state()
 
@@ -39,6 +46,9 @@ func get_virtualization_snapshot() -> Dictionary:
 	snapshot["last_trash_id"] = _last_trash_id
 	snapshot["last_trashed_world_id"] = _last_trashed_world_id
 	snapshot["undo_available"] = not _last_trash_id.is_empty()
+	snapshot["trash_service_shared"] = (
+		_trash_service != null and not _owns_trash_service
+	)
 	return snapshot
 
 
@@ -67,7 +77,7 @@ func _delete_selected() -> void:
 		_status.text = "请先选择一个世界。"
 		_reset_delete_confirmation(false)
 		return
-	if not save_service.has_method("trash_world"):
+	if _trash_service == null or not _trash_service.has_method("trash_world"):
 		_status.text = "回收站服务不可用，未执行删除。"
 		_reset_delete_confirmation(false)
 		return
@@ -82,7 +92,7 @@ func _delete_selected() -> void:
 		return
 	var world_id := _selected_world_id
 	var metadata := _metadata_for_world(world_id)
-	var result: Dictionary = save_service.call("trash_world", world_id)
+	var result: Dictionary = _trash_service.call("trash_world", world_id)
 	_reset_delete_confirmation(false)
 	if not bool(result.get("ok", false)):
 		_status.text = _trash_failure_message(
@@ -102,7 +112,10 @@ func _delete_selected() -> void:
 
 
 func _undo_last_delete() -> void:
-	if save_service == null or not save_service.has_method("restore_trashed_world"):
+	if (
+		_trash_service == null
+		or not _trash_service.has_method("restore_trashed_world")
+	):
 		_status.text = "回收站恢复服务不可用。"
 		return
 	_sync_last_trash_state()
@@ -111,7 +124,7 @@ func _undo_last_delete() -> void:
 		_update_undo_button()
 		return
 	var trash_id := _last_trash_id
-	var result: Dictionary = save_service.call(
+	var result: Dictionary = _trash_service.call(
 		"restore_trashed_world", trash_id
 	)
 	if not bool(result.get("ok", false)):
@@ -132,6 +145,25 @@ func _undo_last_delete() -> void:
 	_render_page()
 	_sync_last_trash_state()
 	_status.text = "已恢复“%s”。" % str(entry.get("name", world_id))
+
+
+func _configure_trash_service(candidate: Node) -> void:
+	if (
+		candidate != null
+		and candidate.has_method("trash_world")
+		and candidate.has_method("restore_trashed_world")
+	):
+		if _owns_trash_service and _trash_service != null:
+			_trash_service.queue_free()
+		_trash_service = candidate
+		_owns_trash_service = false
+		return
+	if _owns_trash_service and _trash_service != null:
+		return
+	_trash_service = ProtectedSaveServiceScript.new()
+	_trash_service.name = "ProtectedDeletionService"
+	add_child(_trash_service)
+	_owns_trash_service = true
 
 
 func _install_delete_protection_controls() -> void:
@@ -159,12 +191,15 @@ func _install_delete_protection_controls() -> void:
 
 
 func _sync_last_trash_state() -> void:
-	if save_service == null or not save_service.has_method("get_last_trashed_world"):
+	if (
+		_trash_service == null
+		or not _trash_service.has_method("get_last_trashed_world")
+	):
 		_last_trash_id = ""
 		_last_trashed_world_id = ""
 		_update_undo_button()
 		return
-	var raw_entry: Variant = save_service.call("get_last_trashed_world")
+	var raw_entry: Variant = _trash_service.call("get_last_trashed_world")
 	var entry: Dictionary = raw_entry if raw_entry is Dictionary else {}
 	_last_trash_id = str(entry.get("trash_id", ""))
 	_last_trashed_world_id = str(entry.get("world_id", ""))
