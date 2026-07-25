@@ -44,13 +44,19 @@ static func select_world_ids(
 	var tokens := query_tokens(query)
 	var safe_sort_mode := normalize_sort_mode(sort_mode)
 	var matched: Array[Dictionary] = []
+	var seen_world_ids: Dictionary = {}
 	for raw_metadata: Variant in worlds:
 		if not raw_metadata is Dictionary:
 			continue
-		var metadata := raw_metadata as Dictionary
+		var metadata: Dictionary = raw_metadata
 		var world_id := str(metadata.get("id", ""))
-		if world_id.is_empty() or not _matches_tokens(metadata, tokens):
+		if (
+			world_id.is_empty()
+			or seen_world_ids.has(world_id)
+			or not _matches_tokens(metadata, tokens)
+		):
 			continue
+		seen_world_ids[world_id] = true
 		matched.append(metadata)
 	matched.sort_custom(
 		func(left: Dictionary, right: Dictionary) -> bool:
