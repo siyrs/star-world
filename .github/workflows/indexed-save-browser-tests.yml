@@ -29,11 +29,11 @@ jobs:
         tests/developer_b/validate_world_catalog.ps1
         tests/developer_b/validate_save_recovery.ps1
         tests/developer_b/validate_reusable_ci_workflows.ps1
-      primary_headless_script: res://tests/qa/save_browser_query_policy_regression.gd
-      primary_headless_output_base: build\save-browser-query-policy-regression
+      primary_headless_script: res://tests/qa/indexed_save_browser_regression.gd
+      primary_headless_output_base: build\indexed-save-browser-regression
       primary_headless_timeout_milliseconds: 600000
       domain_scripts: |
-        res://tests/qa/indexed_save_browser_regression.gd
+        res://tests/qa/save_browser_query_policy_regression.gd
         res://tests/qa/save_browser_virtualization_regression.gd
         res://tests/qa/bounded_authoritative_read_regression.gd
         res://tests/qa/catalog_stage_invalidation_regression.gd
@@ -46,8 +46,8 @@ jobs:
       domain_artifact_name: indexed-save-browser-domain
       domain_artifact_paths: |
         build/reusable-ci-static-validators.log
-        build/save-browser-query-policy-regression.stdout.log
-        build/save-browser-query-policy-regression.stderr.log
+        build/indexed-save-browser-regression.stdout.log
+        build/indexed-save-browser-regression.stderr.log
       domain_artifact_if_no_files: error
       desktop_job_name: Real 256-world index, search, sorting, hidden-selection safety and steady sidecar refresh
       desktop_timeout_minutes: 100
