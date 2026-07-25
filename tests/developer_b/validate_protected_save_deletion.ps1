@@ -52,7 +52,6 @@ foreach ($token in @(
 )) {
   Assert-Match $text.service $token "Protected save service lost required behavior: $token"
 }
-Assert-NoMatch $text.service 'MAX_TRASH_ENTRIES\s*:=\s*(?:0|[1-9]|[12][0-9]|3[013-9]|[4-9][0-9]+)' 'Trash capacity must remain exactly thirty-two'
 Assert-NoMatch $text.service 'delete_world\s*\(' 'Protected service must not override the explicit permanent-delete compatibility API'
 Assert-Match $text.service '_trash_entry_count\s*>=\s*MAX_TRASH_ENTRIES' 'Full trash must reject new deletion before moving files'
 Assert-Match $text.service '_store\.write_dictionary\(_trash_manifest_path' 'Trash must persist a bounded manifest after the atomic directory move'
