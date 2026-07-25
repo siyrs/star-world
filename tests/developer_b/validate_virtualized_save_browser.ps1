@@ -101,9 +101,10 @@ foreach ($token in @(
 foreach ($token in @('固定 24 行','最多 6','分页','不新增 Timer','72 个世界','Windows Release')) {
   Assert-Match $text.contract ([regex]::Escape($token)) "Virtualization contract is missing: $token"
 }
-foreach ($token in @('queue_free','节点抖动','手动刷新','固定行池','真实桌面','Windows Release')) {
+foreach ($token in @('queue_free','节点抖动','手动刷新','真实桌面','Windows Release')) {
   Assert-Match $text.audit ([regex]::Escape($token)) "Architecture audit is missing finding or acceptance evidence: $token"
 }
+Assert-Match $text.audit '固定\s*(?:24\s*)?行池' 'Architecture audit must record the fixed reusable row pool'
 Assert-Match $text.roadmap '固定 24 行' 'Roadmap must record the virtualized save browser row pool'
 Assert-Match $text.roadmap '自动整理' 'Roadmap must record bounded progressive catalog settlement'
 Assert-Match $text.run_all 'validate_virtualized_save_browser\.ps1' 'Full suite is missing the virtualization static contract'
