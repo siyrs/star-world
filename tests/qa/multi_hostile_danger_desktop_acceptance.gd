@@ -28,11 +28,16 @@ func _run() -> void:
 	var runtime: Node = hub.get("exploration_runtime_participant") if hub != null else null
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
 	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
+	var autosave: Node = hub.get("autosave_runtime_participant") if hub != null else null
 	_check(
-		hub != null and runtime != null and coordinator != null and machine_runtime != null,
-		"production game mounts exploration and Machine Base runtime services"
+		hub != null
+		and runtime != null
+		and coordinator != null
+		and machine_runtime != null
+		and autosave != null,
+		"production game mounts exploration, Machine Base and autosave runtime services"
 	)
-	if hub == null or runtime == null or coordinator == null or machine_runtime == null:
+	if hub == null or runtime == null or coordinator == null or machine_runtime == null or autosave == null:
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -54,8 +59,12 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production world starts before multi-hostile acceptance")
 	_check(spawner != null and danger != null and hud != null, "production ecology, danger and HUD services are available")
-	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 6, "production coordinator retains all six lifecycle participants")
+	_check(
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
+		"production coordinator retains all seven lifecycle participants"
+	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root during combat")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "bounded autosave activates during combat")
 	if player == null or world == null or spawner == null or danger == null or hud == null:
 		await _finish(game, hub)
 		return
@@ -179,6 +188,7 @@ func _run() -> void:
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
 	_check(not loaded.has("danger_refresh") and not loaded.has("hostile_windups") and not loaded.has("danger_runtime"), "transient batching and windup telemetry never enter the world save")
 	_check(loaded.has("machines") and loaded.get("machines", {}).has("furnaces"), "Machine Base keeps its compatible save domain during combat")
+	_check(not loaded.has("autosave"), "combat save excludes transient autosave scheduling state")
 	var drops_before_reload := int(hub.inventory.count_item("rotten_flesh"))
 	hub.return_to_menu()
 	for _frame in 8:
@@ -186,6 +196,7 @@ func _run() -> void:
 	var after_menu: Dictionary = runtime.call("get_lifecycle_snapshot")
 	_check(int(after_menu.get("pending_danger_event_count", -1)) == 0, "return-to-menu clears pending danger events")
 	_check(not bool(machine_runtime.call("is_active")), "return-to-menu stops Machine Base during combat cleanup")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "return-to-menu stops bounded autosave during combat cleanup")
 	game.begin_world_state(loaded)
 	var reload_ready := await _wait_for_world_ready(game, hub, 180)
 	_check(reload_ready, "full reload reaches a bounded production-ready state")
@@ -193,6 +204,8 @@ func _run() -> void:
 		_check(not bool(hub.game_ui.hud.call("is_danger_warning_visible")), "full reload does not restore transient incoming attacks")
 		_check(hub.inventory.count_item("rotten_flesh") == drops_before_reload, "full reload restores preserved enemy drops exactly once")
 		_check(bool(machine_runtime.call("is_active")), "full reload restores Machine Base lifecycle")
+		_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload restores bounded autosave lifecycle")
+		_check(hub.call("get_character_snapshot").has("autosave"), "combat diagnostics expose bounded autosave evidence")
 	await _finish(game, hub)
 
 
