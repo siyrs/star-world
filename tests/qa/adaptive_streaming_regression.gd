@@ -4,6 +4,7 @@ const PolicyScript = preload("res://src/performance/adaptive_streaming_policy.gd
 const AdapterScript = preload("res://src/performance/streaming_budget_adapter.gd")
 const ControllerScript = preload("res://src/performance/adaptive_streaming_controller.gd")
 const GameScene = preload("res://scenes/game/game.tscn")
+const CLEANUP_FRAMES := 8
 
 var checks := 0
 var failures: Array[String] = []
@@ -102,6 +103,9 @@ func _test_policy_and_adapter() -> void:
 		and int(clamped.get("chunks_per_frame", 0)) == 4,
 		"budget adapter clamps every runtime value to the world safety range",
 	)
+	# This pure capability fixture is never mounted in the SceneTree. Free it
+	# synchronously so strict ObjectDB gates prove the policy test owns its Node.
+	world.free()
 
 
 func _test_controller_hysteresis() -> void:
@@ -129,10 +133,7 @@ func _test_controller_hysteresis() -> void:
 		str(controller.get_status().get("level_name", "")) == "throughput",
 		"sustained headroom with backlog raises throughput only after confirmation",
 	)
-	_check(
-		float(world.chunk_build_budget_ms) > 4.0,
-		"throughput state changes the real world budget",
-	)
+	_check(float(world.chunk_build_budget_ms) > 4.0, "throughput state changes the real world budget")
 	controller.process_snapshot(_snapshot(27.0, 48.0, 2, 30, 2000))
 	_check(
 		str(controller.get_status().get("level_name", "")) == "throughput",
@@ -174,8 +175,8 @@ func _test_controller_hysteresis() -> void:
 		"detaching restores baseline and releases the world reference",
 	)
 	host.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in CLEANUP_FRAMES:
+		await process_frame
 
 
 func _test_integrated_runtime() -> void:
@@ -223,8 +224,8 @@ func _test_integrated_runtime() -> void:
 	if audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
 	game.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in CLEANUP_FRAMES:
+		await process_frame
 
 
 func _snapshot(
