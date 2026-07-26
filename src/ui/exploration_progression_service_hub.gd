@@ -10,8 +10,12 @@ const ExplorationRuntimeParticipantScript = preload(
 const JournalRewardParticipantScript = preload(
 	"res://src/exploration/exploration_journal_reward_participant.gd"
 )
+const AutosaveRuntimeParticipantScript = preload(
+	"res://src/save/autosave_runtime_participant.gd"
+)
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
+const AUTOSAVE_RUNTIME_FEATURE := &"autosave_runtime"
 
 var prospecting_service: Node
 var exploration_danger_service: Node
@@ -20,6 +24,7 @@ var exploration_reward_service: Node
 var exploration_runtime_participant: Node
 var exploration_journal_reward_participant: Node
 var pickup_stack_coordinator: Node
+var autosave_runtime_participant: Node
 
 
 func _ready() -> void:
@@ -51,6 +56,22 @@ func _ready() -> void:
 		exploration_reward_service = exploration_journal_reward_participant.call(
 			"get_reward_service"
 		) as Node
+	# Registered last so reverse lifecycle cleanup disables checkpoint activity
+	# before any gameplay domain starts releasing state.
+	autosave_runtime_participant = _register_feature_participant(
+		AUTOSAVE_RUNTIME_FEATURE,
+		AutosaveRuntimeParticipantScript.new(),
+		"bounded autosave runtime"
+	)
+
+
+func get_autosave_snapshot() -> Dictionary:
+	if (
+		autosave_runtime_participant == null
+		or not autosave_runtime_participant.has_method("get_snapshot")
+	):
+		return {}
+	return autosave_runtime_participant.call("get_snapshot")
 
 
 func get_character_snapshot() -> Dictionary:
