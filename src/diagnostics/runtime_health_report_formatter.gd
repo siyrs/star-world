@@ -1,6 +1,10 @@
 class_name RuntimeHealthReportFormatter
 extends RefCounted
 
+const TimelineFormatter = preload(
+	"res://src/save/save_checkpoint_timeline_formatter.gd"
+)
+
 
 static func format(report: Dictionary) -> String:
 	var status := str(report.get("status", "healthy"))
@@ -40,6 +44,11 @@ static func format(report: Dictionary) -> String:
 			maxi(0, int(save.get("repair_failure_count", 0))),
 		]
 	)
+	var timeline_lines := TimelineFormatter.format_f3(
+		report.get("save_timeline", {})
+	)
+	for timeline_line: String in timeline_lines:
+		lines.append(timeline_line)
 	lines.append(
 		"目录累计：命中 %d  |  回退 %d  |  自愈 %d  |  写失败 %d" % [
 			maxi(0, int(catalog.get("hit_count", 0))),
