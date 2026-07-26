@@ -32,6 +32,7 @@ function Assert-NotMatches {
 $paths = [ordered]@{
   participant = Join-Path $root 'src\save\autosave_runtime_participant.gd'
   settings_policy = Join-Path $root 'src\settings\game_settings_policy.gd'
+  gameplay_hub = Join-Path $root 'src\ui\service_hub.gd'
   final_hub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
   runtime_health_hub = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
   settings_panel = Join-Path $root 'src\ui\settings_panel.gd'
@@ -96,6 +97,17 @@ foreach ($token in @(
 }
 Assert-NotMatches $text.settings_policy 'extends\s+Node|FileAccess|save_settings' 'Settings policy must remain pure and persistence-free'
 Assert-NotMatches $text.settings_policy 'normalized\.merge\(raw_settings' 'Unknown settings must not escape the canonical whitelist'
+
+foreach ($token in @(
+  'game_settings_policy\.gd',
+  'const\s+DEFAULT_SETTINGS\s*:=\s*SettingsPolicyScript\.DEFAULTS',
+  'current_settings\s*=\s*SettingsPolicyScript\.normalize\(',
+  'save_service\.load_settings\(DEFAULT_SETTINGS\)',
+  'current_settings\s*=\s*SettingsPolicyScript\.merge\(current_settings,\s*settings\)'
+)) {
+  Assert-Matches $text.gameplay_hub $token "Gameplay composition root is missing canonical settings ownership: $token"
+}
+Assert-NotMatches $text.gameplay_hub 'const\s+DEFAULT_SETTINGS\s*:=\s*\{' 'Gameplay composition root must not reintroduce a literal defaults dictionary'
 
 foreach ($token in @(
   'AutosaveRuntimeParticipantScript',
@@ -206,4 +218,4 @@ Assert-Matches $text.testing 'runtime_health_failed_return_regression\.gd' 'Test
 Assert-Matches $text.roadmap '有界自动保存' 'Product roadmap must record the completed bounded autosave capability'
 Assert-Matches $text.roadmap 'BOUNDED_AUTOSAVE_RUNTIME\.md' 'Product roadmap must link the autosave contract'
 
-Write-Host 'PASS bounded_autosave interval=0|2|5|10|15 active_time=pause-aware manual=deduplicated retries=15|60|300 participants=7 persistence=authoritative ui=fact-driven failed_return=attached desktop=visual'
+Write-Host 'PASS bounded_autosave interval=0|2|5|10|15 active_time=pause-aware manual=deduplicated retries=15|60|300 participants=7 settings=canonical persistence=authoritative ui=fact-driven failed_return=attached desktop=visual'
