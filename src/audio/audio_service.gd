@@ -21,7 +21,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	if not _disposed:
-		shutdown()
+		dispose()
 
 
 func shutdown() -> void:
