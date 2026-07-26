@@ -16,6 +16,7 @@ const AutosaveRuntimeParticipantScript = preload(
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
 const AUTOSAVE_RUNTIME_FEATURE := &"autosave_runtime"
+const AUTOSAVE_STATUS_DEDUPE_KEY := "autosave_status"
 
 var prospecting_service: Node
 var exploration_danger_service: Node
@@ -104,7 +105,7 @@ func get_character_snapshot() -> Dictionary:
 func _on_autosave_completed(success: bool, snapshot: Dictionary) -> void:
 	if success:
 		_publish_character_message(
-			"世界已自动保存", "success", "autosave_success", 2.2
+			"世界已自动保存", "success", AUTOSAVE_STATUS_DEDUPE_KEY, 2.2
 		)
 		return
 	var retry_seconds := maxi(
@@ -113,6 +114,6 @@ func _on_autosave_completed(success: bool, snapshot: Dictionary) -> void:
 	_publish_character_message(
 		"自动存档失败，将在活动时间 %d 秒后重试" % retry_seconds,
 		"warning",
-		"autosave_failed",
+		AUTOSAVE_STATUS_DEDUPE_KEY,
 		4.0
 	)
