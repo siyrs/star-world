@@ -47,21 +47,30 @@ jobs:
           .\tests\developer_b\validate_exploration_journal.ps1
           .\tests\developer_b\validate_exploration_rewards.ps1
 
-      - name: Run lifecycle composition regressions
+      - name: Run lifecycle composition regressions with captured logs
         shell: pwsh
         run: |
+          $godotPath = (Get-Command godot).Source
           $scripts = @(
             'res://tests/qa/service_hub_feature_lifecycle_regression.gd',
             'res://tests/qa/husbandry_runtime_lifecycle_regression.gd',
             'res://tests/qa/ranch_runtime_lifecycle_regression.gd'
           )
           foreach ($script in $scripts) {
-            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script"
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($script)
+            .\tests\ci\run_godot_headless_test.ps1 `
+              -Godot $godotPath `
+              -ProjectRoot . `
+              -ScriptPath $script `
+              -OutputBasePath "build\service-hub-lifecycle-$name" `
+              -TimeoutMilliseconds 600000 `
+              -VerboseGodot
           }
 
-      - name: Re-run adjacent husbandry, ranch and exploration regressions
+      - name: Re-run adjacent husbandry, ranch and exploration regressions with captured logs
         shell: pwsh
         run: |
+          $godotPath = (Get-Command godot).Source
           $scripts = @(
             'res://tests/qa/husbandry_regression.gd',
             'res://tests/qa/ranch_products_regression.gd',
@@ -72,8 +81,26 @@ jobs:
             'res://tests/qa/runtime_stability_regression.gd'
           )
           foreach ($script in $scripts) {
-            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script $script"
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($script)
+            .\tests\ci\run_godot_headless_test.ps1 `
+              -Godot $godotPath `
+              -ProjectRoot . `
+              -ScriptPath $script `
+              -OutputBasePath "build\service-hub-lifecycle-$name" `
+              -TimeoutMilliseconds 600000 `
+              -VerboseGodot
           }
+
+      - name: Upload lifecycle regression logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-hub-feature-lifecycle-domain-${{ github.run_number }}
+          path: |
+            build/service-hub-lifecycle-*.stdout.log
+            build/service-hub-lifecycle-*.stderr.log
+          if-no-files-found: error
+          retention-days: 14
 
   real-feature-lifecycle-desktop:
     name: Real reward notice, claim, menu, reload and failed-start acceptance

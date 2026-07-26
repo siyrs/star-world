@@ -27,16 +27,25 @@ func _run() -> void:
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
 	var husbandry_participant: Node = hub.get("husbandry_runtime_participant") if hub != null else null
 	var participant: Node = hub.get("ranch_runtime_participant") if hub != null else null
+	var autosave: Node = hub.get("autosave_runtime_participant") if hub != null else null
 	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
 	_check(
 		hub != null
 		and coordinator != null
 		and husbandry_participant != null
 		and participant != null
+		and autosave != null
 		and machine_runtime != null,
-		"production game mounts machine, husbandry and ranch lifecycle services"
+		"production game mounts machine, husbandry, ranch and autosave lifecycle services"
 	)
-	if hub == null or coordinator == null or husbandry_participant == null or participant == null or machine_runtime == null:
+	if (
+		hub == null
+		or coordinator == null
+		or husbandry_participant == null
+		or participant == null
+		or autosave == null
+		or machine_runtime == null
+	):
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -60,12 +69,27 @@ func _run() -> void:
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(world != null and bool(world.get("is_started")), "production voxel world starts before ranch lifecycle tests")
 	_check(husbandry != null and interaction != null and attraction != null and products != null, "participant-owned husbandry and ranch services keep their public ports")
-	_check(int(coordinator.call("get_snapshot").get("participant_count", 0)) == 6, "production coordinator exposes all six participants")
+	_check(
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
+		"production coordinator exposes all seven participants"
+	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root")
 	_check(
 		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],
 		"production ranch lifecycle declares its husbandry dependency"
 	)
+	_check(
+		coordinator.call("get_participant_dependencies", &"autosave_runtime") == [
+			"machine_runtime",
+			"agriculture_runtime",
+			"husbandry_runtime",
+			"ranch_runtime",
+			"exploration_runtime",
+			"exploration_journal_rewards",
+		],
+		"bounded autosave remains ordered after every persisted participant"
+	)
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "bounded autosave activates with the ranch world")
 	if player == null or world == null or husbandry == null or interaction == null or attraction == null or products == null:
 		await _finish(game, hub)
 		return
@@ -177,6 +201,7 @@ func _run() -> void:
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
 	_check((loaded.get("husbandry", {}).get("animals", {}) as Dictionary).size() >= 3, "saved world preserves all managed animals")
 	_check((loaded.get("animal_products", {}).get("records", {}) as Dictionary).size() >= 3, "saved world preserves all managed product timers")
+	_check(not loaded.has("autosave"), "saved ranch world excludes transient autosave scheduling state")
 	var eggs_before_reload := int(hub.inventory.count_item("egg"))
 	var old_player: Node = player
 	hub.return_to_menu()
@@ -187,6 +212,7 @@ func _run() -> void:
 	var husbandry_lifecycle: Dictionary = husbandry_participant.call("get_lifecycle_snapshot")
 	_check(int(husbandry_lifecycle.get("bound_player_id", -1)) == 0, "return-to-menu releases the husbandry player reference")
 	_check(not bool(machine_runtime.call("is_active")), "return-to-menu stops shared machine processing")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "return-to-menu stops bounded autosave")
 	_check(not bool((attraction.call("get_snapshot") as Dictionary).get("active", true)), "return-to-menu deactivates attraction processing")
 	_check(not bool((products.call("get_snapshot") as Dictionary).get("active", true)), "return-to-menu deactivates product processing")
 	_check(attraction.get("player") == null and products.get("player") == null, "return-to-menu releases both ranch service player references")
@@ -207,8 +233,10 @@ func _run() -> void:
 	_check(int((products.call("get_snapshot") as Dictionary).get("tracked_animals", 0)) >= 3, "full reload restores product timers for managed chickens")
 	_check(interaction.get("product_service") == products, "reload keeps the product read model connected to prompts")
 	_check(bool(machine_runtime.call("is_active")), "full reload reactivates Machine Base")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload reactivates bounded autosave")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("machine_runtime"), "ranch journey preserves Machine Base diagnostics")
+	_check(character_snapshot.has("autosave"), "ranch journey exposes bounded autosave diagnostics")
 
 	game.call("_abort_world_start", "qa_ranch_runtime_failure")
 	for _frame in 4:
@@ -219,6 +247,7 @@ func _run() -> void:
 	_check(int(husbandry_lifecycle.get("bound_player_id", -1)) == 0, "world-start failure clears husbandry runtime references")
 	_check(hub.current_world_id.is_empty(), "world-start failure resets the production world identity")
 	_check(not bool(machine_runtime.call("is_active")), "world-start failure stops Machine Base")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "world-start failure stops bounded autosave")
 	await _finish(game, hub)
 
 

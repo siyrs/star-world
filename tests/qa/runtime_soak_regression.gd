@@ -6,6 +6,7 @@ const FRAMES_PER_CYCLE := 72
 const SAMPLE_INTERVAL_FRAMES := 12
 const MENU_SETTLE_FRAMES := 60
 const MENU_NODE_MARGIN := 40
+const CLEANUP_FRAMES := 8
 
 var checks := 0
 var failures: Array[String] = []
@@ -43,8 +44,8 @@ func _run() -> void:
 	if audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
 	game.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in CLEANUP_FRAMES:
+		await process_frame
 	if failures.is_empty():
 		print("QA RUNTIME SOAK PASS | checks=%d | cycles=%d" % [checks, SOAK_CYCLES])
 		quit(0)
@@ -204,6 +205,11 @@ func _run_world_cycle(
 		spawner != null and spawner.get_child_count() == 0,
 		"returning from world cycle %d clears managed creatures" % (cycle + 1),
 	)
+	var autosave: Node = hub.get("autosave_runtime_participant") as Node
+	_check(
+		autosave != null and not bool(autosave.call("get_snapshot").get("active", true)),
+		"returning from world cycle %d stops bounded autosave" % (cycle + 1),
+	)
 	var save_service = hub.get("save_service")
 	if save_service != null:
 		save_service.call("delete_world", world_id)
@@ -217,6 +223,7 @@ func _wait_for_menu_cleanup(world: Node, diagnostics: Node, hub: Node) -> bool:
 		var input_context = hub.get("input_context")
 		var simulation_pause = hub.get("simulation_pause")
 		var spawner = hub.get("creature_spawner")
+		var autosave: Node = hub.get("autosave_runtime_participant") as Node
 		if (
 			not bool(world.get("is_started"))
 			and int(world.call("get_loaded_chunk_count")) == 0
@@ -230,6 +237,8 @@ func _wait_for_menu_cleanup(world: Node, diagnostics: Node, hub: Node) -> bool:
 			and not bool(simulation_pause.call("is_paused"))
 			and spawner != null
 			and spawner.get_child_count() == 0
+			and autosave != null
+			and not bool(autosave.call("get_snapshot").get("active", true))
 		):
 			return true
 	return false

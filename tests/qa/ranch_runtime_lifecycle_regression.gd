@@ -73,17 +73,22 @@ func _test_production_ranch_composition() -> void:
 	var coordinator: Node = hub.get("feature_lifecycle")
 	var husbandry_participant: Node = hub.get("husbandry_runtime_participant")
 	var participant: Node = hub.get("ranch_runtime_participant")
+	var autosave: Node = hub.get("autosave_runtime_participant")
 	var husbandry: Node = hub.get("husbandry_service")
 	var interaction: Node = hub.get("husbandry_interaction")
 	var attraction: Node = hub.get("animal_attraction_service")
 	var products: Node = hub.get("animal_product_service")
 	_check(coordinator != null, "production composition mounts the lifecycle coordinator")
-	_check(husbandry_participant != null and participant != null, "production composition mounts husbandry and ranch participants")
+	_check(
+		husbandry_participant != null and participant != null and autosave != null,
+		"production composition mounts husbandry, ranch and autosave participants"
+	)
 	_check(husbandry != null and interaction != null and attraction != null and products != null, "legacy husbandry and ranch service fields remain available")
 	if (
 		coordinator == null
 		or husbandry_participant == null
 		or participant == null
+		or autosave == null
 		or husbandry == null
 		or interaction == null
 		or attraction == null
@@ -95,6 +100,7 @@ func _test_production_ranch_composition() -> void:
 	_check(coordinator.has_participant(&"ranch_runtime"), "coordinator exposes the ranch runtime feature id")
 	_check(coordinator.has_participant(&"exploration_runtime"), "production composition keeps exploration runtime")
 	_check(coordinator.has_participant(&"exploration_journal_rewards"), "production composition keeps journal and rewards")
+	_check(coordinator.has_participant(&"autosave_runtime"), "production composition keeps bounded autosave")
 	_check(
 		coordinator.get_participant_dependencies(&"ranch_runtime") == ["husbandry_runtime"],
 		"ranch runtime declares its husbandry dependency"
@@ -102,6 +108,17 @@ func _test_production_ranch_composition() -> void:
 	_check(
 		coordinator.get_participant_dependencies(&"exploration_journal_rewards") == ["exploration_runtime"],
 		"journal and rewards retain their explicit exploration dependency"
+	)
+	_check(
+		coordinator.get_participant_dependencies(&"autosave_runtime") == [
+			"machine_runtime",
+			"agriculture_runtime",
+			"husbandry_runtime",
+			"ranch_runtime",
+			"exploration_runtime",
+			"exploration_journal_rewards",
+		],
+		"autosave remains ordered after every persisted gameplay participant"
 	)
 	_check(hub.get_node_or_null("AnimalHusbandryService") == husbandry, "husbandry keeps its production node path")
 	_check(hub.get_node_or_null("HusbandryInteraction") == interaction, "husbandry interaction keeps its production node path")
@@ -128,6 +145,7 @@ func _test_production_ranch_composition() -> void:
 	root.add_child(fake_player)
 	coordinator.call("attach_game", null, fake_player)
 	coordinator.call("activate")
+	autosave.set_process(false)
 	var husbandry_lifecycle: Dictionary = husbandry_participant.call("get_lifecycle_snapshot")
 	_check(fake_player.entity_interaction_service == interaction, "husbandry participant binds the interaction service before ranch activation")
 	_check(bool(husbandry_lifecycle.get("active", false)), "husbandry dependency activates before ranch services")
@@ -173,10 +191,12 @@ func _test_production_ranch_composition() -> void:
 	coordinator.call("save_into", payload)
 	_check(payload.has("husbandry"), "husbandry dependency contributes to the shared save payload")
 	_check(payload.has("animal_products"), "ranch participant contributes to the shared save payload")
+	_check(not payload.has("autosave"), "autosave scheduling remains outside the shared save payload")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("husbandry"), "husbandry participant preserves its legacy diagnostics field")
 	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 6, "production diagnostics expose all six lifecycle participants")
+	_check(character_snapshot.has("autosave"), "production diagnostics expose transient autosave evidence")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 7, "production diagnostics expose all seven lifecycle participants")
 
 	coordinator.call("clear", &"qa_ranch_clear")
 	_check(fake_player.entity_interaction_service == null, "reverse clear unbinds the husbandry interaction service")
@@ -184,6 +204,14 @@ func _test_production_ranch_composition() -> void:
 	_check(not bool(lifecycle.get("active", true)) and int(lifecycle.get("bound_player_id", -1)) == 0, "ranch clear releases the active player and services")
 	var products_snapshot: Dictionary = products.call("get_snapshot")
 	_check(products_snapshot.is_empty() or not bool(products_snapshot.get("active", true)), "ranch clear deactivates product processing")
+	var history: Array = coordinator.call("get_snapshot").get("phase_history", [])
+	_check(
+		not history.is_empty()
+		and str(history.back()).contains(
+			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
+		),
+		"reverse clear stops autosave before ranch and husbandry state"
+	)
 	fake_player.queue_free()
 	await _cleanup_hub(hub, world_id)
 
@@ -206,7 +234,7 @@ func _cleanup_hub(hub: Node, world_id: String) -> void:
 		if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
 			hub.audio_service.shutdown()
 		hub.queue_free()
-	for _frame in 5:
+	for _frame in 8:
 		await process_frame
 
 

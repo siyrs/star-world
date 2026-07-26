@@ -259,11 +259,14 @@ func _test_production_participant_lifecycle() -> void:
 	var participant: Node = hub.get("agriculture_runtime_participant") as Node
 	var agriculture: Node = hub.get("agriculture_service") as Node
 	var interaction: Node = hub.get("agriculture_interaction") as Node
+	var autosave: Node = hub.get("autosave_runtime_participant") as Node
 	_check(
 		coordinator != null
 		and coordinator.has_participant(&"agriculture_runtime")
-		and participant != null,
-		"production hub installs the agriculture lifecycle participant"
+		and coordinator.has_participant(&"autosave_runtime")
+		and participant != null
+		and autosave != null,
+		"production hub installs agriculture and dependent autosave participants"
 	)
 	_check(
 		agriculture != null
@@ -298,6 +301,7 @@ func _test_production_participant_lifecycle() -> void:
 	hub.call("_begin_world", state)
 	hub.call("attach_game", world, null)
 	coordinator.call("activate")
+	autosave.set_process(false)
 	var batches: Array[Dictionary] = []
 	participant.connect(
 		"maturity_batch_announced",
@@ -318,9 +322,10 @@ func _test_production_participant_lifecycle() -> void:
 	_check((loaded.get("agriculture", {}).get("crops", {}) as Dictionary).size() == 2, "production save preserves both participant-owned crops")
 	var character: Dictionary = hub.call("get_character_snapshot")
 	_check(int(character.get("agriculture", {}).get("crop_count", 0)) == 2, "character diagnostics use bounded agriculture runtime data")
+	_check(character.has("autosave"), "character diagnostics include transient autosave evidence")
 	_check(
-		int(character.get("feature_lifecycle", {}).get("participant_count", 0)) == 6,
-		"feature diagnostics expose all six lifecycle participants"
+		int(character.get("feature_lifecycle", {}).get("participant_count", 0)) == 7,
+		"feature diagnostics expose all seven lifecycle participants"
 	)
 	var batch_count := batches.size()
 	hub.call("return_to_menu")
@@ -329,18 +334,18 @@ func _test_production_participant_lifecycle() -> void:
 	hub.call("_begin_world", loaded)
 	hub.call("attach_game", world, null)
 	coordinator.call("activate")
+	autosave.set_process(false)
 	await process_frame
 	_check(int(agriculture.call("get_runtime_snapshot").get("crop_count", 0)) == 2, "complete reload restores participant-owned crops once")
 	_check(batches.size() == batch_count, "reload does not replay maturity notifications")
-	var history: Array = coordinator.call("get_snapshot").get("phase_history", [])
 	hub.call("return_to_menu")
-	history = coordinator.call("get_snapshot").get("phase_history", [])
+	var history: Array = coordinator.call("get_snapshot").get("phase_history", [])
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
+			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
-		"reverse cleanup includes agriculture between husbandry and machine runtimes"
+		"reverse cleanup starts with autosave and keeps agriculture between husbandry and machine runtimes"
 	)
 	if not world_id.is_empty():
 		hub.save_service.delete_world(world_id)
@@ -348,7 +353,7 @@ func _test_production_participant_lifecycle() -> void:
 		hub.audio_service.shutdown()
 	world.queue_free()
 	hub.queue_free()
-	for _frame in 5:
+	for _frame in 8:
 		await process_frame
 
 

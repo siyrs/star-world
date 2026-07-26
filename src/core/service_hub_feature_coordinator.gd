@@ -31,30 +31,40 @@ func setup(p_hub: Node) -> void:
 
 
 func register_participant(participant_id: StringName, participant: Node) -> Dictionary:
+	# Passing a freshly constructed participant transfers ownership to the
+	# coordinator. Every rejected unparented candidate must therefore be released
+	# immediately, just as an install failure was already released after add_child.
 	var normalized_id := str(participant_id).strip_edges()
 	if normalized_id.is_empty():
-		return _failure("invalid_participant_id")
+		return _reject_participant(participant, "invalid_participant_id")
 	if _shutdown:
-		return _failure("coordinator_shutdown", {"participant_id": normalized_id})
+		return _reject_participant(
+			participant, "coordinator_shutdown", {"participant_id": normalized_id}
+		)
 	if _participants_by_id.has(normalized_id):
-		return _failure("duplicate_participant", {"participant_id": normalized_id})
+		return _reject_participant(
+			participant, "duplicate_participant", {"participant_id": normalized_id}
+		)
 	if participant == null or not is_instance_valid(participant):
 		return _failure("participant_unavailable", {"participant_id": normalized_id})
 	for method_name: String in REQUIRED_METHODS:
 		if not participant.has_method(method_name):
-			return _failure(
+			return _reject_participant(
+				participant,
 				"participant_contract",
 				{"participant_id": normalized_id, "missing_method": method_name}
 			)
 	var dependencies := _dependency_ids(participant)
 	for dependency_id: String in dependencies:
 		if dependency_id == normalized_id:
-			return _failure(
+			return _reject_participant(
+				participant,
 				"participant_dependency_cycle",
 				{"participant_id": normalized_id, "dependency_id": dependency_id}
 			)
 		if not _participants_by_id.has(dependency_id):
-			return _failure(
+			return _reject_participant(
+				participant,
 				"participant_dependency_missing",
 				{"participant_id": normalized_id, "dependency_id": dependency_id}
 			)
@@ -63,8 +73,11 @@ func register_participant(participant_id: StringName, participant: Node) -> Dict
 	var installed := bool(participant.call("install", hub))
 	if not installed:
 		remove_child(participant)
-		participant.queue_free()
-		return _failure("participant_install_failed", {"participant_id": normalized_id})
+		var disposed := _dispose_rejected_participant(participant)
+		return _failure(
+			"participant_install_failed",
+			{"participant_id": normalized_id, "participant_disposed": disposed}
+		)
 	_participants.append(participant)
 	_participants_by_id[normalized_id] = participant
 	_dependencies_by_id[normalized_id] = dependencies.duplicate()
@@ -233,6 +246,25 @@ func _participant_id_for(participant: Node) -> String:
 		if _participants_by_id[raw_id] == participant:
 			return str(raw_id)
 	return participant.name
+
+
+func _reject_participant(
+	participant: Node, reason: String, extra: Dictionary = {}
+) -> Dictionary:
+	var result_extra := extra.duplicate(true)
+	result_extra["participant_disposed"] = _dispose_rejected_participant(participant)
+	return _failure(reason, result_extra)
+
+
+func _dispose_rejected_participant(participant: Node) -> bool:
+	if participant == null or not is_instance_valid(participant):
+		return false
+	# A parented node remains caller-owned. The coordinator only disposes the
+	# unparented candidate shape used by its public registration API.
+	if participant.get_parent() != null:
+		return false
+	participant.free()
+	return true
 
 
 func _record_phase(phase: String, participant_ids: Array[String]) -> void:

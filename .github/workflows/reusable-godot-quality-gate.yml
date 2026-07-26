@@ -37,18 +37,28 @@ on:
         required: false
         type: number
         default: 360000
+      primary_headless_verbose:
+        description: Run the captured primary script with Godot --verbose diagnostics.
+        required: false
+        type: boolean
+        default: false
       domain_scripts:
-        description: Newline-delimited Godot scripts executed through the awaited wrapper.
+        description: Newline-delimited Godot scripts executed through the captured awaited runner.
         required: false
         type: string
         default: ''
+      domain_scripts_verbose:
+        description: Run every adjacent domain script with Godot --verbose diagnostics.
+        required: false
+        type: boolean
+        default: false
       domain_artifact_name:
-        description: Optional domain artifact name prefix.
+        description: Optional domain artifact name prefix; a stable fallback is used when omitted.
         required: false
         type: string
         default: ''
       domain_artifact_paths:
-        description: Optional newline-delimited domain artifact paths.
+        description: Optional newline-delimited additional domain artifact paths.
         required: false
         type: string
         default: ''
@@ -83,12 +93,12 @@ on:
         type: number
         default: 420000
       desktop_artifact_name:
-        description: Optional desktop artifact name prefix.
+        description: Optional desktop artifact name prefix; a stable fallback is used when omitted.
         required: false
         type: string
         default: ''
       desktop_artifact_paths:
-        description: Optional newline-delimited desktop artifact paths.
+        description: Optional newline-delimited additional desktop artifact paths.
         required: false
         type: string
         default: ''
@@ -170,40 +180,64 @@ jobs:
         env:
           PRIMARY_HEADLESS_SCRIPT: ${{ inputs.primary_headless_script }}
           PRIMARY_HEADLESS_OUTPUT_BASE: ${{ inputs.primary_headless_output_base }}
+          PRIMARY_HEADLESS_VERBOSE: ${{ inputs.primary_headless_verbose }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:PRIMARY_HEADLESS_OUTPUT_BASE)) {
             throw 'primary_headless_output_base is required when primary_headless_script is set'
           }
           $godotPath = (Get-Command godot).Source
+          $verboseGodot = $env:PRIMARY_HEADLESS_VERBOSE -eq 'true'
           .\tests\ci\run_godot_headless_test.ps1 `
             -Godot $godotPath `
             -ProjectRoot . `
             -ScriptPath $env:PRIMARY_HEADLESS_SCRIPT `
             -OutputBasePath $env:PRIMARY_HEADLESS_OUTPUT_BASE `
-            -TimeoutMilliseconds ${{ inputs.primary_headless_timeout_milliseconds }}
+            -TimeoutMilliseconds ${{ inputs.primary_headless_timeout_milliseconds }} `
+            -VerboseGodot:$verboseGodot
 
-      - name: Run awaited domain scripts
+      - name: Run adjacent domain scripts with captured logs
         if: ${{ inputs.domain_scripts != '' }}
         shell: pwsh
         env:
           DOMAIN_SCRIPTS: ${{ inputs.domain_scripts }}
+          DOMAIN_SCRIPTS_VERBOSE: ${{ inputs.domain_scripts_verbose }}
         run: |
+          $godotPath = (Get-Command godot).Source
+          $verboseGodot = $env:DOMAIN_SCRIPTS_VERBOSE -eq 'true'
           $scripts = @(
             $env:DOMAIN_SCRIPTS -split '\r?\n' |
               ForEach-Object { $_.Trim() } |
               Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           )
           foreach ($script in $scripts) {
-            .\tests\ci\Invoke-Godot.ps1 `
-              -Arguments "--headless --path . --script $script -- --disable-update-check"
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($script)
+            Write-Host "START adjacent domain script: $script"
+            .\tests\ci\run_godot_headless_test.ps1 `
+              -Godot $godotPath `
+              -ProjectRoot . `
+              -ScriptPath $script `
+              -OutputBasePath "build\reusable-domain-$name" `
+              -TimeoutMilliseconds 600000 `
+              -VerboseGodot:$verboseGodot
+            Write-Host "PASS adjacent domain script: $script"
           }
 
       - name: Upload domain evidence
-        if: ${{ always() && inputs.domain_artifact_paths != '' }}
+        if: >-
+          ${{ always() && (
+            inputs.static_validators != '' ||
+            inputs.primary_headless_script != '' ||
+            inputs.domain_scripts != '' ||
+            inputs.domain_artifact_paths != ''
+          ) }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.domain_artifact_name }}-${{ github.run_number }}
-          path: ${{ inputs.domain_artifact_paths }}
+          name: ${{ inputs.domain_artifact_name != '' && inputs.domain_artifact_name || 'reusable-godot-domain' }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.domain_artifact_paths }}
+            build/reusable-ci-static-validators.log
+            build/*.stdout.log
+            build/*.stderr.log
           if-no-files-found: ${{ inputs.domain_artifact_if_no_files }}
           retention-days: ${{ inputs.retention_days }}
 
@@ -242,10 +276,14 @@ jobs:
             -TimeoutMilliseconds ${{ inputs.desktop_timeout_milliseconds }}
 
       - name: Upload desktop visualization and benchmark evidence
-        if: ${{ always() && inputs.desktop_artifact_paths != '' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.desktop_artifact_name }}-${{ github.run_number }}
-          path: ${{ inputs.desktop_artifact_paths }}
+          name: ${{ inputs.desktop_artifact_name != '' && inputs.desktop_artifact_name || 'reusable-godot-desktop' }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.desktop_artifact_paths }}
+            ${{ inputs.desktop_output_path }}
+            build/*.stdout.log
+            build/*.stderr.log
           if-no-files-found: ${{ inputs.desktop_artifact_if_no_files }}
           retention-days: ${{ inputs.retention_days }}

@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ProjectRoot,
     [Parameter(Mandatory = $true)][string]$ScriptPath,
     [Parameter(Mandatory = $true)][string]$OutputBasePath,
-    [int]$TimeoutMilliseconds = 600000
+    [int]$TimeoutMilliseconds = 600000,
+    [switch]$VerboseGodot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,7 +50,11 @@ if (-not [System.IO.Path]::IsPathRooted($Godot)) {
     }
 }
 
-$arguments = @(
+$arguments = @()
+if ($VerboseGodot) {
+    $arguments += '--verbose'
+}
+$arguments += @(
     '--headless',
     '--path', $projectFullPath,
     '--script', $ScriptPath,
@@ -104,4 +109,4 @@ if ($process.ExitCode -ne 0) {
     throw "Godot headless test failed: $ScriptPath (exit $($process.ExitCode)); logs=$stdoutPath,$stderrPath"
 }
 
-Write-Host "PASS headless evidence | script=$ScriptPath | stdout=$stdoutPath | stderr=$stderrPath"
+Write-Host "PASS headless evidence | script=$ScriptPath | verbose=$VerboseGodot | stdout=$stdoutPath | stderr=$stderrPath"

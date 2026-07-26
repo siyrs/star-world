@@ -17,6 +17,7 @@ $husbandryParticipantPath = Join-Path $root 'src\husbandry\husbandry_runtime_par
 $ranchParticipantPath = Join-Path $root 'src\husbandry\ranch_runtime_participant.gd'
 $runtimeParticipantPath = Join-Path $root 'src\exploration\exploration_runtime_participant.gd'
 $journalParticipantPath = Join-Path $root 'src\exploration\exploration_journal_reward_participant.gd'
+$autosaveParticipantPath = Join-Path $root 'src\save\autosave_runtime_participant.gd'
 $doorServicePath = Join-Path $root 'src\interaction\block_door_interaction_service.gd'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 
@@ -25,7 +26,7 @@ foreach ($path in @(
   $ranchHubPath,$runtimeHealthHubPath,$explorationHubPath,$coordinatorPath,
   $machineParticipantPath,$machineSchedulerPath,$agricultureParticipantPath,
   $husbandryParticipantPath,$ranchParticipantPath,$runtimeParticipantPath,
-  $journalParticipantPath,$doorServicePath,$runAllPath
+  $journalParticipantPath,$autosaveParticipantPath,$doorServicePath,$runAllPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Lifecycle file is missing: $path" }
 }
@@ -46,6 +47,7 @@ $husbandryText = Get-Content -Raw -Encoding UTF8 $husbandryParticipantPath
 $ranchText = Get-Content -Raw -Encoding UTF8 $ranchParticipantPath
 $runtimeText = Get-Content -Raw -Encoding UTF8 $runtimeParticipantPath
 $journalText = Get-Content -Raw -Encoding UTF8 $journalParticipantPath
+$autosaveText = Get-Content -Raw -Encoding UTF8 $autosaveParticipantPath
 $doorText = Get-Content -Raw -Encoding UTF8 $doorServicePath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
 
@@ -76,6 +78,7 @@ if ($toolHubText -notmatch 'unregister_extension",\s*door_interaction_service' -
 foreach ($method in @('try_place_block','try_interact','remove_block_structure','clear','shutdown')) {
   if ($doorText -notmatch "func\s+$method\s*\(") { throw "Door structure service is missing deterministic lifecycle method: $method" }
 }
+
 $combinedHubs = $gameplayHubText + "`n" + $characterHubText + "`n" + $husbandryHubText + "`n" + $ranchHubText + "`n" + $runtimeHealthHubText + "`n" + $explorationHubText
 foreach ($participantPath in @(
   'machine_runtime_participant\.gd',
@@ -83,13 +86,14 @@ foreach ($participantPath in @(
   'husbandry_runtime_participant\.gd',
   'ranch_runtime_participant\.gd',
   'exploration_runtime_participant\.gd',
-  'exploration_journal_reward_participant\.gd'
+  'exploration_journal_reward_participant\.gd',
+  'autosave_runtime_participant\.gd'
 )) {
   if ($combinedHubs -notmatch $participantPath) { throw "Production composition must install participant: $participantPath" }
 }
 foreach ($featureId in @(
   'machine_runtime','agriculture_runtime','husbandry_runtime','ranch_runtime',
-  'exploration_runtime','exploration_journal_rewards'
+  'exploration_runtime','exploration_journal_rewards','autosave_runtime'
 )) {
   if ($combinedHubs -notmatch $featureId) { throw "Production composition is missing feature id: $featureId" }
 }
@@ -108,7 +112,7 @@ foreach ($legacyField in @('husbandry_service','husbandry_interaction')) {
 foreach ($legacyField in @('animal_attraction_service','animal_product_service')) {
   if ($ranchHubText -notmatch "var\s+$legacyField\s*:\s*Node") { throw "Ranch hub removed compatible public field: $legacyField" }
 }
-foreach ($legacyField in @('prospecting_service','exploration_danger_service','exploration_journal_service','exploration_reward_service')) {
+foreach ($legacyField in @('prospecting_service','exploration_danger_service','exploration_journal_service','exploration_reward_service','autosave_runtime_participant')) {
   if ($explorationHubText -notmatch "var\s+$legacyField\s*:\s*Node") { throw "Exploration hub removed compatible public field: $legacyField" }
 }
 if ($runtimeHealthHubText -notmatch 'var\s+runtime_health_report_service\s*:\s*Node') {
@@ -147,7 +151,8 @@ foreach ($participant in @(
   @{Name='Agriculture'; Text=$agricultureText},
   @{Name='Husbandry'; Text=$husbandryText},
   @{Name='Ranch'; Text=$ranchText},
-  @{Name='Exploration'; Text=$runtimeText}
+  @{Name='Exploration'; Text=$runtimeText},
+  @{Name='Autosave'; Text=$autosaveText}
 )) {
   foreach ($method in @('get_dependencies','install','normalize_world_state','begin_world','attach_game','activate','save_into','snapshot_into','clear','shutdown','get_lifecycle_snapshot')) {
     if ($participant.Text -notmatch "func\s+$method\s*\(") { throw "$($participant.Name) runtime participant is missing method: $method" }
@@ -184,13 +189,22 @@ if ($runtimeText -notmatch 'payload\["exploration"\]' -or $runtimeText -notmatch
 if ($journalText -notmatch 'return\s+\[&"exploration_runtime"\]') {
   throw 'Journal/reward participant must declare its exploration dependency'
 }
+foreach ($dependency in @('machine_runtime','agriculture_runtime','husbandry_runtime','ranch_runtime','exploration_runtime','exploration_journal_rewards')) {
+  if ($autosaveText -notmatch [regex]::Escape('&"' + $dependency + '"')) {
+    throw "Autosave must declare persisted participant dependency: $dependency"
+  }
+}
+if ($autosaveText -notmatch 'snapshot\["autosave"\]' -or $autosaveText -match 'payload\["autosave"\]') {
+  throw 'Autosave must expose transient diagnostics without creating a persistence domain'
+}
 
 foreach ($scriptName in @(
   'machine_base_regression\.gd','agriculture_runtime_lifecycle_regression\.gd',
   'service_hub_feature_lifecycle_regression\.gd','husbandry_runtime_lifecycle_regression\.gd',
-  'ranch_runtime_lifecycle_regression\.gd','double_door_regression\.gd'
+  'ranch_runtime_lifecycle_regression\.gd','bounded_autosave_runtime_regression\.gd',
+  'double_door_regression\.gd'
 )) {
   if ($runAllText -notmatch $scriptName) { throw "Full regression entry point must include: $scriptName" }
 }
 
-Write-Host 'PASS service_hub_lifecycle participants=6 root=gameplay health=readonly entry=exploration chain=ranch->health->exploration dependencies=ranch->husbandry,journal->exploration history=48 machine_domains=16'
+Write-Host 'PASS service_hub_lifecycle participants=7 root=gameplay health=readonly entry=exploration chain=ranch->health->exploration dependencies=ranch->husbandry,journal->exploration,autosave->all history=48 machine_domains=16'

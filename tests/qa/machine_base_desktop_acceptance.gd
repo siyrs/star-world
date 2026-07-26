@@ -30,8 +30,16 @@ func _run() -> void:
 	var participant: Node = hub.get("machine_runtime_participant") if hub != null else null
 	var scheduler: Node = hub.get("machine_runtime") if hub != null else null
 	var furnace: Node = hub.get("furnace_service") if hub != null else null
-	_check(hub != null and participant != null and scheduler != null and furnace != null, "production game mounts Machine Base services")
-	if hub == null or participant == null or scheduler == null or furnace == null:
+	var autosave: Node = hub.get("autosave_runtime_participant") if hub != null else null
+	_check(
+		hub != null
+		and participant != null
+		and scheduler != null
+		and furnace != null
+		and autosave != null,
+		"production game mounts Machine Base and bounded autosave services"
+	)
+	if hub == null or participant == null or scheduler == null or furnace == null or autosave == null:
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -46,8 +54,23 @@ func _run() -> void:
 	var player: CharacterBody3D = game.player
 	_check(player != null and bool(player.get("input_enabled")), "production player starts with gameplay input")
 	_check(bool(scheduler.call("is_active")), "world activation starts the shared machine scheduler")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "world activation starts bounded autosave")
 	_check(bool(furnace.call("is_externally_scheduled")) and not furnace.is_processing(), "production furnace has no duplicate private process loop")
-	_check(int(hub.feature_lifecycle.call("get_snapshot").get("participant_count", 0)) == 6, "production composition exposes six lifecycle participants")
+	_check(
+		int(hub.feature_lifecycle.call("get_snapshot").get("participant_count", 0)) == 7,
+		"production composition exposes seven lifecycle participants"
+	)
+	_check(
+		hub.feature_lifecycle.call("get_participant_dependencies", &"autosave_runtime") == [
+			"machine_runtime",
+			"agriculture_runtime",
+			"husbandry_runtime",
+			"ranch_runtime",
+			"exploration_runtime",
+			"exploration_journal_rewards",
+		],
+		"autosave remains ordered after all persisted gameplay participants"
+	)
 
 	var first_id := "furnace@desktop-one"
 	var second_id := "furnace@desktop-two"
@@ -110,20 +133,24 @@ func _run() -> void:
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
 	var saved_furnaces: Dictionary = loaded.get("machines", {}).get("furnaces", {})
 	_check(saved_furnaces.size() == 2, "both machine instances persist under machines.furnaces")
+	_check(not loaded.has("autosave"), "machine world excludes transient autosave scheduling state")
 	var announced_before_reload := announced.size()
 	hub.return_to_menu()
 	for _frame in 8:
 		await process_frame
 	_check(not bool(scheduler.call("is_active")), "return-to-menu stops shared machine processing")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "return-to-menu stops bounded autosave first")
 	_check(int(furnace.call("get_runtime_snapshot").get("machine_count", -1)) == 0, "return-to-menu clears machine runtime state")
 	game.begin_world_state(loaded)
 	_check(await _wait_for_world_ready(game, hub, _world_id), "full reload reaches a bounded production ready state")
 	_check(bool(scheduler.call("is_active")), "full reload reactivates the same shared scheduler")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload reactivates bounded autosave")
 	_check(int((furnace.call("get_machine_snapshot", first_id) as Dictionary).get("output", {}).get("count", 0)) == 1, "full reload restores iron output exactly once")
 	_check(int((furnace.call("get_machine_snapshot", second_id) as Dictionary).get("output", {}).get("count", 0)) == 1, "full reload restores gold output exactly once")
 	_check(announced.size() == announced_before_reload, "world reload does not replay transient completion feedback")
 	var reloaded_character: Dictionary = hub.call("get_character_snapshot")
 	_check(reloaded_character.has("machine_runtime") and reloaded_character.has("machines"), "production diagnostics survive complete reload")
+	_check(reloaded_character.has("autosave"), "production diagnostics include bounded autosave evidence")
 	await _finish(game, hub)
 
 

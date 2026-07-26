@@ -24,6 +24,7 @@ const InputContextScript = preload("res://src/input/input_context_service.gd")
 const SimulationPauseScript = preload("res://src/core/simulation_pause_service.gd")
 const BlockInteractionScript = preload("res://src/interaction/block_interaction_service.gd")
 const PlayerExperienceScript = preload("res://src/experience/player_experience_coordinator.gd")
+const SettingsPolicyScript = preload("res://src/settings/game_settings_policy.gd")
 const FeatureCoordinatorScript = preload(
 	"res://src/core/service_hub_feature_coordinator.gd"
 )
@@ -34,15 +35,7 @@ const ScalableMachineRuntimeParticipantScript = preload(
 	"res://src/machine/scalable_machine_runtime_participant.gd"
 )
 const MACHINE_RUNTIME_FEATURE := &"machine_runtime"
-const DEFAULT_SETTINGS := {
-	"mouse_sensitivity": 0.18,
-	"render_distance": 3,
-	"master_volume": 0.8,
-	"fullscreen": false,
-	"cycle_minutes": 10,
-	"show_tutorial": true,
-	"show_interaction_prompts": true,
-}
+const DEFAULT_SETTINGS := SettingsPolicyScript.DEFAULTS
 const AMBIENT_BY_MAP := {
 	"star_continent": "forest",
 	"desert_ruins": "desert",
@@ -114,9 +107,8 @@ func _ready() -> void:
 	if not creature_spawner.creature_spawned.is_connected(creature_callback):
 		creature_spawner.creature_spawned.connect(creature_callback)
 	crafting.setup(inventory)
-	current_settings = save_service.load_settings(DEFAULT_SETTINGS)
-	current_settings["render_distance"] = clampi(
-		int(current_settings.get("render_distance", DEFAULT_SETTINGS.render_distance)), 1, 5
+	current_settings = SettingsPolicyScript.normalize(
+		save_service.load_settings(DEFAULT_SETTINGS)
 	)
 	main_menu = get_node_or_null("MainMenu")
 	game_ui = get_node_or_null("GameUI")
@@ -323,13 +315,7 @@ func _on_ui_save_requested() -> void:
 
 
 func _on_settings_changed(settings: Dictionary) -> void:
-	var merged: Dictionary = DEFAULT_SETTINGS.duplicate(true)
-	merged.merge(current_settings, true)
-	merged.merge(settings, true)
-	merged["render_distance"] = clampi(
-		int(merged.get("render_distance", DEFAULT_SETTINGS.render_distance)), 1, 5
-	)
-	current_settings = merged
+	current_settings = SettingsPolicyScript.merge(current_settings, settings)
 	var saved: bool = bool(save_service.save_settings(current_settings))
 	_apply_settings(current_settings)
 	if main_menu != null and main_menu.has_method("show_settings_result"):

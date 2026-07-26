@@ -57,21 +57,23 @@ Game Runtime
 │
 ├─ Persistence & Release Domain
 │  ├─ Atomic Save Transaction / Backup Recovery
+│  ├─ Bounded Pause-aware Autosave / Retry Evidence
 │  ├─ Lightweight Self-healing World Catalog
 │  ├─ Bounded Read / Write / Transient Catalog Stage
 │  ├─ Protected Trash / Bounded Slot Manager / Original-ID Restore
-│  ├─ Domain Migration / Whitelist
+│  ├─ Domain Migration / Settings Whitelist
 │  └─ Resumable GitHub Release Auto-update
 │
 └─ Experience & Composition Layer
    ├─ UI / Feedback / Audio
    ├─ First-person Viewmodel
    ├─ Input Contexts / Guidance
+   ├─ Canonical Settings / Fact-driven Autosave Feedback
    ├─ Virtualized & Indexed Save Browser / Query / Sort
    ├─ Two-step Delete Confirmation / Undo Restore
    ├─ Virtualized Trash Manager / Selected Restore / Confirmed Purge
    ├─ Runtime Diagnostics / Unified Runtime & Save Health
-   └─ Feature Lifecycle Participants
+   └─ Seven Feature Lifecycle Participants
 ```
 
 ## 已完成里程碑
@@ -85,6 +87,12 @@ Game Runtime
 - 统一运行与保存健康报告：机器、农业、畜牧、牧场、生态、Chunk、掉落、结构、目录和保存证据进入同一 Telemetry 时间线；
 - 健康投影最多 12 行、8 条问题，75% 警告、90% 严重，并确定性显示主要瓶颈；
 - F3 双栏显示保留原运行诊断，同时呈现最近保存字节/耗时、目录回退/自愈和共享预算；
+- 有界自动保存按未暂停活动时间运行，可选关闭或 2/5/10/15 分钟，单帧最多计入 1 秒；
+- 自动保存复用正式 `save_current()`，手动成功保存取消 pending 并重置同一倒计时，不创建第二个 Timer 或存档域；
+- 连续自动保存失败使用 15/60/300 秒有界退避，成功后清零失败压力，领域只发事实并由组合层展示；
+- `GameSettingsPolicy` 统一默认值、范围、白名单和自动保存周期，SettingsPanel 不再拥有重复默认字典；
+- 自动保存作为第七个 FeatureLifecycle 参与者依赖全部持久玩法域，反向清理时最先停机；
+- 最终保存失败时继续保留当前世界和 F3 world attachment，只有成功返回主菜单后才解除运行时观察；
 - 原子 JSON、临时文件、备份恢复和严格存档迁移；
 - `world.json` 语法损坏或核心结构失效时，会从有效 `.tmp` / `.bak` 恢复并原子重建主文件，同时保留有效备份；
 - 存档浏览器和 F3 显示恢复、主文件修复与失败证据，目录只在权威主文件重新可用后自愈；
@@ -116,6 +124,7 @@ Game Runtime
 
 合同见：
 
+- [BOUNDED_AUTOSAVE_RUNTIME.md](BOUNDED_AUTOSAVE_RUNTIME.md)
 - [RUNTIME_HEALTH_REPORT.md](RUNTIME_HEALTH_REPORT.md)
 - [SELF_HEALING_SAVE_RECOVERY.md](SELF_HEALING_SAVE_RECOVERY.md)
 - [WORLD_CATALOG.md](WORLD_CATALOG.md)
@@ -203,12 +212,13 @@ Game Runtime
 
 ### 7. 组合根、规模门禁与 CI
 
-- ServiceHub 当前六个显式生命周期参与者拥有唯一 ID、依赖和逆序清理；
+- ServiceHub 当前七个显式生命周期参与者拥有唯一 ID、依赖和逆序清理；
+- 自动保存依赖全部持久玩法参与者，反向清理时优先停止检查点；
 - 128 个物理掉落共享一个可暂停运行时，碰撞锚点与视觉浮动解耦；
 - 物理掉落节点上限、无损堆叠、混合机器/作物/敌对/Chunk 耐久验收；
 - 结构完整性使用一个事件驱动、可暂停运行时，并向角色/F3 Snapshot 暴露有界诊断；
 - 最终 ServiceHub 拥有稳定 `RuntimeHealthReport` 节点，聚合层和 F3 均不反向修改领域状态；
-- 六个规模专项已迁移到 reusable Godot quality gate；
+- 六个规模专项已迁移到 reusable Godot quality gate，自动保存另有独立复用门禁；
 - 严格导入、静态验证、等待式领域脚本、真实桌面和 Artifact 语义统一；
 - 总 Runtime、完整桌面矩阵和 Windows Release 仍由单一权威工作流显式拥有。
 
@@ -216,14 +226,14 @@ Game Runtime
 
 ### 1. 长期规模与恢复
 
-- 多小时运行 soak 与周期性真实保存；
+- 多小时运行 soak，验证周期自动保存、连续失败退避、恢复成功和手动保存交错；
 - 多世界、大存档目录长期增长、跨会话索引重建和查询压力；
-- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16、目录暂存 64、活动 UI 行池 24、自动整理 6 轮、查询 64 字符、8 token、回收站物理 32、扫描 64 和管理行池 24 的收敛与失效；
+- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16、目录暂存 64、活动 UI 行池 24、自动整理 6 轮、查询 64 字符、8 token、回收站物理 32、扫描 64、管理行池 24 和单一自动保存 pending 的收敛与失效；
 - 应用重启后的目录命中、指定回收站恢复、损坏槽位治理和长周期大存档压力；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；
-- 统一健康历史与真实保存事件关联，但仍保持固定历史和白名单投影。
+- 统一健康历史与自动/手动真实保存事件关联，但仍保持固定历史和白名单投影。
 
 ### 2. 内容扩展前置条件
 

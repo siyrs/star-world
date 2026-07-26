@@ -130,8 +130,9 @@ func _test_production_composition() -> void:
 		and coordinator.has_participant(&"husbandry_runtime")
 		and coordinator.has_participant(&"ranch_runtime")
 		and coordinator.has_participant(&"exploration_runtime")
-		and coordinator.has_participant(&"exploration_journal_rewards"),
-		"production hub registers all four lifecycle participants"
+		and coordinator.has_participant(&"exploration_journal_rewards")
+		and coordinator.has_participant(&"autosave_runtime"),
+		"production hub registers husbandry, dependent exploration and autosave participants"
 	)
 	_check(participant != null and ranch_participant != null, "production hub exposes husbandry and ranch participants")
 	_check(service != null and interaction != null, "legacy husbandry public service fields remain available")
@@ -166,11 +167,14 @@ func _test_production_composition() -> void:
 	hub.call("_begin_world", world_state)
 	var fake_world := FakeWorld.new()
 	var fake_player := FakePlayer.new()
-	fake_player.global_position = Vector3(0.5, 16.0, 0.5)
 	root.add_child(fake_world)
 	root.add_child(fake_player)
+	fake_player.global_position = Vector3(0.5, 16.0, 0.5)
 	coordinator.call("attach_game", fake_world, fake_player)
 	coordinator.call("activate")
+	var autosave: Node = hub.get("autosave_runtime_participant") as Node
+	if autosave != null:
+		autosave.set_process(false)
 	_check(fake_player.entity_interaction_service == interaction, "husbandry participant binds the interaction port to the active player")
 	_check(bool(service.get("_active")), "husbandry participant activates the production service")
 	_check(service.get_managed_count() == 1, "husbandry participant restores the persisted animal record")
@@ -195,7 +199,7 @@ func _test_production_composition() -> void:
 	_check((payload.get("husbandry", {}).get("animals", {}) as Dictionary).has("animal@persisted"), "husbandry participant contributes records to the shared save payload")
 	var snapshot: Dictionary = {}
 	coordinator.call("snapshot_into", snapshot)
-	_check(snapshot.has("husbandry") and snapshot.has("animal_products"), "husbandry and dependent ranch diagnostics share one snapshot")
+	_check(snapshot.has("husbandry") and snapshot.has("animal_products") and snapshot.has("autosave"), "husbandry, ranch and autosave diagnostics share one snapshot")
 
 	coordinator.call("clear", &"qa_husbandry_clear")
 	_check(fake_player.entity_interaction_service == null, "reverse cleanup unbinds the old entity interaction port")
@@ -204,9 +208,9 @@ func _test_production_composition() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
+			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
 		),
-		"clear history records full reverse dependency order"
+		"clear history records autosave-first reverse dependency order"
 	)
 	coordinator.call("shutdown")
 	_check(interaction.get("service") == null, "shutdown disconnects the husbandry interaction adapter")
@@ -217,7 +221,7 @@ func _test_production_composition() -> void:
 	fake_player.queue_free()
 	fake_world.queue_free()
 	hub.queue_free()
-	for _frame in 5:
+	for _frame in 8:
 		await process_frame
 
 

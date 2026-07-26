@@ -30,28 +30,37 @@ func _ready() -> void:
 
 func register_domain(domain_id: StringName, domain: Node) -> Dictionary:
 	if _shutdown:
-		return {"success":false, "reason":"scheduler_shutdown"}
+		return _registration_failure(domain, "scheduler_shutdown")
 	var normalized_id := StringName(str(domain_id).strip_edges())
 	if str(normalized_id).is_empty():
-		return {"success":false, "reason":"invalid_domain_id"}
+		return _registration_failure(domain, "invalid_domain_id")
 	if _domains.has(normalized_id):
-		return {"success":false, "reason":"duplicate_domain"}
+		return _registration_failure(domain, "duplicate_domain")
 	if _domains.size() >= MAX_DOMAINS:
-		return {"success":false, "reason":"domain_capacity"}
+		return _registration_failure(domain, "domain_capacity")
 	if domain == null or not is_instance_valid(domain):
-		return {"success":false, "reason":"invalid_domain"}
+		return {"success":false, "reason":"invalid_domain", "domain_disposed":false}
 	for required_method: String in ["advance_machine_runtime", "get_runtime_snapshot"]:
 		if not domain.has_method(required_method):
-			return {"success":false, "reason":"domain_contract", "method":required_method}
+			return _registration_failure(
+				domain,
+				"domain_contract",
+				{"method":required_method}
+			)
 	for registered: Variant in _domains.values():
 		if registered == domain:
-			return {"success":false, "reason":"domain_already_registered"}
+			return _registration_failure(domain, "domain_already_registered")
 	_domains[normalized_id] = domain
 	_domain_order.append(normalized_id)
 	if domain.has_method("set_external_scheduler"):
 		domain.call("set_external_scheduler", true)
 	domain_registered.emit(normalized_id)
-	return {"success":true, "domain_id":normalized_id, "domain":domain}
+	return {
+		"success":true,
+		"domain_id":normalized_id,
+		"domain":domain,
+		"domain_disposed":false,
+	}
 
 
 func unregister_domain(domain_id: StringName) -> bool:
@@ -198,6 +207,30 @@ func shutdown() -> void:
 	_shutdown = true
 	deactivate()
 	_last_batch.clear()
+
+
+func _registration_failure(
+	domain: Node,
+	reason: String,
+	extra: Dictionary = {}
+) -> Dictionary:
+	var result := {
+		"success": false,
+		"reason": reason,
+		"domain_disposed": _dispose_rejected_domain(domain),
+	}
+	result.merge(extra, true)
+	return result
+
+
+func _dispose_rejected_domain(domain: Node) -> bool:
+	if domain == null or not is_instance_valid(domain) or domain.get_parent() != null:
+		return false
+	for registered: Variant in _domains.values():
+		if registered == domain:
+			return false
+	domain.free()
+	return true
 
 
 func _string_ids(ids: Array[StringName]) -> Array[String]:
