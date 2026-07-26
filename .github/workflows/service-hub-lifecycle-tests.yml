@@ -63,7 +63,8 @@ jobs:
               -ProjectRoot . `
               -ScriptPath $script `
               -OutputBasePath "build\service-hub-lifecycle-$name" `
-              -TimeoutMilliseconds 600000
+              -TimeoutMilliseconds 600000 `
+              -VerboseGodot
           }
 
       - name: Re-run adjacent husbandry, ranch and exploration regressions with captured logs
@@ -86,7 +87,8 @@ jobs:
               -ProjectRoot . `
               -ScriptPath $script `
               -OutputBasePath "build\service-hub-lifecycle-$name" `
-              -TimeoutMilliseconds 600000
+              -TimeoutMilliseconds 600000 `
+              -VerboseGodot
           }
 
       - name: Upload lifecycle regression logs
