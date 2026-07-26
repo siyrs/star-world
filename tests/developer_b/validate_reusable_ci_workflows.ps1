@@ -32,12 +32,28 @@ $contract = Get-Content -Raw -Encoding UTF8 $contractPath
 $audit = Get-Content -Raw -Encoding UTF8 $auditPath
 
 if ($reusable -notmatch 'workflow_call:') { throw 'Reusable Godot gate must be callable through workflow_call' }
-foreach ($inputName in @('domain_job_name','domain_timeout_minutes','static_validators','primary_headless_script','domain_scripts','domain_artifact_paths','desktop_script','desktop_output_path','desktop_artifact_paths','retention_days')) {
+foreach ($inputName in @(
+  'domain_job_name','domain_timeout_minutes','static_validators',
+  'primary_headless_script','primary_headless_output_base','primary_headless_verbose',
+  'domain_scripts','domain_scripts_verbose','domain_artifact_name','domain_artifact_paths',
+  'desktop_script','desktop_output_path','desktop_artifact_name','desktop_artifact_paths',
+  'retention_days'
+)) {
   $inputPattern = '(?m)^\s{6}' + [regex]::Escape($inputName) + ':'
   if ($reusable -notmatch $inputPattern) { throw "Reusable Godot gate is missing input: $inputName" }
 }
-foreach ($token in @('actions/checkout@v4','chickensoft-games/setup-godot@v2','tests\\ci\\Invoke-Godot\.ps1','tests\\ci\\run_godot_headless_test\.ps1','tests\\ci\\run_godot_desktop_test\.ps1','actions/upload-artifact@v4','inputs\.desktop_script\s*!=\s*''','if-no-files-found:\s*\$\{\{\s*inputs\.')) {
-  if ($reusable -notmatch $token) { throw "Reusable Godot gate is missing awaited runner or artifact contract: $token" }
+foreach ($token in @(
+  'actions/checkout@v4','chickensoft-games/setup-godot@v2',
+  'tests\\ci\\Invoke-Godot\.ps1','tests\\ci\\run_godot_headless_test\.ps1',
+  'tests\\ci\\run_godot_desktop_test\.ps1','actions/upload-artifact@v4',
+  'inputs\.desktop_script\s*!=\s*''','if-no-files-found:\s*\$\{\{\s*inputs\.',
+  'reusable-godot-domain','reusable-godot-desktop','build/\*\.stdout\.log',
+  'build/\*\.stderr\.log','PRIMARY_HEADLESS_VERBOSE','DOMAIN_SCRIPTS_VERBOSE'
+)) {
+  if ($reusable -notmatch $token) { throw "Reusable Godot gate is missing awaited runner, diagnostics or artifact contract: $token" }
+}
+if ($reusable -notmatch 'always\(\)[\s\S]{0,300}inputs\.domain_scripts') {
+  throw 'Reusable domain logs must upload on failure even when callers declare no custom artifact paths'
 }
 if ($reusable -match '(?m)^\s{2}(pull_request|push):') { throw 'Reusable Godot gate must not trigger independently from its caller workflows' }
 $inheritedCredentialPattern = ('se' + 'crets:\s*inherit')
@@ -85,4 +101,4 @@ if ($runAll -notmatch 'validate_reusable_ci_workflows\.ps1') { throw 'Full stati
 if ($contract -notmatch 'workflow_call' -or $contract -notmatch '六个' -or $contract -notmatch 'Windows Release' -or $contract -notmatch '资源泄漏') { throw 'Reusable CI contract must document call boundaries, fatal diagnostics, migration scope, and release authority' }
 if ($audit -notmatch 'Checkout' -or $audit -notmatch 'setup-godot' -or $audit -notmatch '重复') { throw 'Architecture audit must record the duplicated workflow implementation problem' }
 
-Write-Host 'PASS reusable_godot_ci callers=6 shared_jobs=2 checkout_impl=2 setup_impl=2 upload_impl=2 fatal_logs=headless+desktop release_gate=explicit'
+Write-Host 'PASS reusable_godot_ci callers=6 shared_jobs=2 checkout_impl=2 setup_impl=2 upload_impl=2 fatal_logs=headless+desktop default_artifacts=domain+desktop release_gate=explicit'

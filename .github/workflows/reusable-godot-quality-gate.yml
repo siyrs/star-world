@@ -53,12 +53,12 @@ on:
         type: boolean
         default: false
       domain_artifact_name:
-        description: Optional domain artifact name prefix.
+        description: Optional domain artifact name prefix; a stable fallback is used when omitted.
         required: false
         type: string
         default: ''
       domain_artifact_paths:
-        description: Optional newline-delimited domain artifact paths.
+        description: Optional newline-delimited additional domain artifact paths.
         required: false
         type: string
         default: ''
@@ -93,12 +93,12 @@ on:
         type: number
         default: 420000
       desktop_artifact_name:
-        description: Optional desktop artifact name prefix.
+        description: Optional desktop artifact name prefix; a stable fallback is used when omitted.
         required: false
         type: string
         default: ''
       desktop_artifact_paths:
-        description: Optional newline-delimited desktop artifact paths.
+        description: Optional newline-delimited additional desktop artifact paths.
         required: false
         type: string
         default: ''
@@ -223,14 +223,21 @@ jobs:
           }
 
       - name: Upload domain evidence
-        if: ${{ always() && inputs.domain_artifact_paths != '' }}
+        if: >-
+          ${{ always() && (
+            inputs.static_validators != '' ||
+            inputs.primary_headless_script != '' ||
+            inputs.domain_scripts != '' ||
+            inputs.domain_artifact_paths != ''
+          ) }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.domain_artifact_name }}-${{ github.run_number }}
+          name: ${{ inputs.domain_artifact_name != '' && inputs.domain_artifact_name || 'reusable-godot-domain' }}-${{ github.run_number }}
           path: |
             ${{ inputs.domain_artifact_paths }}
-            build/reusable-domain-*.stdout.log
-            build/reusable-domain-*.stderr.log
+            build/reusable-ci-static-validators.log
+            build/*.stdout.log
+            build/*.stderr.log
           if-no-files-found: ${{ inputs.domain_artifact_if_no_files }}
           retention-days: ${{ inputs.retention_days }}
 
@@ -269,10 +276,14 @@ jobs:
             -TimeoutMilliseconds ${{ inputs.desktop_timeout_milliseconds }}
 
       - name: Upload desktop visualization and benchmark evidence
-        if: ${{ always() && inputs.desktop_artifact_paths != '' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.desktop_artifact_name }}-${{ github.run_number }}
-          path: ${{ inputs.desktop_artifact_paths }}
+          name: ${{ inputs.desktop_artifact_name != '' && inputs.desktop_artifact_name || 'reusable-godot-desktop' }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.desktop_artifact_paths }}
+            ${{ inputs.desktop_output_path }}
+            build/*.stdout.log
+            build/*.stderr.log
           if-no-files-found: ${{ inputs.desktop_artifact_if_no_files }}
           retention-days: ${{ inputs.retention_days }}
