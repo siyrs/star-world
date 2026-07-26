@@ -58,6 +58,7 @@ Game Runtime
 ├─ Persistence & Release Domain
 │  ├─ Atomic Save Transaction / Backup Recovery
 │  ├─ Bounded Pause-aware Autosave / Retry Evidence
+│  ├─ Bounded Save Checkpoint Timeline / Source Correlation
 │  ├─ Lightweight Self-healing World Catalog
 │  ├─ Bounded Read / Write / Transient Catalog Stage
 │  ├─ Protected Trash / Bounded Slot Manager / Original-ID Restore
@@ -73,6 +74,7 @@ Game Runtime
    ├─ Two-step Delete Confirmation / Undo Restore
    ├─ Virtualized Trash Manager / Selected Restore / Confirmed Purge
    ├─ Runtime Diagnostics / Unified Runtime & Save Health
+   ├─ F3 Save Source / Checkpoint Timeline
    └─ Seven Feature Lifecycle Participants
 ```
 
@@ -87,6 +89,10 @@ Game Runtime
 - 统一运行与保存健康报告：机器、农业、畜牧、牧场、生态、Chunk、掉落、结构、目录和保存证据进入同一 Telemetry 时间线；
 - 健康投影最多 12 行、8 条问题，75% 警告、90% 严重，并确定性显示主要瓶颈；
 - F3 双栏显示保留原运行诊断，同时呈现最近保存字节/耗时、目录回退/自愈和共享预算；
+- 保存检查点时间线严格区分 manual、autosave、return_to_menu、system，固定保留最近 12 条事件；
+- 检查点被淘汰后四类来源累计与 dropped 计数仍精确，任意扩展 payload 均被白名单剔除；
+- F3 显示保存来源累计、历史预算、最近检查点和下一次自动保存倒计时，时间线不进入 `world.json`；
+- 成功返回主菜单或启动失败会结束健康报告中的世界身份，最终保存失败则继续保留当前世界与观察引用；
 - 有界自动保存按未暂停活动时间运行，可选关闭或 2/5/10/15 分钟，单帧最多计入 1 秒；
 - 自动保存复用正式 `save_current()`，手动成功保存取消 pending 并重置同一倒计时，不创建第二个 Timer 或存档域；
 - 连续自动保存失败使用 15/60/300 秒有界退避，成功后清零失败压力，领域只发事实并由组合层展示；
@@ -125,6 +131,7 @@ Game Runtime
 合同见：
 
 - [BOUNDED_AUTOSAVE_RUNTIME.md](BOUNDED_AUTOSAVE_RUNTIME.md)
+- [SAVE_CHECKPOINT_TIMELINE.md](SAVE_CHECKPOINT_TIMELINE.md)
 - [RUNTIME_HEALTH_REPORT.md](RUNTIME_HEALTH_REPORT.md)
 - [SELF_HEALING_SAVE_RECOVERY.md](SELF_HEALING_SAVE_RECOVERY.md)
 - [WORLD_CATALOG.md](WORLD_CATALOG.md)
@@ -218,6 +225,7 @@ Game Runtime
 - 物理掉落节点上限、无损堆叠、混合机器/作物/敌对/Chunk 耐久验收；
 - 结构完整性使用一个事件驱动、可暂停运行时，并向角色/F3 Snapshot 暴露有界诊断；
 - 最终 ServiceHub 拥有稳定 `RuntimeHealthReport` 节点，聚合层和 F3 均不反向修改领域状态；
+- 保存检查点时间线拥有独立 reusable Godot 门禁，验证真实暂停保存、自动保存、F3 关联和不持久化；
 - 六个规模专项已迁移到 reusable Godot quality gate，自动保存另有独立复用门禁；
 - 严格导入、静态验证、等待式领域脚本、真实桌面和 Artifact 语义统一；
 - 总 Runtime、完整桌面矩阵和 Windows Release 仍由单一权威工作流显式拥有。
@@ -226,14 +234,14 @@ Game Runtime
 
 ### 1. 长期规模与恢复
 
-- 多小时运行 soak，验证周期自动保存、连续失败退避、恢复成功和手动保存交错；
+- 多小时运行 soak，验证周期自动保存、连续失败退避、恢复成功、手动保存交错以及 12 条检查点历史持续淘汰；
 - 多世界、大存档目录长期增长、跨会话索引重建和查询压力；
-- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16、目录暂存 64、活动 UI 行池 24、自动整理 6 轮、查询 64 字符、8 token、回收站物理 32、扫描 64、管理行池 24 和单一自动保存 pending 的收敛与失效；
+- 跨会话验证主文件修复 8、权威读取 32、sidecar 写入 16、目录暂存 64、活动 UI 行池 24、自动整理 6 轮、查询 64 字符、8 token、回收站物理 32、扫描 64、管理行池 24、检查点历史 12 和单一自动保存 pending 的收敛与失效；
 - 应用重启后的目录命中、指定回收站恢复、损坏槽位治理和长周期大存档压力；
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；
-- 统一健康历史与自动/手动真实保存事件关联，但仍保持固定历史和白名单投影。
+- 跨世界会话验证当前世界检查点过滤、旧历史保留和显式会话重置。
 
 ### 2. 内容扩展前置条件
 
@@ -260,12 +268,3 @@ Game Runtime
 5. 领域回归测试；
 6. 真实桌面交互测试；
 7. Windows Release 验收；
-8. 日志无脚本错误、解析错误和资源泄漏；
-9. UI 不直接修改领域 Dictionary；
-10. Player 不承担存档、面板或复杂规则；
-11. 高数量对象共享调度；
-12. 高成本工作有预算、上限和诊断；
-13. 公共合同保留兼容入口或提供明确迁移；
-14. 方块 numeric ID 只追加；
-15. 新分支基于最新 `master`，不得回退并行改动；
-16. 已合并能力必须及时移出“下一阶段”，避免路线图与主分支事实漂移。

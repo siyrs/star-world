@@ -85,6 +85,58 @@ build/bounded-autosave-desktop.stderr.log
 
 真实桌面旅程必须验证设置页、真实 Pause/Resume、未保存背包变化、一次生产自动保存、重新加载完整性和 HUD 成功提示。
 
+## 保存检查点时间线
+
+### 静态合同
+
+```powershell
+powershell -ExecutionPolicy Bypass -File `
+  .\tests\developer_b\validate_save_checkpoint_timeline.ps1
+```
+
+覆盖：
+
+- `manual`、`autosave`、`return_to_menu`、`system` 四类严格来源；
+- 未知来源确定性归一化为 `system`；
+- 最近 12 条有界历史、精确来源累计和淘汰计数；
+- 当前世界过滤、成功结束世界身份和失败返回保留身份；
+- 自动保存来源通过真实 `saving` 窗口推断；
+- F3 只读格式化与自动保存倒计时；
+- 时间线不进入 `world.json`；
+- 独立 CI、截图、JSON 与日志 Artifact 合同。
+
+### 领域与生产集成
+
+```powershell
+godot --headless --path . `
+  --script res://tests/qa/save_checkpoint_timeline_regression.gd `
+  -- --disable-update-check
+```
+
+该脚本验证 20 条事件收敛为最近 12 条、淘汰后四类累计仍精确、任意事件 payload 被白名单剔除、会话结束仅清理当前世界身份，并使用正式 ServiceHub 验证 manual/system/return-to-menu 三种来源和权威存档的完全瞬态边界。
+
+### 真实桌面与可视化证据
+
+```powershell
+.\tests\ci\run_godot_desktop_test.ps1 `
+  -Godot C:\path\to\Godot_v4.7-stable_win64_console.exe `
+  -ProjectRoot . `
+  -ScriptPath res://tests/qa/save_checkpoint_timeline_desktop_acceptance.gd `
+  -OutputPath build\save-checkpoint-timeline-desktop.png `
+  -TimeoutMilliseconds 900000
+```
+
+输出：
+
+```text
+build/save-checkpoint-timeline-desktop.png
+build/save-checkpoint-timeline-desktop.json
+build/save-checkpoint-timeline-desktop.stdout.log
+build/save-checkpoint-timeline-desktop.stderr.log
+```
+
+真实桌面旅程必须使用真实 Escape、暂停菜单鼠标按钮、未暂停自动保存和 F3 输入，验证手动与自动检查点关联、背包变化持久化、时间线不写入存档、1280×720 安全区域与可视化文本。
+
 ## 存档与恢复
 
 关键专项：
@@ -110,7 +162,7 @@ godot --headless --path . --script res://tests/qa/trash_manager_service_regressi
 - 结构完整性、单 flush 和跨 Chunk 建筑；
 - 存档浏览器索引、虚拟化、回收站管理；
 - 1024×576 与 1280×720 UI 安全区域；
-- F3 运行与保存健康；
+- F3 运行与保存健康、保存来源和检查点时间线；
 - 多轮进入/退出与 ObjectDB 资源释放。
 
 ## 合入门禁
