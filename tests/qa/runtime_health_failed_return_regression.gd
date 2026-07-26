@@ -115,10 +115,10 @@ func _run() -> void:
 		not bool(completed_snapshot.get("world_attached", true)),
 		"runtime health detaches only after world ownership is actually released"
 	)
-	await _finish(hub, authoritative_save, world_id)
 	world.queue_free()
 	player.queue_free()
 	await process_frame
+	await _finish(hub, authoritative_save, world_id)
 
 
 func _finish(hub: Node, save: Node, world_id: String) -> void:
