@@ -6,15 +6,7 @@ signal back_requested
 
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
-const DEFAULTS := {
-	"mouse_sensitivity": 0.18,
-	"render_distance": 3,
-	"master_volume": 0.8,
-	"fullscreen": false,
-	"cycle_minutes": 10,
-	"show_tutorial": true,
-	"show_interaction_prompts": true,
-}
+const SettingsPolicy = preload("res://src/settings/game_settings_policy.gd")
 
 var save_service
 var _sensitivity: HSlider
@@ -22,6 +14,7 @@ var _render_distance: OptionButton
 var _volume: HSlider
 var _fullscreen: CheckButton
 var _cycle: HSlider
+var _autosave_interval: OptionButton
 var _show_tutorial: CheckButton
 var _show_interaction_prompts: CheckButton
 var _status: Label
@@ -76,6 +69,20 @@ func _build_ui() -> void:
 	_add_section_title(root, "声音与世界")
 	_volume = _add_slider(root, "主音量", 0.0, 1.0, 0.01)
 	_cycle = _add_slider(root, "昼夜周期（分钟）", 2.0, 30.0, 1.0)
+	var autosave_row := HBoxContainer.new()
+	root.add_child(autosave_row)
+	var autosave_label := Label.new()
+	autosave_label.text = "自动保存"
+	autosave_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	autosave_row.add_child(autosave_label)
+	_autosave_interval = OptionButton.new()
+	_autosave_interval.custom_minimum_size.x = 220.0
+	for minutes: int in SettingsPolicy.allowed_autosave_minutes():
+		_autosave_interval.add_item(
+			"关闭" if minutes <= 0 else "每 %d 分钟" % minutes,
+			minutes
+		)
+	autosave_row.add_child(_autosave_interval)
 	_add_section_title(root, "引导与可读性")
 	_show_tutorial = CheckButton.new()
 	_show_tutorial.text = "显示新手引导（F1 可临时隐藏）"
@@ -132,33 +139,51 @@ func _add_slider(
 
 
 func _load_values() -> void:
-	var settings: Dictionary = (
-		save_service.load_settings(DEFAULTS) if save_service != null else DEFAULTS.duplicate(true)
+	var defaults := SettingsPolicy.defaults()
+	var loaded: Dictionary = (
+		save_service.load_settings(defaults)
+		if save_service != null
+		else defaults.duplicate(true)
 	)
-	_sensitivity.value = float(settings.get("mouse_sensitivity", DEFAULTS.mouse_sensitivity))
-	var distance := int(settings.get("render_distance", DEFAULTS.render_distance))
-	for index in _render_distance.item_count:
-		if _render_distance.get_item_id(index) == distance:
-			_render_distance.select(index)
-	_volume.value = float(settings.get("master_volume", DEFAULTS.master_volume))
-	_fullscreen.button_pressed = bool(settings.get("fullscreen", DEFAULTS.fullscreen))
-	_cycle.value = float(settings.get("cycle_minutes", DEFAULTS.cycle_minutes))
-	_show_tutorial.button_pressed = bool(settings.get("show_tutorial", DEFAULTS.show_tutorial))
+	var settings := SettingsPolicy.normalize(loaded)
+	_sensitivity.value = float(settings.get("mouse_sensitivity", defaults.mouse_sensitivity))
+	_select_option_by_id(
+		_render_distance,
+		int(settings.get("render_distance", defaults.render_distance))
+	)
+	_volume.value = float(settings.get("master_volume", defaults.master_volume))
+	_fullscreen.button_pressed = bool(settings.get("fullscreen", defaults.fullscreen))
+	_cycle.value = float(settings.get("cycle_minutes", defaults.cycle_minutes))
+	_select_option_by_id(
+		_autosave_interval,
+		int(settings.get("autosave_minutes", defaults.autosave_minutes))
+	)
+	_show_tutorial.button_pressed = bool(
+		settings.get("show_tutorial", defaults.show_tutorial)
+	)
 	_show_interaction_prompts.button_pressed = bool(
-		settings.get("show_interaction_prompts", DEFAULTS.show_interaction_prompts)
+		settings.get("show_interaction_prompts", defaults.show_interaction_prompts)
 	)
+
+
+func _select_option_by_id(option: OptionButton, target_id: int) -> void:
+	for index in option.item_count:
+		if option.get_item_id(index) == target_id:
+			option.select(index)
+			return
 
 
 func _apply() -> void:
-	var settings := {
+	var settings := SettingsPolicy.normalize({
 		"mouse_sensitivity": _sensitivity.value,
 		"render_distance": _render_distance.get_selected_id(),
 		"master_volume": _volume.value,
 		"fullscreen": _fullscreen.button_pressed,
 		"cycle_minutes": int(_cycle.value),
+		"autosave_minutes": _autosave_interval.get_selected_id(),
 		"show_tutorial": _show_tutorial.button_pressed,
 		"show_interaction_prompts": _show_interaction_prompts.button_pressed,
-	}
+	})
 	_status.text = "正在应用…"
 	_status.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	settings_applied.emit(settings)
