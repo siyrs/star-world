@@ -5,6 +5,7 @@ signal guidance_visibility_changed(visible: bool)
 
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
 const KeyBadges = preload("res://src/ui/key_badge_formatter.gd")
@@ -15,6 +16,7 @@ var onboarding
 
 var _toast_panel: PanelContainer
 var _toast_label: Label
+var _toast_status: Label
 var _prompt_panel: PanelContainer
 var _prompt_title: Label
 var _prompt_subtitle: Label
@@ -28,6 +30,8 @@ var _tutorial_hint: RichTextLabel
 var _tutorial_state: Dictionary = {}
 var _prompt_state: Dictionary = {}
 var _crosshair: Control
+var _gameplay_active := false
+var _overlay_blocked := false
 
 
 func attach_crosshair(crosshair: Control) -> void:
@@ -45,8 +49,6 @@ func _update_crosshair_state(prompt: Dictionary) -> void:
 	elif str(prompt.get("focus_type", "")) == "block" and str(prompt.get("tone", "")) == "info":
 		state = &"actionable"
 	_crosshair.call("set_target_state", state)
-var _gameplay_active := false
-var _overlay_blocked := false
 
 
 func _ready() -> void:
@@ -100,6 +102,17 @@ func set_overlay_blocked(value: bool) -> void:
 	_refresh_visibility()
 
 
+func get_layout_snapshot() -> Dictionary:
+	return {
+		"toast": _toast_panel.get_global_rect() if _toast_panel != null else Rect2(),
+		"prompt": _prompt_panel.get_global_rect() if _prompt_panel != null else Rect2(),
+		"tutorial": _tutorial_panel.get_global_rect() if _tutorial_panel != null else Rect2(),
+		"tutorial_visible": _tutorial_panel != null and _tutorial_panel.visible,
+		"prompt_visible": _prompt_panel != null and _prompt_panel.visible,
+		"toast_visible": _toast_panel != null and _toast_panel.visible,
+	}
+
+
 func _input(event: InputEvent) -> void:
 	if not _gameplay_active:
 		return
@@ -112,31 +125,43 @@ func _input(event: InputEvent) -> void:
 
 func _build_toast() -> void:
 	_toast_panel = PanelContainer.new()
+	_toast_panel.name = "ToastCard"
 	_toast_panel.anchor_left = 0.5
 	_toast_panel.anchor_right = 0.5
-	_toast_panel.offset_left = -270.0
-	_toast_panel.offset_right = 270.0
-	_toast_panel.offset_top = 20.0
-	_toast_panel.offset_bottom = 76.0
+	_toast_panel.offset_left = -286.0
+	_toast_panel.offset_right = 286.0
+	_toast_panel.offset_top = 18.0
+	_toast_panel.offset_bottom = 72.0
+	_toast_panel.theme_type_variation = "HudPanel"
 	_toast_panel.visible = false
 	add_child(_toast_panel)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	_toast_panel.add_child(row)
+	_toast_status = Label.new()
+	_toast_status.text = "●"
+	_toast_status.theme_type_variation = "MetricLabel"
+	row.add_child(_toast_status)
 	_toast_label = Label.new()
 	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_toast_label.add_theme_font_size_override("font_size", Tokens.FONT_BODY)
-	_toast_panel.add_child(_toast_label)
+	_toast_label.theme_type_variation = "CaptionLabel"
+	row.add_child(_toast_label)
 
 
 func _build_prompt() -> void:
 	_prompt_panel = PanelContainer.new()
+	_prompt_panel.name = "ContextPromptCard"
 	_prompt_panel.anchor_left = 0.5
 	_prompt_panel.anchor_right = 0.5
 	_prompt_panel.anchor_top = 1.0
 	_prompt_panel.anchor_bottom = 1.0
-	_prompt_panel.offset_left = -300.0
-	_prompt_panel.offset_right = 300.0
-	_prompt_panel.offset_top = -235.0
-	_prompt_panel.offset_bottom = -155.0
+	_prompt_panel.offset_left = -310.0
+	_prompt_panel.offset_right = 310.0
+	_prompt_panel.offset_top = -224.0
+	_prompt_panel.offset_bottom = -151.0
+	_prompt_panel.theme_type_variation = "HudPanel"
 	_prompt_panel.visible = false
 	add_child(_prompt_panel)
 	var content := HBoxContainer.new()
@@ -144,36 +169,49 @@ func _build_prompt() -> void:
 	_prompt_panel.add_child(content)
 	var identity := VBoxContainer.new()
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	identity.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	identity.add_theme_constant_override("separation", Tokens.SPACE_2XS)
 	content.add_child(identity)
+	var eyebrow := Label.new()
+	eyebrow.text = "INTERACTION"
+	eyebrow.theme_type_variation = "EyebrowLabel"
+	identity.add_child(eyebrow)
 	_prompt_title = Label.new()
-	_prompt_title.add_theme_font_size_override("font_size", 19)
+	_prompt_title.theme_type_variation = "SectionTitle"
 	identity.add_child(_prompt_title)
 	_prompt_subtitle = Label.new()
-	_prompt_subtitle.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
-	_prompt_subtitle.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_prompt_subtitle.theme_type_variation = "CaptionLabel"
 	identity.add_child(_prompt_subtitle)
 	_prompt_actions = RichTextLabel.new()
 	_prompt_actions.bbcode_enabled = true
 	_prompt_actions.scroll_active = false
 	_prompt_actions.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_prompt_actions.custom_minimum_size = Vector2(220, 44)
+	_prompt_actions.custom_minimum_size = Vector2(226, 46)
 	_prompt_actions.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_prompt_actions.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	_prompt_actions.add_theme_color_override("default_color", Tokens.color(Tokens.COLOR_ACCENT_WARM))
+	_prompt_actions.add_theme_font_size_override("normal_font_size", Tokens.FONT_CAPTION)
+	_prompt_actions.add_theme_color_override(
+		"default_color", Tokens.color(Tokens.COLOR_ACCENT_WARM_BRIGHT)
+	)
 	content.add_child(_prompt_actions)
 
 
 func _build_tutorial() -> void:
 	_tutorial_panel = PanelContainer.new()
+	_tutorial_panel.name = "TutorialCard"
 	_tutorial_panel.anchor_left = 1.0
 	_tutorial_panel.anchor_right = 1.0
 	_tutorial_panel.anchor_top = 0.0
 	_tutorial_panel.anchor_bottom = 0.0
-	_tutorial_panel.offset_left = -380.0
+	_tutorial_panel.offset_left = -372.0
 	_tutorial_panel.offset_right = -18.0
 	_tutorial_panel.offset_top = 18.0
-	_tutorial_panel.offset_bottom = 212.0
+	_tutorial_panel.offset_bottom = 214.0
+	_tutorial_panel.theme_type_variation = "HudPanel"
+	_tutorial_panel.add_theme_stylebox_override(
+		"panel",
+		Tokens.elevated_panel_style(
+			"#071522EE", Tokens.COLOR_ACCENT_WARM, 1, Tokens.RADIUS_LG, Tokens.SPACE_MD, 8
+		)
+	)
 	_tutorial_panel.visible = false
 	add_child(_tutorial_panel)
 	var content := VBoxContainer.new()
@@ -183,34 +221,41 @@ func _build_tutorial() -> void:
 	content.add_child(header)
 	_tutorial_step = Label.new()
 	_tutorial_step.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_tutorial_step.modulate = Tokens.color(Tokens.COLOR_ACCENT)
-	_tutorial_step.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_tutorial_step.theme_type_variation = "EyebrowLabel"
+	_tutorial_step.add_theme_color_override(
+		"font_color", Tokens.color(Tokens.COLOR_ACCENT_WARM_BRIGHT)
+	)
 	header.add_child(_tutorial_step)
-	var hide_hint := Label.new()
-	hide_hint.text = "F1 隐藏引导"
-	hide_hint.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
-	hide_hint.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	var hide_hint := UiKit.make_badge("F1 隐藏", "warm")
 	header.add_child(hide_hint)
 	_tutorial_title = Label.new()
-	_tutorial_title.add_theme_font_size_override("font_size", 22)
+	_tutorial_title.theme_type_variation = "SectionTitle"
 	content.add_child(_tutorial_title)
 	_tutorial_description = Label.new()
 	_tutorial_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_tutorial_description.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
+	_tutorial_description.theme_type_variation = "CaptionLabel"
 	content.add_child(_tutorial_description)
 	_tutorial_hint = RichTextLabel.new()
 	_tutorial_hint.bbcode_enabled = true
 	_tutorial_hint.fit_content = true
 	_tutorial_hint.scroll_active = false
 	_tutorial_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tutorial_hint.add_theme_font_size_override("font_size", 19)
-	_tutorial_hint.add_theme_color_override("default_color", Tokens.color(Tokens.COLOR_ACCENT_WARM))
+	_tutorial_hint.add_theme_font_size_override("normal_font_size", Tokens.FONT_BODY)
+	_tutorial_hint.add_theme_color_override(
+		"default_color", Tokens.color(Tokens.COLOR_ACCENT_WARM_BRIGHT)
+	)
 	content.add_child(_tutorial_hint)
 	_tutorial_progress = ProgressBar.new()
 	_tutorial_progress.show_percentage = false
 	_tutorial_progress.min_value = 0.0
 	_tutorial_progress.max_value = 1.0
-	_tutorial_progress.custom_minimum_size.y = 10.0
+	_tutorial_progress.custom_minimum_size.y = 9.0
+	_tutorial_progress.add_theme_stylebox_override(
+		"fill",
+		Tokens.panel_style(
+			Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM_BRIGHT, 0, Tokens.RADIUS_XL, 1.0
+		)
+	)
 	content.add_child(_tutorial_progress)
 
 
@@ -220,15 +265,18 @@ func _on_toast_changed(toast: Dictionary) -> void:
 		return
 	_toast_label.text = str(toast.get("text", ""))
 	var severity := str(toast.get("severity", "info"))
-	_toast_label.modulate = Tokens.severity_color(severity)
+	var severity_color := Tokens.severity_color(severity)
+	_toast_status.add_theme_color_override("font_color", severity_color)
+	_toast_label.add_theme_color_override("font_color", severity_color)
 	_toast_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style(
+		Tokens.elevated_panel_style(
 			Tokens.COLOR_SURFACE_RAISED,
-			_color_to_hex(Tokens.severity_color(severity)),
-			2,
-			Tokens.RADIUS_MD,
-			10.0
+			_color_to_hex(severity_color),
+			1,
+			Tokens.RADIUS_XL,
+			Tokens.SPACE_SM,
+			9
 		)
 	)
 	_toast_panel.visible = _gameplay_active
@@ -248,6 +296,13 @@ func _on_prompt_changed(prompt: Dictionary) -> void:
 		if not action_text.is_empty():
 			action_parts.append(action_text)
 	_prompt_actions.text = KeyBadges.format("\n".join(action_parts))
+	var tone := str(prompt.get("tone", "info"))
+	_prompt_panel.add_theme_stylebox_override(
+		"panel",
+		Tokens.elevated_panel_style(
+			"#071522EE", Tokens.tone_border(tone), 1, Tokens.RADIUS_LG, Tokens.SPACE_MD, 7
+		)
+	)
 	_refresh_visibility()
 
 
@@ -258,7 +313,7 @@ func _on_tutorial_state_changed(state: Dictionary) -> void:
 		_tutorial_panel.visible = false
 		guidance_visibility_changed.emit(false)
 		return
-	_tutorial_step.text = "新手引导  %d / %d" % [
+	_tutorial_step.text = "新手引导 · %d / %d" % [
 		int(state.get("step_number", 1)), int(state.get("step_count", 1))
 	]
 	_tutorial_title.text = str(step.get("title", ""))
