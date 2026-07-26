@@ -13,6 +13,7 @@ const JournalRewardParticipantScript = preload(
 const AutosaveRuntimeParticipantScript = preload(
 	"res://src/save/autosave_runtime_participant.gd"
 )
+const SettingsPolicyScript = preload("res://src/settings/game_settings_policy.gd")
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
 const AUTOSAVE_RUNTIME_FEATURE := &"autosave_runtime"
@@ -29,6 +30,12 @@ var autosave_runtime_participant: Node
 
 func _ready() -> void:
 	super._ready()
+	# Final production composition owns the canonical settings policy. This keeps
+	# old settings files compatible while ensuring autosave and every existing
+	# setting receive the same whitelist and bounds before runtime participants
+	# read them.
+	current_settings = SettingsPolicyScript.normalize(current_settings)
+	_apply_settings(current_settings)
 	exploration_runtime_participant = _register_feature_participant(
 		EXPLORATION_RUNTIME_FEATURE,
 		ExplorationRuntimeParticipantScript.new(),
@@ -56,13 +63,24 @@ func _ready() -> void:
 		exploration_reward_service = exploration_journal_reward_participant.call(
 			"get_reward_service"
 		) as Node
-	# Registered last so reverse lifecycle cleanup disables checkpoint activity
-	# before any gameplay domain starts releasing state.
+	# Registered last with explicit dependencies so reverse lifecycle cleanup
+	# disables checkpoint activity before any gameplay domain releases state.
 	autosave_runtime_participant = _register_feature_participant(
 		AUTOSAVE_RUNTIME_FEATURE,
 		AutosaveRuntimeParticipantScript.new(),
 		"bounded autosave runtime"
 	)
+	if autosave_runtime_participant != null:
+		var callback := Callable(self, "_on_autosave_completed")
+		if not autosave_runtime_participant.is_connected(
+			"autosave_completed", callback
+		):
+			autosave_runtime_participant.connect("autosave_completed", callback)
+
+
+func _on_settings_changed(settings: Dictionary) -> void:
+	var normalized := SettingsPolicyScript.merge(current_settings, settings)
+	super._on_settings_changed(normalized)
 
 
 func get_autosave_snapshot() -> Dictionary:
@@ -81,4 +99,22 @@ func get_character_snapshot() -> Dictionary:
 		if creature_spawner != null and creature_spawner.has_method("get_ecology_snapshot")
 		else {}
 	)
+	snapshot["autosave"] = get_autosave_snapshot()
 	return snapshot
+
+
+func _on_autosave_completed(success: bool, snapshot: Dictionary) -> void:
+	if success:
+		_publish_character_message(
+			"世界已自动保存", "success", "autosave_success", 2.2
+		)
+		return
+	var retry_seconds := maxi(
+		1, int(ceil(float(snapshot.get("last_retry_delay_seconds", 30.0))))
+	)
+	_publish_character_message(
+		"自动存档失败，将在活动时间 %d 秒后重试" % retry_seconds,
+		"warning",
+		"autosave_failed",
+		4.0
+	)
