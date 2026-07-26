@@ -40,6 +40,7 @@ jobs:
         res://tests/qa/integration_regression.gd
         res://tests/qa/ui_layout_regression.gd
         res://tests/qa/runtime_stability_regression.gd
+      domain_scripts_verbose: true
       domain_artifact_name: bounded-autosave-domain
       domain_artifact_paths: |
         build/reusable-ci-static-validators.log
