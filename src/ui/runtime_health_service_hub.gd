@@ -57,9 +57,16 @@ func handle_world_start_failed(reason: String) -> void:
 
 
 func return_to_menu() -> void:
-	if runtime_health_report_service != null:
-		runtime_health_report_service.call("detach_runtime")
+	# The authoritative return path may refuse to leave gameplay when its final
+	# save fails. Detach diagnostics only after the composition root confirms that
+	# the world identity was cleared; otherwise F3 must keep observing the world
+	# the player is still using.
 	super.return_to_menu()
+	if (
+		current_world_id.is_empty()
+		and runtime_health_report_service != null
+	):
+		runtime_health_report_service.call("detach_runtime")
 
 
 func get_runtime_health_snapshot() -> Dictionary:
