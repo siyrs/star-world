@@ -134,7 +134,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	_test_coordinator_contract()
+	await _test_coordinator_contract()
 	await _test_production_composition()
 	if failures.is_empty():
 		print("QA SERVICE HUB FEATURE LIFECYCLE PASS | checks=%d" % checks)
@@ -241,6 +241,8 @@ func _test_coordinator_contract() -> void:
 		"coordinator diagnostics remain complete and bounded"
 	)
 	host.queue_free()
+	await process_frame
+	await process_frame
 
 
 func _test_production_composition() -> void:
@@ -335,9 +337,9 @@ func _test_production_composition() -> void:
 
 	var fake_world := FakeWorld.new()
 	var fake_player := FakePlayer.new()
-	fake_player.global_position = Vector3(0.5, 16.0, 0.5)
 	root.add_child(fake_world)
 	root.add_child(fake_player)
+	fake_player.global_position = Vector3(0.5, 16.0, 0.5)
 	coordinator.call("attach_game", fake_world, fake_player)
 	coordinator.call("activate")
 	autosave_participant.set_process(false)
@@ -453,7 +455,7 @@ func _test_production_composition() -> void:
 	fake_player.queue_free()
 	fake_world.queue_free()
 	hub.queue_free()
-	for _frame in 6:
+	for _frame in 8:
 		await process_frame
 
 
