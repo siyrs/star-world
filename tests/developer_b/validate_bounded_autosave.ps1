@@ -143,13 +143,14 @@ Assert-NotMatches $text.settings_panel 'const\s+DEFAULTS\s*:=' 'Settings panel m
 foreach ($phrase in @(
   'autosave settings expose one bounded deterministic choice list',
   'manual save cancels a queued autosave',
-  'failure 3 applies the bounded 300-second retry tier',
   'real autosave transaction persists the production inventory mutation',
   'production lifecycle contains seven explicit participants',
   'reverse lifecycle cleanup disables autosave'
 )) {
   Assert-Matches $text.runtime_test ([regex]::Escape($phrase)) "Autosave runtime regression is missing coverage: $phrase"
 }
+Assert-Matches $text.runtime_test 'var\s+expected_delays\s*:=\s*\[15\.0,\s*60\.0,\s*300\.0\]' 'Autosave runtime regression must exercise all three retry tiers'
+Assert-Matches $text.runtime_test ([regex]::Escape('failure %d applies the bounded %.0f-second retry tier')) 'Autosave runtime regression must assert every generated retry-tier description'
 
 foreach ($phrase in @(
   'real settings page exposes exactly the bounded autosave choices',
