@@ -32,6 +32,7 @@ func _run() -> void:
 	var ranch: Node = hub.get("ranch_runtime_participant") if hub != null else null
 	var runtime: Node = hub.get("exploration_runtime_participant") if hub != null else null
 	var participant: Node = hub.get("exploration_journal_reward_participant") if hub != null else null
+	var autosave: Node = hub.get("autosave_runtime_participant") if hub != null else null
 	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
 	_check(
 		hub != null
@@ -42,8 +43,9 @@ func _run() -> void:
 		and ranch != null
 		and runtime != null
 		and participant != null
+		and autosave != null
 		and machine_runtime != null,
-		"production game mounts all six feature lifecycle participants"
+		"production game mounts all seven feature lifecycle participants"
 	)
 	if (
 		hub == null
@@ -54,6 +56,7 @@ func _run() -> void:
 		or ranch == null
 		or runtime == null
 		or participant == null
+		or autosave == null
 		or machine_runtime == null
 	):
 		await _finish(game, hub)
@@ -82,10 +85,7 @@ func _run() -> void:
 	var rewards: Node = hub.get("exploration_reward_service")
 	var journal: Node = hub.get("exploration_journal_service")
 	var game_ui: Node = hub.game_ui
-	_check(
-		player != null and bool(player.get("input_enabled")),
-		"production player starts after participant begin and activate phases"
-	)
+	_check(player != null and bool(player.get("input_enabled")), "production player starts after participant begin and activate phases")
 	_check(
 		agriculture_service != null
 		and agriculture_interaction != null
@@ -99,24 +99,26 @@ func _run() -> void:
 		and journal != null,
 		"legacy agriculture, husbandry, ranch and exploration service ports remain mounted"
 	)
+	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base is registered as a lifecycle root")
+	_check(coordinator.call("has_participant", &"agriculture_runtime"), "agriculture is registered as an independent lifecycle root")
 	_check(
-		coordinator.call("has_participant", &"machine_runtime"),
-		"Machine Base is registered as a lifecycle root"
-	)
-	_check(
-		coordinator.call("has_participant", &"agriculture_runtime"),
-		"agriculture is registered as an independent lifecycle root"
-	)
-	_check(
-		coordinator.call("get_participant_dependencies", &"ranch_runtime")
-		== ["husbandry_runtime"],
+		coordinator.call("get_participant_dependencies", &"ranch_runtime") == ["husbandry_runtime"],
 		"production lifecycle exposes the ranch-to-husbandry dependency"
 	)
 	_check(
-		coordinator.call(
-			"get_participant_dependencies", &"exploration_journal_rewards"
-		) == ["exploration_runtime"],
+		coordinator.call("get_participant_dependencies", &"exploration_journal_rewards") == ["exploration_runtime"],
 		"production lifecycle exposes the journal dependency"
+	)
+	_check(
+		coordinator.call("get_participant_dependencies", &"autosave_runtime") == [
+			"machine_runtime",
+			"agriculture_runtime",
+			"husbandry_runtime",
+			"ranch_runtime",
+			"exploration_runtime",
+			"exploration_journal_rewards",
+		],
+		"production lifecycle orders autosave after every persisted participant"
 	)
 	_check(bool(machine_runtime.call("is_active")), "production world activation starts Machine Base")
 	_check(
@@ -124,6 +126,7 @@ func _run() -> void:
 		and agriculture_service.process_mode == Node.PROCESS_MODE_PAUSABLE,
 		"production world activation starts pausable agriculture"
 	)
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "production world activation starts bounded autosave")
 	if (
 		player == null
 		or agriculture_service == null
@@ -154,41 +157,24 @@ func _run() -> void:
 	await process_frame
 	await _right_click_center()
 	var prospecting_snapshot: Dictionary = prospecting.call("get_snapshot")
-	_check(
-		int(prospecting_snapshot.get("record_count", 0)) == 1,
-		"real right click records the first discovery through composed services"
-	)
-	_check(
-		int(runtime.call("get_lifecycle_snapshot").get("scan_success_count", 0)) == 1,
-		"runtime participant observes the real scan exactly once"
-	)
-	_check(
-		announcements.size() == 1 and "first_discovery" in announcements[0],
-		"real scan publishes exactly one new reward availability notice"
-	)
+	_check(int(prospecting_snapshot.get("record_count", 0)) == 1, "real right click records the first discovery through composed services")
+	_check(int(runtime.call("get_lifecycle_snapshot").get("scan_success_count", 0)) == 1, "runtime participant observes the real scan exactly once")
+	_check(announcements.size() == 1 and "first_discovery" in announcements[0], "real scan publishes exactly one new reward availability notice")
 	var feedback: Node = hub.player_experience.call("get_feedback")
-	_check(
-		int(feedback.call("get_queue_size")) >= 1,
-		"reward availability notice enters the bounded production feedback queue"
-	)
+	_check(int(feedback.call("get_queue_size")) >= 1, "reward availability notice enters the bounded production feedback queue")
 	journal.call("refresh")
 	await process_frame
-	_check(
-		announcements.size() == 1,
-		"manual journal refresh does not duplicate the reward notice"
-	)
+	_check(announcements.size() == 1, "manual journal refresh does not duplicate the reward notice")
 
 	await _tap_key(KEY_J)
 	for _frame in 3:
 		await process_frame
 	_check(
-		int(game_ui.call("get_active_overlay"))
-		== ExtensionOverlayIds.EXPLORATION_JOURNAL,
+		int(game_ui.call("get_active_overlay")) == ExtensionOverlayIds.EXPLORATION_JOURNAL,
 		"real J input opens the participant-backed exploration journal"
 	)
 	_check(
-		not bool(player.get("input_enabled"))
-		and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE,
+		not bool(player.get("input_enabled")) and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE,
 		"journal still isolates gameplay input after composition"
 	)
 	var panel: Control = game_ui.call("get_exploration_journal_panel") as Control
@@ -197,56 +183,36 @@ func _run() -> void:
 		if panel != null
 		else null
 	)
-	_check(
-		claim_button != null and not claim_button.disabled,
-		"first discovery keeps its real claim button"
-	)
+	_check(claim_button != null and not claim_button.disabled, "first discovery keeps its real claim button")
 	if claim_button != null:
 		await _click_control(claim_button)
+	_check(rewards.call("is_claimed", "first_discovery"), "real pointer claim reaches the composed reward service")
 	_check(
-		rewards.call("is_claimed", "first_discovery"),
-		"real pointer claim reaches the composed reward service"
-	)
-	_check(
-		inventory.count_item("torch") == 4
-		and inventory.count_item("apple") == 2,
+		inventory.count_item("torch") == 4 and inventory.count_item("apple") == 2,
 		"real claim grants the complete star-continent reward bundle"
 	)
 	await _tap_key(KEY_J)
-	_check(
-		int(game_ui.call("get_active_overlay")) == 0,
-		"second J closes the composed journal"
-	)
+	_check(int(game_ui.call("get_active_overlay")) == 0, "second J closes the composed journal")
 
-	_check(
-		bool(hub.save_current()),
-		"all participant states join the production save transaction"
-	)
+	_check(bool(hub.save_current()), "all participant states join the production save transaction")
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
-	_check(
-		loaded.has("machines") and loaded.get("machines", {}).has("furnaces"),
-		"saved world contains the Machine Base domain"
-	)
+	_check(loaded.has("machines") and loaded.get("machines", {}).has("furnaces"), "saved world contains the Machine Base domain")
 	_check(
 		loaded.has("agriculture")
 		and loaded.get("agriculture", {}).get("soil_moisture", null) is Dictionary,
 		"saved world contains the agriculture participant domain"
 	)
 	_check(loaded.has("husbandry"), "saved world contains the husbandry participant domain")
-	_check(
-		loaded.has("animal_products"),
-		"saved world contains the ranch participant domain"
-	)
+	_check(loaded.has("animal_products"), "saved world contains the ranch participant domain")
 	_check(
 		(loaded.get("exploration", {}).get("records", []) as Array).size() == 1,
 		"saved world contains the runtime exploration record"
 	)
 	_check(
-		"first_discovery" in (
-			loaded.get("exploration_rewards", {}).get("claimed", []) as Array
-		),
+		"first_discovery" in (loaded.get("exploration_rewards", {}).get("claimed", []) as Array),
 		"saved world contains the claimed dependent state"
 	)
+	_check(not loaded.has("autosave"), "saved world excludes transient autosave scheduling state")
 	var announcement_count_before_reload := int(
 		participant.call("get_lifecycle_snapshot").get("announcement_count", 0)
 	)
@@ -254,44 +220,21 @@ func _run() -> void:
 	hub.return_to_menu()
 	for _frame in 6:
 		await process_frame
-	_check(
-		(journal.call("get_snapshot") as Dictionary).is_empty(),
-		"real return-to-menu clears participant journal state"
-	)
-	_check(
-		(rewards.call("get_snapshot") as Dictionary).is_empty(),
-		"real return-to-menu clears participant reward state"
-	)
-	_check(
-		int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0,
-		"real return-to-menu clears the exploration player binding"
-	)
-	_check(
-		int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0,
-		"real return-to-menu clears the ranch player binding"
-	)
-	_check(
-		int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0,
-		"real return-to-menu clears the husbandry player binding"
-	)
+	_check((journal.call("get_snapshot") as Dictionary).is_empty(), "real return-to-menu clears participant journal state")
+	_check((rewards.call("get_snapshot") as Dictionary).is_empty(), "real return-to-menu clears participant reward state")
+	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the exploration player binding")
+	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the ranch player binding")
+	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "real return-to-menu clears the husbandry player binding")
 	_check(
 		not bool(agriculture.call("get_lifecycle_snapshot").get("active", true))
 		and int(agriculture_service.call("get_runtime_snapshot").get("crop_count", -1)) == 0,
 		"real return-to-menu deactivates and clears agriculture"
 	)
-	_check(
-		not bool(machine_runtime.call("is_active")),
-		"real return-to-menu stops the Machine Base scheduler"
-	)
+	_check(not bool(machine_runtime.call("is_active")), "real return-to-menu stops the Machine Base scheduler")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "real return-to-menu stops bounded autosave first")
 	if old_player != null and is_instance_valid(old_player):
-		_check(
-			old_player.get("prospecting_service") == null,
-			"old player no longer retains the runtime prospecting port"
-		)
-		_check(
-			old_player.get("entity_interaction_service") == null,
-			"old player no longer retains the husbandry interaction port"
-		)
+		_check(old_player.get("prospecting_service") == null, "old player no longer retains the runtime prospecting port")
+		_check(old_player.get("entity_interaction_service") == null, "old player no longer retains the husbandry interaction port")
 	var lifecycle_after_menu: Dictionary = coordinator.call("get_snapshot")
 	_check(
 		_phase_count_with_prefix(lifecycle_after_menu, "clear:return_to_menu") == 1,
@@ -301,9 +244,9 @@ func _run() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
+			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
-		"desktop cleanup records the complete reverse dependency order"
+		"desktop cleanup records the complete seven-participant reverse dependency order"
 	)
 
 	game.begin_world_state(loaded)
@@ -315,106 +258,54 @@ func _run() -> void:
 	rewards = hub.get("exploration_reward_service")
 	journal = hub.get("exploration_journal_service")
 	agriculture_service = hub.get("agriculture_service")
-	_check(
-		rewards.call("is_claimed", "first_discovery"),
-		"full world reload restores participant-owned claimed state"
-	)
-	_check(
-		inventory.count_item("torch") == 4
-		and inventory.count_item("apple") == 2,
-		"full reload does not duplicate reward items"
-	)
+	_check(rewards.call("is_claimed", "first_discovery"), "full world reload restores participant-owned claimed state")
+	_check(inventory.count_item("torch") == 4 and inventory.count_item("apple") == 2, "full reload does not duplicate reward items")
 	_check(
 		int(participant.call("get_lifecycle_snapshot").get("announcement_count", 0))
 		== announcement_count_before_reload,
 		"reload baseline prevents duplicate reward availability messages"
 	)
-	_check(
-		player != null and player.get("prospecting_service") == prospecting,
-		"reload rebinds the runtime prospecting service"
-	)
-	_check(
-		player != null and player.get("entity_interaction_service") == husbandry_interaction,
-		"reload rebinds the husbandry interaction service"
-	)
-	_check(
-		int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", 0))
-		== player.get_instance_id(),
-		"reload rebinds the ranch runtime to the current player"
-	)
-	_check(
-		int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", 0))
-		== player.get_instance_id(),
-		"reload rebinds the husbandry runtime to the current player"
-	)
+	_check(player != null and player.get("prospecting_service") == prospecting, "reload rebinds the runtime prospecting service")
+	_check(player != null and player.get("entity_interaction_service") == husbandry_interaction, "reload rebinds the husbandry interaction service")
+	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", 0)) == player.get_instance_id(), "reload rebinds the ranch runtime to the current player")
+	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", 0)) == player.get_instance_id(), "reload rebinds the husbandry runtime to the current player")
 	_check(
 		bool(agriculture.call("get_lifecycle_snapshot").get("active", false))
 		and agriculture_service != null,
 		"reload reactivates agriculture and preserves its public service"
 	)
-	_check(
-		bool(machine_runtime.call("is_active")),
-		"reload reactivates the shared Machine Base scheduler"
-	)
+	_check(bool(machine_runtime.call("is_active")), "reload reactivates the shared Machine Base scheduler")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "reload reactivates bounded autosave")
 	await _tap_key(KEY_J)
 	for _frame in 3:
 		await process_frame
 	panel = game_ui.call("get_exploration_journal_panel") as Control
 	_check(
-		panel != null
-		and str(panel.call("get_reward_status", "first_discovery")) == "claimed",
+		panel != null and str(panel.call("get_reward_status", "first_discovery")) == "claimed",
 		"reloaded production journal renders the participant reward as claimed"
 	)
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(
-		int(character_snapshot.get("feature_lifecycle", {}).get(
-			"participant_count", 0
-		)) == 6,
-		"production diagnostics expose all six composed participants"
+		int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 7,
+		"production diagnostics expose all seven composed participants"
 	)
-	_check(
-		character_snapshot.has("machine_runtime")
-		and character_snapshot.has("machines"),
-		"Machine Base participant preserves its diagnostics fields"
-	)
-	_check(
-		character_snapshot.has("agriculture"),
-		"agriculture participant preserves its diagnostics field"
-	)
-	_check(
-		character_snapshot.has("husbandry"),
-		"husbandry participant preserves its legacy diagnostics field"
-	)
-	_check(
-		character_snapshot.has("animal_attraction")
-		and character_snapshot.has("animal_products"),
-		"ranch participant preserves legacy diagnostics fields"
-	)
-	_check(
-		character_snapshot.has("exploration")
-		and character_snapshot.has("danger"),
-		"runtime participant preserves legacy diagnostics fields"
-	)
+	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "Machine Base participant preserves its diagnostics fields")
+	_check(character_snapshot.has("agriculture"), "agriculture participant preserves its diagnostics field")
+	_check(character_snapshot.has("husbandry"), "husbandry participant preserves its legacy diagnostics field")
+	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
+	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "runtime participant preserves legacy diagnostics fields")
+	_check(character_snapshot.has("autosave"), "autosave participant preserves bounded diagnostics evidence")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
-	_check(
-		image != null and not image.is_empty(),
-		"desktop viewport renders the participant-backed journal"
-	)
+	_check(image != null and not image.is_empty(), "desktop viewport renders the participant-backed journal")
 	if image != null and not image.is_empty():
-		_check(
-			image.get_size() == root.size,
-			"lifecycle evidence is captured at the 1024x576 product resolution"
-		)
+		_check(image.get_size() == root.size, "lifecycle evidence is captured at the 1024x576 product resolution")
 		_save_image(image)
 
 	game.call("_abort_world_start", "qa_feature_lifecycle_failure")
 	for _frame in 4:
 		await process_frame
-	_check(
-		hub.current_world_id.is_empty(),
-		"real world-start failure signal resets the hub identity"
-	)
+	_check(hub.current_world_id.is_empty(), "real world-start failure signal resets the hub identity")
 	_check(
 		(journal.call("get_snapshot") as Dictionary).is_empty()
 		and (rewards.call("get_snapshot") as Dictionary).is_empty(),
@@ -425,26 +316,12 @@ func _run() -> void:
 		and (danger.call("get_snapshot") as Dictionary).is_empty(),
 		"real world-start failure clears exploration runtime services"
 	)
-	_check(
-		int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0,
-		"failed-start cleanup removes the exploration player binding"
-	)
-	_check(
-		int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0,
-		"failed-start cleanup removes the ranch player binding"
-	)
-	_check(
-		int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0,
-		"failed-start cleanup removes the husbandry player binding"
-	)
-	_check(
-		not bool(agriculture.call("get_lifecycle_snapshot").get("active", true)),
-		"failed-start cleanup stops agriculture"
-	)
-	_check(
-		not bool(machine_runtime.call("is_active")),
-		"failed-start cleanup stops Machine Base"
-	)
+	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the exploration player binding")
+	_check(int(ranch.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the ranch player binding")
+	_check(int(husbandry.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the husbandry player binding")
+	_check(not bool(agriculture.call("get_lifecycle_snapshot").get("active", true)), "failed-start cleanup stops agriculture")
+	_check(not bool(machine_runtime.call("is_active")), "failed-start cleanup stops Machine Base")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "failed-start cleanup stops bounded autosave")
 	await _finish(game, hub)
 
 
@@ -521,10 +398,7 @@ func _tap_key(keycode: Key) -> void:
 func _save_image(image: Image) -> void:
 	DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
 	var error := image.save_png(_capture_path)
-	_check(
-		error == OK and FileAccess.file_exists(_capture_path),
-		"service hub lifecycle desktop screenshot is saved"
-	)
+	_check(error == OK and FileAccess.file_exists(_capture_path), "feature lifecycle desktop screenshot is saved")
 
 
 func _finish(game: Node, hub: Node) -> void:
@@ -539,18 +413,12 @@ func _finish(game: Node, hub: Node) -> void:
 	for _frame in CLEANUP_FRAMES:
 		await process_frame
 	if failures.is_empty():
-		print(
-			"QA SERVICE HUB FEATURE LIFECYCLE DESKTOP PASS | checks=%d | capture=%s"
-			% [checks, _capture_path]
-		)
+		print("QA SERVICE HUB FEATURE LIFECYCLE DESKTOP PASS | checks=%d | capture=%s" % [checks, _capture_path])
 		quit(0)
 	else:
 		for failure: String in failures:
 			push_error("QA SERVICE HUB FEATURE LIFECYCLE DESKTOP FAILURE: %s" % failure)
-		print(
-			"QA SERVICE HUB FEATURE LIFECYCLE DESKTOP FAIL | checks=%d | failures=%d"
-			% [checks, failures.size()]
-		)
+		print("QA SERVICE HUB FEATURE LIFECYCLE DESKTOP FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 		quit(1)
 
 
