@@ -156,15 +156,17 @@ func _test_coordinator_contract() -> void:
 	host.add_child(coordinator)
 	coordinator.setup(host)
 	var events: Array[String] = []
+	var missing_candidate := FakeParticipant.new("dependent", events, [&"first"])
 	var missing_dependency: Dictionary = coordinator.register_participant(
-		&"dependent", FakeParticipant.new("dependent", events, [&"first"])
+		&"dependent", missing_candidate
 	)
 	_check(
 		str(missing_dependency.get("reason", "")) == "participant_dependency_missing",
 		"participant dependencies must already be installed"
 	)
+	var cycle_candidate := FakeParticipant.new("cycle", events, [&"cycle"])
 	var self_dependency: Dictionary = coordinator.register_participant(
-		&"cycle", FakeParticipant.new("cycle", events, [&"cycle"])
+		&"cycle", cycle_candidate
 	)
 	_check(
 		str(self_dependency.get("reason", "")) == "participant_dependency_cycle",
@@ -184,19 +186,32 @@ func _test_coordinator_contract() -> void:
 		coordinator.get_participant_dependencies(&"second") == ["first"],
 		"coordinator exposes normalized dependency diagnostics"
 	)
+	var duplicate_candidate := FakeParticipant.new("duplicate", events)
 	var duplicate: Dictionary = coordinator.register_participant(
-		&"first", FakeParticipant.new("duplicate", events)
+		&"first", duplicate_candidate
 	)
 	_check(
 		str(duplicate.get("reason", "")) == "duplicate_participant",
 		"duplicate lifecycle ids are rejected"
 	)
+	var invalid_candidate := InvalidParticipant.new()
 	var invalid: Dictionary = coordinator.register_participant(
-		&"invalid", InvalidParticipant.new()
+		&"invalid", invalid_candidate
 	)
 	_check(
 		str(invalid.get("reason", "")) == "participant_contract",
 		"participants missing lifecycle methods are rejected"
+	)
+	_check(
+		bool(missing_dependency.get("participant_disposed", false))
+		and bool(self_dependency.get("participant_disposed", false))
+		and bool(duplicate.get("participant_disposed", false))
+		and bool(invalid.get("participant_disposed", false))
+		and not is_instance_valid(missing_candidate)
+		and not is_instance_valid(cycle_candidate)
+		and not is_instance_valid(duplicate_candidate)
+		and not is_instance_valid(invalid_candidate),
+		"every rejected unparented participant candidate is released immediately"
 	)
 	var normalized: Dictionary = coordinator.normalize_world_state(
 		{"marker":"world-a", "normalization_order":[]}
