@@ -17,12 +17,17 @@ var _cycle: HSlider
 var _autosave_interval: OptionButton
 var _show_tutorial: CheckButton
 var _show_interaction_prompts: CheckButton
+var _scroll_container: ScrollContainer
+var _settings_content: VBoxContainer
 var _status: Label
+var _actions: HBoxContainer
+var _apply_button: Button
+var _back_button: Button
 
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
-	custom_minimum_size = Vector2(680, 548)
+	custom_minimum_size = Vector2(680, 520)
 	_build_ui()
 
 
@@ -34,6 +39,27 @@ func setup(p_save_service, _p_audio_service = null) -> void:
 func show_apply_result(saved: bool) -> void:
 	_status.text = "已保存并应用" if saved else "已应用，但设置文件保存失败"
 	_status.modulate = Tokens.severity_color("success" if saved else "warning")
+
+
+func get_scroll_container() -> ScrollContainer:
+	return _scroll_container
+
+
+func get_action_buttons() -> Array[Button]:
+	return [_apply_button, _back_button]
+
+
+func get_layout_snapshot() -> Dictionary:
+	return {
+		"panel_rect": get_global_rect(),
+		"scroll_rect": _scroll_container.get_global_rect() if _scroll_container != null else Rect2(),
+		"actions_rect": _actions.get_global_rect() if _actions != null else Rect2(),
+		"content_minimum_size": (
+			_settings_content.get_combined_minimum_size()
+			if _settings_content != null
+			else Vector2.ZERO
+		),
+	}
 
 
 func _build_ui() -> void:
@@ -49,11 +75,26 @@ func _build_ui() -> void:
 	subtitle.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	subtitle.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(subtitle)
-	_add_section_title(root, "操作")
-	_sensitivity = _add_slider(root, "鼠标灵敏度", 0.05, 0.6, 0.01)
-	_add_section_title(root, "视觉与性能")
+
+	_scroll_container = ScrollContainer.new()
+	_scroll_container.name = "SettingsScroll"
+	_scroll_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_scroll_container.custom_minimum_size.y = 300.0
+	root.add_child(_scroll_container)
+	_settings_content = VBoxContainer.new()
+	_settings_content.name = "SettingsContent"
+	_settings_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_settings_content.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	_scroll_container.add_child(_settings_content)
+
+	_add_section_title(_settings_content, "操作")
+	_sensitivity = _add_slider(_settings_content, "鼠标灵敏度", 0.05, 0.6, 0.01)
+	_add_section_title(_settings_content, "视觉与性能")
 	var distance_row := HBoxContainer.new()
-	root.add_child(distance_row)
+	_settings_content.add_child(distance_row)
 	var distance_label := Label.new()
 	distance_label.text = "区块视距"
 	distance_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -65,12 +106,12 @@ func _build_ui() -> void:
 	distance_row.add_child(_render_distance)
 	_fullscreen = CheckButton.new()
 	_fullscreen.text = "全屏显示"
-	root.add_child(_fullscreen)
-	_add_section_title(root, "声音与世界")
-	_volume = _add_slider(root, "主音量", 0.0, 1.0, 0.01)
-	_cycle = _add_slider(root, "昼夜周期（分钟）", 2.0, 30.0, 1.0)
+	_settings_content.add_child(_fullscreen)
+	_add_section_title(_settings_content, "声音与世界")
+	_volume = _add_slider(_settings_content, "主音量", 0.0, 1.0, 0.01)
+	_cycle = _add_slider(_settings_content, "昼夜周期（分钟）", 2.0, 30.0, 1.0)
 	var autosave_row := HBoxContainer.new()
-	root.add_child(autosave_row)
+	_settings_content.add_child(autosave_row)
 	var autosave_label := Label.new()
 	autosave_label.text = "自动保存"
 	autosave_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -83,32 +124,34 @@ func _build_ui() -> void:
 			minutes
 		)
 	autosave_row.add_child(_autosave_interval)
-	_add_section_title(root, "引导与可读性")
+	_add_section_title(_settings_content, "引导与可读性")
 	_show_tutorial = CheckButton.new()
 	_show_tutorial.text = "显示新手引导（F1 可临时隐藏）"
-	root.add_child(_show_tutorial)
+	_settings_content.add_child(_show_tutorial)
 	_show_interaction_prompts = CheckButton.new()
 	_show_interaction_prompts.text = "显示准星附近的操作提示"
-	root.add_child(_show_interaction_prompts)
+	_settings_content.add_child(_show_interaction_prompts)
+
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.custom_minimum_size.y = 24.0
 	_status.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
 	root.add_child(_status)
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", Tokens.SPACE_MD)
-	root.add_child(actions)
-	var apply_button := Button.new()
-	apply_button.text = "保存并应用"
-	apply_button.custom_minimum_size.y = 44.0
-	apply_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	apply_button.pressed.connect(_apply)
-	actions.add_child(apply_button)
-	var back := Button.new()
-	back.text = "返回"
-	back.custom_minimum_size = Vector2(160, 44)
-	back.pressed.connect(func() -> void: back_requested.emit())
-	actions.add_child(back)
+	_actions = HBoxContainer.new()
+	_actions.name = "SettingsActions"
+	_actions.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	root.add_child(_actions)
+	_apply_button = Button.new()
+	_apply_button.text = "保存并应用"
+	_apply_button.custom_minimum_size.y = 44.0
+	_apply_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apply_button.pressed.connect(_apply)
+	_actions.add_child(_apply_button)
+	_back_button = Button.new()
+	_back_button.text = "返回"
+	_back_button.custom_minimum_size = Vector2(160, 44)
+	_back_button.pressed.connect(func() -> void: back_requested.emit())
+	_actions.add_child(_back_button)
 
 
 func _add_section_title(parent: Control, title: String) -> void:

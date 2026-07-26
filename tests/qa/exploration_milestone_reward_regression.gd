@@ -52,6 +52,7 @@ func _run() -> void:
 	_test_registry_and_policy()
 	await _test_claim_lifecycle()
 	_test_state_migration()
+	await process_frame
 	await _test_production_composition()
 	if failures.is_empty():
 		print("QA EXPLORATION REWARD PASS | checks=%d" % checks)
@@ -102,6 +103,9 @@ func _test_registry_and_policy() -> void:
 	)
 	_check(str(RewardPolicyScript.find_reward(claimed_snapshot, "first_discovery").get("status", "")) == "claimed", "claimed state overrides derived completion")
 	_check(str(RewardPolicyScript.find_reward(claimed_snapshot, "signature_finding").get("status", "")) == "claimed", "profile-only claimed state is idempotent")
+	# This fixture is intentionally not mounted in the SceneTree. Release it
+	# synchronously so strict ObjectDB leak gates verify the policy test itself.
+	journal.free()
 
 
 func _test_claim_lifecycle() -> void:
@@ -211,8 +215,8 @@ func _test_production_composition() -> void:
 	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
 		hub.audio_service.shutdown()
 	hub.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 6:
+		await process_frame
 
 
 func _item_count(raw_items: Variant, item_id: String) -> int:

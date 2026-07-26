@@ -29,9 +29,59 @@ func _run() -> void:
 	main_menu.call("_show_panel", settings_panel)
 	await process_frame
 	_check(settings_panel != null and settings_panel.visible, "settings surface opens at compact resolution")
+	var settings_rect := settings_panel.get_global_rect() if settings_panel != null else Rect2()
 	_check(
-		settings_panel != null and _rect_inside(viewport_rect, settings_panel.get_global_rect()),
+		settings_panel != null and _rect_inside(viewport_rect, settings_rect),
 		"settings surface remains fully inside the 576p viewport",
+	)
+	var settings_scroll := (
+		settings_panel.call("get_scroll_container") as ScrollContainer
+		if settings_panel != null and settings_panel.has_method("get_scroll_container")
+		else null
+	)
+	var layout: Dictionary = (
+		settings_panel.call("get_layout_snapshot")
+		if settings_panel != null and settings_panel.has_method("get_layout_snapshot")
+		else {}
+	)
+	var scroll_rect: Rect2 = layout.get("scroll_rect", Rect2())
+	var actions_rect: Rect2 = layout.get("actions_rect", Rect2())
+	var content_minimum: Vector2 = layout.get("content_minimum_size", Vector2.ZERO)
+	_check(
+		settings_scroll != null
+		and settings_scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_AUTO,
+		"settings surface owns one bounded vertical scroll region",
+	)
+	_check(
+		_rect_inside(settings_rect, scroll_rect)
+		and _rect_inside(settings_rect, actions_rect),
+		"scrolling controls and fixed actions remain inside the settings panel",
+	)
+	_check(
+		content_minimum.y > scroll_rect.size.y,
+		"compact settings content becomes scrollable instead of enlarging the panel",
+	)
+	var action_buttons: Array = (
+		settings_panel.call("get_action_buttons")
+		if settings_panel != null and settings_panel.has_method("get_action_buttons")
+		else []
+	)
+	var actions_accessible := action_buttons.size() == 2
+	for raw_button: Variant in action_buttons:
+		if raw_button is not Button:
+			actions_accessible = false
+			continue
+		var button := raw_button as Button
+		actions_accessible = (
+			actions_accessible
+			and button.visible
+			and _rect_inside(viewport_rect, button.get_global_rect())
+		)
+	_check(actions_accessible, "save and back actions remain visible outside the scroll region")
+	var autosave_option := settings_panel.get("_autosave_interval") as OptionButton
+	_check(
+		autosave_option != null and autosave_option.item_count == 5,
+		"compact settings retain all bounded autosave choices",
 	)
 	main_menu.call("show_main")
 	var settings: Dictionary = hub.current_settings.duplicate(true)
@@ -90,8 +140,8 @@ func _run() -> void:
 	if audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
 	game.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 6:
+		await process_frame
 	if failures.is_empty():
 		print("QA UI LAYOUT PASS | checks=%d" % checks)
 		quit(0)
