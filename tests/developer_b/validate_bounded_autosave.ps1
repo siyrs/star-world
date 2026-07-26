@@ -33,9 +33,11 @@ $paths = [ordered]@{
   participant = Join-Path $root 'src\save\autosave_runtime_participant.gd'
   settings_policy = Join-Path $root 'src\settings\game_settings_policy.gd'
   final_hub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
+  runtime_health_hub = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
   settings_panel = Join-Path $root 'src\ui\settings_panel.gd'
   runtime_test = Join-Path $root 'tests\qa\bounded_autosave_runtime_regression.gd'
   desktop_test = Join-Path $root 'tests\qa\bounded_autosave_desktop_acceptance.gd'
+  failed_return_test = Join-Path $root 'tests\qa\runtime_health_failed_return_regression.gd'
   settings_test = Join-Path $root 'tests\qa\settings_retest.gd'
   workflow = Join-Path $root '.github\workflows\bounded-autosave-tests.yml'
   run_all = Join-Path $root 'tests\run_all.ps1'
@@ -84,14 +86,16 @@ foreach ($token in @(
   '"autosave_minutes"\s*:\s*5',
   'AUTOSAVE_MINUTES\s*:=\s*\[0,\s*2,\s*5,\s*10,\s*15\]',
   'func\s+normalize\s*\(',
+  'var\s+normalized\s*:=\s*defaults\(\)',
   'func\s+merge\s*\(',
   'func\s+normalize_autosave_minutes\s*\(',
-  'unknown',
+  'return\s+normalized',
   'is_finite'
 )) {
   Assert-Matches $text.settings_policy $token "Canonical settings policy is missing autosave normalization: $token"
 }
 Assert-NotMatches $text.settings_policy 'extends\s+Node|FileAccess|save_settings' 'Settings policy must remain pure and persistence-free'
+Assert-NotMatches $text.settings_policy 'normalized\.merge\(raw_settings' 'Unknown settings must not escape the canonical whitelist'
 
 foreach ($token in @(
   'AutosaveRuntimeParticipantScript',
@@ -106,7 +110,10 @@ foreach ($token in @(
 )) {
   Assert-Matches $text.final_hub $token "Final production composition is missing autosave integration: $token"
 }
-Assert-Matches $text.final_hub 'Registered last|registered last|Registered last' 'Autosave composition must document reverse-cleanup ordering'
+Assert-Matches $text.final_hub 'Registered last|registered last' 'Autosave composition must document reverse-cleanup ordering'
+
+Assert-Matches $text.runtime_health_hub 'func\s+return_to_menu\s*\(\)[\s\S]{0,700}super\.return_to_menu\(\)[\s\S]{0,300}current_world_id\.is_empty\(\)[\s\S]{0,200}detach_runtime' 'Runtime health must detach only after the authoritative return succeeds'
+Assert-NotMatches $text.runtime_health_hub 'func\s+return_to_menu\s*\(\)[\s\S]{0,180}detach_runtime[\s\S]{0,180}super\.return_to_menu' 'Runtime health must not detach before a fallible final save'
 
 foreach ($token in @(
   'game_settings_policy\.gd',
@@ -144,6 +151,15 @@ foreach ($phrase in @(
 }
 
 foreach ($phrase in @(
+  'failed final save keeps the player in the current world',
+  'failed final save keeps F3 attached to the world still in use',
+  'failed final save remains visible as critical operational evidence',
+  'runtime health detaches only after world ownership is actually released'
+)) {
+  Assert-Matches $text.failed_return_test ([regex]::Escape($phrase)) "Failed-return health regression is missing coverage: $phrase"
+}
+
+foreach ($phrase in @(
   'production settings policy normalizes autosave to an allowed interval',
   'live autosave runtime receives the normalized interval',
   'reloaded autosave runtime uses the persisted interval',
@@ -158,6 +174,7 @@ foreach ($token in @(
   'bounded_autosave_runtime_regression\.gd',
   'settings_retest\.gd',
   'service_hub_feature_lifecycle_regression\.gd',
+  'runtime_health_failed_return_regression\.gd',
   'bounded_autosave_desktop_acceptance\.gd',
   'bounded-autosave-desktop-settings\.png',
   'bounded-autosave-desktop\.json'
@@ -167,7 +184,8 @@ foreach ($token in @(
 
 foreach ($token in @(
   'validate_bounded_autosave\.ps1',
-  'bounded_autosave_runtime_regression\.gd'
+  'bounded_autosave_runtime_regression\.gd',
+  'runtime_health_failed_return_regression\.gd'
 )) {
   Assert-Matches $text.run_all $token "Full regression entry point is missing autosave coverage: $token"
 }
@@ -184,7 +202,8 @@ foreach ($phrase in @(
 }
 Assert-Matches $text.testing 'bounded_autosave_runtime_regression\.gd' 'Testing guide must document the autosave domain command'
 Assert-Matches $text.testing 'bounded_autosave_desktop_acceptance\.gd' 'Testing guide must document the autosave desktop command'
+Assert-Matches $text.testing 'runtime_health_failed_return_regression\.gd' 'Testing guide must document the failed-return regression'
 Assert-Matches $text.roadmap '有界自动保存' 'Product roadmap must record the completed bounded autosave capability'
 Assert-Matches $text.roadmap 'BOUNDED_AUTOSAVE_RUNTIME\.md' 'Product roadmap must link the autosave contract'
 
-Write-Host 'PASS bounded_autosave interval=0|2|5|10|15 active_time=pause-aware manual=deduplicated retries=15|60|300 participants=7 persistence=authoritative ui=fact-driven desktop=visual'
+Write-Host 'PASS bounded_autosave interval=0|2|5|10|15 active_time=pause-aware manual=deduplicated retries=15|60|300 participants=7 persistence=authoritative ui=fact-driven failed_return=attached desktop=visual'
