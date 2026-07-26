@@ -1,6 +1,7 @@
 extends SceneTree
 
 const ServiceHubScene = preload("res://scenes/ui/service_hub.tscn")
+const CLEANUP_FRAMES := 8
 
 var checks := 0
 var failures: Array[String] = []
@@ -127,10 +128,16 @@ func _finish(hub: Node, save: Node, world_id: String) -> void:
 			save.call("delete_world", world_id)
 	if hub != null and is_instance_valid(hub):
 		var audio: Node = hub.get("audio_service") as Node
-		if audio != null and audio.has_method("shutdown"):
+		if audio != null and audio.has_method("dispose"):
+			audio.call("dispose")
+			_check(
+				bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+				"failed-return fixture disposes generated audio playback nodes"
+			)
+		elif audio != null and audio.has_method("shutdown"):
 			audio.call("shutdown")
 		hub.queue_free()
-	for _frame in 6:
+	for _frame in CLEANUP_FRAMES:
 		await process_frame
 	if failures.is_empty():
 		print("QA RUNTIME HEALTH FAILED RETURN PASS | checks=%d" % checks)
