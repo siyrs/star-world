@@ -26,12 +26,23 @@ func _run() -> void:
 	var hub: Node = game.service_hub
 	var coordinator: Node = hub.get("feature_lifecycle") if hub != null else null
 	var runtime: Node = hub.get("exploration_runtime_participant") if hub != null else null
+	var autosave: Node = hub.get("autosave_runtime_participant") if hub != null else null
 	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
 	_check(
-		hub != null and coordinator != null and runtime != null and machine_runtime != null,
-		"production game mounts exploration and Machine Base runtime participants"
+		hub != null
+		and coordinator != null
+		and runtime != null
+		and autosave != null
+		and machine_runtime != null,
+		"production game mounts exploration, autosave and Machine Base runtime participants"
 	)
-	if hub == null or coordinator == null or runtime == null or machine_runtime == null:
+	if (
+		hub == null
+		or coordinator == null
+		or runtime == null
+		or autosave == null
+		or machine_runtime == null
+	):
 		await _finish(game, hub)
 		return
 	var state: Dictionary = hub.save_service.create_world(
@@ -58,12 +69,24 @@ func _run() -> void:
 		coordinator.call("get_participant_dependencies", &"exploration_journal_rewards") == ["exploration_runtime"],
 		"production dependency graph orders journal after exploration runtime"
 	)
+	_check(
+		coordinator.call("get_participant_dependencies", &"autosave_runtime") == [
+			"machine_runtime",
+			"agriculture_runtime",
+			"husbandry_runtime",
+			"ranch_runtime",
+			"exploration_runtime",
+			"exploration_journal_rewards",
+		],
+		"production dependency graph orders autosave after every persisted participant"
+	)
 	if player == null or prospecting == null or danger == null:
 		await _finish(game, hub)
 		return
 	var lifecycle_before: Dictionary = runtime.call("get_lifecycle_snapshot")
 	_check(int(lifecycle_before.get("bound_player_id", 0)) == player.get_instance_id(), "runtime participant binds prospecting to the production player")
 	_check(bool(lifecycle_before.get("active", false)), "runtime participant activates with gameplay")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "bounded autosave activates with gameplay")
 	_check(bool(machine_runtime.call("is_active")), "Machine Base activates with gameplay")
 
 	var transitions: Array[String] = []
@@ -134,6 +157,7 @@ func _run() -> void:
 	var loaded: Dictionary = hub.save_service.load_world(_world_id)
 	_check((loaded.get("exploration", {}).get("records", []) as Array).size() == 1, "saved world contains the participant-owned exploration record")
 	_check(loaded.has("machines") and loaded.get("machines", {}).has("furnaces"), "saved world contains the compatible Machine Base domain")
+	_check(not loaded.has("autosave"), "saved world excludes transient autosave scheduling evidence")
 
 	var old_player := player
 	hub.return_to_menu()
@@ -146,6 +170,7 @@ func _run() -> void:
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 0, "return-to-menu clears runtime prospecting state")
 	_check((danger.call("get_snapshot") as Dictionary).is_empty(), "return-to-menu clears runtime danger state")
 	_check(not bool(machine_runtime.call("is_active")), "return-to-menu stops Machine Base")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "return-to-menu stops bounded autosave")
 
 	game.begin_world_state(loaded)
 	for _frame in 10:
@@ -155,11 +180,13 @@ func _run() -> void:
 	_check(player != null and player.get("prospecting_service") == prospecting, "full reload rebinds the same production prospecting port")
 	_check(int((prospecting.call("get_snapshot") as Dictionary).get("record_count", 0)) == 1, "full reload restores the saved exploration record")
 	_check(bool(machine_runtime.call("is_active")), "full reload reactivates Machine Base")
+	_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload reactivates bounded autosave")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 6, "production diagnostics expose all six participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 7, "production diagnostics expose all seven participants")
 	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "production diagnostics include Machine Base fields")
 	_check(character_snapshot.has("husbandry") and character_snapshot.has("animal_products"), "production character diagnostics include husbandry and ranch participant fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "production character diagnostics retain legacy runtime fields")
+	_check(character_snapshot.has("autosave"), "production character diagnostics include bounded autosave evidence")
 
 	game.call("_abort_world_start", "qa_exploration_runtime_failure")
 	for _frame in 4:
@@ -167,6 +194,7 @@ func _run() -> void:
 	_check(hub.current_world_id.is_empty(), "real failed-start path resets the hub identity")
 	_check(int(runtime.call("get_lifecycle_snapshot").get("bound_player_id", -1)) == 0, "failed-start cleanup removes the current player binding")
 	_check(not bool(machine_runtime.call("is_active")), "failed-start cleanup stops Machine Base")
+	_check(not bool(autosave.call("get_snapshot").get("active", true)), "failed-start cleanup stops bounded autosave")
 	await _finish(game, hub)
 
 
