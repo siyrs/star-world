@@ -13,7 +13,6 @@ const JournalRewardParticipantScript = preload(
 const AutosaveRuntimeParticipantScript = preload(
 	"res://src/save/autosave_runtime_participant.gd"
 )
-const SettingsPolicyScript = preload("res://src/settings/game_settings_policy.gd")
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
 const AUTOSAVE_RUNTIME_FEATURE := &"autosave_runtime"
@@ -30,10 +29,9 @@ var autosave_runtime_participant: Node
 
 func _ready() -> void:
 	super._ready()
-	# Final production composition owns the canonical settings policy. This keeps
-	# old settings files compatible while ensuring autosave and every existing
-	# setting receive the same whitelist and bounds before runtime participants
-	# read them.
+	# The canonical SettingsPolicyScript is owned by GameplayServiceHub and
+	# inherited here. Final composition reuses that one policy before installing
+	# the autosave participant instead of declaring another settings owner.
 	current_settings = SettingsPolicyScript.normalize(current_settings)
 	_apply_settings(current_settings)
 	exploration_runtime_participant = _register_feature_participant(
