@@ -2,7 +2,7 @@
 
 ## 目标
 
-保存系统继续保持单一权威事务：所有手动保存、自动保存、返回主菜单保存和维护级系统保存都复用 `GameplayServiceHub.save_current()`，检查点时间线只记录结果，不创建第二个 Timer、第二份文件或平行存档域。
+保存系统继续保持**单一权威保存事务**：所有手动保存、自动保存、返回主菜单保存和维护级系统保存都复用 `GameplayServiceHub.save_current()`，检查点时间线只记录结果，不创建第二个 Timer、第二份文件或平行存档域。
 
 本能力解决三个玩家与运维问题：
 
@@ -22,7 +22,7 @@
 
 ```text
 manual
- autosave
+autosave
 return_to_menu
 system
 ```
