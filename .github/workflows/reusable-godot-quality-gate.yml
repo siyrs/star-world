@@ -37,6 +37,11 @@ on:
         required: false
         type: number
         default: 360000
+      primary_headless_verbose:
+        description: Run the captured primary script with Godot --verbose diagnostics.
+        required: false
+        type: boolean
+        default: false
       domain_scripts:
         description: Newline-delimited Godot scripts executed through the awaited wrapper.
         required: false
@@ -170,17 +175,20 @@ jobs:
         env:
           PRIMARY_HEADLESS_SCRIPT: ${{ inputs.primary_headless_script }}
           PRIMARY_HEADLESS_OUTPUT_BASE: ${{ inputs.primary_headless_output_base }}
+          PRIMARY_HEADLESS_VERBOSE: ${{ inputs.primary_headless_verbose }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:PRIMARY_HEADLESS_OUTPUT_BASE)) {
             throw 'primary_headless_output_base is required when primary_headless_script is set'
           }
           $godotPath = (Get-Command godot).Source
+          $verboseGodot = $env:PRIMARY_HEADLESS_VERBOSE -eq 'true'
           .\tests\ci\run_godot_headless_test.ps1 `
             -Godot $godotPath `
             -ProjectRoot . `
             -ScriptPath $env:PRIMARY_HEADLESS_SCRIPT `
             -OutputBasePath $env:PRIMARY_HEADLESS_OUTPUT_BASE `
-            -TimeoutMilliseconds ${{ inputs.primary_headless_timeout_milliseconds }}
+            -TimeoutMilliseconds ${{ inputs.primary_headless_timeout_milliseconds }} `
+            -VerboseGodot:$verboseGodot
 
       - name: Run awaited domain scripts
         if: ${{ inputs.domain_scripts != '' }}
