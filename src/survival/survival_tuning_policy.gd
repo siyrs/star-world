@@ -58,12 +58,10 @@ static func normalize_catalog(raw: Dictionary = {}) -> Dictionary:
 	var raw_profiles: Dictionary = raw.get("profiles", {}) if raw.get("profiles", {}) is Dictionary else {}
 	var profiles: Dictionary = {}
 	for profile_id: String in PROFILE_IDS:
-		var candidate: Dictionary = (
-			raw_profiles.get(profile_id, {})
-			if raw_profiles.get(profile_id, {}) is Dictionary
-			else {}
-		)
-		profiles[profile_id] = normalize_profile(candidate, FALLBACK_PROFILES[profile_id])
+		var raw_candidate: Variant = raw_profiles.get(profile_id, {})
+		var candidate: Dictionary = raw_candidate if raw_candidate is Dictionary else {}
+		var fallback: Dictionary = (FALLBACK_PROFILES[profile_id] as Dictionary)
+		profiles[profile_id] = normalize_profile(candidate, fallback)
 	normalized["profiles"] = profiles
 	return normalized
 
@@ -71,7 +69,7 @@ static func normalize_catalog(raw: Dictionary = {}) -> Dictionary:
 static func normalize_profile(raw: Dictionary, fallback: Dictionary = {}) -> Dictionary:
 	var base: Dictionary = fallback.duplicate(true)
 	if base.is_empty():
-		base = FALLBACK_PROFILES[DEFAULT_PROFILE].duplicate(true)
+		base = (FALLBACK_PROFILES[DEFAULT_PROFILE] as Dictionary).duplicate(true)
 	return {
 		"passive_hunger_interval": _bounded_number(
 			raw.get("passive_hunger_interval"),
@@ -103,7 +101,9 @@ static func normalize_profile(raw: Dictionary, fallback: Dictionary = {}) -> Dic
 static func profile_from_catalog(catalog: Dictionary, profile_id: String) -> Dictionary:
 	var normalized := normalize_catalog(catalog)
 	var selected := normalize_profile_id(profile_id)
-	return (normalized["profiles"] as Dictionary).get(selected, {}).duplicate(true)
+	var profiles: Dictionary = normalized["profiles"] as Dictionary
+	var raw_profile: Variant = profiles.get(selected, {})
+	return raw_profile.duplicate(true) if raw_profile is Dictionary else {}
 
 
 static func _bounded_number(
