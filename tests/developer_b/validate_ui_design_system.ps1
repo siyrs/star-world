@@ -115,7 +115,7 @@ Assert-Matches $text.protected_menu 'protected_save_browser_panel\.gd' 'Producti
 
 foreach ($pair in @(
   @('map','MapCatalogScroll'),
-  @('map','SelectedCardButton'),
+  @('map','set_selected_card'),
   @('map','地图简报'),
   @('settings','section_card_count'),
   @('settings','SettingsScroll'),
