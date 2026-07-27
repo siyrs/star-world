@@ -80,7 +80,7 @@ if ($furnaceText -notmatch 'MAX_SIMULATION_ITERATIONS\s*:=\s*512') {
 if ($furnacePanelText -notmatch 'get_recipe_text' -or $furnacePanelText -notmatch '队列 %d' -or $furnacePanelText -notmatch '全部 %.1f 秒') {
   throw 'Furnace panel must expose queue count and whole-batch ETA to players'
 }
-if ($furnacePanelText -notmatch '共享调度推进') {
+if ($furnacePanelText -notmatch '共享调度[^\r\n]*推进') {
   throw 'Furnace panel must explain shared background processing'
 }
 
