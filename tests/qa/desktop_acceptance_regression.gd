@@ -32,12 +32,12 @@ func _run() -> void:
 	_check(menu != null and menu.visible, "main menu is visible on desktop startup")
 	_check(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED, "startup does not trap the mouse")
 
-	var start_button := _find_button(menu, "开始游戏")
-	_check(start_button != null, "main menu exposes the start button")
-	if start_button != null:
-		await _click_control(start_button)
+	var continue_button := _find_button(menu, "继续游戏")
+	_check(continue_button != null, "main menu exposes the continue-or-create button")
+	if continue_button != null:
+		await _click_control(continue_button)
 	var map_panel: Control = menu.get("_map_panel")
-	_check(map_panel != null and map_panel.visible, "a real pointer click opens map selection")
+	_check(map_panel != null and map_panel.visible, "a real pointer click opens map selection when no save exists")
 
 	var world_name := map_panel.get("_world_name") as LineEdit
 	var seed_input := map_panel.get("_seed") as LineEdit
