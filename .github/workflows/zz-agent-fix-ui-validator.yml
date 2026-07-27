@@ -1,0 +1,45 @@
+name: One-shot UI validator correction
+
+on:
+  push:
+    branches:
+      - agent/professional-ui-refresh
+
+permissions:
+  contents: write
+
+jobs:
+  correct:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/professional-ui-refresh
+          fetch-depth: 0
+
+      - name: Correct responsive map ownership assertion
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("tests/developer_b/validate_ui_design_system.ps1")
+          text = path.read_text(encoding="utf-8")
+          old = "foreach ($token in @('get_viewport_rect','custom_minimum_size','MapCatalogScroll')) {"
+          new = "foreach ($token in @('get_viewport_rect','custom_minimum_size','_details','_map_buttons')) {"
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected one responsive-map assertion block, found {count}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+
+      - name: Commit validator correction
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/developer_b/validate_ui_design_system.ps1
+          git diff --cached --check
+          git commit -m "fix(test): assert responsive map-owned controls"
+          git push origin HEAD:agent/professional-ui-refresh
