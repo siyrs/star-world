@@ -9,7 +9,6 @@ const TrashManagerPanelScript = preload(
 )
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const UiKit = preload("res://src/ui/ui_kit.gd")
-const QueryPolicy = preload("res://src/ui/save_browser_query_policy.gd")
 
 var _delete_button: Button
 var _undo_delete_button: Button
