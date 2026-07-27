@@ -1,11 +1,11 @@
 class_name ProtectedMainMenu
-extends "res://src/ui/main_menu.gd"
+extends "res://src/ui/responsive_main_menu.gd"
 
 const ProtectedMapPanelScript = preload(
-	"res://src/ui/map_selection_panel.gd"
+	"res://src/ui/responsive_map_selection_panel.gd"
 )
 const ProtectedSaveBrowserScript = preload(
-	"res://src/ui/protected_save_browser_panel.gd"
+	"res://src/ui/responsive_protected_save_browser_panel.gd"
 )
 const ProtectedSettingsPanelScript = preload(
 	"res://src/ui/settings_panel.gd"
@@ -17,14 +17,14 @@ const ProtectedUpdatePromptPanelScript = preload(
 
 func _build_subpanels() -> void:
 	_map_panel = ProtectedMapPanelScript.new()
-	_center_panel(_map_panel, Vector2(960, 610))
+	_center_panel(_map_panel, Vector2(1000, 650))
 	add_child(_map_panel)
 	_map_panel.visible = false
 	_map_panel.create_requested.connect(_on_create_requested)
 	_map_panel.back_requested.connect(show_main)
 
 	_save_panel = ProtectedSaveBrowserScript.new()
-	_center_panel(_save_panel, Vector2(960, 610))
+	_center_panel(_save_panel, Vector2(1000, 650))
 	add_child(_save_panel)
 	_save_panel.visible = false
 	_save_panel.load_requested.connect(_on_load_requested)
