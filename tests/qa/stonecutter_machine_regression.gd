@@ -337,10 +337,17 @@ func _test_production_service_hub() -> void:
 	_check(not scheduler.call("is_active"), "return-to-menu stops both machine domains")
 	if not world_id.is_empty():
 		hub.save_service.delete_world(world_id)
-	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
-		hub.audio_service.shutdown()
+	var audio: Node = hub.get("audio_service") as Node
+	if audio != null and audio.has_method("dispose"):
+		audio.call("dispose")
+		_check(
+			bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+			"stonecutter fixture terminally disposes generated audio playback nodes"
+		)
+	elif audio != null and audio.has_method("shutdown"):
+		audio.call("shutdown")
 	hub.queue_free()
-	for _frame in 5:
+	for _frame in 12:
 		await process_frame
 
 
