@@ -6,7 +6,7 @@ const FRAMES_PER_CYCLE := 72
 const SAMPLE_INTERVAL_FRAMES := 12
 const MENU_SETTLE_FRAMES := 60
 const MENU_NODE_MARGIN := 40
-const CLEANUP_FRAMES := 8
+const CLEANUP_FRAMES := 40
 
 var checks := 0
 var failures: Array[String] = []
@@ -41,7 +41,13 @@ func _run() -> void:
 		"long-running telemetry history remains bounded",
 	)
 	var audio = hub.get("audio_service")
-	if audio != null and audio.has_method("shutdown"):
+	if audio != null and audio.has_method("dispose"):
+		audio.call("dispose")
+		_check(
+			bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+			"runtime soak terminally disposes every generated audio playback node",
+		)
+	elif audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
 	game.queue_free()
 	for _frame in CLEANUP_FRAMES:
@@ -272,5 +278,8 @@ func _world_state(world_id: String, seed_value: int) -> Dictionary:
 
 func _check(condition: bool, description: String) -> void:
 	checks += 1
-	if not condition:
+	if condition:
+		print("  PASS  %s" % description)
+	else:
+		print("  FAIL  %s" % description)
 		failures.append(description)
