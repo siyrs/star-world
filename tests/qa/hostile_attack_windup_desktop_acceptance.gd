@@ -107,9 +107,6 @@ func _run() -> void:
 		_check(image.get_size() == root.size, "hostile telegraph evidence uses the 1024x576 product resolution")
 		_save_image(image)
 
-	# Drive the real movement input backwards until the player exits the warning ring.
-	# The durable cancellation reason is the acceptance contract rather than one
-	# transient cooldown frame on a slow software renderer.
 	await _hold_key(KEY_S, 28)
 	var cancelled_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
 	var cancel_reason := str(cancelled_snapshot.get("last_cancel_reason", ""))
@@ -124,7 +121,6 @@ func _run() -> void:
 	_check(player.global_position.distance_to(zombie.global_position) > float(cancelled_snapshot.get("attack_range", 0.0)), "real WASD movement leaves the committed hit range")
 	_check(_landed_hits == 0, "a successful dodge produces no hostile landed-hit event")
 
-	# Re-enter after the short cancel recovery and remain in range for one committed hit.
 	await create_timer(0.75).timeout
 	player.global_position = player_start
 	player.call("reset_motion")
@@ -142,16 +138,16 @@ func _run() -> void:
 	_check(is_equal_approx(float(hub.survival.health), health_before_hit - 1.0), "committed zombie attack applies the production one-point damage")
 	_check(_landed_hits == 1, "one committed attack emits exactly one landed-hit event")
 	_check(str(hit_snapshot.get("state", "")) == "cooldown", "successful hit enters data-driven cooldown")
-	_check(float(hit_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "cooldown remains externally diagnosable")
+	var initial_cooldown := float(hit_snapshot.get("cooldown_remaining", 0.0))
+	_check(initial_cooldown > 0.0, "cooldown remains externally diagnosable")
 	var landed_after_hit := _landed_hits
 	player.set_physics_process(false)
-	for _frame in 45:
-		await physics_frame
-		await process_frame
+	var cooldown_probe_seconds := minf(0.6, maxf(0.1, initial_cooldown * 0.2))
+	await create_timer(cooldown_probe_seconds, true, false, true).timeout
 	var cooldown_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
 	_check(_landed_hits == landed_after_hit, "cooldown prevents an immediate duplicate hostile landed-hit event")
-	_check(str(cooldown_snapshot.get("state", "")) == "cooldown", "hostile remains in its data-driven cooldown during the duplicate-hit window")
-	_check(float(cooldown_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "duplicate-hit window retains positive cooldown evidence")
+	_check(str(cooldown_snapshot.get("state", "")) == "cooldown", "hostile remains in its data-driven cooldown during the wall-clock duplicate-hit probe")
+	_check(float(cooldown_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "wall-clock duplicate-hit probe retains positive cooldown evidence")
 	_check(bool(player.get("input_enabled")), "hostile telegraph and dodge never disable player control")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "hostile combat never releases the gameplay mouse")
 	_check(bool(hub.save_current()), "transient hostile windup coexists with the production save transaction")
