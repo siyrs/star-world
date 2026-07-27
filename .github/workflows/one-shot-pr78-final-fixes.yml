@@ -1,6 +1,7 @@
 name: One-shot PR 78 final convergence fixes
 
 on:
+  pull_request:
   push:
     branches:
       - agent/professional-ui-refresh
