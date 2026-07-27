@@ -15,6 +15,74 @@
 
 任何 `SCRIPT ERROR`、`Parse Error`、ObjectDB 泄漏或退出时仍在使用的资源都会被 CI Runner 判为失败，不能只依赖进程退出码 0。
 
+## 统一专业 UI
+
+### 静态设计合同
+
+```powershell
+powershell -ExecutionPolicy Bypass -File `
+  .\tests\developer_b\validate_ui_design_system.ps1
+```
+
+覆盖：
+
+- “星际远征”语义颜色、8pt 间距、字体、圆角和控件高度；
+- Primary、Secondary、Ghost、Danger、Selected 和 Focus 状态；
+- 主菜单 Hero + Command Deck；
+- 地图、设置、存档、HUD、引导、工作区、弹窗和 F3 的统一结构；
+- 1024×576 与 1280×720 响应式边界；
+- 设计合同、路线图、测试、工作流和 Artifact 声明。
+
+### Theme 与布局回归
+
+```powershell
+godot --headless --path . `
+  --script res://tests/qa/ui_design_system_regression.gd `
+  -- --disable-update-check
+```
+
+该脚本验证：
+
+- Theme 变体的继承关系和高对比键盘焦点；
+- 主文字与表面的可读性；
+- 主菜单六个命令及主/危险层级；
+- Hero、Command Deck、地图、设置和存档在 1280×720 与 1024×576 下不越界；
+- 设置四张分组卡、固定操作区和单一滚动区；
+- 阻塞界面共享暗幕；
+- 暂停菜单主次操作；
+- F3 双卡布局与完整鼠标穿透。
+
+### 十屏真实桌面验收
+
+```powershell
+.\tests\ci\run_godot_desktop_test.ps1 `
+  -Godot C:\path\to\Godot_v4.7-stable_win64_console.exe `
+  -ProjectRoot . `
+  -ScriptPath res://tests/qa/ui_visual_refresh_desktop_acceptance.gd `
+  -OutputPath build\ui-visual-refresh-main-menu.png `
+  -TimeoutMilliseconds 1200000
+```
+
+真实旅程使用鼠标点击主菜单、地图、设置、存档和开始按钮，并使用真实 `Escape`、`E`、`C`、`J`、`F3` 打开游戏内界面。输出：
+
+```text
+build/ui-visual-refresh-main-menu.png
+build/ui-visual-refresh-map-selection.png
+build/ui-visual-refresh-settings.png
+build/ui-visual-refresh-save-browser.png
+build/ui-visual-refresh-gameplay-hud.png
+build/ui-visual-refresh-pause.png
+build/ui-visual-refresh-inventory.png
+build/ui-visual-refresh-crafting.png
+build/ui-visual-refresh-exploration-journal.png
+build/ui-visual-refresh-diagnostics.png
+build/ui-visual-refresh-report.json
+build/ui-visual-refresh-main-menu.stdout.log
+build/ui-visual-refresh-main-menu.stderr.log
+```
+
+十张截图必须来自同一正式生产旅程，JSON 必须保留各页面的布局矩形、Theme 状态、截图路径和世界 ID。该专项不能替代已有熔炉、容器、农业、装备、更新和 Windows Release 的真实桌面门禁，而是与它们共同证明整套 UI 的一致性。
+
 ## 有界自动保存
 
 ### 静态合同
