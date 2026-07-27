@@ -1,0 +1,70 @@
+name: Professional UI visual refresh quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-visual-refresh-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Semantic design system, responsive hierarchy and adjacent UI regression
+      domain_timeout_minutes: 80
+      static_validators: |
+        tests/developer_b/validate_ui_design_system.ps1
+        tests/developer_b/validate_protected_save_deletion.ps1
+        tests/developer_b/validate_bounded_autosave.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_exploration_journal.ps1
+      primary_headless_script: res://tests/qa/ui_design_system_regression.gd
+      primary_headless_output_base: build\ui-design-system-runtime
+      primary_headless_timeout_milliseconds: 600000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/ui_layout_regression.gd
+        res://tests/qa/desktop_input_contract_regression.gd
+        res://tests/qa/settings_retest.gd
+        res://tests/qa/protected_save_browser_regression.gd
+        res://tests/qa/trash_manager_panel_regression.gd
+        res://tests/qa/exploration_journal_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/player_experience_regression.gd
+        res://tests/qa/integration_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: ui-visual-refresh-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/ui-design-system-runtime.stdout.log
+        build/ui-design-system-runtime.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real menu, subpage, HUD, modal, workspace and diagnostics visual acceptance
+      desktop_timeout_minutes: 100
+      desktop_script: res://tests/qa/ui_visual_refresh_desktop_acceptance.gd
+      desktop_output_path: build\ui-visual-refresh-main-menu.png
+      desktop_timeout_milliseconds: 1200000
+      desktop_artifact_name: ui-visual-refresh-evidence
+      desktop_artifact_paths: |
+        build/ui-visual-refresh-main-menu.png
+        build/ui-visual-refresh-map-selection.png
+        build/ui-visual-refresh-settings.png
+        build/ui-visual-refresh-save-browser.png
+        build/ui-visual-refresh-gameplay-hud.png
+        build/ui-visual-refresh-pause.png
+        build/ui-visual-refresh-inventory.png
+        build/ui-visual-refresh-crafting.png
+        build/ui-visual-refresh-exploration-journal.png
+        build/ui-visual-refresh-diagnostics.png
+        build/ui-visual-refresh-report.json
+        build/ui-visual-refresh-main-menu.stdout.log
+        build/ui-visual-refresh-main-menu.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
