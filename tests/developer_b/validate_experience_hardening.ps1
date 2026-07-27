@@ -8,10 +8,10 @@ $survivalPolicyPath = Join-Path $root 'src\survival\survival_tuning_policy.gd'
 $survivalServicePath = Join-Path $root 'src\survival\survival_service.gd'
 $survivalDataPath = Join-Path $root 'data\survival_tuning.json'
 $settingsPolicyPath = Join-Path $root 'src\settings\game_settings_policy.gd'
-$settingsPanelPath = Join-Path $root 'src\ui\settings_panel.gd'
-$serviceHubPath = Join-Path $root 'src\ui\service_hub.gd'
+$settingsPanelPath = Join-Path $root 'src\ui\hardened_settings_panel.gd'
+$serviceHubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
 $particlesPath = Join-Path $root 'src\harvest\block_break_particles.gd'
-$mainMenuPath = Join-Path $root 'src\ui\main_menu.gd'
+$mainMenuPath = Join-Path $root 'src\ui\protected_main_menu.gd'
 $testPath = Join-Path $root 'tests\qa\experience_hardening_regression.gd'
 $desktopPath = Join-Path $root 'tests\qa\experience_hardening_desktop_acceptance.gd'
 $workflowPath = Join-Path $root '.github\workflows\experience-hardening-tests.yml'
@@ -67,7 +67,9 @@ if ($settingsPolicy -notmatch '"survival_difficulty"\s*:\s*"relaxed"') { throw '
 if ($settingsPanel -notmatch '_survival_difficulty' -or $settingsPanel -notmatch 'allowed_survival_difficulties') {
     throw 'Settings UI must expose the authoritative difficulty catalog'
 }
-if ($serviceHub -notmatch 'set_difficulty_profile') { throw 'Service hub must apply difficulty through the survival service port' }
+if ($serviceHub -notmatch 'set_difficulty_profile' -or $serviceHub -notmatch 'survival_tuning') {
+    throw 'Final composition must apply and expose survival difficulty through the service port'
+}
 
 if ($particles -notmatch 'MAX_PARTICLES\s*:=\s*64' -or $particles -notmatch 'MAX_MATERIALS\s*:=\s*128') {
     throw 'Block debris node and material budgets must remain explicit'
@@ -75,8 +77,11 @@ if ($particles -notmatch 'MAX_PARTICLES\s*:=\s*64' -or $particles -notmatch 'MAX
 if ($particles -notmatch 'set_process\(false\)' -or $particles -notmatch 'func\s+get_snapshot\s*\(') {
     throw 'Block debris must stop while idle and expose bounded diagnostics'
 }
-if ($mainMenu -notmatch 'MenuStarfield' -or $mainMenu -match 'Minecraft-classic') {
-    throw 'Main menu must preserve Star World identity instead of shipping Minecraft-copy branding'
+if ($mainMenu -notmatch 'MenuStarfieldScript' -or $mainMenu -notmatch 'StarWorldBackdrop') {
+    throw 'Production main menu must render the Star World pixel-space identity'
+}
+if ($mainMenu -notmatch '继续游戏' -or $mainMenu -notmatch '创建新世界') {
+    throw 'Production main menu must separate continue and create journeys'
 }
 foreach ($testName in @('experience_hardening_regression.gd','experience_hardening_desktop_acceptance.gd')) {
     if ($workflow -notmatch [regex]::Escape($testName) -and $runAll -notmatch [regex]::Escape($testName)) {
@@ -84,4 +89,4 @@ foreach ($testName in @('experience_hardening_regression.gd','experience_hardeni
     }
 }
 
-Write-Host 'PASS experience hardening strict_camera=1 survival_profiles=3 particle_pool=64 material_cache=128 desktop=1'
+Write-Host 'PASS experience hardening strict_camera=1 survival_profiles=3 particle_pool=64 material_cache=128 star_identity=1 desktop=1'
