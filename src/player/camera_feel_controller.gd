@@ -122,7 +122,7 @@ func _update_bob(delta: float, horizontal_speed: float, grounded: bool) -> void:
 			_emit_footstep()
 		target_offset = Vector2(
 			cos(_bob_phase) * amplitude * float(config["bob_lateral_factor"]),
-			sinf(_bob_phase * 2.0) * amplitude * 0.5 - amplitude * 0.5
+			sin(_bob_phase * 2.0) * amplitude * 0.5 - amplitude * 0.5
 		)
 	else:
 		_bob_phase = 0.0
