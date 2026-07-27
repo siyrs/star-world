@@ -65,7 +65,7 @@ func refresh() -> void:
 			continue
 		visible_count += 1
 		var recipe_id := str(recipe.get("id", ""))
-		var can_craft := crafting.can_craft(recipe_id)
+		var can_craft: bool = bool(crafting.can_craft(recipe_id))
 		if can_craft:
 			available_count += 1
 		var button := Button.new()
