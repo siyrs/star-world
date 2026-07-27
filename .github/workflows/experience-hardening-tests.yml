@@ -1,0 +1,58 @@
+name: Post-K3 experience hardening quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experience-hardening-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Strict camera policy, survival difficulty and bounded feedback regression
+      domain_timeout_minutes: 40
+      static_validators: |
+        tests/developer_b/validate_experience_hardening.ps1
+        tests/developer_b/validate_ui_design_system.ps1
+        tests/developer_b/validate_block_visuals.ps1
+      primary_headless_script: res://tests/qa/experience_hardening_regression.gd
+      primary_headless_output_base: build\experience-hardening-runtime
+      primary_headless_timeout_milliseconds: 600000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/settings_retest.gd
+        res://tests/qa/water_survival_regression.gd
+        res://tests/qa/audio_lifecycle_regression.gd
+        res://tests/qa/player_experience_regression.gd
+        res://tests/qa/ui_design_system_regression.gd
+        res://tests/qa/integration_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: experience-hardening-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/experience-hardening-runtime.stdout.log
+        build/experience-hardening-runtime.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real compact settings, difficulty application and accessibility acceptance
+      desktop_timeout_minutes: 35
+      desktop_script: res://tests/qa/experience_hardening_desktop_acceptance.gd
+      desktop_output_path: build\experience-hardening-desktop.png
+      desktop_timeout_milliseconds: 240000
+      desktop_artifact_name: experience-hardening-evidence
+      desktop_artifact_paths: |
+        build/experience-hardening-desktop.png
+        build/experience-hardening-desktop.json
+        build/experience-hardening-desktop.stdout.log
+        build/experience-hardening-desktop.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
