@@ -32,6 +32,7 @@ jobs:
         res://tests/qa/settings_retest.gd
         res://tests/qa/water_survival_regression.gd
         res://tests/qa/audio_lifecycle_regression.gd
+        res://tests/qa/creature_ambient_voice_regression.gd
         res://tests/qa/player_experience_regression.gd
         res://tests/qa/ui_design_system_regression.gd
         res://tests/qa/integration_regression.gd
