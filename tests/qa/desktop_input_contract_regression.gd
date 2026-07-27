@@ -60,14 +60,14 @@ func _test_real_menu_pointer_click() -> void:
 	root.add_child(menu)
 	await process_frame
 	await process_frame
-	var start_button := _find_button(menu, "开始游戏")
-	_check(start_button != null, "start button exists for pointer routing test")
-	if start_button != null:
-		await _click_control(start_button)
+	var continue_button := _find_button(menu, "继续游戏")
+	_check(continue_button != null, "continue button exists for pointer routing test")
+	if continue_button != null:
+		await _click_control(continue_button)
 	var map_panel: Control = menu.get("_map_panel")
 	_check(
 		map_panel != null and map_panel.visible,
-		"viewport mouse press and release reach the start button instead of decorative controls",
+		"viewport mouse press and release reach continue and fall back to creation without a save",
 	)
 	menu.queue_free()
 	await process_frame
