@@ -41,9 +41,11 @@ func _run() -> void:
 			await _click_control(abyss_button)
 	_check(panel.get_selected_map_id() == "abyss_world", "real pointer input selects the abyss resource profile")
 	var abyss_summary := panel.get_resource_summary("abyss_world")
+	var summary_label := panel.get("_resource_summary_label") as Label
+	var visible_summary := summary_label.text if summary_label != null else ""
 	_check(not abyss_summary.is_empty(), "selected map exposes a resource strategy summary")
-	_check(panel.get_details_text().contains(abyss_summary), "production map details display the selected resource strategy")
-	_check(panel.get_details_text().contains("资源特点"), "resource strategy is explicitly labelled for players")
+	_check(visible_summary.contains(abyss_summary), "production map summary displays the selected resource strategy")
+	_check(visible_summary.contains("资源特点"), "resource strategy is explicitly labelled for players")
 
 	var density: Dictionary = {}
 	for profile_id: String in DENSITY_PROFILE_IDS:

@@ -36,8 +36,10 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_protected_save_deletion.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_trash_manager.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_autosave.ps1"
+& "$PSScriptRoot\developer_b\validate_save_checkpoint_timeline.ps1"
 & "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"
 & "$PSScriptRoot\developer_b\validate_runtime_health_sources.ps1"
+& "$PSScriptRoot\developer_b\validate_ui_design_system.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
@@ -106,6 +108,7 @@ Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
 Invoke-GodotTest 'res://tests/qa/map_signature_prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/service_hub_feature_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/bounded_autosave_runtime_regression.gd'
+Invoke-GodotTest 'res://tests/qa/save_checkpoint_timeline_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_scale_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/husbandry_runtime_lifecycle_regression.gd'
@@ -160,6 +163,8 @@ Invoke-GodotTest 'res://tests/qa/runtime_health_failed_return_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_diagnostics_regression.gd'
 Invoke-GodotTest 'res://tests/qa/player_experience_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ui_layout_regression.gd'
+Invoke-GodotTest 'res://tests/qa/ui_design_system_regression.gd'
+Invoke-GodotTest 'res://tests/qa/menu_keyboard_navigation_regression.gd'
 Invoke-GodotTest 'res://tests/qa/visual_acceptance_regression.gd'
 Invoke-GodotTest 'res://tests/qa/adaptive_streaming_regression.gd'
 Invoke-GodotTest 'res://tests/qa/audio_lifecycle_regression.gd'
@@ -167,4 +172,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
+Write-Host 'PASS: professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'

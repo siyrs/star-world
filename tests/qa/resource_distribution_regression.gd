@@ -148,9 +148,15 @@ func _test_map_selection_contract() -> void:
 		panel.call("_select_profile", profile_id)
 		var summary := str(panel.call("get_resource_summary", profile_id))
 		var details := str(panel.call("get_details_text"))
+		var summary_label := panel.get("_resource_summary_label") as Label
+		var visible_summary := summary_label.text if summary_label != null else ""
 		_check(not summary.is_empty(), "%s resource summary is available to the map selection UI" % profile_id)
-		_check(details.contains("资源特点"), "%s map details label the resource strategy" % profile_id)
-		_check(details.contains(summary), "%s map details display the authoritative resource summary" % profile_id)
+		_check(
+			details.contains("生成规则") and details.contains("生存难度"),
+			"%s map briefing preserves generation and difficulty context" % profile_id
+		)
+		_check(visible_summary.contains("资源特点"), "%s map summary labels the resource strategy" % profile_id)
+		_check(visible_summary.contains(summary), "%s map summary displays the authoritative resource profile" % profile_id)
 	panel.queue_free()
 	await process_frame
 	await process_frame

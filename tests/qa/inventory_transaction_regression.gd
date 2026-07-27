@@ -44,6 +44,7 @@ func _test_policy_rejections() -> void:
 		[{"item_id":"torch", "count":0}]
 	)
 	_check(str(invalid.get("reason", "")) == "invalid_addition", "zero-count additions are rejected")
+	inventory.free()
 
 
 func _test_atomic_bundle_capacity() -> void:

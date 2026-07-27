@@ -1,0 +1,54 @@
+name: Save checkpoint timeline quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: save-checkpoint-timeline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Exact save sources, bounded history, transient projection and lifecycle identity
+      domain_timeout_minutes: 70
+      static_validators: |
+        tests/developer_b/validate_save_checkpoint_timeline.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_bounded_autosave.ps1
+      primary_headless_script: res://tests/qa/save_checkpoint_timeline_regression.gd
+      primary_headless_output_base: build\save-checkpoint-timeline-runtime
+      primary_headless_timeout_milliseconds: 600000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/runtime_health_report_policy_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/runtime_health_failed_return_regression.gd
+        res://tests/qa/bounded_autosave_runtime_regression.gd
+        res://tests/qa/ui_layout_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: save-checkpoint-timeline-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/save-checkpoint-timeline-runtime.stdout.log
+        build/save-checkpoint-timeline-runtime.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real pause save, automatic checkpoint, F3 correlation, persistence and visualization
+      desktop_timeout_minutes: 90
+      desktop_script: res://tests/qa/save_checkpoint_timeline_desktop_acceptance.gd
+      desktop_output_path: build\save-checkpoint-timeline-desktop.png
+      desktop_timeout_milliseconds: 900000
+      desktop_artifact_name: save-checkpoint-timeline-evidence
+      desktop_artifact_paths: |
+        build/save-checkpoint-timeline-desktop.png
+        build/save-checkpoint-timeline-desktop.json
+        build/save-checkpoint-timeline-desktop.stdout.log
+        build/save-checkpoint-timeline-desktop.stderr.log
+      desktop_artifact_if_no_files: error

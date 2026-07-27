@@ -7,6 +7,7 @@ const SlotScript = preload("res://src/ui/inventory_slot.gd")
 const IconFactory = preload("res://src/ui/item_icon_factory.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
 const SLOT_INPUT := "input"
 const SLOT_FUEL := "fuel"
 const SLOT_OUTPUT := "output"
@@ -24,10 +25,14 @@ var _fuel_button: Button
 var _output_button: Button
 var _inventory_grid: GridContainer
 var _inventory_buttons: Array = []
+var _machine_card: PanelContainer
+var _inventory_card: PanelContainer
+var _machine_badge: Label
 
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
+	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(900, 520)
 	_build_ui()
 
@@ -52,7 +57,9 @@ func open_machine(machine_id: String, title: String = "熔炉") -> bool:
 		return false
 	_active_machine_id = machine_id
 	_title.text = title
+	_machine_badge.text = "共享调度"
 	_status.text = "点击背包物品可自动放入原料槽或燃料槽"
+	_status.theme_type_variation = "CaptionLabel"
 	refresh()
 	return true
 
@@ -92,21 +99,27 @@ func refresh() -> void:
 	_fuel.value = float(snapshot.get("fuel_ratio", 0.0))
 	var recipe: Dictionary = snapshot.get("recipe", {})
 	if recipe.is_empty():
-		_recipe_label.text = "当前配方：等待原料"
+		_recipe_label.text = "等待可烧制原料"
+		_machine_badge.text = "待机"
 	else:
 		var queued_jobs := maxi(0, int(snapshot.get("queued_jobs", 0)))
 		var remaining := maxf(0.0, float(snapshot.get("remaining_seconds", 0.0)))
 		var total_remaining := maxf(
 			remaining, float(snapshot.get("estimated_total_seconds", remaining))
 		)
-		_recipe_label.text = "当前配方：%s · 队列 %d · 下一份 %.1f 秒 · 全部 %.1f 秒" % [
+		_recipe_label.text = "%s · 队列 %d · 下一份 %.1f 秒 · 全部 %.1f 秒" % [
 			str(recipe.get("name", "")), queued_jobs, remaining, total_remaining
 		]
+		_machine_badge.text = "加工中" if float(snapshot.get("progress_ratio", 0.0)) > 0.0 else "已排队"
 	_status.text = str(snapshot.get("status", "等待操作"))
+	_status.theme_type_variation = "CaptionLabel"
 
 
 func get_layout_rects() -> Dictionary:
 	return {
+		"panel": get_global_rect(),
+		"machine_card": _machine_card.get_global_rect() if _machine_card != null else Rect2(),
+		"inventory_card": _inventory_card.get_global_rect() if _inventory_card != null else Rect2(),
 		"input": _input_button.get_global_rect() if _input_button != null else Rect2(),
 		"fuel": _fuel_button.get_global_rect() if _fuel_button != null else Rect2(),
 		"output": _output_button.get_global_rect() if _output_button != null else Rect2(),
@@ -118,56 +131,66 @@ func _build_ui() -> void:
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	add_child(root)
+
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	header.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(header)
-	_title = Label.new()
-	_title.text = "熔炉"
-	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_title.add_theme_font_size_override("font_size", 26)
-	header.add_child(_title)
-	var close_button := Button.new()
+	var heading := VBoxContainer.new()
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	header.add_child(heading)
+	heading.add_child(UiKit.make_eyebrow("MACHINE PROCESSING"))
+	_title = UiKit.make_title("熔炉")
+	heading.add_child(_title)
+	heading.add_child(UiKit.make_subtitle("机器由共享调度持续推进；关闭界面后继续加工，世界暂停时同步停止。"))
+	_machine_badge = UiKit.make_badge("未连接", "warm")
+	header.add_child(_machine_badge)
+	var close_button := UiKit.style_button(
+		Button.new(), "GhostButton", Vector2(132, Tokens.CONTROL_HEIGHT_MD)
+	)
 	close_button.text = "关闭 [Esc]"
-	close_button.custom_minimum_size = Vector2(140, 40)
 	close_button.pressed.connect(func() -> void: panel_closed.emit())
 	header.add_child(close_button)
-	var description := Label.new()
-	description.text = "多台机器由共享调度推进；关闭界面后继续加工，世界暂停时同步停止。"
-	description.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
-	description.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	root.add_child(description)
-	var machine_panel := PanelContainer.new()
-	machine_panel.add_theme_stylebox_override(
-		"panel",
-		Tokens.panel_style(
-			Tokens.COLOR_SURFACE_RAISED,
-			Tokens.COLOR_BORDER_STRONG,
-			1,
-			Tokens.RADIUS_MD,
-			Tokens.SPACE_SM
-		)
-	)
-	root.add_child(machine_panel)
+
+	_machine_card = UiKit.make_card("CardPanel")
+	root.add_child(_machine_card)
+	var machine_root := VBoxContainer.new()
+	machine_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	_machine_card.add_child(machine_root)
+	var machine_header := HBoxContainer.new()
+	machine_root.add_child(machine_header)
+	var machine_title := Label.new()
+	machine_title.text = "处理链路"
+	machine_title.theme_type_variation = "SectionTitle"
+	machine_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	machine_header.add_child(machine_title)
+	var machine_hint := Label.new()
+	machine_hint.text = "点击机器槽位取回物品"
+	machine_hint.theme_type_variation = "SubduedLabel"
+	machine_header.add_child(machine_hint)
+
 	var machine_row := HBoxContainer.new()
 	machine_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	machine_row.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	machine_panel.add_child(machine_row)
-	_input_button = _make_machine_slot("原料\n空")
+	machine_row.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	machine_root.add_child(machine_row)
+	_input_button = _make_machine_slot("原料\n空", "MachineSlotButton")
 	_input_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_INPUT))
 	machine_row.add_child(_input_button)
+
+	var process_card := UiKit.make_card("InsetPanel", Vector2(330, 118))
+	process_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	machine_row.add_child(process_card)
 	var process_column := VBoxContainer.new()
-	process_column.custom_minimum_size = Vector2(300, 96)
 	process_column.add_theme_constant_override("separation", Tokens.SPACE_XS)
-	machine_row.add_child(process_column)
+	process_card.add_child(process_column)
 	_recipe_label = Label.new()
 	_recipe_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_recipe_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_recipe_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_recipe_label.theme_type_variation = "CaptionLabel"
 	process_column.add_child(_recipe_label)
 	var progress_caption := Label.new()
 	progress_caption.text = "烧制进度"
-	progress_caption.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
-	progress_caption.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	progress_caption.theme_type_variation = "SubduedLabel"
 	process_column.add_child(progress_caption)
 	_progress = ProgressBar.new()
 	_progress.min_value = 0.0
@@ -177,8 +200,7 @@ func _build_ui() -> void:
 	process_column.add_child(_progress)
 	var fuel_caption := Label.new()
 	fuel_caption.text = "燃料余量"
-	fuel_caption.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
-	fuel_caption.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	fuel_caption.theme_type_variation = "SubduedLabel"
 	process_column.add_child(fuel_caption)
 	_fuel = ProgressBar.new()
 	_fuel.min_value = 0.0
@@ -186,64 +208,84 @@ func _build_ui() -> void:
 	_fuel.show_percentage = false
 	_fuel.custom_minimum_size.y = 10.0
 	_fuel.add_theme_stylebox_override(
-		"fill", Tokens.panel_style("#F2A94ADD", "#FFD36C", 0, Tokens.RADIUS_SM, 1.0)
+		"fill",
+		Tokens.panel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM_BRIGHT, 0, Tokens.RADIUS_XL, 1.0)
 	)
 	process_column.add_child(_fuel)
-	_fuel_button = _make_machine_slot("燃料\n空")
+
+	_fuel_button = _make_machine_slot("燃料\n空", "MachineSlotButton")
 	_fuel_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_FUEL))
 	machine_row.add_child(_fuel_button)
 	var arrow := Label.new()
 	arrow.text = "→"
-	arrow.add_theme_font_size_override("font_size", 28)
-	arrow.modulate = Tokens.color(Tokens.COLOR_ACCENT_WARM)
+	arrow.theme_type_variation = "PageTitle"
+	arrow.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_ACCENT_WARM))
 	machine_row.add_child(arrow)
-	_output_button = _make_machine_slot("产出\n空")
+	_output_button = _make_machine_slot("产出\n空", "OutputSlotButton")
 	_output_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_OUTPUT))
 	machine_row.add_child(_output_button)
+
 	_status = Label.new()
+	_status.name = "MachineStatus"
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size.y = 24.0
-	_status.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_status.theme_type_variation = "CaptionLabel"
+	_status.custom_minimum_size.y = 26.0
+	_status.add_theme_stylebox_override(
+		"normal",
+		Tokens.panel_style(Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 6.0)
+	)
 	root.add_child(_status)
-	var separator := HSeparator.new()
-	root.add_child(separator)
+
+	_inventory_card = UiKit.make_card("InsetPanel")
+	_inventory_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_inventory_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(_inventory_card)
+	var inventory_root := VBoxContainer.new()
+	inventory_root.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	_inventory_card.add_child(inventory_root)
 	var inventory_header := HBoxContainer.new()
-	root.add_child(inventory_header)
+	inventory_root.add_child(inventory_header)
 	var inventory_title := Label.new()
 	inventory_title.text = "玩家背包"
+	inventory_title.theme_type_variation = "SectionTitle"
 	inventory_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inventory_title.add_theme_font_size_override("font_size", 20)
 	inventory_header.add_child(inventory_title)
 	var inventory_hint := Label.new()
-	inventory_hint.text = "点击投入 · 点击上方槽位取回"
-	inventory_hint.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
-	inventory_hint.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	inventory_hint.text = "点击投入 · 原料与燃料自动分类"
+	inventory_hint.theme_type_variation = "SubduedLabel"
 	inventory_header.add_child(inventory_hint)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(860, 180)
+	scroll.custom_minimum_size = Vector2(820, 166)
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	root.add_child(scroll)
+	inventory_root.add_child(scroll)
+	var inventory_center := CenterContainer.new()
+	inventory_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(inventory_center)
 	_inventory_grid = GridContainer.new()
 	_inventory_grid.columns = 9
-	_inventory_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_inventory_grid.add_theme_constant_override("h_separation", Tokens.SPACE_XS)
 	_inventory_grid.add_theme_constant_override("v_separation", Tokens.SPACE_XS)
-	scroll.add_child(_inventory_grid)
+	inventory_center.add_child(_inventory_grid)
 	for index in 36:
 		var slot = SlotScript.new()
 		slot.configure(index)
-		slot.custom_minimum_size = Vector2(62, 54)
+		slot.custom_minimum_size = Vector2(58, 50)
 		slot.slot_clicked.connect(_on_inventory_slot_clicked)
 		_inventory_grid.add_child(slot)
 		_inventory_buttons.append(slot)
 
 
-func _make_machine_slot(label: String) -> Button:
-	var button := Button.new()
+func _make_machine_slot(label: String, variation: String) -> Button:
+	var button := UiKit.style_button(
+		Button.new(), variation, Vector2(142, 104)
+	)
 	button.text = label
-	button.custom_minimum_size = Vector2(135, 96)
 	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.expand_icon = true
 	return button
 
 
@@ -260,10 +302,15 @@ func _show_empty_machine() -> void:
 	_input_button.text = "原料\n空"
 	_fuel_button.text = "燃料\n空"
 	_output_button.text = "产出\n空"
+	_input_button.icon = null
+	_fuel_button.icon = null
+	_output_button.icon = null
 	_progress.value = 0.0
 	_fuel.value = 0.0
-	_recipe_label.text = "当前配方：未连接"
+	_recipe_label.text = "等待机器连接"
 	_status.text = "熔炉服务未连接"
+	_status.theme_type_variation = "DangerLabel"
+	_machine_badge.text = "未连接"
 
 
 func _slot_text(label: String, slot: Dictionary) -> String:
@@ -291,6 +338,7 @@ func _on_inventory_slot_clicked(index: int) -> void:
 		return
 	if not furnace_service.transfer_from_inventory_auto(inventory, index, _active_machine_id):
 		_status.text = "该物品不能投入，或目标槽位没有空间"
+		_status.theme_type_variation = "DangerLabel"
 
 
 func _take_machine_slot(slot_name: String) -> void:
@@ -298,6 +346,7 @@ func _take_machine_slot(slot_name: String) -> void:
 		return
 	if not furnace_service.transfer_to_inventory(inventory, slot_name, _active_machine_id):
 		_status.text = "槽位为空，或背包没有足够空间"
+		_status.theme_type_variation = "DangerLabel"
 
 
 func _on_machine_changed(machine_id: String, _snapshot: Dictionary) -> void:
@@ -320,6 +369,7 @@ func _on_transfer_rejected(machine_id: String, reason: String) -> void:
 		"slot_full_or_mismatch": "槽位已满，或需要先取走不同物品",
 		"inventory_full": "背包空间不足",
 	}.get(reason, "无法完成该操作")
+	_status.theme_type_variation = "DangerLabel"
 
 
 func _disconnect_services() -> void:
