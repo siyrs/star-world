@@ -13,6 +13,8 @@ signal ambient_voice_requested(species_id: String)
 const HostileAttackPolicyScript = preload("res://src/entity/hostile_attack_policy.gd")
 const KNOCKBACK_DRAG := 7.5
 const MOTION_EPSILON := 0.0001
+const AMBIENT_VOICE_MIN_SECONDS := 9.0
+const AMBIENT_VOICE_MAX_SECONDS := 24.0
 
 @export var species_id: String = "creature"
 @export var display_name: String = "Creature"
@@ -56,6 +58,7 @@ var _combat_impulse := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 var _gravity: float = 9.8
 var _ambient_voice_timer: float = 0.0
+var _ambient_voice_count := 0
 
 
 func _ready() -> void:
@@ -244,6 +247,16 @@ func get_hostile_attack_snapshot() -> Dictionary:
 	}
 
 
+func get_ambient_voice_snapshot() -> Dictionary:
+	return {
+		"remaining_seconds": _ambient_voice_timer,
+		"request_count": _ambient_voice_count,
+		"minimum_interval_seconds": AMBIENT_VOICE_MIN_SECONDS,
+		"maximum_interval_seconds": AMBIENT_VOICE_MAX_SECONDS,
+		"active": not _dead and is_physics_processing(),
+	}
+
+
 func _physics_process(delta: float) -> void:
 	_update_ambient_voice(delta)
 	if _dead:
@@ -296,6 +309,20 @@ func _physics_process(delta: float) -> void:
 	if absf(_combat_impulse.z) <= MOTION_EPSILON:
 		_combat_impulse.z = 0.0
 	_update_attack_telegraph_visual()
+
+
+func _update_ambient_voice(delta: float) -> void:
+	if _dead or species_id.is_empty():
+		return
+	var safe_delta := clampf(delta, 0.0, 1.0)
+	_ambient_voice_timer = maxf(0.0, _ambient_voice_timer - safe_delta)
+	if _ambient_voice_timer > 0.0:
+		return
+	_ambient_voice_count += 1
+	ambient_voice_requested.emit(species_id)
+	_ambient_voice_timer = _rng.randf_range(
+		AMBIENT_VOICE_MIN_SECONDS, AMBIENT_VOICE_MAX_SECONDS
+	)
 
 
 func _choose_direction() -> Vector3:
@@ -505,7 +532,6 @@ func die() -> void:
 	set_physics_process(false)
 	var generated_drops := _roll_drops()
 	died.emit(species_id, generated_drops, global_position)
-
 
 	_spawn_pickups(generated_drops)
 	var tween := create_tween()
