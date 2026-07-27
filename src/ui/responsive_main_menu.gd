@@ -1,3 +1,4 @@
+class_name ResponsiveMainMenu
 extends "res://src/ui/main_menu.gd"
 
 const CompactTokens = preload("res://src/ui/design_tokens.gd")
@@ -13,38 +14,7 @@ func _ready() -> void:
 	var queued_callback := Callable(self, "_queue_responsive_layout")
 	if not resized.is_connected(queued_callback):
 		resized.connect(queued_callback)
-	set_process_unhandled_input(true)
 	_queue_responsive_layout()
-	call_deferred("_focus_primary_action")
-
-
-func show_main() -> void:
-	super.show_main()
-	call_deferred("_focus_primary_action")
-
-
-func _show_panel(panel: Control) -> void:
-	super._show_panel(panel)
-	if panel != null and panel.visible:
-		call_deferred("_focus_first_interactive", panel)
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible or _loading:
-		return
-	if event is InputEventKey and event.echo:
-		return
-	if not event.is_action_pressed("ui_cancel"):
-		return
-	var cancellable_panel_visible := (
-		(_map_panel != null and _map_panel.visible)
-		or (_save_panel != null and _save_panel.visible)
-		or (_settings_panel != null and _settings_panel.visible)
-	)
-	if not cancellable_panel_visible:
-		return
-	show_main()
-	get_viewport().set_input_as_handled()
 
 
 func _queue_responsive_layout() -> void:
@@ -96,7 +66,7 @@ func _set_compact_hero(compact: bool) -> void:
 
 func _set_compact_commands(compact: bool) -> void:
 	for index in _menu_buttons.size():
-		var button: Button = _menu_buttons[index]
+		var button := _menu_buttons[index]
 		button.custom_minimum_size.x = 286.0 if compact else 338.0
 		button.custom_minimum_size.y = (
 			44.0 if compact and index == 0 else (38.0 if compact else (
@@ -107,54 +77,3 @@ func _set_compact_commands(compact: bool) -> void:
 		_version_label.visible = not compact
 	if _status != null:
 		_status.custom_minimum_size.y = 24.0 if compact else 36.0
-
-
-func _focus_primary_action() -> void:
-	if (
-		not visible
-		or _main_panel == null
-		or not _main_panel.visible
-		or _menu_buttons.is_empty()
-	):
-		return
-	var primary: Button = _menu_buttons[0]
-	if is_instance_valid(primary) and not primary.disabled:
-		primary.grab_focus()
-
-
-func _focus_first_interactive(panel: Control) -> void:
-	if panel == null or not is_instance_valid(panel) or not panel.is_visible_in_tree():
-		return
-	var target: Control = _find_focusable(panel)
-	if target != null:
-		target.grab_focus()
-
-
-func _find_focusable(node: Node) -> Control:
-	if node is Control:
-		var control := node as Control
-		var disabled := false
-		if control is BaseButton:
-			disabled = (control as BaseButton).disabled
-		if control.is_visible_in_tree() and control.focus_mode != Control.FOCUS_NONE and not disabled:
-			return control
-	for child: Node in node.get_children():
-		var target: Control = _find_focusable(child)
-		if target != null:
-			return target
-	return null
-
-
-func get_navigation_snapshot() -> Dictionary:
-	var focus_owner: Control = get_viewport().gui_get_focus_owner()
-	var focus_text := ""
-	if focus_owner is BaseButton:
-		focus_text = (focus_owner as BaseButton).text
-	return {
-		"main_visible": _main_panel != null and _main_panel.visible,
-		"map_visible": _map_panel != null and _map_panel.visible,
-		"save_visible": _save_panel != null and _save_panel.visible,
-		"settings_visible": _settings_panel != null and _settings_panel.visible,
-		"focus_owner": focus_owner,
-		"focus_text": focus_text,
-	}
