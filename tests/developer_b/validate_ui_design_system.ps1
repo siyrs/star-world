@@ -161,9 +161,9 @@ foreach ($pair in @(
   @('guidance','ContextPromptCard'),
   @('guidance','TutorialCard'),
   @('inventory','inventory_card'),
-  @('crafting','CRAFTING DATABASE'),
-  @('container','STORAGE TRANSFER'),
-  @('journal','EXPLORATION ARCHIVE'),
+  @('crafting','合成配方'),
+  @('container','物品搬移'),
+  @('journal','探索日志'),
   @('diagnostics','DiagnosticsDashboard'),
   @('diagnostics','DiagnosticsCard'),
   @('update_prompt','SECURE RELEASE UPDATE')
