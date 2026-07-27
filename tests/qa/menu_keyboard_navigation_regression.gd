@@ -56,7 +56,7 @@ func _run() -> void:
 
 	var previous_focus := snapshot.get("focus_owner") as Control
 	await _press_key(KEY_TAB)
-	var next_focus := get_viewport().gui_get_focus_owner()
+	var next_focus := root.gui_get_focus_owner() as Control
 	_check(
 		next_focus != null
 		and next_focus != previous_focus
