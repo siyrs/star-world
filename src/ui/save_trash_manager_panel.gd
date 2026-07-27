@@ -31,7 +31,7 @@ var _service_list_count := 0
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	custom_minimum_size = Vector2(820, 590)
 	_build_ui()
 	visibility_changed.connect(_on_visibility_changed)

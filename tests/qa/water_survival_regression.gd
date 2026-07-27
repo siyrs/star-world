@@ -181,15 +181,15 @@ func _test_passive_survival_pacing() -> void:
 	)
 	survival.hunger = 0.0
 	var health_before: float = survival.health
-	survival.call("_process", 7.0)
+	survival.call("_process", 3.0)
 	_check(
 		is_equal_approx(survival.health, health_before),
-		"starvation does not damage the player every few seconds"
+		"starvation does not damage the player instantly"
 	)
-	survival.call("_process", 1.1)
+	survival.call("_process", 1.2)
 	_check(
 		is_equal_approx(survival.health, health_before - 1.0),
-		"starvation damage remains gradual after its longer interval"
+		"starvation damage stays gradual at the tuned interval"
 	)
 
 

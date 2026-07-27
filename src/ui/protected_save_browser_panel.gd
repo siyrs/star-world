@@ -120,7 +120,7 @@ func _build_ui() -> void:
 	_status.custom_minimum_size.y = 32
 	_status.add_theme_stylebox_override(
 		"normal",
-		Tokens.panel_style(Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 7.0)
+		Tokens.bevel_style("#B0B0B0", "#7A7A7A", 2, 7.0)
 	)
 	root.add_child(_status)
 

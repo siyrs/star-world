@@ -23,6 +23,8 @@ var _cloud_mesh: MeshInstance3D
 var _cloud_material: StandardMaterial3D
 var _cloud_scroll_accum := 0.0
 var _last_sky_strength := -1.0
+var _fog_begin := 30.0
+var _fog_end := 47.0
 
 
 func _ready() -> void:
@@ -78,6 +80,15 @@ func skip_to_time(hours: float) -> Dictionary:
 	}
 
 
+func set_view_distance(block_distance: float) -> void:
+	# Fog hides the hard streaming boundary: it starts around 60% of the view
+	# distance and reaches full opacity just before the furthest loaded chunk.
+	var safe_distance := maxf(24.0, block_distance)
+	_fog_begin = safe_distance * 0.62
+	_fog_end = safe_distance * 0.98
+	_apply_lighting()
+
+
 func is_night() -> bool:
 	return time_of_day < 6.0 or time_of_day >= 19.0
 
@@ -127,6 +138,7 @@ func _apply_lighting() -> void:
 			day_color = Color("#191D31")
 		environment.background_color = Color("#091020").lerp(day_color, strength)
 		_apply_sky(environment, day_color, strength)
+		_apply_fog(environment, strength)
 	var phase := get_phase()
 	if phase != _last_phase:
 		_last_phase = phase
@@ -178,6 +190,25 @@ func _apply_sky(environment: Environment, day_color: Color, strength: float) -> 
 	_sky_material.ground_horizon_color = horizon.lerp(Color("#3A3328"), 0.45)
 	_sky_material.sky_energy_multiplier = lerpf(0.25, 1.0, strength)
 	_sky_material.ground_energy_multiplier = lerpf(0.1, 0.6, strength)
+
+
+func _apply_fog(environment: Environment, strength: float) -> void:
+	var density_factor := 1.0
+	if map_id == "abyss_world":
+		density_factor = 2.4
+	elif map_id == "sky_islands":
+		density_factor = 0.85
+	elif map_id == "frozen_wastes":
+		density_factor = 1.15
+	environment.fog_enabled = true
+	environment.fog_mode = Environment.FOG_MODE_DEPTH
+	environment.fog_light_color = environment.background_color
+	environment.fog_light_energy = lerpf(0.4, 1.0, strength)
+	environment.fog_sun_scatter = 0.0
+	environment.fog_depth_curve = 1.0
+	environment.fog_density = 1.0
+	environment.fog_depth_begin = _fog_begin / density_factor
+	environment.fog_depth_end = _fog_end / density_factor
 
 
 func _update_clouds(delta: float) -> void:

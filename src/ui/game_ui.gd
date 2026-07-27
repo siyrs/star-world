@@ -521,9 +521,7 @@ func _build_death_panel() -> void:
 	_death_panel.theme_type_variation = "ModalPanel"
 	_death_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.elevated_panel_style(
-			"#1E1118FA", Tokens.COLOR_DANGER, 1, Tokens.RADIUS_XL, Tokens.SPACE_XL, 18
-		)
+		Tokens.bevel_style("#2A0F0AFA", Tokens.COLOR_DANGER, 2, Tokens.SPACE_XL)
 	)
 	_center_control(_death_panel, Vector2(540, 350))
 	add_child(_death_panel)

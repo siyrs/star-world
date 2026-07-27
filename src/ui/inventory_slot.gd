@@ -138,7 +138,7 @@ func display_slot(
 		_count_label.text = ""
 		_durability_back.visible = true
 		_durability_bar.visible = true
-		_durability_bar.offset_right = 7.0 + 50.0 * ratio
+		_durability_bar.offset_right = 7.0 + 42.0 * ratio
 		_durability_bar.color = Tokens.color(Tokens.COLOR_SUCCESS).lerp(
 			Tokens.color(Tokens.COLOR_DANGER), 1.0 - ratio
 		)

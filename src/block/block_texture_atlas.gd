@@ -163,6 +163,20 @@ static func _paint_tile(image: Image, tile_id: String, style: Dictionary) -> voi
 			_paint_repair_top(image, palette, seed)
 		"repair_side":
 			_paint_repair_side(image, palette, seed)
+		"tall_grass":
+			_paint_tall_grass(image, palette, seed)
+		"flower":
+			_paint_flower(image, palette, seed)
+		"cactus_side":
+			_paint_cactus_side(image, palette, seed)
+		"cactus_top":
+			_paint_cactus_top(image, palette, seed)
+		"dead_bush":
+			_paint_dead_bush(image, palette, seed)
+		"ruin_stone":
+			_paint_ruin_stone(image, palette, seed)
+		"glow_crystal":
+			_paint_glow_crystal(image, palette, seed)
 		_:
 			_paint_noise(image, palette, 0.35, seed)
 
@@ -547,6 +561,116 @@ static func _paint_repair_side(image: Image, palette: Array[Color], seed: int) -
 	image.fill_rect(Rect2i(2, 3, 12, 3), _pick(palette, 2))
 	image.fill_rect(Rect2i(4, 7, 8, 6), _pick(palette, 0))
 	image.fill_rect(Rect2i(6, 8, 4, 4), _pick(palette, 3))
+
+
+static func _paint_tall_grass(image: Image, palette: Array[Color], seed: int) -> void:
+	image.fill(Color.TRANSPARENT)
+	# Several leaning blades rising from the bottom edge.
+	var blade_xs := [2, 5, 8, 11, 13]
+	for blade_index in blade_xs.size():
+		var base_x: int = blade_xs[blade_index]
+		var height := 7 + int(_hash01(base_x, 3, seed) * 5.0)
+		var lean := -1 if _hash01(base_x, 7, seed) < 0.4 else 1
+		for y in range(16 - height, 16):
+			var progress := float(16 - y) / float(maxi(1, height))
+			var x := base_x + int((1.0 - progress) * lean * 1.6)
+			var color := _pick(palette, 1 if y % 2 else 0)
+			if y >= 15:
+				color = _pick(palette, 3)
+			_set_safe(image, x, y, color)
+			if _hash01(x, y, seed ^ 0x77) > 0.72:
+				_set_safe(image, x + 1, y, _pick(palette, 2))
+
+
+static func _paint_flower(image: Image, palette: Array[Color], seed: int) -> void:
+	image.fill(Color.TRANSPARENT)
+	# Stem with two leaves and a four-petal head on top.
+	for y in range(9, 16):
+		image.set_pixel(8, y, _pick(palette, 0))
+		if y % 2 == 0:
+			image.set_pixel(7, y, _pick(palette, 1))
+	image.set_pixel(6, 12, _pick(palette, 1))
+	image.set_pixel(9, 11, _pick(palette, 1))
+	image.set_pixel(5, 13, _pick(palette, 0))
+	var petal := _pick(palette, 2)
+	var petal_dark := _pick(palette, 3)
+	for offset in [Vector2i(7, 6), Vector2i(9, 6), Vector2i(8, 5), Vector2i(8, 7)]:
+		image.set_pixel(offset.x, offset.y, petal)
+		if _hash01(offset.x, offset.y, seed) > 0.5:
+			_set_safe(image, offset.x, offset.y - 1, petal)
+	image.set_pixel(8, 6, _pick(palette, 3 if _hash01(8, 6, seed) > 0.5 else 2))
+	image.set_pixel(8, 8, petal_dark)
+
+
+static func _paint_cactus_side(image: Image, palette: Array[Color], seed: int) -> void:
+	image.fill(_pick(palette, 1))
+	# Dark edge ribs and pale spine dots, like the classic cactus silhouette.
+	for y in range(16):
+		image.set_pixel(0, y, _pick(palette, 3))
+		image.set_pixel(15, y, _pick(palette, 3))
+		image.set_pixel(1, y, _pick(palette, 0))
+		image.set_pixel(14, y, _pick(palette, 0))
+		for x in range(2, 14):
+			if _hash01(x, y, seed) > 0.82:
+				image.set_pixel(x, y, _pick(palette, 0))
+			elif (x + y) % 7 == 0:
+				image.set_pixel(x, y, _pick(palette, 2))
+
+
+static func _paint_cactus_top(image: Image, palette: Array[Color], seed: int) -> void:
+	image.fill(_pick(palette, 1))
+	for i in range(16):
+		image.set_pixel(i, 0, _pick(palette, 3))
+		image.set_pixel(i, 15, _pick(palette, 3))
+		image.set_pixel(0, i, _pick(palette, 3))
+		image.set_pixel(15, i, _pick(palette, 3))
+	for y in range(3, 13):
+		for x in range(3, 13):
+			if (x - 8) * (x - 8) + (y - 8) * (y - 8) <= 9:
+				image.set_pixel(x, y, _pick(palette, 2 if _hash01(x, y, seed) > 0.4 else 0))
+
+
+static func _paint_dead_bush(image: Image, palette: Array[Color], seed: int) -> void:
+	image.fill(Color.TRANSPARENT)
+	# Forking dry twigs spreading upward from a root point.
+	var twig_starts := [Vector2i(8, 15), Vector2i(8, 15), Vector2i(8, 15), Vector2i(8, 15)]
+	var twig_ends := [Vector2i(4, 7), Vector2i(12, 6), Vector2i(6, 4), Vector2i(11, 10)]
+	for index in twig_starts.size():
+		var color := _pick(palette, index % 3)
+		_draw_pixel_line(image, twig_starts[index], twig_ends[index], color)
+	_draw_pixel_line(image, Vector2i(6, 10), Vector2i(3, 6), _pick(palette, 2))
+	_draw_pixel_line(image, Vector2i(10, 9), Vector2i(13, 5), _pick(palette, 0))
+	if _hash01(8, 8, seed) > 0.5:
+		_set_safe(image, 7, 8, _pick(palette, 2))
+
+
+static func _paint_ruin_stone(image: Image, palette: Array[Color], seed: int) -> void:
+	_paint_cobble(image, palette, seed)
+	# Weathered cracks set the ruins apart from ordinary cobblestone.
+	_draw_pixel_line(image, Vector2i(3, 2), Vector2i(6, 9), _pick(palette, 3))
+	_draw_pixel_line(image, Vector2i(11, 6), Vector2i(8, 13), _pick(palette, 3))
+	_draw_pixel_line(image, Vector2i(6, 9), Vector2i(10, 11), _pick(palette, 0))
+	for point in [Vector2i(2, 12), Vector2i(13, 3), Vector2i(9, 1)]:
+		if _hash01(point.x, point.y, seed) > 0.35:
+			_set_safe(image, point.x, point.y, _pick(palette, 2))
+
+
+static func _paint_glow_crystal(image: Image, palette: Array[Color], seed: int) -> void:
+	image.fill(Color.TRANSPARENT)
+	# Three bright shards rising from a dark base, plus sparkle pixels.
+	for y in range(13, 16):
+		for x in range(4, 13):
+			image.set_pixel(x, y, _pick(palette, 3))
+	_draw_pixel_line(image, Vector2i(8, 14), Vector2i(8, 3), _pick(palette, 1))
+	_draw_pixel_line(image, Vector2i(8, 6), Vector2i(9, 5), _pick(palette, 2))
+	_draw_pixel_line(image, Vector2i(5, 14), Vector2i(4, 7), _pick(palette, 0))
+	_draw_pixel_line(image, Vector2i(11, 14), Vector2i(12, 6), _pick(palette, 0))
+	_set_safe(image, 8, 2, _pick(palette, 2))
+	_set_safe(image, 4, 6, _pick(palette, 1))
+	_set_safe(image, 12, 5, _pick(palette, 1))
+	if _hash01(3, 3, seed) > 0.4:
+		_set_safe(image, 6, 4, _pick(palette, 2))
+		_set_safe(image, 13, 9, _pick(palette, 2))
 
 
 static func _draw_pixel_line(image: Image, start: Vector2i, end: Vector2i, color: Color) -> void:

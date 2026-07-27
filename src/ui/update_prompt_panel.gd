@@ -20,7 +20,7 @@ var _download_started := false
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ModalPanel"
 	custom_minimum_size = Vector2(720, 510)
 	mouse_filter = Control.MOUSE_FILTER_STOP

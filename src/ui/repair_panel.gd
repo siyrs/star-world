@@ -16,7 +16,7 @@ var _repair_buttons: Dictionary = {}
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	custom_minimum_size = Vector2(860, 500)
 	_build_ui()
 
@@ -140,7 +140,7 @@ func _add_preview_row(preview: Dictionary) -> void:
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style(Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_MD, 8.0)
+		Tokens.bevel_style("#B0B0B0", "#7A7A7A", 2, 8.0)
 	)
 	_list.add_child(row)
 	var content := HBoxContainer.new()

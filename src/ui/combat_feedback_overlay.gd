@@ -143,7 +143,7 @@ func _build_cooldown_panel() -> void:
 	_cooldown_panel.offset_bottom = 78.0
 	_cooldown_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style("#0B1420D9", Tokens.COLOR_BORDER_STRONG, 1, Tokens.RADIUS_SM, 6.0)
+		Tokens.bevel_style("#100C07D9", Tokens.COLOR_BORDER_STRONG, 2, 6.0)
 	)
 	add_child(_cooldown_panel)
 	var content := VBoxContainer.new()
@@ -160,7 +160,7 @@ func _build_cooldown_panel() -> void:
 	_cooldown_bar.custom_minimum_size = Vector2(190.0, 8.0)
 	_cooldown_bar.add_theme_stylebox_override(
 		"fill",
-		Tokens.panel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM, 0, Tokens.RADIUS_SM, 1.0)
+		Tokens.bevel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM, 0, 1.0)
 	)
 	content.add_child(_cooldown_bar)
 
@@ -177,7 +177,7 @@ func _build_hit_panel() -> void:
 	_hit_panel.offset_bottom = -34.0
 	_hit_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style("#09111ACC", Tokens.COLOR_BORDER, 1, Tokens.RADIUS_SM, 6.0)
+		Tokens.bevel_style("#100C07CC", Tokens.COLOR_BORDER, 2, 6.0)
 	)
 	add_child(_hit_panel)
 	_hit_label = Label.new()

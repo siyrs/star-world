@@ -28,7 +28,11 @@ const BLOCK_IDS := [
 	"oak_door_upper_open", "oak_door_upper_open_east",
 	"oak_door_upper_open_north", "oak_door_upper_open_west",
 	# The legacy ladder ID remains the south-supported canonical state.
-	"ladder_east", "ladder_north", "ladder_west"
+	"ladder_east", "ladder_north", "ladder_west",
+	# Decorative flora and ruins appended last so existing numeric block IDs
+	# and old world saves stay stable.
+	"tall_grass", "flower_red", "flower_yellow", "cactus", "dead_bush",
+	"ruin_pillar", "glow_crystal"
 ]
 
 const DEFINITIONS := {
@@ -101,7 +105,14 @@ const DEFINITIONS := {
 	"oak_door_upper_open_west": {"name":"木门", "color":"#9B6331", "solid":true, "transparent":true, "collectible":true, "item_id":"oak_door", "hardness":1.5, "shape":"door", "door_family":"oak_door", "door_half":"upper", "door_open":true, "rotation_quarters":3, "visual_parent":"oak_door", "harvest_parent":"oak_door"},
 	"ladder_east": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":1, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"},
 	"ladder_north": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":2, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"},
-	"ladder_west": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":3, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"}
+	"ladder_west": {"name":"梯子", "color":"#B98245", "solid":false, "transparent":true, "collectible":true, "item_id":"ladder", "hardness":0.5, "shape":"ladder", "orientation_family":"ladder", "rotation_quarters":3, "targetable":true, "climbable":true, "visual_parent":"ladder", "harvest_parent":"ladder"},
+	"tall_grass": {"name":"高草", "color":"#56993C", "solid":false, "transparent":true, "collectible":true, "item_id":"tall_grass", "hardness":0.05, "shape":"crop", "crop_height":0.6},
+	"flower_red": {"name":"红花", "color":"#D84A3A", "solid":false, "transparent":true, "collectible":true, "item_id":"flower_red", "hardness":0.05, "shape":"crop", "crop_height":0.5},
+	"flower_yellow": {"name":"黄花", "color":"#E8C93A", "solid":false, "transparent":true, "collectible":true, "item_id":"flower_yellow", "hardness":0.05, "shape":"crop", "crop_height":0.5},
+	"cactus": {"name":"仙人掌", "color":"#3F7A34", "solid":true, "transparent":false, "collectible":true, "item_id":"cactus", "hardness":0.6},
+	"dead_bush": {"name":"枯木丛", "color":"#8A6B3F", "solid":false, "transparent":true, "collectible":true, "item_id":"dead_bush", "hardness":0.05, "shape":"crop", "crop_height":0.45},
+	"ruin_pillar": {"name":"遗迹石柱", "color":"#8A8578", "solid":true, "transparent":false, "collectible":true, "item_id":"ruin_pillar", "hardness":2.2},
+	"glow_crystal": {"name":"辉光晶体", "color":"#54E0D8", "solid":false, "transparent":true, "collectible":true, "item_id":"glow_crystal", "hardness":0.8, "shape":"crop", "crop_height":0.7, "emissive":true}
 }
 
 

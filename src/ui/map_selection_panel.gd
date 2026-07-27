@@ -26,7 +26,7 @@ var _resource_registry = ResourceDistributionRegistryScript.new()
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(900, 520)
 	_load_profiles()
@@ -56,7 +56,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("WORLD CREATION"))
+	heading.add_child(UiKit.make_eyebrow("创建世界"))
 	var title := UiKit.make_title("选择远征世界")
 	heading.add_child(title)
 	var subtitle := UiKit.make_subtitle("先选择地图生态，再定义世界名称与种子。每张地图拥有独立资源、危险与环境特征。")

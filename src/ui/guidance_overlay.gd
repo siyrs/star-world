@@ -172,7 +172,7 @@ func _build_prompt() -> void:
 	identity.add_theme_constant_override("separation", Tokens.SPACE_2XS)
 	content.add_child(identity)
 	var eyebrow := Label.new()
-	eyebrow.text = "INTERACTION"
+	eyebrow.text = "交互"
 	eyebrow.theme_type_variation = "EyebrowLabel"
 	identity.add_child(eyebrow)
 	_prompt_title = Label.new()
@@ -208,9 +208,7 @@ func _build_tutorial() -> void:
 	_tutorial_panel.theme_type_variation = "HudPanel"
 	_tutorial_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.elevated_panel_style(
-			"#071522EE", Tokens.COLOR_ACCENT_WARM, 1, Tokens.RADIUS_LG, Tokens.SPACE_MD, 8
-		)
+		Tokens.bevel_style("#100C07F5", Tokens.COLOR_ACCENT_WARM, 2, Tokens.SPACE_MD)
 	)
 	_tutorial_panel.visible = false
 	add_child(_tutorial_panel)
@@ -252,8 +250,8 @@ func _build_tutorial() -> void:
 	_tutorial_progress.custom_minimum_size.y = 9.0
 	_tutorial_progress.add_theme_stylebox_override(
 		"fill",
-		Tokens.panel_style(
-			Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM_BRIGHT, 0, Tokens.RADIUS_XL, 1.0
+		Tokens.bevel_style(
+			Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM_BRIGHT, 1, 1.0
 		)
 	)
 	content.add_child(_tutorial_progress)
@@ -270,13 +268,11 @@ func _on_toast_changed(toast: Dictionary) -> void:
 	_toast_label.add_theme_color_override("font_color", severity_color)
 	_toast_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.elevated_panel_style(
+		Tokens.bevel_style(
 			Tokens.COLOR_SURFACE_RAISED,
 			_color_to_hex(severity_color),
-			1,
-			Tokens.RADIUS_XL,
-			Tokens.SPACE_SM,
-			9
+			2,
+			Tokens.SPACE_SM
 		)
 	)
 	_toast_panel.visible = _gameplay_active
@@ -299,9 +295,7 @@ func _on_prompt_changed(prompt: Dictionary) -> void:
 	var tone := str(prompt.get("tone", "info"))
 	_prompt_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.elevated_panel_style(
-			"#071522EE", Tokens.tone_border(tone), 1, Tokens.RADIUS_LG, Tokens.SPACE_MD, 7
-		)
+		Tokens.bevel_style("#100C07EE", Tokens.tone_border(tone), 2, Tokens.SPACE_MD)
 	)
 	_refresh_visibility()
 

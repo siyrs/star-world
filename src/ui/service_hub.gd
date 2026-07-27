@@ -352,6 +352,14 @@ func _apply_settings(settings: Dictionary) -> void:
 		)
 		_set_property_if_present(world_node, "render_distance", render_distance)
 		_set_property_if_present(world_node, "unload_distance", render_distance + 1)
+		if day_night != null and day_night.has_method("set_view_distance"):
+			day_night.call("set_view_distance", render_distance * 16.0)
+	if player_node != null:
+		_set_property_if_present(
+			player_node,
+			"camera_bob_enabled",
+			bool(settings.get("camera_bob", DEFAULT_SETTINGS.get("camera_bob", true)))
+		)
 	settings_applied.emit(settings.duplicate(true))
 
 

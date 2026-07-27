@@ -1,105 +1,1028 @@
 {
-  "schema_version": 2,
-  "items": [
-    {"id":"grass_block","name":"草方块","category":"block","max_stack":64,"block_id":"grass","color":"#61A84B"},
-    {"id":"dirt","name":"泥土","category":"block","max_stack":64,"block_id":"dirt","color":"#79533A"},
-    {"id":"stone","name":"石头","category":"block","max_stack":64,"block_id":"stone","color":"#777C82"},
-    {"id":"cobblestone","name":"圆石","category":"block","max_stack":64,"block_id":"cobblestone","color":"#686D72"},
-    {"id":"sand","name":"沙子","category":"block","max_stack":64,"block_id":"sand","color":"#DCCB86"},
-    {"id":"snow_block","name":"雪块","category":"block","max_stack":64,"block_id":"snow","color":"#EAF4F7"},
-    {"id":"oak_log","name":"原木","category":"block","max_stack":64,"block_id":"wood","color":"#74502D"},
-    {"id":"leaves","name":"树叶","category":"block","max_stack":64,"block_id":"leaves","color":"#397A38"},
-    {"id":"oak_planks","name":"木板","category":"block","max_stack":64,"block_id":"planks","color":"#B5834E"},
-    {"id":"stone_bricks","name":"石砖","category":"block","max_stack":64,"block_id":"stone_bricks","color":"#85888A"},
-    {"id":"glass","name":"玻璃","category":"block","max_stack":64,"block_id":"glass","color":"#BFE4EA"},
-    {"id":"glass_pane","name":"玻璃板","category":"block","max_stack":64,"block_id":"glass_pane","color":"#C8EDF1"},
-    {"id":"stone_slab","name":"石台阶","category":"block","max_stack":64,"block_id":"stone_slab","color":"#85888A"},
-    {"id":"oak_stairs","name":"木楼梯","category":"block","max_stack":64,"block_id":"oak_stairs","color":"#B5834E"},
-    {"id":"crafting_table","name":"工作台","category":"block","max_stack":64,"block_id":"crafting_table","color":"#9A6333"},
-    {"id":"furnace","name":"熔炉","category":"block","max_stack":64,"block_id":"furnace","color":"#55595D"},
-    {"id":"stonecutter","name":"石材切割机","category":"block","max_stack":64,"block_id":"stonecutter","color":"#6F777C"},
-    {"id":"chest","name":"箱子","category":"block","max_stack":64,"block_id":"chest","color":"#A66B2C"},
-    {"id":"oak_door","name":"木门","category":"block","max_stack":64,"block_id":"oak_door","color":"#9B6331"},
-    {"id":"oak_fence","name":"木栅栏","category":"block","max_stack":64,"block_id":"oak_fence","color":"#A87540"},
-    {"id":"oak_bed","name":"橡木床","category":"block","max_stack":1,"block_id":"oak_bed","color":"#B94E4A"},
-    {"id":"repair_station","name":"修理台","category":"block","max_stack":64,"block_id":"repair_station","color":"#8B7667"},
-    {"id":"ladder","name":"梯子","category":"block","max_stack":64,"block_id":"ladder","color":"#B98245"},
-    {"id":"torch","name":"火把","category":"block","max_stack":64,"block_id":"torch","color":"#F3B63F"},
-    {"id":"coal_ore","name":"煤矿石","category":"block","max_stack":64,"block_id":"coal_ore","color":"#3E4144"},
-    {"id":"iron_ore","name":"铁矿石","category":"block","max_stack":64,"block_id":"iron_ore","color":"#BA967C"},
-    {"id":"gold_ore","name":"金矿石","category":"block","max_stack":64,"block_id":"gold_ore","color":"#E4C343"},
-    {"id":"diamond_ore","name":"钻石矿石","category":"block","max_stack":64,"block_id":"diamond_ore","color":"#4DD8D0"},
-    {"id":"water_bucket","name":"水桶","category":"utility","max_stack":1,"block_id":"water","color":"#3487D8"},
-    {"id":"lava_bucket","name":"岩浆桶","category":"utility","max_stack":1,"block_id":"lava","color":"#F06423"},
-    {"id":"bucket","name":"铁桶","category":"utility","max_stack":16,"color":"#A9AFB4"},
-    {"id":"coal","name":"煤炭","category":"material","max_stack":64,"color":"#25282A"},
-    {"id":"raw_iron","name":"粗铁","category":"material","max_stack":64,"color":"#BC8868"},
-    {"id":"iron_ingot","name":"铁锭","category":"material","max_stack":64,"color":"#D4D8D9"},
-    {"id":"raw_gold","name":"粗金","category":"material","max_stack":64,"color":"#C49B31"},
-    {"id":"gold_ingot","name":"金锭","category":"material","max_stack":64,"color":"#F0D253"},
-    {"id":"diamond","name":"钻石","category":"material","max_stack":64,"color":"#5BE0DB"},
-    {"id":"stick","name":"木棍","category":"material","max_stack":64,"color":"#966637"},
-    {"id":"feather","name":"羽毛","category":"material","max_stack":64,"color":"#F1F1E9"},
-    {"id":"leather","name":"皮革","category":"material","max_stack":64,"color":"#90502F"},
-    {"id":"string","name":"线","category":"material","max_stack":64,"color":"#E5E3D9"},
-    {"id":"wool","name":"羊毛","category":"block","max_stack":64,"block_id":"wool","color":"#F0EFE8"},
-    {"id":"snowball","name":"雪球","category":"material","max_stack":16,"color":"#F3FAFC"},
-    {"id":"wheat_seeds","name":"小麦种子","category":"material","max_stack":64,"color":"#B9A343"},
-    {"id":"wheat","name":"小麦","category":"material","max_stack":64,"color":"#D8B94F"},
-    {"id":"compost","name":"堆肥","category":"material","max_stack":64,"color":"#6E5638"},
-    {"id":"carrot","name":"胡萝卜","category":"food","max_stack":64,"food":3,"saturation":2,"color":"#E98332"},
-    {"id":"potato","name":"马铃薯","category":"food","max_stack":64,"food":1,"saturation":0,"color":"#B89152"},
-    {"id":"baked_potato","name":"烤马铃薯","category":"food","max_stack":64,"food":5,"saturation":5,"color":"#D6A454"},
-    {"id":"rotten_flesh","name":"腐肉","category":"food","max_stack":64,"food":2,"saturation":0,"color":"#7E4C34"},
-    {"id":"apple","name":"苹果","category":"food","max_stack":64,"food":4,"saturation":2,"color":"#D93D38"},
-    {"id":"bread","name":"面包","category":"food","max_stack":64,"food":5,"saturation":5,"color":"#D89A43"},
-    {"id":"egg","name":"鸡蛋","category":"material","max_stack":16,"color":"#F4E4B6"},
-    {"id":"cooked_egg","name":"熟鸡蛋","category":"food","max_stack":64,"food":4,"saturation":3,"color":"#F2C94C"},
-    {"id":"raw_chicken","name":"生鸡肉","category":"food","max_stack":64,"food":2,"saturation":1,"color":"#D7A69D"},
-    {"id":"cooked_chicken","name":"熟鸡肉","category":"food","max_stack":64,"food":6,"saturation":6,"color":"#A95C36"},
-    {"id":"raw_beef","name":"生牛肉","category":"food","max_stack":64,"food":3,"saturation":1,"color":"#A84542"},
-    {"id":"steak","name":"熟牛排","category":"food","max_stack":64,"food":8,"saturation":8,"color":"#733B2D"},
-    {"id":"raw_pork","name":"生猪排","category":"food","max_stack":64,"food":3,"saturation":1,"color":"#E6A39E"},
-    {"id":"cooked_pork","name":"熟猪排","category":"food","max_stack":64,"food":8,"saturation":8,"color":"#B96B50"},
-    {"id":"wooden_pickaxe","name":"木镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":60,"power":1,"mining_speed":2.0,"color":"#9A6A3B"},
-    {"id":"stone_pickaxe","name":"石镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":132,"power":2,"mining_speed":3.2,"color":"#777C82"},
-    {"id":"iron_pickaxe","name":"铁镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":251,"power":3,"mining_speed":4.8,"color":"#D4D8D9"},
-    {"id":"diamond_pickaxe","name":"钻石镐","category":"tool","tool_type":"pickaxe","max_stack":1,"durability":1562,"power":4,"mining_speed":7.0,"color":"#5BE0DB"},
-    {"id":"wooden_axe","name":"木斧","category":"tool","tool_type":"axe","max_stack":1,"durability":60,"power":1,"mining_speed":2.0,"color":"#9A6A3B"},
-    {"id":"stone_axe","name":"石斧","category":"tool","tool_type":"axe","max_stack":1,"durability":132,"power":2,"mining_speed":3.2,"color":"#777C82"},
-    {"id":"iron_axe","name":"铁斧","category":"tool","tool_type":"axe","max_stack":1,"durability":251,"power":3,"mining_speed":4.8,"color":"#D4D8D9"},
-    {"id":"diamond_axe","name":"钻石斧","category":"tool","tool_type":"axe","max_stack":1,"durability":1562,"power":4,"mining_speed":7.0,"color":"#5BE0DB"},
-    {"id":"wooden_shovel","name":"木铲","category":"tool","tool_type":"shovel","max_stack":1,"durability":60,"power":1,"mining_speed":2.2,"color":"#9A6A3B"},
-    {"id":"stone_shovel","name":"石铲","category":"tool","tool_type":"shovel","max_stack":1,"durability":132,"power":2,"mining_speed":3.6,"color":"#777C82"},
-    {"id":"iron_shovel","name":"铁铲","category":"tool","tool_type":"shovel","max_stack":1,"durability":251,"power":3,"mining_speed":5.2,"color":"#D4D8D9"},
-    {"id":"diamond_shovel","name":"钻石铲","category":"tool","tool_type":"shovel","max_stack":1,"durability":1562,"power":4,"mining_speed":7.5,"color":"#5BE0DB"},
-    {"id":"wooden_hoe","name":"木锄","category":"tool","tool_type":"hoe","max_stack":1,"durability":60,"power":1,"mining_speed":1.0,"color":"#9A6A3B"},
-    {"id":"stone_hoe","name":"石锄","category":"tool","tool_type":"hoe","max_stack":1,"durability":132,"power":2,"mining_speed":1.0,"color":"#777C82"},
-    {"id":"iron_hoe","name":"铁锄","category":"tool","tool_type":"hoe","max_stack":1,"durability":251,"power":3,"mining_speed":1.0,"color":"#D4D8D9"},
-    {"id":"diamond_hoe","name":"钻石锄","category":"tool","tool_type":"hoe","max_stack":1,"durability":1562,"power":4,"mining_speed":1.0,"color":"#5BE0DB"},
-    {"id":"wooden_sword","name":"木剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":60,"power":1,"mining_speed":1.0,"damage":4,"equipment":{"slot":"main_hand","attributes":{"attack_damage":3}},"color":"#9A6A3B"},
-    {"id":"stone_sword","name":"石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":132,"power":2,"mining_speed":1.0,"damage":5,"equipment":{"slot":"main_hand","attributes":{"attack_damage":4}},"color":"#777C82"},
-    {"id":"iron_sword","name":"铁剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":251,"power":3,"mining_speed":1.0,"damage":6,"equipment":{"slot":"main_hand","attributes":{"attack_damage":5}},"color":"#D4D8D9"},
-    {"id":"gold_sword","name":"金剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":33,"power":2,"mining_speed":1.0,"damage":4,"equipment":{"slot":"main_hand","attributes":{"attack_damage":3}},"color":"#F0D253"},
-    {"id":"diamond_sword","name":"钻石剑","category":"weapon","tool_type":"sword","max_stack":1,"durability":1562,"power":4,"mining_speed":1.0,"damage":7,"equipment":{"slot":"main_hand","attributes":{"attack_damage":6}},"color":"#5BE0DB"},
-    {"id":"leather_cap","name":"皮革帽","category":"armor","max_stack":1,"durability":80,"rarity":"common","equipment":{"slot":"helmet","attributes":{"defense":1}},"color":"#9A613C"},
-    {"id":"leather_tunic","name":"皮革衣","category":"armor","max_stack":1,"durability":120,"rarity":"common","equipment":{"slot":"chestplate","attributes":{"defense":3}},"color":"#8E5637"},
-    {"id":"leather_pants","name":"皮革裤","category":"armor","max_stack":1,"durability":110,"rarity":"common","equipment":{"slot":"leggings","attributes":{"defense":2}},"color":"#865033"},
-    {"id":"leather_boots","name":"皮革靴","category":"armor","max_stack":1,"durability":70,"rarity":"common","equipment":{"slot":"boots","attributes":{"defense":1}},"color":"#78462F"},
-    {"id":"iron_helmet","name":"铁头盔","category":"armor","max_stack":1,"durability":165,"rarity":"uncommon","equipment":{"slot":"helmet","attributes":{"defense":2}},"color":"#D4D8D9"},
-    {"id":"iron_chestplate","name":"铁胸甲","category":"armor","max_stack":1,"durability":240,"rarity":"uncommon","equipment":{"slot":"chestplate","attributes":{"defense":6}},"color":"#C9CED0"},
-    {"id":"iron_leggings","name":"铁护腿","category":"armor","max_stack":1,"durability":225,"rarity":"uncommon","equipment":{"slot":"leggings","attributes":{"defense":5}},"color":"#BEC4C7"},
-    {"id":"iron_boots","name":"铁靴","category":"armor","max_stack":1,"durability":195,"rarity":"uncommon","equipment":{"slot":"boots","attributes":{"defense":2}},"color":"#B5BCC0"},
-    {"id":"prospecting_kit","name":"简易探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"均衡扫描当前区块附近的岩层。","color":"#D7B56D"},
-    {"id":"verdant_resonance","name":"翠绿共鸣石","category":"material","max_stack":16,"rarity":"rare","description":"星辰大陆地层中形成的稳定共鸣样本。","color":"#72C76A"},
-    {"id":"ruin_sun_glass","name":"遗迹日耀玻璃","category":"material","max_stack":16,"rarity":"rare","description":"荒漠遗迹高温与矿砂共同烧结的透亮样本。","color":"#E7B85E"},
-    {"id":"frost_heart_crystal","name":"冰原寒心晶","category":"material","max_stack":16,"rarity":"rare","description":"极寒冰原深层岩隙中凝结的低温晶体。","color":"#A8E1F1"},
-    {"id":"sky_wind_crystal","name":"浮岛风鸣晶","category":"material","max_stack":16,"rarity":"rare","description":"天空群岛岩层受高空风压形成的轻质晶体。","color":"#8ED6F8"},
-    {"id":"abyss_cinder","name":"深渊余烬","category":"material","max_stack":16,"rarity":"rare","description":"深渊洞窟危险岩层中残留的稳定热核。","color":"#E76B3C"},
-    {"id":"verdant_prospecting_kit","name":"翠绿校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"扩大星辰大陆平原与林地下方的水平扫描覆盖。","color":"#78C96E"},
-    {"id":"ruin_prospecting_kit","name":"遗迹校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"扩大荒漠遗迹周边矿层的水平扫描范围。","color":"#D9A94F"},
-    {"id":"frost_prospecting_kit","name":"冰原校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"强化冰峰和厚雪层下方的垂直扫描。","color":"#9ED9EA"},
-    {"id":"sky_prospecting_kit","name":"浮岛校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"扩大浅层岛面覆盖，并适应稀薄岩层。","color":"#7CCAF0"},
-    {"id":"abyss_prospecting_kit","name":"深渊校准探矿仪","category":"utility","max_stack":1,"prospecting":true,"description":"强化深渊洞穴中的垂直扫描并降低连续岩层要求。","color":"#D95B35"}
-  ]
+ "schema_version": 2,
+ "items": [
+  {
+   "id": "grass_block",
+   "name": "草方块",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "grass",
+   "color": "#61A84B"
+  },
+  {
+   "id": "dirt",
+   "name": "泥土",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "dirt",
+   "color": "#79533A"
+  },
+  {
+   "id": "stone",
+   "name": "石头",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "stone",
+   "color": "#777C82"
+  },
+  {
+   "id": "cobblestone",
+   "name": "圆石",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "cobblestone",
+   "color": "#686D72"
+  },
+  {
+   "id": "sand",
+   "name": "沙子",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "sand",
+   "color": "#DCCB86"
+  },
+  {
+   "id": "snow_block",
+   "name": "雪块",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "snow",
+   "color": "#EAF4F7"
+  },
+  {
+   "id": "oak_log",
+   "name": "原木",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "wood",
+   "color": "#74502D"
+  },
+  {
+   "id": "leaves",
+   "name": "树叶",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "leaves",
+   "color": "#397A38"
+  },
+  {
+   "id": "oak_planks",
+   "name": "木板",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "planks",
+   "color": "#B5834E"
+  },
+  {
+   "id": "stone_bricks",
+   "name": "石砖",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "stone_bricks",
+   "color": "#85888A"
+  },
+  {
+   "id": "glass",
+   "name": "玻璃",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "glass",
+   "color": "#BFE4EA"
+  },
+  {
+   "id": "glass_pane",
+   "name": "玻璃板",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "glass_pane",
+   "color": "#C8EDF1"
+  },
+  {
+   "id": "stone_slab",
+   "name": "石台阶",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "stone_slab",
+   "color": "#85888A"
+  },
+  {
+   "id": "oak_stairs",
+   "name": "木楼梯",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "oak_stairs",
+   "color": "#B5834E"
+  },
+  {
+   "id": "crafting_table",
+   "name": "工作台",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "crafting_table",
+   "color": "#9A6333"
+  },
+  {
+   "id": "furnace",
+   "name": "熔炉",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "furnace",
+   "color": "#55595D"
+  },
+  {
+   "id": "stonecutter",
+   "name": "石材切割机",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "stonecutter",
+   "color": "#6F777C"
+  },
+  {
+   "id": "chest",
+   "name": "箱子",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "chest",
+   "color": "#A66B2C"
+  },
+  {
+   "id": "oak_door",
+   "name": "木门",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "oak_door",
+   "color": "#9B6331"
+  },
+  {
+   "id": "oak_fence",
+   "name": "木栅栏",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "oak_fence",
+   "color": "#A87540"
+  },
+  {
+   "id": "oak_bed",
+   "name": "橡木床",
+   "category": "block",
+   "max_stack": 1,
+   "block_id": "oak_bed",
+   "color": "#B94E4A"
+  },
+  {
+   "id": "repair_station",
+   "name": "修理台",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "repair_station",
+   "color": "#8B7667"
+  },
+  {
+   "id": "ladder",
+   "name": "梯子",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "ladder",
+   "color": "#B98245"
+  },
+  {
+   "id": "torch",
+   "name": "火把",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "torch",
+   "color": "#F3B63F"
+  },
+  {
+   "id": "coal_ore",
+   "name": "煤矿石",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "coal_ore",
+   "color": "#3E4144"
+  },
+  {
+   "id": "iron_ore",
+   "name": "铁矿石",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "iron_ore",
+   "color": "#BA967C"
+  },
+  {
+   "id": "gold_ore",
+   "name": "金矿石",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "gold_ore",
+   "color": "#E4C343"
+  },
+  {
+   "id": "diamond_ore",
+   "name": "钻石矿石",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "diamond_ore",
+   "color": "#4DD8D0"
+  },
+  {
+   "id": "water_bucket",
+   "name": "水桶",
+   "category": "utility",
+   "max_stack": 1,
+   "block_id": "water",
+   "color": "#3487D8"
+  },
+  {
+   "id": "lava_bucket",
+   "name": "岩浆桶",
+   "category": "utility",
+   "max_stack": 1,
+   "block_id": "lava",
+   "color": "#F06423"
+  },
+  {
+   "id": "bucket",
+   "name": "铁桶",
+   "category": "utility",
+   "max_stack": 16,
+   "color": "#A9AFB4"
+  },
+  {
+   "id": "coal",
+   "name": "煤炭",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#25282A"
+  },
+  {
+   "id": "raw_iron",
+   "name": "粗铁",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#BC8868"
+  },
+  {
+   "id": "iron_ingot",
+   "name": "铁锭",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "raw_gold",
+   "name": "粗金",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#C49B31"
+  },
+  {
+   "id": "gold_ingot",
+   "name": "金锭",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#F0D253"
+  },
+  {
+   "id": "diamond",
+   "name": "钻石",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#5BE0DB"
+  },
+  {
+   "id": "stick",
+   "name": "木棍",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#966637"
+  },
+  {
+   "id": "feather",
+   "name": "羽毛",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#F1F1E9"
+  },
+  {
+   "id": "leather",
+   "name": "皮革",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#90502F"
+  },
+  {
+   "id": "string",
+   "name": "线",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#E5E3D9"
+  },
+  {
+   "id": "wool",
+   "name": "羊毛",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "wool",
+   "color": "#F0EFE8"
+  },
+  {
+   "id": "snowball",
+   "name": "雪球",
+   "category": "material",
+   "max_stack": 16,
+   "color": "#F3FAFC"
+  },
+  {
+   "id": "wheat_seeds",
+   "name": "小麦种子",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#B9A343"
+  },
+  {
+   "id": "wheat",
+   "name": "小麦",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#D8B94F"
+  },
+  {
+   "id": "compost",
+   "name": "堆肥",
+   "category": "material",
+   "max_stack": 64,
+   "color": "#6E5638"
+  },
+  {
+   "id": "carrot",
+   "name": "胡萝卜",
+   "category": "food",
+   "max_stack": 64,
+   "food": 3,
+   "saturation": 2,
+   "color": "#E98332"
+  },
+  {
+   "id": "potato",
+   "name": "马铃薯",
+   "category": "food",
+   "max_stack": 64,
+   "food": 1,
+   "saturation": 0,
+   "color": "#B89152"
+  },
+  {
+   "id": "baked_potato",
+   "name": "烤马铃薯",
+   "category": "food",
+   "max_stack": 64,
+   "food": 5,
+   "saturation": 5,
+   "color": "#D6A454"
+  },
+  {
+   "id": "rotten_flesh",
+   "name": "腐肉",
+   "category": "food",
+   "max_stack": 64,
+   "food": 2,
+   "saturation": 0,
+   "color": "#7E4C34"
+  },
+  {
+   "id": "apple",
+   "name": "苹果",
+   "category": "food",
+   "max_stack": 64,
+   "food": 4,
+   "saturation": 2,
+   "color": "#D93D38"
+  },
+  {
+   "id": "bread",
+   "name": "面包",
+   "category": "food",
+   "max_stack": 64,
+   "food": 5,
+   "saturation": 5,
+   "color": "#D89A43"
+  },
+  {
+   "id": "egg",
+   "name": "鸡蛋",
+   "category": "material",
+   "max_stack": 16,
+   "color": "#F4E4B6"
+  },
+  {
+   "id": "cooked_egg",
+   "name": "熟鸡蛋",
+   "category": "food",
+   "max_stack": 64,
+   "food": 4,
+   "saturation": 3,
+   "color": "#F2C94C"
+  },
+  {
+   "id": "raw_chicken",
+   "name": "生鸡肉",
+   "category": "food",
+   "max_stack": 64,
+   "food": 2,
+   "saturation": 1,
+   "color": "#D7A69D"
+  },
+  {
+   "id": "cooked_chicken",
+   "name": "熟鸡肉",
+   "category": "food",
+   "max_stack": 64,
+   "food": 6,
+   "saturation": 6,
+   "color": "#A95C36"
+  },
+  {
+   "id": "raw_beef",
+   "name": "生牛肉",
+   "category": "food",
+   "max_stack": 64,
+   "food": 3,
+   "saturation": 1,
+   "color": "#A84542"
+  },
+  {
+   "id": "steak",
+   "name": "熟牛排",
+   "category": "food",
+   "max_stack": 64,
+   "food": 8,
+   "saturation": 8,
+   "color": "#733B2D"
+  },
+  {
+   "id": "raw_pork",
+   "name": "生猪排",
+   "category": "food",
+   "max_stack": 64,
+   "food": 3,
+   "saturation": 1,
+   "color": "#E6A39E"
+  },
+  {
+   "id": "cooked_pork",
+   "name": "熟猪排",
+   "category": "food",
+   "max_stack": 64,
+   "food": 8,
+   "saturation": 8,
+   "color": "#B96B50"
+  },
+  {
+   "id": "wooden_pickaxe",
+   "name": "木镐",
+   "category": "tool",
+   "tool_type": "pickaxe",
+   "max_stack": 1,
+   "durability": 60,
+   "power": 1,
+   "mining_speed": 2.0,
+   "color": "#9A6A3B"
+  },
+  {
+   "id": "stone_pickaxe",
+   "name": "石镐",
+   "category": "tool",
+   "tool_type": "pickaxe",
+   "max_stack": 1,
+   "durability": 132,
+   "power": 2,
+   "mining_speed": 3.2,
+   "color": "#777C82"
+  },
+  {
+   "id": "iron_pickaxe",
+   "name": "铁镐",
+   "category": "tool",
+   "tool_type": "pickaxe",
+   "max_stack": 1,
+   "durability": 251,
+   "power": 3,
+   "mining_speed": 4.8,
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "diamond_pickaxe",
+   "name": "钻石镐",
+   "category": "tool",
+   "tool_type": "pickaxe",
+   "max_stack": 1,
+   "durability": 1562,
+   "power": 4,
+   "mining_speed": 7.0,
+   "color": "#5BE0DB"
+  },
+  {
+   "id": "wooden_axe",
+   "name": "木斧",
+   "category": "tool",
+   "tool_type": "axe",
+   "max_stack": 1,
+   "durability": 60,
+   "power": 1,
+   "mining_speed": 2.0,
+   "color": "#9A6A3B"
+  },
+  {
+   "id": "stone_axe",
+   "name": "石斧",
+   "category": "tool",
+   "tool_type": "axe",
+   "max_stack": 1,
+   "durability": 132,
+   "power": 2,
+   "mining_speed": 3.2,
+   "color": "#777C82"
+  },
+  {
+   "id": "iron_axe",
+   "name": "铁斧",
+   "category": "tool",
+   "tool_type": "axe",
+   "max_stack": 1,
+   "durability": 251,
+   "power": 3,
+   "mining_speed": 4.8,
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "diamond_axe",
+   "name": "钻石斧",
+   "category": "tool",
+   "tool_type": "axe",
+   "max_stack": 1,
+   "durability": 1562,
+   "power": 4,
+   "mining_speed": 7.0,
+   "color": "#5BE0DB"
+  },
+  {
+   "id": "wooden_shovel",
+   "name": "木铲",
+   "category": "tool",
+   "tool_type": "shovel",
+   "max_stack": 1,
+   "durability": 60,
+   "power": 1,
+   "mining_speed": 2.2,
+   "color": "#9A6A3B"
+  },
+  {
+   "id": "stone_shovel",
+   "name": "石铲",
+   "category": "tool",
+   "tool_type": "shovel",
+   "max_stack": 1,
+   "durability": 132,
+   "power": 2,
+   "mining_speed": 3.6,
+   "color": "#777C82"
+  },
+  {
+   "id": "iron_shovel",
+   "name": "铁铲",
+   "category": "tool",
+   "tool_type": "shovel",
+   "max_stack": 1,
+   "durability": 251,
+   "power": 3,
+   "mining_speed": 5.2,
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "diamond_shovel",
+   "name": "钻石铲",
+   "category": "tool",
+   "tool_type": "shovel",
+   "max_stack": 1,
+   "durability": 1562,
+   "power": 4,
+   "mining_speed": 7.5,
+   "color": "#5BE0DB"
+  },
+  {
+   "id": "wooden_hoe",
+   "name": "木锄",
+   "category": "tool",
+   "tool_type": "hoe",
+   "max_stack": 1,
+   "durability": 60,
+   "power": 1,
+   "mining_speed": 1.0,
+   "color": "#9A6A3B"
+  },
+  {
+   "id": "stone_hoe",
+   "name": "石锄",
+   "category": "tool",
+   "tool_type": "hoe",
+   "max_stack": 1,
+   "durability": 132,
+   "power": 2,
+   "mining_speed": 1.0,
+   "color": "#777C82"
+  },
+  {
+   "id": "iron_hoe",
+   "name": "铁锄",
+   "category": "tool",
+   "tool_type": "hoe",
+   "max_stack": 1,
+   "durability": 251,
+   "power": 3,
+   "mining_speed": 1.0,
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "diamond_hoe",
+   "name": "钻石锄",
+   "category": "tool",
+   "tool_type": "hoe",
+   "max_stack": 1,
+   "durability": 1562,
+   "power": 4,
+   "mining_speed": 1.0,
+   "color": "#5BE0DB"
+  },
+  {
+   "id": "wooden_sword",
+   "name": "木剑",
+   "category": "weapon",
+   "tool_type": "sword",
+   "max_stack": 1,
+   "durability": 60,
+   "power": 1,
+   "mining_speed": 1.0,
+   "damage": 4,
+   "equipment": {
+    "slot": "main_hand",
+    "attributes": {
+     "attack_damage": 3
+    }
+   },
+   "color": "#9A6A3B"
+  },
+  {
+   "id": "stone_sword",
+   "name": "石剑",
+   "category": "weapon",
+   "tool_type": "sword",
+   "max_stack": 1,
+   "durability": 132,
+   "power": 2,
+   "mining_speed": 1.0,
+   "damage": 5,
+   "equipment": {
+    "slot": "main_hand",
+    "attributes": {
+     "attack_damage": 4
+    }
+   },
+   "color": "#777C82"
+  },
+  {
+   "id": "iron_sword",
+   "name": "铁剑",
+   "category": "weapon",
+   "tool_type": "sword",
+   "max_stack": 1,
+   "durability": 251,
+   "power": 3,
+   "mining_speed": 1.0,
+   "damage": 6,
+   "equipment": {
+    "slot": "main_hand",
+    "attributes": {
+     "attack_damage": 5
+    }
+   },
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "gold_sword",
+   "name": "金剑",
+   "category": "weapon",
+   "tool_type": "sword",
+   "max_stack": 1,
+   "durability": 33,
+   "power": 2,
+   "mining_speed": 1.0,
+   "damage": 4,
+   "equipment": {
+    "slot": "main_hand",
+    "attributes": {
+     "attack_damage": 3
+    }
+   },
+   "color": "#F0D253"
+  },
+  {
+   "id": "diamond_sword",
+   "name": "钻石剑",
+   "category": "weapon",
+   "tool_type": "sword",
+   "max_stack": 1,
+   "durability": 1562,
+   "power": 4,
+   "mining_speed": 1.0,
+   "damage": 7,
+   "equipment": {
+    "slot": "main_hand",
+    "attributes": {
+     "attack_damage": 6
+    }
+   },
+   "color": "#5BE0DB"
+  },
+  {
+   "id": "leather_cap",
+   "name": "皮革帽",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 80,
+   "rarity": "common",
+   "equipment": {
+    "slot": "helmet",
+    "attributes": {
+     "defense": 1
+    }
+   },
+   "color": "#9A613C"
+  },
+  {
+   "id": "leather_tunic",
+   "name": "皮革衣",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 120,
+   "rarity": "common",
+   "equipment": {
+    "slot": "chestplate",
+    "attributes": {
+     "defense": 3
+    }
+   },
+   "color": "#8E5637"
+  },
+  {
+   "id": "leather_pants",
+   "name": "皮革裤",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 110,
+   "rarity": "common",
+   "equipment": {
+    "slot": "leggings",
+    "attributes": {
+     "defense": 2
+    }
+   },
+   "color": "#865033"
+  },
+  {
+   "id": "leather_boots",
+   "name": "皮革靴",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 70,
+   "rarity": "common",
+   "equipment": {
+    "slot": "boots",
+    "attributes": {
+     "defense": 1
+    }
+   },
+   "color": "#78462F"
+  },
+  {
+   "id": "iron_helmet",
+   "name": "铁头盔",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 165,
+   "rarity": "uncommon",
+   "equipment": {
+    "slot": "helmet",
+    "attributes": {
+     "defense": 2
+    }
+   },
+   "color": "#D4D8D9"
+  },
+  {
+   "id": "iron_chestplate",
+   "name": "铁胸甲",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 240,
+   "rarity": "uncommon",
+   "equipment": {
+    "slot": "chestplate",
+    "attributes": {
+     "defense": 6
+    }
+   },
+   "color": "#C9CED0"
+  },
+  {
+   "id": "iron_leggings",
+   "name": "铁护腿",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 225,
+   "rarity": "uncommon",
+   "equipment": {
+    "slot": "leggings",
+    "attributes": {
+     "defense": 5
+    }
+   },
+   "color": "#BEC4C7"
+  },
+  {
+   "id": "iron_boots",
+   "name": "铁靴",
+   "category": "armor",
+   "max_stack": 1,
+   "durability": 195,
+   "rarity": "uncommon",
+   "equipment": {
+    "slot": "boots",
+    "attributes": {
+     "defense": 2
+    }
+   },
+   "color": "#B5BCC0"
+  },
+  {
+   "id": "prospecting_kit",
+   "name": "简易探矿仪",
+   "category": "utility",
+   "max_stack": 1,
+   "prospecting": true,
+   "description": "均衡扫描当前区块附近的岩层。",
+   "color": "#D7B56D"
+  },
+  {
+   "id": "verdant_resonance",
+   "name": "翠绿共鸣石",
+   "category": "material",
+   "max_stack": 16,
+   "rarity": "rare",
+   "description": "星辰大陆地层中形成的稳定共鸣样本。",
+   "color": "#72C76A"
+  },
+  {
+   "id": "ruin_sun_glass",
+   "name": "遗迹日耀玻璃",
+   "category": "material",
+   "max_stack": 16,
+   "rarity": "rare",
+   "description": "荒漠遗迹高温与矿砂共同烧结的透亮样本。",
+   "color": "#E7B85E"
+  },
+  {
+   "id": "frost_heart_crystal",
+   "name": "冰原寒心晶",
+   "category": "material",
+   "max_stack": 16,
+   "rarity": "rare",
+   "description": "极寒冰原深层岩隙中凝结的低温晶体。",
+   "color": "#A8E1F1"
+  },
+  {
+   "id": "sky_wind_crystal",
+   "name": "浮岛风鸣晶",
+   "category": "material",
+   "max_stack": 16,
+   "rarity": "rare",
+   "description": "天空群岛岩层受高空风压形成的轻质晶体。",
+   "color": "#8ED6F8"
+  },
+  {
+   "id": "abyss_cinder",
+   "name": "深渊余烬",
+   "category": "material",
+   "max_stack": 16,
+   "rarity": "rare",
+   "description": "深渊洞窟危险岩层中残留的稳定热核。",
+   "color": "#E76B3C"
+  },
+  {
+   "id": "verdant_prospecting_kit",
+   "name": "翠绿校准探矿仪",
+   "category": "utility",
+   "max_stack": 1,
+   "prospecting": true,
+   "description": "扩大星辰大陆平原与林地下方的水平扫描覆盖。",
+   "color": "#78C96E"
+  },
+  {
+   "id": "ruin_prospecting_kit",
+   "name": "遗迹校准探矿仪",
+   "category": "utility",
+   "max_stack": 1,
+   "prospecting": true,
+   "description": "扩大荒漠遗迹周边矿层的水平扫描范围。",
+   "color": "#D9A94F"
+  },
+  {
+   "id": "frost_prospecting_kit",
+   "name": "冰原校准探矿仪",
+   "category": "utility",
+   "max_stack": 1,
+   "prospecting": true,
+   "description": "强化冰峰和厚雪层下方的垂直扫描。",
+   "color": "#9ED9EA"
+  },
+  {
+   "id": "sky_prospecting_kit",
+   "name": "浮岛校准探矿仪",
+   "category": "utility",
+   "max_stack": 1,
+   "prospecting": true,
+   "description": "扩大浅层岛面覆盖，并适应稀薄岩层。",
+   "color": "#7CCAF0"
+  },
+  {
+   "id": "abyss_prospecting_kit",
+   "name": "深渊校准探矿仪",
+   "category": "utility",
+   "max_stack": 1,
+   "prospecting": true,
+   "description": "强化深渊洞穴中的垂直扫描并降低连续岩层要求。",
+   "color": "#D95B35"
+  },
+  {
+   "id": "tall_grass",
+   "name": "高草",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "tall_grass",
+   "color": "#56993C",
+   "plant_icon": true
+  },
+  {
+   "id": "flower_red",
+   "name": "红花",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "flower_red",
+   "color": "#D84A3A",
+   "plant_icon": true
+  },
+  {
+   "id": "flower_yellow",
+   "name": "黄花",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "flower_yellow",
+   "color": "#E8C93A",
+   "plant_icon": true
+  },
+  {
+   "id": "cactus",
+   "name": "仙人掌",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "cactus",
+   "color": "#3F7A34"
+  },
+  {
+   "id": "dead_bush",
+   "name": "枯木丛",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "dead_bush",
+   "color": "#8A6B3F",
+   "plant_icon": true
+  },
+  {
+   "id": "ruin_pillar",
+   "name": "遗迹石柱",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "ruin_pillar",
+   "color": "#8A8578"
+  },
+  {
+   "id": "glow_crystal",
+   "name": "辉光晶体",
+   "category": "block",
+   "max_stack": 64,
+   "block_id": "glow_crystal",
+   "color": "#54E0D8",
+   "plant_icon": true
+  }
+ ]
 }

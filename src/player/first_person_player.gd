@@ -37,6 +37,12 @@ const VOXEL_GROUND_RECOVERY_DEPTH := 0.4
 @export var air_acceleration := 5.0
 @export var mouse_sensitivity := 0.0022
 @export var interaction_distance := 6.0
+@export var camera_bob_enabled := true:
+	set(value):
+		camera_bob_enabled = value
+		var feel := get_node_or_null("CameraFeel")
+		if feel != null:
+			feel.bob_enabled = value
 
 var world: Node
 var inventory: Node
@@ -66,6 +72,9 @@ func _ready() -> void:
 	interaction_ray.enabled = true
 	interaction_ray.hit_from_inside = true
 	set_process_unhandled_input(input_enabled)
+	var feel := get_node_or_null("CameraFeel")
+	if feel != null:
+		feel.bob_enabled = camera_bob_enabled
 	_emit_hotbar_selection()
 
 

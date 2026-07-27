@@ -60,11 +60,10 @@ static func make_badge(text: String, tone: String = "info") -> Label:
 	label.add_theme_color_override("font_color", _tone_text_color(tone))
 	label.add_theme_stylebox_override(
 		"normal",
-		Tokens.panel_style(
+		Tokens.bevel_style(
 			_tone_fill(tone),
 			Tokens.tone_border(tone),
-			1,
-			Tokens.RADIUS_XL,
+			2,
 			6.0
 		)
 	)
@@ -135,13 +134,13 @@ static func format_bytes(value: int) -> String:
 static func _tone_fill(tone: String) -> String:
 	match tone:
 		"success":
-			return "#123528E8"
+			return "#16300FE8"
 		"warning", "warm", "primary":
 			return "#3A2E16E8"
 		"danger", "error", "critical":
 			return "#3B1A23E8"
 		_:
-			return "#0E3042E8"
+			return "#1E2A12E8"
 
 
 static func _tone_text_color(tone: String) -> Color:

@@ -6,6 +6,9 @@ signal sound_played(event_name: String)
 var _effects_player: AudioStreamPlayer
 var _creature_player: AudioStreamPlayer
 var _ambient_player: AudioStreamPlayer
+var _effect_pool: Array[AudioStreamPlayer] = []
+var _pool_cursor := 0
+var _pool_enabled := true
 var _cache: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var _disposed := false
@@ -13,7 +16,12 @@ var _disposed := false
 
 func _ready() -> void:
 	_rng.seed = 7355608
+	_pool_enabled = not bool(get_meta("disable_effect_pool", false))
 	_effects_player = _create_player("Effects")
+	_effect_pool.append(_effects_player)
+	if _pool_enabled:
+		for index in range(2, 5):
+			_effect_pool.append(_create_player("Effects%d" % index))
 	_creature_player = _create_player("Creatures")
 	_ambient_player = _create_player("Ambient")
 	_build_cache()
@@ -30,6 +38,10 @@ func shutdown() -> void:
 	if _disposed:
 		return
 	_effects_player = _replace_player(_effects_player, "Effects")
+	_effect_pool = [_effects_player]
+	if _pool_enabled:
+		for index in range(2, 5):
+			_effect_pool.append(_replace_player(_effect_pool[index - 1], "Effects%d" % index))
 	_creature_player = _replace_player(_creature_player, "Creatures")
 	_ambient_player = _replace_player(_ambient_player, "Ambient")
 
@@ -40,6 +52,10 @@ func dispose() -> void:
 	_disposed = true
 	_stop_and_clear_players()
 	_cache.clear()
+	for pooled_player in _effect_pool:
+		if pooled_player != _effects_player:
+			_dispose_player(pooled_player)
+	_effect_pool.clear()
 	_dispose_player(_effects_player)
 	_dispose_player(_creature_player)
 	_dispose_player(_ambient_player)
@@ -53,7 +69,7 @@ func is_disposed() -> bool:
 
 
 func _stop_and_clear_players() -> void:
-	for player in [_effects_player, _creature_player, _ambient_player]:
+	for player in [_effects_player, _creature_player, _ambient_player] + _effect_pool:
 		if player != null and is_instance_valid(player):
 			player.stop()
 			player.stream = null
@@ -93,6 +109,16 @@ func _build_cache() -> void:
 	_cache["cow"] = _make_wave(92.0, 0.45, 0.3, "saw", 0.72)
 	_cache["pig"] = _make_wave(185.0, 0.25, 0.26, "square", 0.82)
 	_cache["zombie"] = _make_wave(63.0, 0.5, 0.32, "saw", 0.68)
+	# Game-feel additions: footsteps per material family, digging ticks,
+	# eating chews, a reward arpeggio and a landing thud.
+	_cache["step_soft"] = _make_wave(120.0, 0.07, 0.16, "noise", 0.72)
+	_cache["step_hard"] = _make_wave(230.0, 0.05, 0.14, "noise", 0.8)
+	_cache["step_sand"] = _make_wave(88.0, 0.09, 0.13, "noise", 0.66)
+	_cache["step_wood"] = _make_wave(150.0, 0.055, 0.15, "square", 0.7)
+	_cache["dig_tick"] = _make_wave(310.0, 0.035, 0.15, "noise", 0.85)
+	_cache["eat"] = _make_chew_wave()
+	_cache["reward"] = _make_arpeggio_wave([523.0, 659.0, 784.0, 1046.0], 0.09, 0.2)
+	_cache["land"] = _make_wave(72.0, 0.12, 0.3, "noise", 0.6)
 
 
 func play_block_break(block_id: String = "stone") -> void:
@@ -134,6 +160,48 @@ func play_creature(species_id: String) -> void:
 	_creature_player.pitch_scale = _rng.randf_range(0.92, 1.08)
 	_creature_player.play()
 	sound_played.emit("creature_%s" % species_id)
+
+
+func play_footstep(block_id: String = "grass") -> void:
+	var key := "step_soft"
+	if block_id in [
+		"stone", "cobblestone", "stone_bricks", "coal_ore", "iron_ore", "gold_ore",
+		"diamond_ore", "furnace", "stonecutter", "repair_station", "bedrock", "ice",
+		"ruin_pillar", "stone_slab"
+	]:
+		key = "step_hard"
+	elif block_id in ["sand", "snow"]:
+		key = "step_sand"
+	elif block_id in [
+		"wood", "planks", "crafting_table", "chest", "oak_door", "oak_fence",
+		"ladder", "oak_bed", "oak_stairs"
+	]:
+		key = "step_wood"
+	_play_effect(key)
+
+
+func play_dig_tick(progress: float = 0.0) -> void:
+	if _disposed or not _cache.has("dig_tick"):
+		return
+	var player := _next_pool_player()
+	if player == null:
+		return
+	player.stream = _cache["dig_tick"]
+	player.pitch_scale = 0.92 + clampf(progress, 0.0, 1.0) * 0.35
+	player.play()
+	sound_played.emit("dig_tick")
+
+
+func play_eat() -> void:
+	_play_effect("eat")
+
+
+func play_reward() -> void:
+	_play_effect("reward")
+
+
+func play_land() -> void:
+	_play_effect("land")
 
 
 func start_ambient(profile: String = "forest") -> void:
@@ -179,17 +247,85 @@ func set_master_volume(linear_value: float) -> void:
 
 
 func _play_effect(key: String) -> void:
-	if (
-		_disposed
-		or _effects_player == null
-		or not is_instance_valid(_effects_player)
-		or not _cache.has(key)
-	):
+	if _disposed or not _cache.has(key):
 		return
-	_effects_player.stream = _cache[key]
-	_effects_player.pitch_scale = _rng.randf_range(0.94, 1.06)
-	_effects_player.play()
+	var player := _next_pool_player()
+	if player == null:
+		return
+	player.stream = _cache[key]
+	player.pitch_scale = _rng.randf_range(0.94, 1.06)
+	player.play()
 	sound_played.emit(key)
+
+
+func _next_pool_player() -> AudioStreamPlayer:
+	if not _pool_enabled:
+		return _effects_player if is_instance_valid(_effects_player) else null
+	if _effect_pool.is_empty():
+		return null
+	for attempt in _effect_pool.size():
+		var index := (_pool_cursor + attempt) % _effect_pool.size()
+		var candidate := _effect_pool[index]
+		if candidate != null and is_instance_valid(candidate) and not candidate.playing:
+			_pool_cursor = (index + 1) % _effect_pool.size()
+			return candidate
+	# Every voice is busy; steal the oldest one rather than dropping the event.
+	var fallback := _effect_pool[_pool_cursor % _effect_pool.size()]
+	_pool_cursor = (_pool_cursor + 1) % _effect_pool.size()
+	return fallback if is_instance_valid(fallback) else null
+
+
+func _make_chew_wave() -> AudioStreamWAV:
+	var mix_rate := 22050
+	var duration := 0.52
+	var sample_count := int(duration * mix_rate)
+	var bytes := PackedByteArray()
+	bytes.resize(sample_count * 2)
+	var chew_centers := [0.07, 0.23, 0.39]
+	for sample_index in sample_count:
+		var t := float(sample_index) / float(mix_rate)
+		var sample_value := 0.0
+		for center: float in chew_centers:
+			var local := t - center
+			if local < 0.0 or local > 0.12:
+				continue
+			var envelope := sin(PI * local / 0.12)
+			sample_value += sin(TAU * 165.0 * local) * envelope
+			sample_value += _rng.randf_range(-0.35, 0.35) * envelope * 0.5
+		var master := clampf(sample_value * 0.24, -1.0, 1.0)
+		bytes.encode_s16(sample_index * 2, int(master * 32767.0))
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = mix_rate
+	stream.stereo = false
+	stream.data = bytes
+	return stream
+
+
+func _make_arpeggio_wave(notes: Array, note_seconds: float, volume: float) -> AudioStreamWAV:
+	var mix_rate := 22050
+	var duration := note_seconds * notes.size() + 0.18
+	var sample_count := int(duration * mix_rate)
+	var bytes := PackedByteArray()
+	bytes.resize(sample_count * 2)
+	for sample_index in sample_count:
+		var t := float(sample_index) / float(mix_rate)
+		var note_index := clampi(int(t / note_seconds), 0, notes.size() - 1)
+		var local := t - float(note_index) * note_seconds
+		var frequency := float(notes[note_index])
+		var envelope := minf(1.0, local * 40.0) * maxf(0.0, 1.0 - local / (note_seconds + 0.18))
+		var sample_value := sin(TAU * frequency * local) * envelope
+		sample_value += sin(TAU * frequency * 2.0 * local) * envelope * 0.28
+		bytes.encode_s16(
+			sample_index * 2,
+			int(clampf(sample_value * volume, -1.0, 1.0) * 32767.0)
+		)
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = mix_rate
+	stream.stereo = false
+	stream.data = bytes
+	return stream
 
 
 func _make_wave(

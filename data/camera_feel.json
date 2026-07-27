@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "bob_enabled_default": true,
+  "bob_walk_amplitude": 0.035,
+  "bob_sprint_amplitude": 0.052,
+  "bob_lateral_factor": 0.55,
+  "bob_step_frequency": 1.85,
+  "sprint_fov": 82.0,
+  "base_fov": 75.0,
+  "fov_transition_speed": 7.0,
+  "sprint_speed_threshold": 6.4,
+  "land_dip_depth": 0.085,
+  "land_min_impact_speed": 3.2,
+  "land_sound_min_impact_speed": 4.6,
+  "shake_decay_per_second": 6.5,
+  "shake_max_roll_degrees": 1.6,
+  "hurt_shake_strength": 0.9
+}

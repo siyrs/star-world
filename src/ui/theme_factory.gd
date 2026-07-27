@@ -2,26 +2,61 @@ class_name StarThemeFactory
 extends RefCounted
 
 const Tokens = preload("res://src/ui/design_tokens.gd")
+const PixelTextures = preload("res://src/ui/pixel_ui_textures.gd")
+
+# Theme contexts: "overlay" floats over the 3D world or the menu dirt
+# background (light text with pixel shadow, dark translucent panels), while
+# "panel" renders classic light-gray Minecraft GUI surfaces (dark text).
+const CONTEXT_OVERLAY := &"overlay"
+const CONTEXT_PANEL := &"panel"
+
+static var _pixel_font: FontFile
+static var _font_loaded := false
 
 
-static func create_theme() -> Theme:
+static func create_theme(context: StringName = CONTEXT_OVERLAY) -> Theme:
 	var result := Theme.new()
-	_register_base_typography(result)
-	_register_label_variations(result)
-	_register_panel_variations(result)
-	_register_button_variations(result)
-	_register_inputs(result)
-	_register_progress_and_scrolling(result)
-	_register_miscellaneous(result)
+	_register_base_typography(result, context)
+	_register_label_variations(result, context)
+	_register_panel_variations(result, context)
+	_register_button_variations(result, context)
+	_register_inputs(result, context)
+	_register_progress_and_scrolling(result, context)
+	_register_miscellaneous(result, context)
 	return result
 
 
-static func _register_base_typography(theme: Theme) -> void:
+static func get_ui_font() -> Font:
+	if _font_loaded:
+		return _pixel_font
+	_font_loaded = true
+	_pixel_font = null
+	if FileAccess.file_exists(Tokens.PIXEL_FONT_PATH):
+		var bytes := FileAccess.get_file_as_bytes(Tokens.PIXEL_FONT_PATH)
+		if bytes.size() > 1024:
+			var font := FontFile.new()
+			font.data = bytes
+			font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+			font.hinting = TextServer.HINTING_NONE
+			font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+			font.oversampling = 1.0
+			font.multichannel_signed_distance_field = false
+			_pixel_font = font
+	if _pixel_font == null:
+		push_warning("Pixel font missing at %s; falling back to the default font." % Tokens.PIXEL_FONT_PATH)
+	return _pixel_font
+
+
+static func _register_base_typography(theme: Theme, context: StringName) -> void:
+	var font := get_ui_font()
+	if font != null:
+		theme.default_font = font
 	theme.set_default_font_size(Tokens.FONT_BODY)
+	var text_color := _text_color(context, "body")
 	for control_type: String in [
 		"Label", "Button", "LineEdit", "TextEdit", "OptionButton", "CheckButton", "RichTextLabel"
 	]:
-		theme.set_color("font_color", control_type, Tokens.color(Tokens.COLOR_TEXT))
+		theme.set_color("font_color", control_type, text_color)
 	theme.set_font_size("font_size", "Label", Tokens.FONT_BODY)
 	theme.set_font_size("font_size", "Button", Tokens.FONT_BUTTON)
 	theme.set_font_size("font_size", "LineEdit", Tokens.FONT_BODY)
@@ -29,443 +64,316 @@ static func _register_base_typography(theme: Theme) -> void:
 	theme.set_font_size("font_size", "OptionButton", Tokens.FONT_BODY)
 	theme.set_font_size("font_size", "CheckButton", Tokens.FONT_BODY)
 	theme.set_font_size("normal_font_size", "RichTextLabel", Tokens.FONT_BODY)
-	theme.set_color("default_color", "RichTextLabel", Tokens.color(Tokens.COLOR_TEXT))
-	theme.set_color("font_placeholder_color", "LineEdit", Tokens.color(Tokens.COLOR_TEXT_SUBDUED))
-	theme.set_color("font_uneditable_color", "LineEdit", Tokens.color(Tokens.COLOR_TEXT_MUTED))
+	theme.set_color("default_color", "RichTextLabel", text_color)
+	theme.set_color("font_placeholder_color", "LineEdit", _text_color(context, "subdued"))
+	theme.set_color("font_uneditable_color", "LineEdit", _text_color(context, "muted"))
 	theme.set_color("caret_color", "LineEdit", Tokens.color(Tokens.COLOR_ACCENT))
-	theme.set_color("selection_color", "LineEdit", Color("#1E7197AA"))
+	theme.set_color("selection_color", "LineEdit", Color("#4E7A2866"))
+	# Buttons always read as white pixel text with a dark drop shadow.
+	for button_type: String in ["Button", "OptionButton"]:
+		theme.set_color("font_shadow_color", button_type, Color("#101010CC"))
+		theme.set_constant("shadow_offset_x", button_type, 1)
+		theme.set_constant("shadow_offset_y", button_type, 1)
+		theme.set_constant("shadow_outline_size", button_type, 2)
 
 
-static func _register_label_variations(theme: Theme) -> void:
-	_register_label(theme, "DisplayTitle", Tokens.FONT_DISPLAY, Tokens.COLOR_TEXT)
-	_register_label(theme, "PageTitle", Tokens.FONT_TITLE, Tokens.COLOR_TEXT)
-	_register_label(theme, "SectionTitle", Tokens.FONT_SUBTITLE, Tokens.COLOR_TEXT)
-	_register_label(theme, "EyebrowLabel", Tokens.FONT_CAPTION, Tokens.COLOR_ACCENT)
-	_register_label(theme, "MutedLabel", Tokens.FONT_SMALL, Tokens.COLOR_TEXT_MUTED)
-	_register_label(theme, "SubduedLabel", Tokens.FONT_CAPTION, Tokens.COLOR_TEXT_SUBDUED)
-	_register_label(theme, "CaptionLabel", Tokens.FONT_CAPTION, Tokens.COLOR_TEXT_MUTED)
-	_register_label(theme, "MetricLabel", Tokens.FONT_BUTTON, Tokens.COLOR_ACCENT_SOFT)
-	_register_label(theme, "DangerLabel", Tokens.FONT_SMALL, Tokens.COLOR_DANGER)
-	_register_label(theme, "SuccessLabel", Tokens.FONT_SMALL, Tokens.COLOR_SUCCESS)
-	_register_label(theme, "BadgeLabel", Tokens.FONT_CAPTION, Tokens.COLOR_ACCENT_SOFT)
-	theme.set_stylebox(
-		"normal",
-		"BadgeLabel",
-		Tokens.panel_style("#0E3042E8", Tokens.COLOR_BORDER_STRONG, 1, Tokens.RADIUS_XL, 6.0)
-	)
+static func _text_color(context: StringName, role: String) -> Color:
+	if context == CONTEXT_PANEL:
+		match role:
+			"body":
+				return Tokens.color(Tokens.MC_PANEL_TEXT)
+			"muted":
+				return Tokens.color(Tokens.MC_PANEL_TEXT_MUTED)
+			"subdued":
+				return Tokens.color("#6E6E6E")
+			"danger":
+				return Tokens.color("#A02818")
+			"success":
+				return Tokens.color("#3E7A24")
+			"accent":
+				return Tokens.color("#3E5B1E")
+	match role:
+		"body":
+			return Tokens.color(Tokens.COLOR_TEXT)
+		"muted":
+			return Tokens.color(Tokens.COLOR_TEXT_MUTED)
+		"subdued":
+			return Tokens.color(Tokens.COLOR_TEXT_SUBDUED)
+		"danger":
+			return Tokens.color(Tokens.COLOR_DANGER)
+		"success":
+			return Tokens.color(Tokens.COLOR_SUCCESS)
+		"accent":
+			return Tokens.color(Tokens.COLOR_ACCENT_SOFT)
+	return Tokens.color(Tokens.COLOR_TEXT)
 
 
-static func _register_panel_variations(theme: Theme) -> void:
-	theme.set_stylebox(
-		"panel",
-		"PanelContainer",
-		Tokens.elevated_panel_style(
-			Tokens.COLOR_SURFACE_GLASS,
-			Tokens.COLOR_BORDER,
-			1,
-			Tokens.RADIUS_LG,
-			Tokens.SPACE_LG,
-			8,
-			Vector2(0.0, 4.0)
+static func _register_label_variations(theme: Theme, context: StringName) -> void:
+	_register_label(theme, context, "DisplayTitle", Tokens.FONT_DISPLAY, "body", true)
+	_register_label(theme, context, "PageTitle", Tokens.FONT_TITLE, "body", true)
+	_register_label(theme, context, "SectionTitle", Tokens.FONT_SUBTITLE, "body", true)
+	_register_label(theme, context, "EyebrowLabel", Tokens.FONT_CAPTION, "accent", context != CONTEXT_PANEL)
+	_register_label(theme, context, "MutedLabel", Tokens.FONT_SMALL, "muted", context != CONTEXT_PANEL)
+	_register_label(theme, context, "SubduedLabel", Tokens.FONT_CAPTION, "subdued", context != CONTEXT_PANEL)
+	_register_label(theme, context, "CaptionLabel", Tokens.FONT_CAPTION, "muted", context != CONTEXT_PANEL)
+	_register_label(theme, context, "MetricLabel", Tokens.FONT_SUBTITLE, "accent", context != CONTEXT_PANEL)
+	_register_label(theme, context, "DangerLabel", Tokens.FONT_SMALL, "danger", context != CONTEXT_PANEL)
+	_register_label(theme, context, "SuccessLabel", Tokens.FONT_SMALL, "success", context != CONTEXT_PANEL)
+	_register_label(theme, context, "BadgeLabel", Tokens.FONT_CAPTION, "accent", context != CONTEXT_PANEL)
+	if context == CONTEXT_PANEL:
+		theme.set_stylebox(
+			"normal",
+			"BadgeLabel",
+			Tokens.bevel_style("#B0B0B0", "#7A7A7A", 2, 6.0)
 		)
-	)
-	_register_panel(theme, "MenuCanvas", "#00000000", "#00000000", 0, 0, 0.0, 0)
-	_register_panel(
-		theme, "GlassPanel", Tokens.COLOR_SURFACE_GLASS, Tokens.COLOR_BORDER, 1,
-		Tokens.RADIUS_LG, Tokens.SPACE_LG, 8
-	)
-	_register_panel(
-		theme, "ElevatedPanel", Tokens.COLOR_SURFACE_RAISED, Tokens.COLOR_BORDER_STRONG, 1,
-		Tokens.RADIUS_XL, Tokens.SPACE_XL, 12
-	)
-	_register_panel(
-		theme, "CommandPanel", "#0A1B2BF7", Tokens.COLOR_BORDER_STRONG, 1,
-		Tokens.RADIUS_XL, Tokens.SPACE_XL, 16
-	)
-	_register_panel(
-		theme, "CardPanel", Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER_SUBTLE, 1,
-		Tokens.RADIUS_MD, Tokens.SPACE_MD, 4
-	)
-	_register_panel(
-		theme, "InsetPanel", Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1,
-		Tokens.RADIUS_MD, Tokens.SPACE_MD, 0
-	)
-	_register_panel(
-		theme, "HudPanel", "#071522E8", Tokens.COLOR_BORDER, 1,
-		Tokens.RADIUS_LG, Tokens.SPACE_MD, 7
-	)
-	_register_panel(
-		theme, "ModalPanel", "#091827FA", Tokens.COLOR_BORDER_STRONG, 1,
-		Tokens.RADIUS_XL, Tokens.SPACE_XL, 18
-	)
-	_register_panel(
-		theme, "SuccessPanel", "#0E2A22F2", Tokens.COLOR_SUCCESS, 1,
-		Tokens.RADIUS_LG, Tokens.SPACE_MD, 7
-	)
-	_register_panel(
-		theme, "DangerPanel", "#2B131AF2", Tokens.COLOR_DANGER, 1,
-		Tokens.RADIUS_LG, Tokens.SPACE_MD, 7
-	)
-	_register_panel(
-		theme, "DiagnosticsBackdrop", Tokens.COLOR_OVERLAY, Tokens.COLOR_BORDER_STRONG, 1,
-		Tokens.RADIUS_LG, Tokens.SPACE_LG, 0
-	)
-	_register_panel(
-		theme, "DiagnosticsCard", "#071522F5", Tokens.COLOR_BORDER, 1,
-		Tokens.RADIUS_MD, Tokens.SPACE_MD, 5
-	)
+	else:
+		theme.set_stylebox(
+			"normal",
+			"BadgeLabel",
+			Tokens.bevel_style("#241A10E8", Tokens.COLOR_BORDER_STRONG, 2, 6.0)
+		)
 
 
-static func _register_button_variations(theme: Theme) -> void:
-	_register_button(
-		theme,
-		"Button",
-		Tokens.COLOR_SURFACE_SOFT,
-		Tokens.COLOR_SURFACE_INTERACTIVE,
-		Tokens.COLOR_SURFACE_SELECTED,
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_BORDER_STRONG,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_WARM_BRIGHT,
-		Tokens.FONT_BUTTON,
-		Tokens.RADIUS_MD,
-		9.0
-	)
-	_register_button(
-		theme,
-		"PrimaryButton",
-		"#D6A63BEF",
-		"#E6BB55F5",
-		"#B98527F5",
-		Tokens.COLOR_ACCENT_WARM,
-		Tokens.COLOR_ACCENT_WARM_BRIGHT,
-		Tokens.COLOR_BACKGROUND_DEEP,
-		Tokens.COLOR_BACKGROUND_DEEP,
-		"#07111C",
-		Tokens.FONT_BUTTON,
-		Tokens.RADIUS_MD,
-		10.0
-	)
-	_register_button(
-		theme,
-		"SecondaryButton",
-		"#103149F2",
-		"#174864F5",
-		"#0C293DF5",
-		Tokens.COLOR_BORDER_STRONG,
-		Tokens.COLOR_BORDER_FOCUS,
-		Tokens.COLOR_TEXT,
-		Color.WHITE.to_html(),
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_BUTTON,
-		Tokens.RADIUS_MD,
-		10.0
-	)
-	_register_button(
-		theme,
-		"GhostButton",
-		"#0A172400",
-		"#153047D9",
-		"#10263ADB",
-		Tokens.COLOR_BORDER_SUBTLE,
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_TEXT_MUTED,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_BUTTON,
-		Tokens.RADIUS_MD,
-		9.0
-	)
-	_register_button(
-		theme,
-		"DangerButton",
-		"#391820E8",
-		"#52222CF2",
-		"#281118F2",
-		Tokens.COLOR_DANGER_DEEP,
-		Tokens.COLOR_DANGER,
-		Tokens.COLOR_DANGER,
-		"#FFB2B8",
-		"#FFB2B8",
-		Tokens.FONT_BUTTON,
-		Tokens.RADIUS_MD,
-		9.0
-	)
-	_register_button(
-		theme,
-		"MenuPrimaryButton",
-		"#D9A73FF5",
-		"#EDC35EF8",
-		"#B98422F8",
-		Tokens.COLOR_ACCENT_WARM,
-		Tokens.COLOR_ACCENT_WARM_BRIGHT,
-		Tokens.COLOR_BACKGROUND_DEEP,
-		Tokens.COLOR_BACKGROUND_DEEP,
-		"#07111C",
-		Tokens.FONT_SUBTITLE,
-		Tokens.RADIUS_LG,
-		12.0
-	)
-	_register_button(
-		theme,
-		"MenuButton",
-		"#0C2032E8",
-		"#143A53F2",
-		"#0C293DF5",
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_BORDER_STRONG,
-		Tokens.COLOR_TEXT,
-		Color.WHITE.to_html(),
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_BUTTON,
-		Tokens.RADIUS_LG,
-		11.0
-	)
-	_register_button(
-		theme,
-		"CardButton",
-		Tokens.COLOR_SURFACE_SOFT,
-		Tokens.COLOR_SURFACE_INTERACTIVE,
-		Tokens.COLOR_SURFACE_SELECTED,
-		Tokens.COLOR_BORDER_SUBTLE,
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_BODY,
-		Tokens.RADIUS_MD,
-		10.0
-	)
-	_register_button(
-		theme,
-		"SelectedCardButton",
-		Tokens.COLOR_SURFACE_SELECTED,
-		"#1A4C68F5",
-		Tokens.COLOR_SURFACE_SELECTED,
-		Tokens.COLOR_BORDER_STRONG,
-		Tokens.COLOR_BORDER_FOCUS,
-		Tokens.COLOR_TEXT,
-		Color.WHITE.to_html(),
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_BODY,
-		Tokens.RADIUS_MD,
-		10.0,
-		2
-	)
-	_register_button(
-		theme,
-		"ToolbarButton",
-		"#0B1B2A99",
-		"#153047DD",
-		"#0B2234EE",
-		Tokens.COLOR_BORDER_SUBTLE,
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_TEXT_MUTED,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_CAPTION,
-		Tokens.RADIUS_SM,
-		7.0
-	)
-	_register_button(
-		theme,
-		"RecipeButton",
-		Tokens.COLOR_SURFACE_SOFT,
-		Tokens.COLOR_SURFACE_INTERACTIVE,
-		Tokens.COLOR_SURFACE_SELECTED,
-		Tokens.COLOR_BORDER_SUBTLE,
-		Tokens.COLOR_BORDER_STRONG,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_WARM_BRIGHT,
-		Tokens.FONT_BODY,
-		Tokens.RADIUS_MD,
-		12.0
-	)
-	_register_button(
-		theme,
-		"InventorySlot",
-		"#071421F0",
-		"#102C42F2",
-		"#0A1C2BF5",
-		Tokens.COLOR_BORDER_SUBTLE,
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.FONT_CAPTION,
-		Tokens.RADIUS_SM,
-		4.0
-	)
-	_register_button(
-		theme,
-		"InventorySlotSelected",
-		"#22341AF5",
-		"#2B4520F5",
-		"#1A2814F5",
-		Tokens.COLOR_ACCENT_WARM,
-		Tokens.COLOR_ACCENT_WARM_BRIGHT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_WARM_BRIGHT,
-		Tokens.FONT_CAPTION,
-		Tokens.RADIUS_SM,
-		4.0,
-		2
-	)
-	_register_button(
-		theme,
-		"InventorySlotSwap",
-		"#123345F5",
-		"#174A61F5",
-		"#0F2B3BF5",
-		Tokens.COLOR_ACCENT,
-		Tokens.COLOR_BORDER_FOCUS,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_CAPTION,
-		Tokens.RADIUS_SM,
-		4.0,
-		2
-	)
-	_register_button(
-		theme,
-		"MachineSlotButton",
-		"#0B1C2CF5",
-		"#15364FF5",
-		"#0A1825F5",
-		Tokens.COLOR_BORDER,
-		Tokens.COLOR_BORDER_STRONG,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_ACCENT_SOFT,
-		Tokens.FONT_BODY,
-		Tokens.RADIUS_MD,
-		10.0
-	)
-	_register_button(
-		theme,
-		"OutputSlotButton",
-		"#123126F5",
-		"#194633F5",
-		"#0D281DF5",
-		Tokens.COLOR_SUCCESS,
-		"#A0F1BE",
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_TEXT,
-		Tokens.COLOR_SUCCESS,
-		Tokens.FONT_BODY,
-		Tokens.RADIUS_MD,
-		10.0
-	)
+static func _register_panel_variations(theme: Theme, context: StringName) -> void:
+	if context == CONTEXT_PANEL:
+		theme.set_stylebox("panel", "PanelContainer", PixelTextures.panel_style_box())
+	else:
+		theme.set_stylebox(
+			"panel",
+			"PanelContainer",
+			Tokens.bevel_style("#181209F2", Tokens.COLOR_BORDER, 2, Tokens.SPACE_LG)
+		)
+	_register_panel(theme, context, "MenuCanvas", "#00000000", "#00000000", 0)
+	_register_panel(theme, context, "GlassPanel", "", "", 0)
+	_register_panel(theme, context, "ElevatedPanel", "", "", 0)
+	_register_panel(theme, context, "CommandPanel", "", "", 0)
+	_register_panel(theme, context, "CardPanel", "", "", 0)
+	_register_panel(theme, context, "InsetPanel", "", "", 0, true)
+	_register_panel(theme, context, "HudPanel", "#100C07E8", Tokens.COLOR_BORDER, 2)
+	_register_panel(theme, context, "ModalPanel", "", "", 0)
+	_register_panel(theme, context, "SuccessPanel", "#16240FF2", Tokens.COLOR_SUCCESS, 2)
+	_register_panel(theme, context, "DangerPanel", "#2A0F0AF2", Tokens.COLOR_DANGER, 2)
+	_register_panel(theme, context, "DiagnosticsBackdrop", Tokens.COLOR_OVERLAY, Tokens.COLOR_BORDER_STRONG, 2)
+	_register_panel(theme, context, "DiagnosticsCard", "#100C07F5", Tokens.COLOR_BORDER, 2)
 
 
-static func _register_inputs(theme: Theme) -> void:
+static func _register_panel(
+	theme: Theme,
+	context: StringName,
+	variation: String,
+	fill: String,
+	border: String,
+	border_width: int,
+	inset: bool = false
+) -> void:
+	theme.set_type_variation(variation, "PanelContainer")
+	if variation == "MenuCanvas":
+		theme.set_stylebox("panel", variation, Tokens.empty_style())
+		return
+	if fill.is_empty():
+		if context == CONTEXT_PANEL:
+			theme.set_stylebox(
+				"panel",
+				variation,
+				PixelTextures.slot_style_box() if inset else PixelTextures.panel_style_box()
+			)
+		else:
+			theme.set_stylebox(
+				"panel",
+				variation,
+				Tokens.bevel_style("#0D0905EE" if inset else "#1B130BF2", Tokens.COLOR_BORDER, 2, Tokens.SPACE_MD)
+			)
+		return
+	theme.set_stylebox("panel", variation, Tokens.bevel_style(fill, border, border_width, Tokens.SPACE_MD))
+
+
+static func _register_button_variations(theme: Theme, context: StringName) -> void:
+	_register_textured_button(theme, "Button", "normal", "hover", "pressed", Tokens.FONT_BUTTON)
+	_register_textured_button(theme, "PrimaryButton", "primary", "primary_hover", "primary_pressed", Tokens.FONT_BUTTON)
+	_register_textured_button(theme, "SecondaryButton", "normal", "hover", "pressed", Tokens.FONT_BUTTON)
+	_register_textured_button(theme, "DangerButton", "danger", "danger_hover", "danger_pressed", Tokens.FONT_BUTTON)
+	_register_textured_button(theme, "MenuPrimaryButton", "primary", "primary_hover", "primary_pressed", Tokens.FONT_SUBTITLE)
+	_register_textured_button(theme, "MenuButton", "normal", "hover", "pressed", Tokens.FONT_BUTTON)
+	_register_textured_button(theme, "RecipeButton", "normal", "hover", "pressed", Tokens.FONT_BODY)
+	_register_flat_button(
+		theme, "GhostButton",
+		"#00000000", "#00000066", "#00000088",
+		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER_STRONG,
+		"muted", "body", "accent",
+		Tokens.FONT_BUTTON
+	)
+	_register_flat_button(
+		theme, "CardButton",
+		"#100C07CC" if context != CONTEXT_PANEL else "#9E9E9E",
+		"#241A10E8" if context != CONTEXT_PANEL else "#B4B4B4",
+		"#0D0905E8" if context != CONTEXT_PANEL else "#8C8C8C",
+		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER_STRONG,
+		"body", "body", "accent",
+		Tokens.FONT_BODY
+	)
+	_register_flat_button(
+		theme, "SelectedCardButton",
+		"#2E3410E8" if context != CONTEXT_PANEL else "#C9D89A",
+		"#3A4214F2" if context != CONTEXT_PANEL else "#D8E6AC",
+		"#2E3410F2" if context != CONTEXT_PANEL else "#B9C98A",
+		Tokens.COLOR_ACCENT, Tokens.COLOR_BORDER_FOCUS,
+		"body", "body", "accent",
+		Tokens.FONT_BODY, 2
+	)
+	_register_flat_button(
+		theme, "ToolbarButton",
+		"#00000055", "#00000088", "#000000AA",
+		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER,
+		"muted", "body", "accent",
+		Tokens.FONT_CAPTION, 1
+	)
+	_register_slot_buttons(theme)
+
+
+static func _register_textured_button(
+	theme: Theme,
+	variation: String,
+	normal_state: String,
+	hover_state: String,
+	pressed_state: String,
+	font_size: int
+) -> void:
+	if variation != "MenuButton":
+		theme.set_type_variation(variation, "Button")
+	theme.set_font_size("font_size", variation, font_size)
+	theme.set_color("font_color", variation, Color("#FFFFFF"))
+	theme.set_color("font_hover_color", variation, Color("#FFFFA0"))
+	theme.set_color("font_pressed_color", variation, Color("#FFFFFF"))
+	theme.set_color("font_focus_color", variation, Color("#FFFFA0"))
+	theme.set_color("font_disabled_color", variation, Color("#A0A0A0"))
+	theme.set_stylebox("normal", variation, PixelTextures.button_style(normal_state))
+	theme.set_stylebox("hover", variation, PixelTextures.button_style(hover_state))
+	theme.set_stylebox("pressed", variation, PixelTextures.button_style(pressed_state))
+	theme.set_stylebox("hover_pressed", variation, PixelTextures.button_style(pressed_state))
+	theme.set_stylebox("disabled", variation, PixelTextures.button_style("disabled"))
+	theme.set_stylebox("focus", variation, Tokens.focus_style())
+
+
+static func _register_flat_button(
+	theme: Theme,
+	variation: String,
+	normal_fill: String,
+	hover_fill: String,
+	pressed_fill: String,
+	border: String,
+	hover_border: String,
+	font_role: String,
+	hover_font_role: String,
+	pressed_font_role: String,
+	font_size: int,
+	border_width: int = 1
+) -> void:
+	theme.set_type_variation(variation, "Button")
+	theme.set_font_size("font_size", variation, font_size)
+	theme.set_color("font_color", variation, _text_color(CONTEXT_OVERLAY, font_role))
+	theme.set_color("font_hover_color", variation, _text_color(CONTEXT_OVERLAY, hover_font_role))
+	theme.set_color("font_pressed_color", variation, _text_color(CONTEXT_OVERLAY, pressed_font_role))
+	theme.set_color("font_focus_color", variation, _text_color(CONTEXT_OVERLAY, hover_font_role))
+	theme.set_color("font_disabled_color", variation, Tokens.color(Tokens.COLOR_TEXT_DISABLED))
+	theme.set_stylebox("normal", variation, Tokens.bevel_style(normal_fill, border, border_width, 9.0))
+	theme.set_stylebox("hover", variation, Tokens.bevel_style(hover_fill, hover_border, border_width, 9.0))
+	theme.set_stylebox("pressed", variation, Tokens.bevel_style(pressed_fill, hover_border, border_width, 9.0))
+	theme.set_stylebox("hover_pressed", variation, Tokens.bevel_style(pressed_fill, hover_border, border_width, 9.0))
+	theme.set_stylebox("disabled", variation, Tokens.bevel_style("#00000033", border, border_width, 9.0))
+	theme.set_stylebox("focus", variation, Tokens.focus_style())
+
+
+static func _register_slot_buttons(theme: Theme) -> void:
+	for variation: String in [
+		"InventorySlot", "InventorySlotSelected", "InventorySlotSwap",
+		"MachineSlotButton", "OutputSlotButton"
+	]:
+		theme.set_type_variation(variation, "Button")
+		theme.set_font_size("font_size", variation, Tokens.FONT_CAPTION)
+		theme.set_color("font_color", variation, Color("#FFFFFF"))
+		theme.set_color("font_hover_color", variation, Color("#FFFFFF"))
+		theme.set_color("font_pressed_color", variation, Color("#FFFFFF"))
+		theme.set_color("font_focus_color", variation, Color("#FFFFFF"))
+		theme.set_color("font_disabled_color", variation, Color("#A0A0A0"))
+		theme.set_color("font_shadow_color", variation, Color("#101010CC"))
+		theme.set_constant("shadow_offset_x", variation, 1)
+		theme.set_constant("shadow_offset_y", variation, 1)
+		theme.set_stylebox("normal", variation, PixelTextures.slot_style_box())
+		theme.set_stylebox("hover", variation, PixelTextures.slot_style_box())
+		theme.set_stylebox("pressed", variation, PixelTextures.slot_style_box())
+		theme.set_stylebox("hover_pressed", variation, PixelTextures.slot_style_box())
+		theme.set_stylebox("disabled", variation, PixelTextures.slot_style_box())
+		theme.set_stylebox("focus", variation, Tokens.focus_style())
 	theme.set_stylebox(
-		"normal",
-		"LineEdit",
-		Tokens.panel_style(Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_MD, 10.0)
+		"normal", "InventorySlotSelected",
+		Tokens.bevel_style(Tokens.MC_SLOT, Tokens.MC_HOTBAR_FRAME, 2, 4.0)
 	)
 	theme.set_stylebox(
-		"focus",
-		"LineEdit",
-		Tokens.panel_style("#0B2031F8", Tokens.COLOR_BORDER_FOCUS, 2, Tokens.RADIUS_MD, 10.0)
+		"hover", "InventorySlotSelected",
+		Tokens.bevel_style(Tokens.MC_SLOT, Tokens.COLOR_ACCENT_WARM_BRIGHT, 2, 4.0)
 	)
 	theme.set_stylebox(
-		"read_only",
-		"LineEdit",
-		Tokens.panel_style("#0A141FDD", Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_MD, 10.0)
+		"normal", "InventorySlotSwap",
+		Tokens.bevel_style(Tokens.MC_SLOT, Tokens.COLOR_ACCENT, 2, 4.0)
 	)
+	theme.set_stylebox(
+		"hover", "InventorySlotSwap",
+		Tokens.bevel_style(Tokens.MC_SLOT, Tokens.COLOR_ACCENT_SOFT, 2, 4.0)
+	)
+
+
+static func _register_inputs(theme: Theme, context: StringName) -> void:
+	var normal_fill := "#E8E8E8" if context == CONTEXT_PANEL else "#0D0905EE"
+	var text_color := _text_color(context, "body")
+	theme.set_stylebox("normal", "LineEdit", Tokens.bevel_style(normal_fill, "#555555", 2, 10.0))
+	theme.set_stylebox("focus", "LineEdit", Tokens.bevel_style(normal_fill, Tokens.COLOR_BORDER_FOCUS, 2, 10.0))
+	theme.set_stylebox("read_only", "LineEdit", Tokens.bevel_style("#B0B0B0" if context == CONTEXT_PANEL else "#100C07DD", "#555555", 2, 10.0))
+	theme.set_color("font_color", "LineEdit", text_color)
 	theme.set_stylebox("normal", "TextEdit", theme.get_stylebox("normal", "LineEdit"))
 	theme.set_stylebox("focus", "TextEdit", theme.get_stylebox("focus", "LineEdit"))
 	for style_name: String in ["normal", "hover", "pressed", "disabled"]:
 		theme.set_stylebox(style_name, "OptionButton", theme.get_stylebox(style_name, "Button"))
-	theme.set_stylebox("focus", "OptionButton", Tokens.focus_style(Tokens.RADIUS_MD))
-	theme.set_color("font_hover_color", "OptionButton", Color.WHITE)
-	theme.set_color("font_pressed_color", "OptionButton", Tokens.color(Tokens.COLOR_ACCENT_SOFT))
+	theme.set_stylebox("focus", "OptionButton", Tokens.focus_style())
+	theme.set_color("font_hover_color", "OptionButton", Color("#FFFFA0"))
+	theme.set_color("font_pressed_color", "OptionButton", Color.WHITE)
 
 	for style_name: String in ["normal", "pressed", "hover", "hover_pressed"]:
-		var fill := "#00000000" if style_name == "normal" else "#153047A8"
-		theme.set_stylebox(
-			style_name,
-			"CheckButton",
-			Tokens.panel_style(fill, "#00000000", 0, Tokens.RADIUS_MD, 8.0)
-		)
-	theme.set_stylebox("focus", "CheckButton", Tokens.focus_style(Tokens.RADIUS_MD))
-	theme.set_color("font_hover_color", "CheckButton", Color.WHITE)
-	theme.set_color("font_pressed_color", "CheckButton", Tokens.color(Tokens.COLOR_ACCENT_SOFT))
-	theme.set_color("font_disabled_color", "CheckButton", Tokens.color(Tokens.COLOR_TEXT_DISABLED))
+		var fill := "#00000000" if style_name == "normal" else "#00000044"
+		theme.set_stylebox(style_name, "CheckButton", Tokens.bevel_style(fill, "#00000000", 0, 8.0))
+	theme.set_stylebox("focus", "CheckButton", Tokens.focus_style())
+	theme.set_color("font_color", "CheckButton", text_color)
+	theme.set_color("font_hover_color", "CheckButton", _text_color(context, "accent"))
+	theme.set_color("font_pressed_color", "CheckButton", _text_color(context, "accent"))
+	theme.set_color("font_disabled_color", "CheckButton", _text_color(context, "subdued"))
 
-	_register_popup_menu(theme)
+	_register_popup_menu(theme, context)
 
 
-static func _register_progress_and_scrolling(theme: Theme) -> void:
-	theme.set_stylebox(
-		"background",
-		"ProgressBar",
-		Tokens.panel_style("#050D15", Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 2.0)
-	)
-	theme.set_stylebox(
-		"fill",
-		"ProgressBar",
-		Tokens.panel_style(Tokens.COLOR_ACCENT_DEEP, Tokens.COLOR_ACCENT, 0, Tokens.RADIUS_XL, 2.0)
-	)
-	theme.set_color("font_color", "ProgressBar", Tokens.color(Tokens.COLOR_TEXT))
+static func _register_progress_and_scrolling(theme: Theme, context: StringName) -> void:
+	var bar_bg := "#0D0905" if context != CONTEXT_PANEL else "#6E6E6E"
+	theme.set_stylebox("background", "ProgressBar", Tokens.bevel_style(bar_bg, "#373737", 2, 2.0))
+	theme.set_stylebox("fill", "ProgressBar", Tokens.bevel_style(Tokens.COLOR_ACCENT_DEEP, Tokens.COLOR_ACCENT, 1, 2.0))
+	theme.set_color("font_color", "ProgressBar", Color.WHITE)
 
 	for slider_type: String in ["HSlider", "VSlider"]:
-		theme.set_stylebox(
-			"slider",
-			slider_type,
-			Tokens.panel_style("#06101A", Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 2.0)
-		)
-		theme.set_stylebox(
-			"grabber_area",
-			slider_type,
-			Tokens.panel_style(Tokens.COLOR_ACCENT_DEEP, Tokens.COLOR_ACCENT_DEEP, 0, Tokens.RADIUS_XL, 2.0)
-		)
-		theme.set_stylebox(
-			"grabber_area_highlight",
-			slider_type,
-			Tokens.panel_style(Tokens.COLOR_ACCENT, Tokens.COLOR_ACCENT, 0, Tokens.RADIUS_XL, 2.0)
-		)
+		theme.set_stylebox("slider", slider_type, Tokens.bevel_style(bar_bg, "#373737", 2, 2.0))
+		theme.set_stylebox("grabber_area", slider_type, Tokens.bevel_style(Tokens.COLOR_ACCENT_DEEP, Tokens.COLOR_ACCENT_DEEP, 0, 2.0))
+		theme.set_stylebox("grabber_area_highlight", slider_type, Tokens.bevel_style(Tokens.COLOR_ACCENT, Tokens.COLOR_ACCENT, 0, 2.0))
+		theme.set_icon("grabber", slider_type, PixelTextures.grabber_icon())
+		theme.set_icon("grabber_highlight", slider_type, PixelTextures.grabber_icon(true))
 
 	for scroll_type: String in ["HScrollBar", "VScrollBar"]:
-		theme.set_stylebox(
-			"scroll",
-			scroll_type,
-			Tokens.panel_style("#030A11AA", "#00000000", 0, Tokens.RADIUS_XL, 1.0)
-		)
-		theme.set_stylebox(
-			"grabber",
-			scroll_type,
-			Tokens.panel_style("#24455AE6", "#00000000", 0, Tokens.RADIUS_XL, 1.0)
-		)
-		theme.set_stylebox(
-			"grabber_highlight",
-			scroll_type,
-			Tokens.panel_style("#3A718DEB", "#00000000", 0, Tokens.RADIUS_XL, 1.0)
-		)
-		theme.set_stylebox(
-			"grabber_pressed",
-			scroll_type,
-			Tokens.panel_style(Tokens.COLOR_ACCENT_DEEP, "#00000000", 0, Tokens.RADIUS_XL, 1.0)
-		)
+		theme.set_stylebox("scroll", scroll_type, Tokens.bevel_style("#00000066", "#00000000", 0, 1.0))
+		theme.set_stylebox("grabber", scroll_type, Tokens.bevel_style(Tokens.MC_BUTTON, "#555555", 2, 1.0))
+		theme.set_stylebox("grabber_highlight", scroll_type, Tokens.bevel_style(Tokens.MC_BUTTON_HOVER, "#555555", 2, 1.0))
+		theme.set_stylebox("grabber_pressed", scroll_type, Tokens.bevel_style("#666666", "#555555", 2, 1.0))
 
 
-static func _register_miscellaneous(theme: Theme) -> void:
+static func _register_miscellaneous(theme: Theme, context: StringName) -> void:
 	theme.set_stylebox(
 		"panel",
 		"TooltipPanel",
-		Tokens.elevated_panel_style(
-			Tokens.COLOR_SURFACE_RAISED,
-			Tokens.COLOR_BORDER_STRONG,
-			1,
-			Tokens.RADIUS_MD,
-			Tokens.SPACE_MD,
-			8
-		)
+		Tokens.bevel_style("#100010F5", "#5030A0", 2, Tokens.SPACE_MD)
 	)
 	theme.set_color("font_color", "TooltipLabel", Tokens.color(Tokens.COLOR_TEXT))
 	theme.set_font_size("font_size", "TooltipLabel", Tokens.FONT_CAPTION)
@@ -476,115 +384,46 @@ static func _register_miscellaneous(theme: Theme) -> void:
 
 	theme.set_type_variation("SoftSeparator", "HSeparator")
 	var separator := StyleBoxLine.new()
-	separator.color = Tokens.color(Tokens.COLOR_BORDER_SUBTLE)
-	separator.thickness = 1
+	separator.color = Tokens.color("#373737" if context == CONTEXT_PANEL else Tokens.COLOR_BORDER_SUBTLE)
+	separator.thickness = 2
 	theme.set_stylebox("separator", "SoftSeparator", separator)
 	theme.set_stylebox("separator", "HSeparator", separator)
 	var vertical_separator := StyleBoxLine.new()
-	vertical_separator.color = Tokens.color(Tokens.COLOR_BORDER_SUBTLE)
-	vertical_separator.thickness = 1
+	vertical_separator.color = separator.color
+	vertical_separator.thickness = 2
 	vertical_separator.vertical = true
 	theme.set_stylebox("separator", "VSeparator", vertical_separator)
 
 
-static func _register_label(
-	theme: Theme,
-	variation: String,
-	font_size: int,
-	font_color: String
-) -> void:
-	theme.set_type_variation(variation, "Label")
-	theme.set_font_size("font_size", variation, font_size)
-	theme.set_color("font_color", variation, Tokens.color(font_color))
-
-
-static func _register_panel(
-	theme: Theme,
-	variation: String,
-	fill: String,
-	border: String,
-	border_width: int,
-	radius: int,
-	padding: float,
-	shadow_size: int
-) -> void:
-	theme.set_type_variation(variation, "PanelContainer")
-	var style := Tokens.elevated_panel_style(
-		fill, border, border_width, radius, padding, shadow_size,
-		Vector2(0.0, 4.0 if shadow_size > 0 else 0.0)
-	)
-	theme.set_stylebox("panel", variation, style)
-
-
-static func _register_button(
-	theme: Theme,
-	variation: String,
-	normal_fill: String,
-	hover_fill: String,
-	pressed_fill: String,
-	border: String,
-	hover_border: String,
-	font: String,
-	hover_font: String,
-	pressed_font: String,
-	font_size: int,
-	radius: int,
-	padding: float,
-	border_width: int = 1
-) -> void:
-	# MenuButton is a built-in Godot theme type. Reuse that native type instead
-	# of attempting to mark the same name as a Button variation.
-	if variation not in ["Button", "MenuButton"]:
-		theme.set_type_variation(variation, "Button")
-	theme.set_font_size("font_size", variation, font_size)
-	theme.set_color("font_color", variation, Tokens.color(font))
-	theme.set_color("font_hover_color", variation, Tokens.color(hover_font))
-	theme.set_color("font_pressed_color", variation, Tokens.color(pressed_font))
-	theme.set_color("font_focus_color", variation, Tokens.color(hover_font))
-	theme.set_color("font_disabled_color", variation, Tokens.color(Tokens.COLOR_TEXT_DISABLED))
-	theme.set_stylebox(
-		"normal", variation,
-		Tokens.panel_style(normal_fill, border, border_width, radius, padding)
-	)
-	theme.set_stylebox(
-		"hover", variation,
-		Tokens.elevated_panel_style(
-			hover_fill, hover_border, maxi(1, border_width), radius, padding, 5, Vector2(0.0, 2.0)
-		)
-	)
-	theme.set_stylebox(
-		"pressed", variation,
-		Tokens.panel_style(pressed_fill, hover_border, maxi(1, border_width), radius, padding)
-	)
-	theme.set_stylebox(
-		"hover_pressed", variation,
-		Tokens.panel_style(pressed_fill, hover_border, maxi(1, border_width), radius, padding)
-	)
-	theme.set_stylebox(
-		"disabled", variation,
-		Tokens.panel_style("#0B141ED9", Tokens.COLOR_BORDER_SUBTLE, 1, radius, padding)
-	)
-	theme.set_stylebox("focus", variation, Tokens.focus_style(radius))
-
-
-static func _register_popup_menu(theme: Theme) -> void:
+static func _register_popup_menu(theme: Theme, context: StringName) -> void:
 	theme.set_stylebox(
 		"panel",
 		"PopupMenu",
-		Tokens.elevated_panel_style(
-			Tokens.COLOR_SURFACE_RAISED,
-			Tokens.COLOR_BORDER_STRONG,
-			1,
-			Tokens.RADIUS_MD,
-			Tokens.SPACE_SM,
-			10
-		)
+		PixelTextures.panel_style_box() if context == CONTEXT_PANEL else Tokens.bevel_style("#1B130BF5", Tokens.COLOR_BORDER_STRONG, 2, Tokens.SPACE_SM)
 	)
 	theme.set_stylebox(
 		"hover",
 		"PopupMenu",
-		Tokens.panel_style(Tokens.COLOR_SURFACE_INTERACTIVE, Tokens.COLOR_BORDER_STRONG, 1, Tokens.RADIUS_SM, 5.0)
+		Tokens.bevel_style("#B4B4B4" if context == CONTEXT_PANEL else "#3A2C1AF2", "#555555", 1, 5.0)
 	)
-	theme.set_color("font_color", "PopupMenu", Tokens.color(Tokens.COLOR_TEXT))
-	theme.set_color("font_hover_color", "PopupMenu", Color.WHITE)
+	theme.set_color("font_color", "PopupMenu", _text_color(context, "body"))
+	theme.set_color("font_hover_color", "PopupMenu", _text_color(context, "body"))
 	theme.set_font_size("font_size", "PopupMenu", Tokens.FONT_BODY)
+
+
+static func _register_label(
+	theme: Theme,
+	context: StringName,
+	variation: String,
+	font_size: int,
+	role: String,
+	shadow: bool
+) -> void:
+	theme.set_type_variation(variation, "Label")
+	theme.set_font_size("font_size", variation, font_size)
+	theme.set_color("font_color", variation, _text_color(context, role))
+	if shadow:
+		theme.set_color("font_shadow_color", variation, Color("#101010CC"))
+		theme.set_constant("shadow_offset_x", variation, 1)
+		theme.set_constant("shadow_offset_y", variation, 1)
+		theme.set_constant("shadow_outline_size", variation, 2)

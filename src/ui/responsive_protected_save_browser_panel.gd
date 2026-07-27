@@ -28,15 +28,7 @@ func _flush_responsive_layout() -> void:
 	var compact: bool = viewport_size.x < 1120.0 or viewport_size.y < 650.0
 	add_theme_stylebox_override(
 		"panel",
-		CompactTokens.elevated_panel_style(
-			CompactTokens.COLOR_SURFACE_RAISED,
-			CompactTokens.COLOR_BORDER_STRONG,
-			1,
-			CompactTokens.RADIUS_LG if compact else CompactTokens.RADIUS_XL,
-			10.0 if compact else 14.0,
-			7 if compact else 9,
-			Vector2(0.0, 3.0)
-		)
+		CompactTokens.bevel_style("#C6C6C6", "#555555", 2, 10.0 if compact else 14.0)
 	)
 	var list_scroll := _find_list_scroll()
 	if list_scroll != null:
@@ -46,22 +38,20 @@ func _flush_responsive_layout() -> void:
 	if _query_card != null:
 		_query_card.add_theme_stylebox_override(
 			"panel",
-			CompactTokens.panel_style(
-				CompactTokens.COLOR_SURFACE_SOFT,
-				CompactTokens.COLOR_BORDER_SUBTLE,
-				1,
-				CompactTokens.RADIUS_MD,
+			CompactTokens.bevel_style(
+				"#BCBCBC",
+				"#7A7A7A",
+				2,
 				7.0 if compact else 9.0
 			)
 		)
 	if _save_list_card != null:
 		_save_list_card.add_theme_stylebox_override(
 			"panel",
-			CompactTokens.panel_style(
-				CompactTokens.COLOR_INSET,
-				CompactTokens.COLOR_BORDER_SUBTLE,
-				1,
-				CompactTokens.RADIUS_MD,
+			CompactTokens.bevel_style(
+				"#B0B0B0",
+				"#7A7A7A",
+				2,
 				7.0 if compact else 9.0
 			)
 		)

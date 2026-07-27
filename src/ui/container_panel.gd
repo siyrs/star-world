@@ -23,7 +23,7 @@ var _inventory_card: PanelContainer
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(820, 560)
 	_build_ui()
@@ -105,7 +105,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("STORAGE TRANSFER"))
+	heading.add_child(UiKit.make_eyebrow("物品搬移"))
 	_title = UiKit.make_title("箱子")
 	heading.add_child(_title)
 	var close_button := UiKit.style_button(
@@ -122,7 +122,7 @@ func _build_ui() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_stylebox_override(
 		"normal",
-		Tokens.panel_style(Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 6.0)
+		Tokens.bevel_style("#B0B0B0", "#7A7A7A", 2, 6.0)
 	)
 	root.add_child(_status)
 

@@ -11,7 +11,7 @@ const MapPanelScript = preload("res://src/ui/map_selection_panel.gd")
 const SaveBrowserScript = preload("res://src/ui/save_browser_panel.gd")
 const SettingsPanelScript = preload("res://src/ui/settings_panel.gd")
 const UpdatePromptPanelScript = preload("res://src/ui/update_prompt_panel.gd")
-const StarfieldScript = preload("res://src/ui/menu_starfield.gd")
+const PixelTextures = preload("res://src/ui/pixel_ui_textures.gd")
 const AppVersion = preload("res://src/update/app_version.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
@@ -38,6 +38,10 @@ var _main_layout: HBoxContainer
 var _menu_margin: MarginContainer
 var _local_save_service: Node
 var _menu_buttons: Array[Button] = []
+var _splash_label: Label
+var _loading_grid: CenterContainer
+var _loading_cells: Array[ColorRect] = []
+var _loading_sweep_tween: Tween
 var _loading := false
 var _panel_sizes: Dictionary = {}
 
@@ -53,7 +57,72 @@ func _ready() -> void:
 	resized.connect(_apply_responsive_layout)
 	call_deferred("_ensure_standalone_services")
 	call_deferred("_apply_responsive_layout")
+	_start_splash_pulse()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+const SPLASHES := [
+	"也是方块的世界！",
+	"小心夜晚的僵尸！",
+	"先撸树，再造家！",
+	"钻石在深处等你！",
+	"别忘了种地吃饭！",
+	"星星喜欢这里！",
+]
+
+
+func _pick_splash() -> String:
+	return SPLASHES[randi() % SPLASHES.size()]
+
+
+func _start_splash_pulse() -> void:
+	if _splash_label == null:
+		return
+	var tween := create_tween().set_loops()
+	tween.tween_property(_splash_label, "scale", Vector2(1.08, 1.08), 0.42)
+	tween.tween_property(_splash_label, "scale", Vector2(1.0, 1.0), 0.42)
+
+
+func _build_loading_chunk_grid() -> CenterContainer:
+	# Minecraft-style chunk-loading square: a 9x9 grid of cells whose fill
+	# sweeps outward from the center while the world generates.
+	var center := CenterContainer.new()
+	center.custom_minimum_size = Vector2(198, 198)
+	var grid := GridContainer.new()
+	grid.columns = 9
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 2)
+	center.add_child(grid)
+	_loading_cells.clear()
+	for index in 81:
+		var cell := ColorRect.new()
+		cell.custom_minimum_size = Vector2(20, 20)
+		cell.color = Color("#241A10")
+		grid.add_child(cell)
+		_loading_cells.append(cell)
+	return center
+
+
+func _start_loading_sweep() -> void:
+	if _loading_sweep_tween != null and _loading_sweep_tween.is_running():
+		_loading_sweep_tween.kill()
+	if _loading_cells.is_empty():
+		return
+	var grid_center := Vector2(4, 4)
+	var ordered: Array = _loading_cells.duplicate()
+	ordered.sort_custom(
+		func(a: ColorRect, b: ColorRect) -> bool:
+			var ia := _loading_cells.find(a)
+			var ib := _loading_cells.find(b)
+			var da := (Vector2(ia % 9, ia / 9) - grid_center).length()
+			var db := (Vector2(ib % 9, ib / 9) - grid_center).length()
+			return da < db
+	)
+	_loading_sweep_tween = create_tween().set_loops()
+	for cell: ColorRect in ordered:
+		var order := ordered.find(cell)
+		_loading_sweep_tween.tween_property(cell, "color", Color("#8BC34A"), 0.08).set_delay(order * 0.014)
+		_loading_sweep_tween.tween_property(cell, "color", Color("#241A10"), 0.24)
 
 
 func setup(p_save_service, p_audio_service = null, p_update_service = null) -> void:
@@ -166,25 +235,21 @@ func _apply_standalone_settings(settings: Dictionary) -> void:
 
 
 func _build_background() -> void:
-	var background := ColorRect.new()
+	# Minecraft-classic title treatment: darkened dirt tiles wall-to-wall.
+	var background := TextureRect.new()
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.color = Tokens.color(Tokens.COLOR_BACKGROUND_DEEP)
+	background.texture = PixelTextures.dirt_background()
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_TILE
+	background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	UiInputPolicy.make_passthrough(background)
 	add_child(background)
 
-	var gradient := TextureRect.new()
-	gradient.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	gradient.texture = _build_horizon_glow()
-	gradient.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	gradient.stretch_mode = TextureRect.STRETCH_SCALE
-	UiInputPolicy.make_passthrough(gradient)
-	add_child(gradient)
-
-	var starfield := StarfieldScript.new()
-	starfield.name = "CelestialBackdrop"
-	starfield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	UiInputPolicy.make_passthrough(starfield)
-	add_child(starfield)
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color("#100A06B8")
+	UiInputPolicy.make_passthrough(shade)
+	add_child(shade)
 
 	var vignette := TextureRect.new()
 	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -256,46 +321,40 @@ func _build_hero_column() -> void:
 	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_hero_column.add_child(top_spacer)
 
-	_hero_column.add_child(UiKit.make_eyebrow("SINGLE PLAYER · VOXEL SURVIVAL · BUILD & EXPLORE"))
-	_hero_title = UiKit.make_title("星 的 世 界", true)
-	_hero_title.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_TEXT))
-	_hero_title.add_theme_color_override("font_shadow_color", Color("#0A7CA8AA"))
-	_hero_title.add_theme_constant_override("shadow_offset_x", 0)
-	_hero_title.add_theme_constant_override("shadow_offset_y", 5)
-	_hero_title.add_theme_constant_override("shadow_outline_size", 12)
-	_hero_column.add_child(_hero_title)
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	_hero_column.add_child(title_row)
+	_hero_title = UiKit.make_title("星的世界", true)
+	_hero_title.add_theme_color_override("font_color", Color("#FFFFFF"))
+	_hero_title.add_theme_color_override("font_shadow_color", Color("#101010CC"))
+	_hero_title.add_theme_constant_override("shadow_offset_x", 3)
+	_hero_title.add_theme_constant_override("shadow_offset_y", 3)
+	_hero_title.add_theme_constant_override("shadow_outline_size", 6)
+	title_row.add_child(_hero_title)
+
+	_splash_label = Label.new()
+	_splash_label.text = _pick_splash()
+	_splash_label.theme_type_variation = "SectionTitle"
+	_splash_label.add_theme_color_override("font_color", Tokens.color(Tokens.MC_SPLASH))
+	_splash_label.add_theme_color_override("font_shadow_color", Color("#3F3F00CC"))
+	_splash_label.add_theme_constant_override("shadow_offset_x", 1)
+	_splash_label.add_theme_constant_override("shadow_offset_y", 1)
+	_splash_label.rotation = deg_to_rad(-8.0)
+	_splash_label.pivot_offset = Vector2(60, 20)
+	title_row.add_child(_splash_label)
 
 	var tagline := Label.new()
-	tagline.text = "在星光照亮的方块世界里，建立基地、经营生产、穿越五种生态，并把每一次远征保存成自己的故事。"
+	tagline.text = "采集、合成、建造、耕种、放牧，在五种生态的方块世界里活下去。"
 	tagline.theme_type_variation = "MutedLabel"
 	tagline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tagline.custom_minimum_size = Vector2(430, 64)
+	tagline.custom_minimum_size = Vector2(430, 32)
 	tagline.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_hero_column.add_child(tagline)
 
-	var feature_row := HBoxContainer.new()
-	feature_row.name = "FeatureBadges"
-	feature_row.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	_hero_column.add_child(feature_row)
-	feature_row.add_child(UiKit.make_badge("5 张世界地图", "info"))
-	feature_row.add_child(UiKit.make_badge("自动保存与恢复", "success"))
-	feature_row.add_child(UiKit.make_badge("离线单人世界", "warm"))
-
-	var manifesto := UiKit.make_card("GlassPanel", Vector2(500, 100))
-	manifesto.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_hero_column.add_child(manifesto)
-	var manifesto_content := VBoxContainer.new()
-	manifesto_content.add_theme_constant_override("separation", Tokens.SPACE_XS)
-	manifesto.add_child(manifesto_content)
-	var manifesto_title := Label.new()
-	manifesto_title.text = "远征状态"
-	manifesto_title.theme_type_variation = "SectionTitle"
-	manifesto_content.add_child(manifesto_title)
 	_hero_summary = Label.new()
-	_hero_summary.text = "世界目录、原子存档、自动恢复和 Windows Release 验收均已启用。"
+	_hero_summary.text = ""
 	_hero_summary.theme_type_variation = "MutedLabel"
-	_hero_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	manifesto_content.add_child(_hero_summary)
+	_hero_column.add_child(_hero_summary)
 
 	var bottom_spacer := Control.new()
 	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -311,19 +370,12 @@ func _build_command_panel() -> void:
 	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	command_wrap.add_child(top_spacer)
 
-	_command_panel = UiKit.make_card("CommandPanel", Vector2(390, 0))
+	_command_panel = UiKit.make_card("MenuCanvas", Vector2(390, 0))
 	_command_panel.name = "CommandDeck"
 	command_wrap.add_child(_command_panel)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	_command_panel.add_child(content)
-
-	content.add_child(UiKit.make_eyebrow("COMMAND DECK"))
-	var title := UiKit.make_title("开始远征")
-	content.add_child(title)
-	var subtitle := UiKit.make_subtitle("创建新世界、继续已有旅程，或调整运行设置。")
-	content.add_child(subtitle)
-	content.add_child(UiKit.make_divider())
 
 	_add_menu_button(
 		content,
@@ -445,7 +497,7 @@ func _build_subpanels() -> void:
 func _build_loading_panel() -> void:
 	_loading_panel = PanelContainer.new()
 	_loading_panel.name = "LoadingPanel"
-	_loading_panel.theme_type_variation = "ModalPanel"
+	_loading_panel.theme_type_variation = "MenuCanvas"
 	_center_panel(_loading_panel, Vector2(560, 250))
 	add_child(_loading_panel)
 	_loading_panel.visible = false
@@ -453,9 +505,12 @@ func _build_loading_panel() -> void:
 	content.alignment = BoxContainer.ALIGNMENT_CENTER
 	content.add_theme_constant_override("separation", Tokens.SPACE_LG)
 	_loading_panel.add_child(content)
-	content.add_child(UiKit.make_eyebrow("PREPARING EXPEDITION"))
 	var title := UiKit.make_title("星的世界")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color("#FFFFFF"))
+	title.add_theme_color_override("font_shadow_color", Color("#101010CC"))
+	title.add_theme_constant_override("shadow_offset_x", 2)
+	title.add_theme_constant_override("shadow_offset_y", 2)
 	content.add_child(title)
 	_loading_label = Label.new()
 	_loading_label.text = "正在生成世界…"
@@ -463,11 +518,9 @@ func _build_loading_panel() -> void:
 	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_loading_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_loading_label)
-	var progress := ProgressBar.new()
-	progress.indeterminate = true
-	progress.custom_minimum_size = Vector2(440, 8)
-	progress.show_percentage = false
-	content.add_child(progress)
+	_loading_grid = _build_loading_chunk_grid()
+	content.add_child(_loading_grid)
+	_start_loading_sweep()
 
 
 func _center_panel(panel: Control, panel_size: Vector2) -> void:

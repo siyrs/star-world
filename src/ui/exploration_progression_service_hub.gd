@@ -62,6 +62,16 @@ func _ready() -> void:
 		exploration_reward_service = exploration_journal_reward_participant.call(
 			"get_reward_service"
 		) as Node
+		if (
+			exploration_reward_service != null
+			and exploration_reward_service.has_signal("reward_claimed")
+			and not exploration_reward_service.is_connected(
+				"reward_claimed", Callable(self, "_on_reward_claimed_sound")
+			)
+		):
+			exploration_reward_service.connect(
+				"reward_claimed", Callable(self, "_on_reward_claimed_sound")
+			)
 	# Registered last with explicit dependencies so reverse lifecycle cleanup
 	# disables checkpoint activity before any gameplay domain releases state.
 	autosave_runtime_participant = _register_feature_participant(
@@ -80,6 +90,11 @@ func _ready() -> void:
 func _on_settings_changed(settings: Dictionary) -> void:
 	var normalized := SettingsPolicyScript.merge(current_settings, settings)
 	super._on_settings_changed(normalized)
+
+
+func _on_reward_claimed_sound(_milestone_id: String, _result: Dictionary) -> void:
+	if audio_service != null and audio_service.has_method("play_reward"):
+		audio_service.play_reward()
 
 
 func get_autosave_snapshot() -> Dictionary:

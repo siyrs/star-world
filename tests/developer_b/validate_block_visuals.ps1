@@ -35,7 +35,8 @@ $allowedPatterns = @(
   'transparent','noise','grass_side','cobble','bark','rings','leaves','water','lava',
   'boards','bricks','glass','ore','crafting_top','crafting_side','furnace','chest','door',
   'fence','ladder','torch','weave','ice','furrows','crop','bed_top','bed_side',
-  'repair_top','repair_side'
+  'repair_top','repair_side',
+  'tall_grass','flower','cactus_side','cactus_top','dead_bush','ruin_stone','glow_crystal'
 )
 foreach ($rawTileId in $tileOrder) {
   $tileId = [string]$rawTileId

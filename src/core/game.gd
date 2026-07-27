@@ -14,10 +14,12 @@ const DiagnosticsCoordinatorScript = preload(
 )
 const ReleaseSmokeRunnerScript = preload("res://src/diagnostics/release_smoke_runner.gd")
 const PLAYER_COLLISION_LOAD_MARGIN := 0.45
+const BreakParticlesScript = preload("res://src/harvest/block_break_particles.gd")
 
 var world: Node3D
 var player: CharacterBody3D
 var runtime_diagnostics: Node
+var break_particles: Node3D
 var current_profile_id := "star_continent"
 var current_seed := 734521
 var current_world_id := "quick-world"
@@ -170,6 +172,7 @@ func _ensure_core_nodes() -> void:
 
 
 func _attach_gameplay_services() -> void:
+	_ensure_break_particles()
 	if service_hub.has_method("attach_game"):
 		service_hub.call(
 			"attach_game",
@@ -179,6 +182,17 @@ func _attach_gameplay_services() -> void:
 			world_environment,
 			Callable(world, "resolve_ground_position")
 		)
+
+
+func _ensure_break_particles() -> void:
+	if break_particles == null:
+		break_particles = BreakParticlesScript.new()
+		break_particles.name = "BlockBreakParticles"
+		add_child(break_particles)
+	if world != null and world.has_signal("block_broken"):
+		var callback := Callable(break_particles, "spawn_burst")
+		if not world.is_connected("block_broken", callback):
+			world.connect("block_broken", callback)
 
 
 func _setup_runtime_diagnostics() -> void:
@@ -209,6 +223,8 @@ func _abort_world_start(reason: String) -> void:
 		if player.has_method("reset_motion"):
 			player.call("reset_motion")
 		player.visible = false
+	if break_particles != null and break_particles.has_method("clear"):
+		break_particles.call("clear")
 	if world != null and world.has_method("clear_world"):
 		world.call("clear_world")
 	world_root.visible = false
@@ -230,6 +246,8 @@ func _on_return_to_menu_requested() -> void:
 		if player.has_method("reset_motion"):
 			player.call("reset_motion")
 		player.visible = false
+	if break_particles != null and break_particles.has_method("clear"):
+		break_particles.call("clear")
 	if world != null and world.has_method("clear_world"):
 		world.call("clear_world")
 	world_root.visible = false

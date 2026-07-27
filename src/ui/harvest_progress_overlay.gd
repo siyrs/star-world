@@ -66,11 +66,10 @@ func _build_ui() -> void:
 	_panel.offset_bottom = -246.0
 	_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style(
+		Tokens.bevel_style(
 			Tokens.COLOR_SURFACE_RAISED,
 			Tokens.COLOR_BORDER_STRONG,
-			1,
-			Tokens.RADIUS_MD,
+			2,
 			Tokens.SPACE_SM
 		)
 	)
@@ -96,7 +95,7 @@ func _build_ui() -> void:
 	_progress.custom_minimum_size.y = 12.0
 	_progress.add_theme_stylebox_override(
 		"fill",
-		Tokens.panel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM, 0, Tokens.RADIUS_SM, 1.0)
+		Tokens.bevel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM, 0, 1.0)
 	)
 	content.add_child(_progress)
 

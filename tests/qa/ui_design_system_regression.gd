@@ -63,12 +63,22 @@ func _test_theme_contract() -> void:
 			theme.get_type_variation_base(variation) == "PanelContainer",
 			"theme registers %s as one reusable panel variation" % variation
 		)
-	var primary_normal := theme.get_stylebox("normal", "PrimaryButton") as StyleBoxFlat
-	var secondary_normal := theme.get_stylebox("normal", "SecondaryButton") as StyleBoxFlat
+	var primary_normal := theme.get_stylebox("normal", "PrimaryButton")
+	var secondary_normal := theme.get_stylebox("normal", "SecondaryButton")
 	var focus := theme.get_stylebox("focus", "PrimaryButton") as StyleBoxFlat
+	var distinct_surfaces := false
+	if primary_normal is StyleBoxTexture and secondary_normal is StyleBoxTexture:
+		distinct_surfaces = (
+			(primary_normal as StyleBoxTexture).texture
+			!= (secondary_normal as StyleBoxTexture).texture
+		)
+	elif primary_normal is StyleBoxFlat and secondary_normal is StyleBoxFlat:
+		distinct_surfaces = (
+			(primary_normal as StyleBoxFlat).bg_color
+			!= (secondary_normal as StyleBoxFlat).bg_color
+		)
 	_check(
-		primary_normal != null and secondary_normal != null
-		and primary_normal.bg_color != secondary_normal.bg_color,
+		primary_normal != null and secondary_normal != null and distinct_surfaces,
 		"primary and secondary actions have distinct semantic surfaces"
 	)
 	_check(

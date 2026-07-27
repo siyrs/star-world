@@ -25,7 +25,7 @@ var _inventory_buttons: Array = []
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	custom_minimum_size = Vector2(820, 500)
 	_build_ui()
 
@@ -134,11 +134,10 @@ func _build_ui() -> void:
 	var machine_panel := PanelContainer.new()
 	machine_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style(
-			Tokens.COLOR_SURFACE_RAISED,
-			Tokens.COLOR_BORDER_STRONG,
-			1,
-			Tokens.RADIUS_MD,
+		Tokens.bevel_style(
+			"#BCBCBC",
+			"#7A7A7A",
+			2,
 			Tokens.SPACE_SM
 		)
 	)
@@ -178,7 +177,7 @@ func _build_ui() -> void:
 	var arrow := Label.new()
 	arrow.text = "→"
 	arrow.add_theme_font_size_override("font_size", 28)
-	arrow.modulate = Tokens.color(Tokens.COLOR_ACCENT_WARM)
+	arrow.modulate = Color("#B8860B")
 	machine_row.add_child(arrow)
 	_output_button = _make_machine_slot("产出\n空")
 	_output_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_OUTPUT))

@@ -54,7 +54,7 @@ func get_block(block_position: Vector3i) -> String:
 	if profile_id == "sky_islands":
 		return _get_sky_block(block_position, terrain_height)
 	if block_position.y > terrain_height:
-		if profile_id == "star_continent":
+		if profile_id == "star_continent" or profile_id == "sky_islands":
 			var tree_block := _get_tree_block(block_position, terrain_height)
 			if tree_block != BlockRegistryScript.AIR:
 				return tree_block
@@ -62,6 +62,10 @@ func get_block(block_position: Vector3i) -> String:
 			return "water"
 		if profile_id == "frozen_wastes" and block_position.y <= SEA_LEVEL:
 			return "ice" if block_position.y == SEA_LEVEL else "water"
+		if block_position.y <= terrain_height + 4:
+			var decoration := _get_decoration_block(block_position, terrain_height)
+			if decoration != BlockRegistryScript.AIR:
+				return decoration
 		return BlockRegistryScript.AIR
 	if profile_id == "abyss_world" and block_position.y > 3 and block_position.y < terrain_height - 2:
 		var cave_density := cave_noise.get_noise_3d(block_position.x, block_position.y * 0.9, block_position.z)
@@ -142,9 +146,16 @@ func _get_sky_block(position: Vector3i, terrain_height: int) -> String:
 	var strength := _sky_island_strength(position.x, position.z)
 	if strength <= 0.0:
 		return BlockRegistryScript.AIR
+	if position.y > terrain_height:
+		var tree_block := _get_tree_block(position, terrain_height)
+		if tree_block != BlockRegistryScript.AIR:
+			return tree_block
+		if position.y <= terrain_height + 4:
+			return _get_decoration_block(position, terrain_height)
+		return BlockRegistryScript.AIR
 	var thickness := 3 + roundi(strength * 10.0)
 	var bottom := terrain_height - thickness
-	if position.y < bottom or position.y > terrain_height:
+	if position.y < bottom:
 		return BlockRegistryScript.AIR
 	var depth := terrain_height - position.y
 	if depth == 0: return "grass"
@@ -171,12 +182,15 @@ func _sky_island_strength(x: int, z: int) -> float:
 func _get_tree_block(position: Vector3i, terrain_height: int) -> String:
 	if position.y <= terrain_height or position.y > terrain_height + 8:
 		return BlockRegistryScript.AIR
+	var density := 90 if profile_id == "sky_islands" else 185
 	for tree_x in range(position.x - 2, position.x + 3):
 		for tree_z in range(position.z - 2, position.z + 3):
-			if not _tree_here(tree_x, tree_z):
+			if not _tree_here(tree_x, tree_z, density):
 				continue
 			var ground := get_surface_height(tree_x, tree_z)
 			if ground < SEA_LEVEL:
+				continue
+			if profile_id == "sky_islands" and _sky_island_strength(tree_x, tree_z) < 0.45:
 				continue
 			if position.x == tree_x and position.z == tree_z and position.y >= ground + 1 and position.y <= ground + 4:
 				return "wood"
@@ -188,8 +202,107 @@ func _get_tree_block(position: Vector3i, terrain_height: int) -> String:
 	return BlockRegistryScript.AIR
 
 
-func _tree_here(x: int, z: int) -> bool:
-	return _hash_roll(x, 0, z, 701) < 185
+func _tree_here(x: int, z: int, density: int = 185) -> bool:
+	return _hash_roll(x, 0, z, 701) < density
+
+
+# Surface decoration layer: flowers, tall grass, cacti, dead bushes and the
+# desert ruin structures. Everything derives from deterministic hashes so old
+# saves see the same decorations in unexplored chunks.
+func _get_decoration_block(position: Vector3i, terrain_height: int) -> String:
+	var x := position.x
+	var z := position.z
+	match profile_id:
+		"star_continent":
+			if position.y != terrain_height + 1 or terrain_height < SEA_LEVEL:
+				return BlockRegistryScript.AIR
+			if _tree_here(x, z, 185):
+				return BlockRegistryScript.AIR
+			var roll := _hash_roll(x, 0, z, 911)
+			if roll < 600:
+				return "tall_grass"
+			if roll < 680:
+				return "flower_red"
+			if roll < 740:
+				return "flower_yellow"
+		"desert_ruins":
+			var pillar_height := _ruin_pillar_height(x, z)
+			if pillar_height > 0 and position.y <= terrain_height + pillar_height:
+				return "ruin_pillar"
+			var cactus_height := _cactus_height(x, z)
+			if cactus_height > 0 and position.y <= terrain_height + cactus_height:
+				return "cactus"
+			if position.y != terrain_height + 1:
+				return BlockRegistryScript.AIR
+			if _ruin_debris_here(x, z):
+				return "ruin_pillar"
+			if _hash_roll(x, 0, z, 977) < 150:
+				return "dead_bush"
+		"frozen_wastes":
+			if position.y != terrain_height + 1:
+				return BlockRegistryScript.AIR
+			if _hash_roll(x, 0, z, 983) < 60:
+				return "dead_bush"
+		"sky_islands":
+			if position.y != terrain_height + 1:
+				return BlockRegistryScript.AIR
+			if _sky_island_strength(x, z) < 0.35:
+				return BlockRegistryScript.AIR
+			if _tree_here(x, z, 90):
+				return BlockRegistryScript.AIR
+			var roll := _hash_roll(x, 0, z, 907)
+			if roll < 500:
+				return "tall_grass"
+			if roll < 580:
+				return "flower_yellow"
+			if roll < 640:
+				return "flower_red"
+		"abyss_world":
+			if position.y != terrain_height + 1:
+				return BlockRegistryScript.AIR
+			if _hash_roll(x, 0, z, 991) < 130:
+				return "glow_crystal"
+	return BlockRegistryScript.AIR
+
+
+func _cactus_height(x: int, z: int) -> int:
+	if _hash_roll(x, 0, z, 937) < 90:
+		return 1 + _hash_roll(x, 0, z, 941) % 2
+	return 0
+
+
+# Ruins: one site per 48x48 cell, a broken 3x3 pillar grid with debris around
+# it, placed by hash so every seed produces different archaeology.
+func _ruin_site_center(cell_x: int, cell_z: int) -> Vector2i:
+	var offset_x := _hash_roll(cell_x, 0, cell_z, 953) % 24 - 12
+	var offset_z := _hash_roll(cell_x, 0, cell_z, 967) % 24 - 12
+	return Vector2i(cell_x * 48 + 24 + offset_x, cell_z * 48 + 24 + offset_z)
+
+
+func _ruin_pillar_height(x: int, z: int) -> int:
+	var cell_x := floori(float(x) / 48.0)
+	var cell_z := floori(float(z) / 48.0)
+	if _hash_roll(cell_x, 0, cell_z, 971) < 4200:
+		return 0
+	var center := _ruin_site_center(cell_x, cell_z)
+	var local_x := x - center.x
+	var local_z := z - center.y
+	if absi(local_x) > 4 or absi(local_z) > 4:
+		return 0
+	if posmod(local_x, 3) != 0 or posmod(local_z, 3) != 0:
+		return 0
+	return 1 + _hash_roll(x, 0, z, 983) % 4
+
+
+func _ruin_debris_here(x: int, z: int) -> bool:
+	var cell_x := floori(float(x) / 48.0)
+	var cell_z := floori(float(z) / 48.0)
+	if _hash_roll(cell_x, 0, cell_z, 971) < 4200:
+		return false
+	var center := _ruin_site_center(cell_x, cell_z)
+	if absi(x - center.x) > 9 or absi(z - center.y) > 9:
+		return false
+	return _hash_roll(x, 0, z, 991) < 110
 
 
 func _hash_roll(x: int, y: int, z: int, salt: int) -> int:

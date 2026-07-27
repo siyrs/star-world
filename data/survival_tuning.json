@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "passive_hunger_interval": 70.0,
+  "starvation_damage_interval": 4.0,
+  "natural_regeneration_interval": 3.5,
+  "regeneration_hunger_threshold": 17.0,
+  "comment": "生存压力曲线：饥饿消耗加快（90s→70s）、挨饿掉血加快（8s→4s），让农业、烹饪与床进入核心循环。"
+}

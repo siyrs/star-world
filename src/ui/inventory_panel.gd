@@ -17,7 +17,7 @@ var _inventory_card: PanelContainer
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(760, 510)
 	_build_ui()
@@ -83,7 +83,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("INVENTORY · 36 SLOTS"))
+	heading.add_child(UiKit.make_eyebrow("背包 · 36 格"))
 	heading.add_child(UiKit.make_title("背包与快捷栏"))
 	heading.add_child(UiKit.make_subtitle("前 9 格是快捷栏；选择任意槽位后点击目标槽位可完成交换。"))
 	var close_button := UiKit.style_button(
@@ -99,7 +99,7 @@ func _build_ui() -> void:
 	_selection_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_selection_label.add_theme_stylebox_override(
 		"normal",
-		Tokens.panel_style(Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 7.0)
+		Tokens.bevel_style("#B0B0B0", "#7A7A7A", 2, 7.0)
 	)
 	root.add_child(_selection_label)
 

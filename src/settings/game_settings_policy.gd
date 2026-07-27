@@ -10,6 +10,7 @@ const DEFAULTS := {
 	"show_tutorial": true,
 	"show_interaction_prompts": true,
 	"autosave_minutes": 5,
+	"camera_bob": true,
 }
 const AUTOSAVE_MINUTES := [0, 2, 5, 10, 15]
 const MIN_MOUSE_SENSITIVITY := 0.05
@@ -77,6 +78,9 @@ static func normalize(raw_settings: Dictionary = {}) -> Dictionary:
 	)
 	normalized["autosave_minutes"] = normalize_autosave_minutes(
 		raw_settings.get("autosave_minutes")
+	)
+	normalized["camera_bob"] = _bool_or_default(
+		raw_settings.get("camera_bob"), bool(DEFAULTS["camera_bob"])
 	)
 	return normalized
 

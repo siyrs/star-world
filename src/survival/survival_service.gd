@@ -9,12 +9,14 @@ signal starvation_started
 signal food_consumed(item_id: String, food_points: float)
 
 const SERIAL_VERSION := 1
+const TUNING_PATH := "res://data/survival_tuning.json"
 
 @export var max_health: float = 20.0
 @export var max_hunger: float = 20.0
 @export var passive_hunger_interval: float = 90.0
 @export var starvation_damage_interval: float = 8.0
 @export var natural_regeneration_interval: float = 4.0
+@export var regeneration_hunger_threshold: float = 18.0
 
 var health: float = 20.0
 var hunger: float = 20.0
@@ -28,10 +30,36 @@ var _regeneration_timer: float = 0.0
 
 
 func _ready() -> void:
+	_load_tuning()
 	health = clampf(health, 0.0, max_health)
 	hunger = clampf(hunger, 0.0, max_hunger)
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, max_hunger)
+
+
+func _load_tuning() -> void:
+	if not FileAccess.file_exists(TUNING_PATH):
+		return
+	var file := FileAccess.open(TUNING_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if parsed is not Dictionary:
+		return
+	passive_hunger_interval = maxf(
+		10.0, float(parsed.get("passive_hunger_interval", passive_hunger_interval))
+	)
+	starvation_damage_interval = maxf(
+		1.0, float(parsed.get("starvation_damage_interval", starvation_damage_interval))
+	)
+	natural_regeneration_interval = maxf(
+		0.5, float(parsed.get("natural_regeneration_interval", natural_regeneration_interval))
+	)
+	regeneration_hunger_threshold = clampf(
+		float(parsed.get("regeneration_hunger_threshold", regeneration_hunger_threshold)),
+		1.0,
+		max_hunger
+	)
 
 
 func _process(delta: float) -> void:
@@ -48,7 +76,7 @@ func _process(delta: float) -> void:
 			take_damage(1.0, "starvation")
 	else:
 		_starvation_timer = 0.0
-	if hunger >= 18.0 and health < max_health:
+	if hunger >= regeneration_hunger_threshold and health < max_health:
 		_regeneration_timer += delta
 		if _regeneration_timer >= natural_regeneration_interval:
 			_regeneration_timer = 0.0

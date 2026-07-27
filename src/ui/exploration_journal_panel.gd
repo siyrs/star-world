@@ -25,7 +25,7 @@ var _claim_buttons: Dictionary = {}
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(0, 0)
 	_build_ui()
@@ -105,7 +105,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("EXPLORATION ARCHIVE"))
+	heading.add_child(UiKit.make_eyebrow("探索日志"))
 	heading.add_child(UiKit.make_title("探索日志"))
 	heading.add_child(UiKit.make_subtitle("保留区块级趋势与里程碑，不暴露矿物或危险的精确坐标。"))
 	var close_button := UiKit.style_button(
@@ -122,11 +122,10 @@ func _build_ui() -> void:
 	_summary_label.custom_minimum_size.y = 48
 	_summary_label.add_theme_stylebox_override(
 		"normal",
-		Tokens.panel_style(
-			Tokens.COLOR_INSET,
-			Tokens.COLOR_BORDER_STRONG,
-			1,
-			Tokens.RADIUS_LG,
+		Tokens.bevel_style(
+			"#B0B0B0",
+			"#7A7A7A",
+			2,
 			Tokens.SPACE_SM
 		)
 	)
@@ -262,11 +261,10 @@ func _render_milestones(snapshot: Dictionary, reward_snapshot: Dictionary) -> vo
 		var card := UiKit.make_card("CardPanel")
 		card.add_theme_stylebox_override(
 			"panel",
-			Tokens.panel_style(
-				Tokens.COLOR_SURFACE_RAISED,
+			Tokens.bevel_style(
+				"#BCBCBC",
 				Tokens.tone_border(tone),
-				1,
-				Tokens.RADIUS_MD,
+				2,
 				Tokens.SPACE_SM
 			)
 		)
@@ -315,11 +313,10 @@ func _render_records(snapshot: Dictionary) -> void:
 		var card := UiKit.make_card("CardPanel")
 		card.add_theme_stylebox_override(
 			"panel",
-			Tokens.panel_style(
-				Tokens.COLOR_SURFACE_RAISED,
-				Tokens.COLOR_DANGER if danger_score >= 70 else Tokens.COLOR_BORDER,
-				1,
-				Tokens.RADIUS_MD,
+			Tokens.bevel_style(
+				"#BCBCBC",
+				Tokens.COLOR_DANGER if danger_score >= 70 else "#7A7A7A",
+				2,
 				Tokens.SPACE_MD
 			)
 		)

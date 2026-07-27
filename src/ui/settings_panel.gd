@@ -18,6 +18,7 @@ var _cycle: HSlider
 var _autosave_interval: OptionButton
 var _show_tutorial: CheckButton
 var _show_interaction_prompts: CheckButton
+var _camera_bob: CheckButton
 var _scroll_container: ScrollContainer
 var _settings_content: VBoxContainer
 var _status: Label
@@ -29,7 +30,7 @@ var _section_cards: Array[PanelContainer] = []
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(740, 520)
 	_build_ui()
@@ -83,7 +84,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("GAME SETTINGS"))
+	heading.add_child(UiKit.make_eyebrow("游戏设置"))
 	heading.add_child(UiKit.make_title("设置与可访问性"))
 	heading.add_child(UiKit.make_subtitle("所有改动会立即应用；自动保存、引导和视距设置会在重启后继续保留。"))
 	var profile_badge := UiKit.make_badge("本地配置", "info")
@@ -147,6 +148,11 @@ func _build_control_card() -> void:
 		"01"
 	)
 	_sensitivity = _add_slider(card_root, "鼠标灵敏度", 0.05, 0.6, 0.01, "%.2f")
+	_camera_bob = _make_switch_row(
+		card_root,
+		"行走视角晃动",
+		"移动与冲刺时的轻微镜头起伏；容易晕 3D 的玩家可以关闭。"
+	)
 
 
 func _build_visual_card() -> void:
@@ -339,6 +345,7 @@ func _load_values() -> void:
 	_show_interaction_prompts.button_pressed = bool(
 		settings.get("show_interaction_prompts", defaults.show_interaction_prompts)
 	)
+	_camera_bob.button_pressed = bool(settings.get("camera_bob", true))
 
 
 func _select_option_by_id(option: OptionButton, target_id: int) -> void:
@@ -358,6 +365,7 @@ func _apply() -> void:
 		"autosave_minutes": _autosave_interval.get_selected_id(),
 		"show_tutorial": _show_tutorial.button_pressed,
 		"show_interaction_prompts": _show_interaction_prompts.button_pressed,
+		"camera_bob": _camera_bob.button_pressed,
 	})
 	_status.text = "正在保存并应用设置…"
 	_status.theme_type_variation = "CaptionLabel"

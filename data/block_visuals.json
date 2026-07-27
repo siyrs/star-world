@@ -55,7 +55,15 @@
   "bed_top",
   "bed_side",
   "repair_top",
-  "repair_side"
+  "repair_side",
+  "tall_grass",
+  "flower_red",
+  "flower_yellow",
+  "cactus_side",
+  "cactus_top",
+  "dead_bush",
+  "ruin_stone",
+  "glow_crystal"
  ],
  "tiles": {
   "air": {
@@ -576,6 +584,78 @@
     "#8B7667",
     "#C4B5A4"
    ]
+  },
+  "tall_grass": {
+   "pattern": "tall_grass",
+   "palette": [
+    "#3E7A2C",
+    "#56993C",
+    "#6FB24E",
+    "#2C5A1F"
+   ]
+  },
+  "flower_red": {
+   "pattern": "flower",
+   "palette": [
+    "#3E7A2C",
+    "#56993C",
+    "#D84A3A",
+    "#A82A20"
+   ]
+  },
+  "flower_yellow": {
+   "pattern": "flower",
+   "palette": [
+    "#3E7A2C",
+    "#56993C",
+    "#E8C93A",
+    "#B89020"
+   ]
+  },
+  "cactus_side": {
+   "pattern": "cactus_side",
+   "palette": [
+    "#2C5A24",
+    "#3F7A34",
+    "#569A44",
+    "#22481C"
+   ]
+  },
+  "cactus_top": {
+   "pattern": "cactus_top",
+   "palette": [
+    "#2C5A24",
+    "#3F7A34",
+    "#569A44",
+    "#22481C"
+   ]
+  },
+  "dead_bush": {
+   "pattern": "dead_bush",
+   "palette": [
+    "#6B4F2C",
+    "#8A6B3F",
+    "#A5844E",
+    "#4A351D"
+   ]
+  },
+  "ruin_stone": {
+   "pattern": "ruin_stone",
+   "palette": [
+    "#6E6A5E",
+    "#8A8578",
+    "#9E998A",
+    "#55524A"
+   ]
+  },
+  "glow_crystal": {
+   "pattern": "glow_crystal",
+   "palette": [
+    "#2E8E96",
+    "#54E0D8",
+    "#BFFBFF",
+    "#1E3A46"
+   ]
   }
  },
  "blocks": {
@@ -734,6 +814,29 @@
    "top": "repair_top",
    "side": "repair_side",
    "bottom": "stone_bricks"
+  },
+  "tall_grass": {
+   "all": "tall_grass"
+  },
+  "flower_red": {
+   "all": "flower_red"
+  },
+  "flower_yellow": {
+   "all": "flower_yellow"
+  },
+  "cactus": {
+   "top": "cactus_top",
+   "side": "cactus_side",
+   "bottom": "cactus_top"
+  },
+  "dead_bush": {
+   "all": "dead_bush"
+  },
+  "ruin_pillar": {
+   "all": "ruin_stone"
+  },
+  "glow_crystal": {
+   "all": "glow_crystal"
   }
  }
 }

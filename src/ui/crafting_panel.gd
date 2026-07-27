@@ -19,7 +19,7 @@ var _recipe_scroll: ScrollContainer
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(820, 540)
 	_build_ui()
@@ -105,7 +105,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("CRAFTING DATABASE"))
+	heading.add_child(UiKit.make_eyebrow("合成"))
 	heading.add_child(UiKit.make_title("合成配方"))
 	heading.add_child(UiKit.make_subtitle("可制作状态会随着背包材料实时更新；工作台同时包含随身配方。"))
 	_station_select = OptionButton.new()

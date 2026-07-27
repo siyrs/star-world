@@ -23,6 +23,11 @@ static func get_icon(item_id: String, item: Dictionary = {}) -> Texture2D:
 	image.fill(Color.TRANSPARENT)
 	var category := str(item.get("category", ""))
 	var color := Color.from_string(str(item.get("color", "#FFFFFF")), Color.WHITE)
+	if bool(item.get("plant_icon", false)):
+		_paint_plant(image, item_id, color)
+		var plant_texture := _to_texture(image)
+		_cache[item_id] = plant_texture
+		return plant_texture
 	match category:
 		"block":
 			_paint_cube(image, color)
@@ -239,6 +244,46 @@ static func _paint_orb(image: Image, color: Color) -> void:
 		var half := 4 - absi(8 - y) / 2
 		_rect(image, 8 - half, y, half * 2, 1, _shade(color, 1.0))
 	_rect(image, 6, 5, 2, 2, _shade(color, 1.45))
+
+
+static func _paint_plant(image: Image, item_id: String, color: Color) -> void:
+	# Flat botanical sprite for flora items instead of the generic cube.
+	var stem := Color("#3E7A2C")
+	var leaf := Color("#56993C")
+	if item_id == "tall_grass":
+		for x in [4, 7, 10, 12]:
+			var top := 3 + (x % 3)
+			for y in range(top, 15):
+				_px(image, x + (15 - y) / 5 - 1, y, leaf if (x + y) % 2 else stem)
+	elif item_id == "glow_crystal":
+		var shard := Color("#54E0D8")
+		var bright := Color("#BFFBFF")
+		for i in 10:
+			_px(image, 8, 14 - i, shard)
+			_px(image, 8 - i / 3, 14 - i, _shade(shard, 0.75))
+			_px(image, 8 + i / 3, 14 - i, _shade(shard, 0.9))
+		_px(image, 8, 3, bright)
+		_px(image, 6, 7, bright)
+		_px(image, 10, 6, bright)
+	elif item_id == "dead_bush":
+		var twig := _shade(color, 1.0)
+		for i in 9:
+			_px(image, 8, 14 - i, twig)
+			_px(image, 8 - i / 2, 14 - i, _shade(color, 0.85))
+			_px(image, 8 + i / 2, 13 - i, _shade(color, 1.1))
+		_px(image, 5, 6, twig)
+		_px(image, 11, 5, twig)
+	else:
+		for y in range(8, 15):
+			_px(image, 8, y, stem)
+			if y % 2 == 0:
+				_px(image, 7, y, leaf)
+		_px(image, 6, 11, leaf)
+		_px(image, 9, 10, leaf)
+		var petal := _shade(color, 1.1)
+		for point in [Vector2i(7, 5), Vector2i(9, 5), Vector2i(8, 4), Vector2i(8, 6), Vector2i(8, 7)]:
+			_px(image, point.x, point.y, petal)
+		_px(image, 8, 5, _shade(color, 0.75))
 
 
 static func _paint_torch(image: Image) -> void:

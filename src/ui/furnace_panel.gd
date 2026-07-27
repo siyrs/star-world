@@ -31,7 +31,7 @@ var _machine_badge: Label
 
 
 func _ready() -> void:
-	theme = ThemeFactory.create_theme()
+	theme = ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	theme_type_variation = "ElevatedPanel"
 	custom_minimum_size = Vector2(900, 520)
 	_build_ui()
@@ -139,7 +139,7 @@ func _build_ui() -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	header.add_child(heading)
-	heading.add_child(UiKit.make_eyebrow("MACHINE PROCESSING"))
+	heading.add_child(UiKit.make_eyebrow("加工中"))
 	_title = UiKit.make_title("熔炉")
 	heading.add_child(_title)
 	heading.add_child(UiKit.make_subtitle("机器由共享调度持续推进；关闭界面后继续加工，世界暂停时同步停止。"))
@@ -209,7 +209,7 @@ func _build_ui() -> void:
 	_fuel.custom_minimum_size.y = 10.0
 	_fuel.add_theme_stylebox_override(
 		"fill",
-		Tokens.panel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM_BRIGHT, 0, Tokens.RADIUS_XL, 1.0)
+		Tokens.bevel_style("#C9A227", "#E8C93A", 1, 1.0)
 	)
 	process_column.add_child(_fuel)
 
@@ -219,7 +219,7 @@ func _build_ui() -> void:
 	var arrow := Label.new()
 	arrow.text = "→"
 	arrow.theme_type_variation = "PageTitle"
-	arrow.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_ACCENT_WARM))
+	arrow.add_theme_color_override("font_color", Color("#B8860B"))
 	machine_row.add_child(arrow)
 	_output_button = _make_machine_slot("产出\n空", "OutputSlotButton")
 	_output_button.pressed.connect(func() -> void: _take_machine_slot(SLOT_OUTPUT))
@@ -233,7 +233,7 @@ func _build_ui() -> void:
 	_status.custom_minimum_size.y = 26.0
 	_status.add_theme_stylebox_override(
 		"normal",
-		Tokens.panel_style(Tokens.COLOR_INSET, Tokens.COLOR_BORDER_SUBTLE, 1, Tokens.RADIUS_XL, 6.0)
+		Tokens.bevel_style("#B0B0B0", "#7A7A7A", 2, 6.0)
 	)
 	root.add_child(_status)
 

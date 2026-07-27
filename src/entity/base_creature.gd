@@ -8,6 +8,7 @@ signal attack_windup_cancelled(reason: String, snapshot: Dictionary)
 signal attack_state_changed(snapshot: Dictionary)
 signal attack_landed(target: Node, damage: float)
 signal combat_hit_applied(result: Dictionary)
+signal ambient_voice_requested(species_id: String)
 
 const HostileAttackPolicyScript = preload("res://src/entity/hostile_attack_policy.gd")
 const KNOCKBACK_DRAG := 7.5
@@ -54,10 +55,13 @@ var _locomotion_horizontal := Vector2.ZERO
 var _combat_impulse := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 var _gravity: float = 9.8
+var _ambient_voice_timer: float = 0.0
 
 
 func _ready() -> void:
 	_rng.randomize()
+	# 首次鸣叫在 6–18 秒之间随机，避免同批生成的生物齐声叫。
+	_ambient_voice_timer = _rng.randf_range(6.0, 18.0)
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 	if attack_source_id.is_empty():
 		attack_source_id = species_id
@@ -241,6 +245,7 @@ func get_hostile_attack_snapshot() -> Dictionary:
 
 
 func _physics_process(delta: float) -> void:
+	_update_ambient_voice(delta)
 	if _dead:
 		return
 	var safe_delta := maxf(0.0, delta)
@@ -500,6 +505,8 @@ func die() -> void:
 	set_physics_process(false)
 	var generated_drops := _roll_drops()
 	died.emit(species_id, generated_drops, global_position)
+
+
 	_spawn_pickups(generated_drops)
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector3(1.0, 0.05, 1.0), 0.25)

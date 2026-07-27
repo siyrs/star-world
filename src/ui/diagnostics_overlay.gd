@@ -227,11 +227,10 @@ func _on_snapshot_updated(snapshot: Dictionary) -> void:
 		)
 		_status_badge.add_theme_stylebox_override(
 			"normal",
-			Tokens.panel_style(
-				"#0D1D2CEE",
+			Tokens.bevel_style(
+				"#100C07EE",
 				_color_to_hex(Tokens.severity_color(status)),
-				1,
-				Tokens.RADIUS_XL,
+				2,
 				7.0
 			)
 		)

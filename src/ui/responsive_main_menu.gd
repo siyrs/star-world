@@ -100,14 +100,11 @@ func _configure_compact_command_deck(compact: bool) -> void:
 	if compact:
 		_command_panel.add_theme_stylebox_override(
 			"panel",
-			CompactTokens.elevated_panel_style(
-				"#0A1B2BF7",
+			CompactTokens.bevel_style(
+				"#100C07F7",
 				CompactTokens.COLOR_BORDER_STRONG,
-				1,
-				CompactTokens.RADIUS_LG,
-				12.0,
-				8,
-				Vector2(0.0, 3.0)
+				2,
+				12.0
 			)
 		)
 	else:

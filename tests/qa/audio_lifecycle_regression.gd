@@ -13,6 +13,9 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var audio = AudioServiceScript.new()
+	# The production hub enables the pooled effect voices; this contract test
+	# keeps the legacy three-node layout to verify shutdown/dispose semantics.
+	audio.set_meta("disable_effect_pool", true)
 	root.add_child(audio)
 	await process_frame
 	_check(audio.get_child_count() == 3, "audio service owns exactly three playback nodes")
