@@ -13,7 +13,6 @@ const ProtectedSettingsPanelScript = preload(
 const ProtectedUpdatePromptPanelScript = preload(
 	"res://src/ui/update_prompt_panel.gd"
 )
-const PixelTextures = preload("res://src/ui/pixel_ui_textures.gd")
 const MenuStarfieldScript = preload("res://src/ui/menu_starfield.gd")
 const UiInputPolicyScript = preload("res://src/ui/ui_input_policy.gd")
 
