@@ -100,7 +100,8 @@ foreach ($variation in @(
 )) {
   Assert-Matches $text.theme ([regex]::Escape($variation)) "Unified theme is missing variation: $variation"
 }
-Assert-Matches $text.theme 'focus.*COLOR_BORDER_FOCUS|COLOR_BORDER_FOCUS.*focus' 'Unified theme must provide a visible keyboard focus ring'
+Assert-Matches $text.tokens 'COLOR_BORDER_FOCUS' 'Semantic tokens must expose the focus color'
+Assert-Matches $text.theme 'focus_style' 'Unified theme must apply the shared high-contrast focus ring'
 
 foreach ($token in @(
   'MainCommandSurface','HeroColumn','CommandDeck','get_visual_snapshot',
