@@ -18,7 +18,7 @@ jobs:
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
       domain_job_name: Strict camera policy, survival difficulty and bounded feedback regression
-      domain_timeout_minutes: 40
+      domain_timeout_minutes: 55
       static_validators: |
         tests/developer_b/validate_experience_hardening.ps1
         tests/developer_b/validate_ui_design_system.ps1
@@ -36,6 +36,7 @@ jobs:
         res://tests/qa/player_experience_regression.gd
         res://tests/qa/ui_design_system_regression.gd
         res://tests/qa/integration_regression.gd
+        res://tests/qa/runtime_soak_regression.gd
       domain_scripts_verbose: true
       domain_artifact_name: experience-hardening-domain
       domain_artifact_paths: |
