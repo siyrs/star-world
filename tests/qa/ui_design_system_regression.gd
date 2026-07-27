@@ -96,6 +96,16 @@ func _test_main_menu_and_subpages(viewport_size: Vector2i) -> void:
 	var menu_snapshot: Dictionary = menu.call("get_visual_snapshot")
 	var hero: Rect2 = menu_snapshot.get("hero", Rect2())
 	var command: Rect2 = menu_snapshot.get("command_panel", Rect2())
+	print(
+		"UI_GEOMETRY menu viewport=%s menu=%s main=%s hero=%s command=%s"
+		% [
+			viewport_size,
+			menu.get_global_rect(),
+			menu_snapshot.get("main_layout", Rect2()),
+			hero,
+			command,
+		]
+	)
 	_check(_rect_inside(viewport_rect, hero), "%s hero remains inside the product viewport" % viewport_size)
 	_check(_rect_inside(viewport_rect, command), "%s command deck remains inside the product viewport" % viewport_size)
 	_check(not hero.intersects(command), "%s hero and command deck keep separate visual hierarchy" % viewport_size)
@@ -112,6 +122,17 @@ func _test_main_menu_and_subpages(viewport_size: Vector2i) -> void:
 	menu.call("_show_panel", map_panel)
 	await process_frame
 	var map_snapshot: Dictionary = map_panel.call("get_visual_snapshot")
+	print(
+		"UI_GEOMETRY map viewport=%s panel=%s details=%s create=%s minimum=%s size=%s"
+		% [
+			viewport_size,
+			map_snapshot.get("panel_rect", Rect2()),
+			map_snapshot.get("details_rect", Rect2()),
+			map_snapshot.get("create_rect", Rect2()),
+			map_panel.get_combined_minimum_size(),
+			map_panel.size,
+		]
+	)
 	_check(_rect_inside(viewport_rect, map_snapshot.get("panel_rect", Rect2())), "map briefing fits the viewport")
 	_check(int(map_snapshot.get("profile_count", 0)) == 5, "map directory exposes all five production worlds")
 	_check(str(map_snapshot.get("selected_variation", "")) == "SelectedCardButton", "selected map uses the shared selected-card state")
@@ -135,6 +156,17 @@ func _test_main_menu_and_subpages(viewport_size: Vector2i) -> void:
 	await process_frame
 	var save_snapshot: Dictionary = save_panel.call("get_virtualization_snapshot")
 	var visual: Dictionary = save_snapshot.get("visual", {})
+	print(
+		"UI_GEOMETRY save viewport=%s panel=%s query=%s list=%s minimum=%s size=%s"
+		% [
+			viewport_size,
+			visual.get("panel", Rect2()),
+			visual.get("query_card", Rect2()),
+			visual.get("list_card", Rect2()),
+			save_panel.get_combined_minimum_size(),
+			save_panel.size,
+		]
+	)
 	_check(_rect_inside(viewport_rect, visual.get("panel", Rect2())), "protected save browser fits the viewport")
 	_check(str(visual.get("delete_variation", "")) == "DangerButton", "world deletion is visually classified as destructive")
 
