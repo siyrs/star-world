@@ -66,6 +66,8 @@ func _ready() -> void:
 			exploration_reward_service.connect(
 				"reward_claimed", Callable(self, "_on_reward_claimed_sound")
 			)
+	# Registered last with explicit dependencies so reverse lifecycle cleanup
+	# disables checkpoint activity before any gameplay domain releases state.
 	autosave_runtime_participant = _register_feature_participant(
 		AUTOSAVE_RUNTIME_FEATURE,
 		AutosaveRuntimeParticipantScript.new(),
