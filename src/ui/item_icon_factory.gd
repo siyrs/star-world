@@ -251,8 +251,9 @@ static func _paint_plant(image: Image, item_id: String, color: Color) -> void:
 	var stem := Color("#3E7A2C")
 	var leaf := Color("#56993C")
 	if item_id == "tall_grass":
-		for x in [4, 7, 10, 12]:
-			var top := 3 + (x % 3)
+		for raw_x: Variant in [4, 7, 10, 12]:
+			var x := int(raw_x)
+			var top: int = 3 + (x % 3)
 			for y in range(top, 15):
 				_px(image, x + (15 - y) / 5 - 1, y, leaf if (x + y) % 2 else stem)
 	elif item_id == "glow_crystal":
