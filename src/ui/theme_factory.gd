@@ -238,7 +238,8 @@ static func _register_textured_button(
 	pressed_state: String,
 	font_size: int
 ) -> void:
-	if variation != "MenuButton":
+	# Built-in type names receive direct styles; only custom names become variations.
+	if variation not in ["Button", "MenuButton"]:
 		theme.set_type_variation(variation, "Button")
 	theme.set_font_size("font_size", variation, font_size)
 	theme.set_color("font_color", variation, Color("#FFFFFF"))
