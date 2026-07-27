@@ -7,9 +7,11 @@ signal player_died(cause: String)
 signal player_respawned
 signal starvation_started
 signal food_consumed(item_id: String, food_points: float)
+signal difficulty_changed(profile_id: String, snapshot: Dictionary)
 
 const SERIAL_VERSION := 1
 const TUNING_PATH := "res://data/survival_tuning.json"
+const TuningPolicyScript = preload("res://src/survival/survival_tuning_policy.gd")
 
 @export var max_health: float = 20.0
 @export var max_hunger: float = 20.0
@@ -23,7 +25,9 @@ var hunger: float = 20.0
 var saturation: float = 5.0
 var alive: bool = true
 var hunger_multiplier: float = 1.0
+var difficulty_profile := TuningPolicyScript.DEFAULT_PROFILE
 
+var _tuning_catalog: Dictionary = TuningPolicyScript.fallback_catalog()
 var _passive_timer: float = 0.0
 var _starvation_timer: float = 0.0
 var _regeneration_timer: float = 0.0
@@ -31,6 +35,7 @@ var _regeneration_timer: float = 0.0
 
 func _ready() -> void:
 	_load_tuning()
+	_apply_difficulty_profile(difficulty_profile, false)
 	health = clampf(health, 0.0, max_health)
 	hunger = clampf(hunger, 0.0, max_hunger)
 	health_changed.emit(health, max_health)
@@ -38,46 +43,73 @@ func _ready() -> void:
 
 
 func _load_tuning() -> void:
-	if not FileAccess.file_exists(TUNING_PATH):
-		return
-	var file := FileAccess.open(TUNING_PATH, FileAccess.READ)
-	if file == null:
-		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if parsed is not Dictionary:
-		return
-	passive_hunger_interval = maxf(
-		10.0, float(parsed.get("passive_hunger_interval", passive_hunger_interval))
+	var raw: Dictionary = {}
+	if FileAccess.file_exists(TUNING_PATH):
+		var file := FileAccess.open(TUNING_PATH, FileAccess.READ)
+		if file != null:
+			var parsed: Variant = JSON.parse_string(file.get_as_text())
+			if parsed is Dictionary:
+				raw = parsed
+	_tuning_catalog = TuningPolicyScript.normalize_catalog(raw)
+	difficulty_profile = TuningPolicyScript.normalize_profile_id(
+		_tuning_catalog.get("default_profile", TuningPolicyScript.DEFAULT_PROFILE)
 	)
-	starvation_damage_interval = maxf(
-		1.0, float(parsed.get("starvation_damage_interval", starvation_damage_interval))
+
+
+func set_difficulty_profile(profile_id: String) -> bool:
+	return _apply_difficulty_profile(profile_id, true)
+
+
+func _apply_difficulty_profile(profile_id: String, emit_change: bool) -> bool:
+	var normalized_id: String = TuningPolicyScript.normalize_profile_id(profile_id)
+	var tuning: Dictionary = TuningPolicyScript.profile_from_catalog(
+		_tuning_catalog, normalized_id
 	)
-	natural_regeneration_interval = maxf(
-		0.5, float(parsed.get("natural_regeneration_interval", natural_regeneration_interval))
-	)
+	var changed := normalized_id != difficulty_profile
+	difficulty_profile = normalized_id
+	passive_hunger_interval = float(tuning["passive_hunger_interval"])
+	starvation_damage_interval = float(tuning["starvation_damage_interval"])
+	natural_regeneration_interval = float(tuning["natural_regeneration_interval"])
 	regeneration_hunger_threshold = clampf(
-		float(parsed.get("regeneration_hunger_threshold", regeneration_hunger_threshold)),
-		1.0,
-		max_hunger
+		float(tuning["regeneration_hunger_threshold"]), 1.0, max_hunger
 	)
+	if changed:
+		_reset_tuning_timers()
+	if emit_change and changed:
+		difficulty_changed.emit(difficulty_profile, get_tuning_snapshot())
+	return changed
+
+
+func get_tuning_snapshot() -> Dictionary:
+	return {
+		"schema_version": TuningPolicyScript.SCHEMA_VERSION,
+		"profile_id": difficulty_profile,
+		"profile_label": TuningPolicyScript.profile_label(difficulty_profile),
+		"passive_hunger_interval": passive_hunger_interval,
+		"starvation_damage_interval": starvation_damage_interval,
+		"natural_regeneration_interval": natural_regeneration_interval,
+		"regeneration_hunger_threshold": regeneration_hunger_threshold,
+		"hunger_multiplier": hunger_multiplier,
+	}
 
 
 func _process(delta: float) -> void:
 	if not alive:
 		return
-	_passive_timer += delta
+	var elapsed := maxf(0.0, delta)
+	_passive_timer += elapsed
 	if _passive_timer >= passive_hunger_interval / maxf(0.1, hunger_multiplier):
 		_passive_timer = 0.0
 		add_exhaustion(1.0)
 	if hunger <= 0.0:
-		_starvation_timer += delta
+		_starvation_timer += elapsed
 		if _starvation_timer >= starvation_damage_interval:
 			_starvation_timer = 0.0
 			take_damage(1.0, "starvation")
 	else:
 		_starvation_timer = 0.0
 	if hunger >= regeneration_hunger_threshold and health < max_health:
-		_regeneration_timer += delta
+		_regeneration_timer += elapsed
 		if _regeneration_timer >= natural_regeneration_interval:
 			_regeneration_timer = 0.0
 			heal(1.0)
@@ -100,7 +132,6 @@ func take_damage(amount: float, cause: String = "damage") -> void:
 		player_died.emit(cause)
 
 
-# Compatibility alias used by the player controller's public service contract.
 func damage(amount: float, cause: String = "damage") -> void:
 	take_damage(amount, cause)
 
@@ -199,9 +230,7 @@ func respawn() -> void:
 	health = max_health
 	hunger = max_hunger * 0.75
 	saturation = 2.0
-	_passive_timer = 0.0
-	_starvation_timer = 0.0
-	_regeneration_timer = 0.0
+	_reset_tuning_timers()
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, max_hunger)
 	player_respawned.emit()
@@ -214,7 +243,7 @@ func serialize() -> Dictionary:
 		"hunger": hunger,
 		"saturation": saturation,
 		"alive": alive,
-		"hunger_multiplier": hunger_multiplier
+		"hunger_multiplier": hunger_multiplier,
 	}
 
 
@@ -224,9 +253,13 @@ func deserialize(data: Dictionary) -> bool:
 	saturation = clampf(float(data.get("saturation", 5.0)), 0.0, max_hunger)
 	alive = bool(data.get("alive", health > 0.0)) and health > 0.0
 	hunger_multiplier = maxf(0.1, float(data.get("hunger_multiplier", 1.0)))
-	_passive_timer = 0.0
-	_starvation_timer = 0.0
-	_regeneration_timer = 0.0
+	_reset_tuning_timers()
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, max_hunger)
 	return true
+
+
+func _reset_tuning_timers() -> void:
+	_passive_timer = 0.0
+	_starvation_timer = 0.0
+	_regeneration_timer = 0.0
