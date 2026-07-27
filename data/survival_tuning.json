@@ -1,8 +1,24 @@
 {
-  "schema_version": 1,
-  "passive_hunger_interval": 70.0,
-  "starvation_damage_interval": 4.0,
-  "natural_regeneration_interval": 3.5,
-  "regeneration_hunger_threshold": 17.0,
-  "comment": "生存压力曲线：饥饿消耗加快（90s→70s）、挨饿掉血加快（8s→4s），让农业、烹饪与床进入核心循环。"
+  "schema_version": 2,
+  "default_profile": "relaxed",
+  "profiles": {
+    "relaxed": {
+      "passive_hunger_interval": 90.0,
+      "starvation_damage_interval": 8.0,
+      "natural_regeneration_interval": 4.0,
+      "regeneration_hunger_threshold": 18.0
+    },
+    "balanced": {
+      "passive_hunger_interval": 70.0,
+      "starvation_damage_interval": 4.0,
+      "natural_regeneration_interval": 3.5,
+      "regeneration_hunger_threshold": 17.0
+    },
+    "challenging": {
+      "passive_hunger_interval": 50.0,
+      "starvation_damage_interval": 3.0,
+      "natural_regeneration_interval": 5.0,
+      "regeneration_hunger_threshold": 18.0
+    }
+  }
 }
