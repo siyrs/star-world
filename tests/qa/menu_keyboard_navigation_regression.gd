@@ -21,7 +21,7 @@ func _run() -> void:
 	var snapshot: Dictionary = menu.call("get_navigation_snapshot")
 	_check(
 		bool(snapshot.get("main_visible", false))
-		and str(snapshot.get("focus_text", "")) == "开始游戏",
+		and str(snapshot.get("focus_text", "")) == "继续游戏",
 		"startup places keyboard focus on the primary expedition action"
 	)
 
@@ -50,7 +50,7 @@ func _run() -> void:
 		"Escape returns from a cancellable subpage without closing the application"
 	)
 	_check(
-		str(snapshot.get("focus_text", "")) == "开始游戏",
+		str(snapshot.get("focus_text", "")) == "继续游戏",
 		"returning to the command deck restores the primary focus target"
 	)
 
