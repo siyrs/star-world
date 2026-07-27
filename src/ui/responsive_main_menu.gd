@@ -97,7 +97,7 @@ func _set_compact_hero(compact: bool) -> void:
 
 func _set_compact_commands(compact: bool) -> void:
 	for index in _menu_buttons.size():
-		var button := _menu_buttons[index]
+		var button: Button = _menu_buttons[index]
 		button.custom_minimum_size.x = 286.0 if compact else 338.0
 		button.custom_minimum_size.y = (
 			44.0 if compact and index == 0 else (38.0 if compact else (
@@ -118,15 +118,15 @@ func _focus_primary_action() -> void:
 		or _menu_buttons.is_empty()
 	):
 		return
-	var primary := _menu_buttons[0]
-	if primary != null and is_instance_valid(primary) and not primary.disabled:
+	var primary: Button = _menu_buttons[0]
+	if is_instance_valid(primary) and not primary.disabled:
 		primary.grab_focus()
 
 
 func _focus_first_interactive(panel: Control) -> void:
 	if panel == null or not is_instance_valid(panel) or not panel.is_visible_in_tree():
 		return
-	var target := _find_focusable(panel)
+	var target: Control = _find_focusable(panel)
 	if target != null:
 		target.grab_focus()
 
@@ -134,23 +134,28 @@ func _focus_first_interactive(panel: Control) -> void:
 func _find_focusable(node: Node) -> Control:
 	if node is Control:
 		var control := node as Control
-		var disabled := control is BaseButton and (control as BaseButton).disabled
+		var disabled := false
+		if control is BaseButton:
+			disabled = (control as BaseButton).disabled
 		if control.is_visible_in_tree() and control.focus_mode != Control.FOCUS_NONE and not disabled:
 			return control
 	for child: Node in node.get_children():
-		var target := _find_focusable(child)
+		var target: Control = _find_focusable(child)
 		if target != null:
 			return target
 	return null
 
 
 func get_navigation_snapshot() -> Dictionary:
-	var focus_owner := get_viewport().gui_get_focus_owner()
+	var focus_owner: Control = get_viewport().gui_get_focus_owner()
+	var focus_text := ""
+	if focus_owner is BaseButton:
+		focus_text = (focus_owner as BaseButton).text
 	return {
 		"main_visible": _main_panel != null and _main_panel.visible,
 		"map_visible": _map_panel != null and _map_panel.visible,
 		"save_visible": _save_panel != null and _save_panel.visible,
 		"settings_visible": _settings_panel != null and _settings_panel.visible,
 		"focus_owner": focus_owner,
-		"focus_text": focus_owner.text if focus_owner is BaseButton else "",
+		"focus_text": focus_text,
 	}
