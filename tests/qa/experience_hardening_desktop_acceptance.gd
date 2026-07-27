@@ -72,27 +72,40 @@ func _run() -> void:
 	)
 	var layout: Dictionary = settings.call("get_layout_snapshot")
 	var panel_rect: Rect2 = layout.get("panel_rect", Rect2())
-	var viewport_rect := Rect2(Vector2.ZERO, Vector2(root.size))
+	var design_viewport_rect: Rect2 = menu.get_viewport_rect()
+	var physical_viewport_rect := Rect2(Vector2.ZERO, Vector2(root.size))
+	var physical_panel_rect := _scale_rect_to_physical(
+		panel_rect,
+		design_viewport_rect.size,
+		Vector2(root.size)
+	)
 	_check(
-		viewport_rect.encloses(panel_rect),
-		"settings workspace remains fully inside the compact product viewport"
+		design_viewport_rect.encloses(panel_rect),
+		"settings workspace remains fully inside the design viewport"
+	)
+	_check(
+		physical_viewport_rect.encloses(physical_panel_rect),
+		"settings workspace remains fully inside the rendered 1024x576 viewport"
 	)
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "desktop viewport renders the hardened settings experience")
 	if image != null and not image.is_empty():
+		_check(image.get_size() == root.size, "desktop evidence uses the requested 1024x576 physical resolution")
 		DirAccess.make_dir_recursive_absolute(_capture_path.get_base_dir())
 		var error := image.save_png(_capture_path)
 		_check(error == OK and FileAccess.file_exists(_capture_path), "desktop evidence screenshot is saved")
 	var report := {
 		"checks": checks,
 		"failures": failures.duplicate(),
-		"viewport": [root.size.x, root.size.y],
+		"physical_viewport": [root.size.x, root.size.y],
+		"design_viewport": [design_viewport_rect.size.x, design_viewport_rect.size.y],
 		"difficulty_labels": labels,
 		"selected_profile": str(tuning.get("profile_id", "")),
 		"passive_hunger_interval": float(tuning.get("passive_hunger_interval", 0.0)),
 		"starvation_damage_interval": float(tuning.get("starvation_damage_interval", 0.0)),
-		"panel_rect": [panel_rect.position.x, panel_rect.position.y, panel_rect.size.x, panel_rect.size.y],
+		"design_panel_rect": _rect_to_array(panel_rect),
+		"physical_panel_rect": _rect_to_array(physical_panel_rect),
 	}
 	_write_report(report)
 	await _finish(hub, original_settings)
@@ -132,6 +145,24 @@ func _click_control(control: Control) -> void:
 	root.push_input(release, true)
 	await process_frame
 	await process_frame
+
+
+func _scale_rect_to_physical(
+	design_rect: Rect2,
+	design_size: Vector2,
+	physical_size: Vector2
+) -> Rect2:
+	if design_size.x <= 0.0 or design_size.y <= 0.0:
+		return Rect2()
+	var scale := Vector2(
+		physical_size.x / design_size.x,
+		physical_size.y / design_size.y
+	)
+	return Rect2(design_rect.position * scale, design_rect.size * scale)
+
+
+func _rect_to_array(rect: Rect2) -> Array[float]:
+	return [rect.position.x, rect.position.y, rect.size.x, rect.size.y]
 
 
 func _write_report(report: Dictionary) -> void:
