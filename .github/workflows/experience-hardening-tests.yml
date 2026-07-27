@@ -28,6 +28,7 @@ jobs:
       primary_headless_timeout_milliseconds: 600000
       primary_headless_verbose: true
       domain_scripts: |
+        res://tests/developer_b/run_tests.gd
         res://tests/qa/settings_retest.gd
         res://tests/qa/water_survival_regression.gd
         res://tests/qa/audio_lifecycle_regression.gd
