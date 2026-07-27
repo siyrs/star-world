@@ -110,8 +110,8 @@ Assert-Matches $text.theme 'focus_style' 'Unified theme must apply the shared hi
 
 foreach ($token in @(
   'MainCommandSurface','HeroColumn','CommandDeck','get_visual_snapshot',
-  'MenuPrimaryButton','MenuButton','DangerButton','星 的 世 界',
-  '开始游戏','地图选择','存档 / 继续','设置','检查更新','退出'
+  'MenuPrimaryButton','MenuButton','DangerButton','星的世界',
+  '存档 / 继续','设置','检查更新','退出'
 )) {
   Assert-Matches $text.main_menu ([regex]::Escape($token)) "Professional main menu is missing hierarchy or command: $token"
 }
@@ -125,9 +125,12 @@ foreach ($token in @(
   'responsive_protected_save_browser_panel\.gd',
   'func\s+_focus_primary_action',
   'func\s+_focus_first_interactive',
-  'ui_cancel'
+  'ui_cancel',
+  '继续游戏',
+  '创建新世界',
+  'StarWorldBackdrop'
 )) {
-  Assert-Matches $text.protected_menu $token "Production menu composition or keyboard contract is missing: $token"
+  Assert-Matches $text.protected_menu $token "Production menu composition, branding or keyboard contract is missing: $token"
 }
 foreach ($token in @('get_viewport_rect','custom_minimum_size','_details','_map_buttons')) {
   Assert-Matches $text.responsive_map $token "Responsive map briefing is missing: $token"
@@ -158,9 +161,9 @@ foreach ($pair in @(
   @('guidance','ContextPromptCard'),
   @('guidance','TutorialCard'),
   @('inventory','inventory_card'),
-  @('crafting','CRAFTING DATABASE'),
-  @('container','STORAGE TRANSFER'),
-  @('journal','EXPLORATION ARCHIVE'),
+  @('crafting','合成配方'),
+  @('container','物品搬移'),
+  @('journal','探索日志'),
   @('diagnostics','DiagnosticsDashboard'),
   @('diagnostics','DiagnosticsCard'),
   @('update_prompt','SECURE RELEASE UPDATE')
@@ -232,4 +235,4 @@ Assert-Matches $text.testing 'ui_visual_refresh_desktop_acceptance\.gd' 'Testing
 Assert-Matches $text.roadmap '统一专业 UI' 'Product roadmap must record the completed professional UI system'
 Assert-Matches $text.roadmap 'UI_DESIGN_SYSTEM\.md' 'Product roadmap must link the UI design contract'
 
-Write-Host 'PASS ui_design_system palette=celestial hierarchy=semantic spacing=8pt focus=visible keyboard=enter|escape|tab menus=responsive overlays=unified screens=10 desktop=real-input release=required'
+Write-Host 'PASS ui_design_system palette=pixel-space hierarchy=semantic spacing=8pt focus=visible keyboard=enter|escape|tab menus=responsive overlays=unified screens=10 desktop=real-input release=required'

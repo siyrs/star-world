@@ -4,13 +4,14 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://hostile-attack-windup-desktop.png"
-const CLEANUP_FRAMES := 8
+const CLEANUP_FRAMES := 40
 const MAX_WAIT_FRAMES := 180
 
 var checks := 0
 var failures: Array[String] = []
 var _capture_path := ""
 var _world_id := ""
+var _landed_hits := 0
 
 
 func _initialize() -> void:
@@ -60,8 +61,12 @@ func _run() -> void:
 	player.set("_hostile_damage_grace_remaining", 0.0)
 	player.set("_hostile_damage_cooldown_remaining", 0.0)
 	hub.survival.health = hub.survival.max_health
-	hub.survival.hunger = 10.0
+	hub.survival.hunger = hub.survival.max_hunger
+	hub.survival.saturation = hub.survival.max_hunger
 	hub.creature_spawner.clear_creatures()
+	for _frame in 2:
+		await process_frame
+	_check(hub.creature_spawner.get_child_count() == 0, "old world creatures are fully released before the combat fixture")
 	var zombie_variant: Variant = hub.creature_spawner.call(
 		"spawn_creature",
 		"zombie",
@@ -76,6 +81,11 @@ func _run() -> void:
 	zombie.set("move_speed", 0.0)
 	zombie.set("target", player)
 	zombie.set("_decision_timer", 999.0)
+	if zombie.has_signal("attack_landed"):
+		zombie.connect(
+			"attack_landed",
+			func(_target: Node, _damage: float) -> void: _landed_hits += 1
+		)
 	await _aim_at(player, zombie.global_position + Vector3(0.0, 1.2, 0.0))
 	var entered_windup := await _wait_attack_state(zombie, "windup")
 	_check(entered_windup, "real hostile AI enters windup before dealing damage")
@@ -97,10 +107,6 @@ func _run() -> void:
 		_check(image.get_size() == root.size, "hostile telegraph evidence uses the 1024x576 product resolution")
 		_save_image(image)
 
-	# Drive the real movement input backwards until the player exits the warning ring.
-	# The short cancel recovery may already have elapsed on a slow renderer, so the
-	# durable cancellation reason is the acceptance contract rather than a single
-	# transient cooldown frame.
 	await _hold_key(KEY_S, 28)
 	var cancelled_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
 	var cancel_reason := str(cancelled_snapshot.get("last_cancel_reason", ""))
@@ -113,8 +119,8 @@ func _run() -> void:
 	_check(not bool(cancelled_snapshot.get("telegraph_visible", true)), "successful dodge hides the warning ring")
 	_check(is_equal_approx(float(hub.survival.health), health_before_dodge), "successful real dodge prevents all player damage")
 	_check(player.global_position.distance_to(zombie.global_position) > float(cancelled_snapshot.get("attack_range", 0.0)), "real WASD movement leaves the committed hit range")
+	_check(_landed_hits == 0, "a successful dodge produces no hostile landed-hit event")
 
-	# Re-enter after the short cancel recovery and remain in range for one committed hit.
 	await create_timer(0.75).timeout
 	player.global_position = player_start
 	player.call("reset_motion")
@@ -130,13 +136,18 @@ func _run() -> void:
 	var hit_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
 	_check(hit_committed, "remaining inside the warning ring commits one real hit")
 	_check(is_equal_approx(float(hub.survival.health), health_before_hit - 1.0), "committed zombie attack applies the production one-point damage")
+	_check(_landed_hits == 1, "one committed attack emits exactly one landed-hit event")
 	_check(str(hit_snapshot.get("state", "")) == "cooldown", "successful hit enters data-driven cooldown")
-	_check(float(hit_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "cooldown remains externally diagnosable")
-	var health_after_hit := float(hub.survival.health)
-	for _frame in 45:
-		await physics_frame
-		await process_frame
-	_check(is_equal_approx(float(hub.survival.health), health_after_hit), "cooldown prevents an immediate duplicate hostile hit")
+	var initial_cooldown := float(hit_snapshot.get("cooldown_remaining", 0.0))
+	_check(initial_cooldown > 0.0, "cooldown remains externally diagnosable")
+	var landed_after_hit := _landed_hits
+	player.set_physics_process(false)
+	var cooldown_probe_seconds := minf(0.6, maxf(0.1, initial_cooldown * 0.2))
+	await create_timer(cooldown_probe_seconds, true, false, true).timeout
+	var cooldown_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
+	_check(_landed_hits == landed_after_hit, "cooldown prevents an immediate duplicate hostile landed-hit event")
+	_check(str(cooldown_snapshot.get("state", "")) == "cooldown", "hostile remains in its data-driven cooldown during the wall-clock duplicate-hit probe")
+	_check(float(cooldown_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "wall-clock duplicate-hit probe retains positive cooldown evidence")
 	_check(bool(player.get("input_enabled")), "hostile telegraph and dodge never disable player control")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "hostile combat never releases the gameplay mouse")
 	_check(bool(hub.save_current()), "transient hostile windup coexists with the production save transaction")
@@ -228,8 +239,15 @@ func _save_image(image: Image) -> void:
 func _finish(game: Node, hub: Node) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hub != null:
-		if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
-			hub.audio_service.shutdown()
+		var audio: Node = hub.get("audio_service") as Node
+		if audio != null and audio.has_method("dispose"):
+			audio.call("dispose")
+			_check(
+				bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+				"hostile desktop fixture terminally disposes generated audio nodes"
+			)
+		elif audio != null and audio.has_method("shutdown"):
+			audio.call("shutdown")
 		if not _world_id.is_empty() and hub.get("save_service") != null:
 			hub.save_service.delete_world(_world_id)
 	if game != null and is_instance_valid(game):

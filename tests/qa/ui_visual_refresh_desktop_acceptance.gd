@@ -51,7 +51,7 @@ func _run() -> void:
 		"main menu presents one visually dominant start action"
 	)
 
-	_check(await _click_text(main_menu, "地图选择"), "real mouse opens the map briefing workspace")
+	_check(await _click_text(main_menu, "创建新世界"), "real mouse opens the map briefing workspace")
 	var map_panel := main_menu.get("_map_panel") as Control
 	_check(map_panel != null and map_panel.visible, "map briefing becomes visible")
 	_check(await _capture("map-selection"), "map selection screenshot is saved")
@@ -79,7 +79,7 @@ func _run() -> void:
 	_check(await _capture("save-browser"), "save archive screenshot is saved")
 	_check(await _click_text(save_panel, "返回"), "real mouse returns from the save archive")
 
-	_check(await _click_text(main_menu, "开始游戏"), "real mouse opens world creation from the primary CTA")
+	_check(await _click_text(main_menu, "创建新世界"), "real mouse opens world creation from the explicit create command")
 	map_panel = main_menu.get("_map_panel") as Control
 	_check(await _click_text(map_panel, "创建并进入世界"), "real mouse creates the selected production world")
 	_check(

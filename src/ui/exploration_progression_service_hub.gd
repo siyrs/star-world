@@ -1,9 +1,6 @@
 class_name ExplorationProgressionServiceHub
 extends "res://src/ui/runtime_health_service_hub.gd"
 
-# The production implementation extends the stable exploration participant at
-# res://src/exploration/exploration_runtime_participant.gd without changing the
-# public ServiceHub scene or feature id.
 const ExplorationRuntimeParticipantScript = preload(
 	"res://src/exploration/pickup_aware_exploration_runtime_participant.gd"
 )
@@ -30,9 +27,6 @@ var autosave_runtime_participant: Node
 
 func _ready() -> void:
 	super._ready()
-	# The canonical SettingsPolicyScript is owned by GameplayServiceHub and
-	# inherited here. Final composition reuses that one policy before installing
-	# the autosave participant instead of declaring another settings owner.
 	current_settings = SettingsPolicyScript.normalize(current_settings)
 	_apply_settings(current_settings)
 	exploration_runtime_participant = _register_feature_participant(
@@ -87,6 +81,15 @@ func _ready() -> void:
 			autosave_runtime_participant.connect("autosave_completed", callback)
 
 
+func _apply_settings(settings: Dictionary) -> void:
+	if survival != null and survival.has_method("set_difficulty_profile"):
+		survival.call(
+			"set_difficulty_profile",
+			str(settings.get("survival_difficulty", DEFAULT_SETTINGS.survival_difficulty))
+		)
+	super._apply_settings(settings)
+
+
 func _on_settings_changed(settings: Dictionary) -> void:
 	var normalized := SettingsPolicyScript.merge(current_settings, settings)
 	super._on_settings_changed(normalized)
@@ -114,6 +117,11 @@ func get_character_snapshot() -> Dictionary:
 		else {}
 	)
 	snapshot["autosave"] = get_autosave_snapshot()
+	snapshot["survival_tuning"] = (
+		survival.call("get_tuning_snapshot")
+		if survival != null and survival.has_method("get_tuning_snapshot")
+		else {}
+	)
 	return snapshot
 
 

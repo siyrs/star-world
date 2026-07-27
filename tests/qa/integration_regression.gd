@@ -45,20 +45,34 @@ func _test_menu_navigation() -> void:
 	var main_panel := menu.get("_main_panel") as Control
 	var map_panel := menu.get("_map_panel") as Control
 	var save_panel := menu.get("_save_panel") as Control
-	var start_button := _find_button(menu, "开始游戏")
-	var maps_button := _find_button(menu, "地图选择")
+	var continue_button := _find_button(menu, "继续游戏")
+	var create_button := _find_button(menu, "创建新世界")
 	var saves_button := _find_button(menu, "存档 / 继续")
-	_check(start_button != null and maps_button != null and saves_button != null, "main menu exposes start, map, and save actions")
-	var start_rect := start_button.get_global_rect()
+	_check(
+		continue_button != null and create_button != null and saves_button != null,
+		"main menu exposes continue, create, and save actions"
+	)
+	if continue_button == null or create_button == null or saves_button == null:
+		menu.queue_free()
+		await process_frame
+		return
+	var continue_rect := continue_button.get_global_rect()
 	var saves_rect := saves_button.get_global_rect()
-	_check(not start_rect.intersects(saves_rect), "main menu button hit rectangles do not overlap")
-	_check(start_rect.has_point(start_rect.get_center()) and not saves_rect.has_point(start_rect.get_center()), "start button center resolves only to start")
-	start_button.pressed.emit()
-	_check(map_panel.visible and not main_panel.visible, "start action opens map selection")
+	_check(not continue_rect.intersects(saves_rect), "main menu button hit rectangles do not overlap")
+	_check(
+		continue_rect.has_point(continue_rect.get_center())
+		and not saves_rect.has_point(continue_rect.get_center()),
+		"continue button center resolves only to continue"
+	)
+	continue_button.pressed.emit()
+	_check(
+		map_panel.visible and not main_panel.visible,
+		"continue without an available save falls back to world creation"
+	)
 	map_panel.emit_signal("back_requested")
 	_check(main_panel.visible and not map_panel.visible, "map selection returns to main menu")
-	maps_button.pressed.emit()
-	_check(map_panel.visible and not save_panel.visible, "map action opens map selection")
+	create_button.pressed.emit()
+	_check(map_panel.visible and not save_panel.visible, "create action opens map selection")
 	map_panel.emit_signal("back_requested")
 	saves_button.pressed.emit()
 	_check(save_panel.visible and not map_panel.visible, "save action opens save browser")
@@ -71,7 +85,10 @@ func _test_menu_navigation() -> void:
 	for index in mini(map_buttons.size(), profiles.size()):
 		var button := map_buttons[index] as Button
 		button.pressed.emit()
-		_check(str(map_panel.get("_selected_map_id")) == str(profiles[index].get("id", "")), "map button %d selects its own profile" % (index + 1))
+		_check(
+			str(map_panel.get("_selected_map_id")) == str(profiles[index].get("id", "")),
+			"map button %d selects its own profile" % (index + 1)
+		)
 	menu.queue_free()
 	await process_frame
 
@@ -201,12 +218,8 @@ func _test_combat_food_audio_and_lifecycle() -> void:
 	_check(not spawner.active and spawner.get_child_count() == 0, "world exit stops and clears creature spawning")
 	world.clear_world()
 	_check(not world.is_started and world.get_loaded_chunk_count() == 0, "world exit clears streaming chunks")
-	for player_name in ["Effects", "Creatures", "Ambient"]:
-		var audio_player := audio.get_node(player_name) as AudioStreamPlayer
-		audio_player.stop()
-		audio_player.stream = null
-	var audio_cache: Dictionary = audio.get("_cache")
-	audio_cache.clear()
+	if audio.has_method("dispose"):
+		audio.call("dispose")
 	await create_timer(0.35).timeout
 	arena.queue_free()
 	await process_frame

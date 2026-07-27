@@ -11,8 +11,15 @@ const DEFAULTS := {
 	"show_interaction_prompts": true,
 	"autosave_minutes": 5,
 	"camera_bob": true,
+	"survival_difficulty": "relaxed",
 }
 const AUTOSAVE_MINUTES := [0, 2, 5, 10, 15]
+const SURVIVAL_DIFFICULTIES: Array[String] = ["relaxed", "balanced", "challenging"]
+const SURVIVAL_DIFFICULTY_LABELS := {
+	"relaxed": "轻松建造",
+	"balanced": "平衡生存",
+	"challenging": "挑战生存",
+}
 const MIN_MOUSE_SENSITIVITY := 0.05
 const MAX_MOUSE_SENSITIVITY := 0.60
 const MIN_RENDER_DISTANCE := 1
@@ -30,6 +37,15 @@ static func allowed_autosave_minutes() -> Array[int]:
 	for raw_value: Variant in AUTOSAVE_MINUTES:
 		values.append(int(raw_value))
 	return values
+
+
+static func allowed_survival_difficulties() -> Array[String]:
+	return SURVIVAL_DIFFICULTIES.duplicate()
+
+
+static func survival_difficulty_label(profile_id: String) -> String:
+	var normalized := normalize_survival_difficulty(profile_id)
+	return str(SURVIVAL_DIFFICULTY_LABELS[normalized])
 
 
 static func normalize(raw_settings: Dictionary = {}) -> Dictionary:
@@ -82,6 +98,9 @@ static func normalize(raw_settings: Dictionary = {}) -> Dictionary:
 	normalized["camera_bob"] = _bool_or_default(
 		raw_settings.get("camera_bob"), bool(DEFAULTS["camera_bob"])
 	)
+	normalized["survival_difficulty"] = normalize_survival_difficulty(
+		raw_settings.get("survival_difficulty")
+	)
 	return normalized
 
 
@@ -107,6 +126,15 @@ static func normalize_autosave_minutes(value: Variant) -> int:
 			selected = candidate
 			best_distance = distance
 	return selected
+
+
+static func normalize_survival_difficulty(value: Variant) -> String:
+	var requested := str(value).strip_edges().to_lower()
+	return (
+		requested
+		if requested in SURVIVAL_DIFFICULTIES
+		else str(DEFAULTS["survival_difficulty"])
+	)
 
 
 static func _number_or_default(value: Variant, default_value: float) -> float:

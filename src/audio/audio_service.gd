@@ -33,17 +33,11 @@ func _exit_tree() -> void:
 
 
 func shutdown() -> void:
+	# Shutdown is non-destructive: it releases every stream/cache reference while
+	# preserving the fixed playback-node topology for diagnostics and terminal dispose.
 	_stop_and_clear_players()
 	_cache.clear()
-	if _disposed:
-		return
-	_effects_player = _replace_player(_effects_player, "Effects")
-	_effect_pool = [_effects_player]
-	if _pool_enabled:
-		for index in range(2, 5):
-			_effect_pool.append(_replace_player(_effect_pool[index - 1], "Effects%d" % index))
-	_creature_player = _replace_player(_creature_player, "Creatures")
-	_ambient_player = _replace_player(_ambient_player, "Ambient")
+	_pool_cursor = 0
 
 
 func dispose() -> void:
@@ -52,32 +46,55 @@ func dispose() -> void:
 	_disposed = true
 	_stop_and_clear_players()
 	_cache.clear()
-	for pooled_player in _effect_pool:
-		if pooled_player != _effects_player:
-			_dispose_player(pooled_player)
+	for pooled_player: AudioStreamPlayer in _effect_pool.duplicate():
+		_dispose_player(pooled_player)
 	_effect_pool.clear()
-	_dispose_player(_effects_player)
+	# The main effects player is part of the pool and has already been released.
+	_effects_player = null
 	_dispose_player(_creature_player)
 	_dispose_player(_ambient_player)
-	_effects_player = null
 	_creature_player = null
 	_ambient_player = null
+	_pool_cursor = 0
 
 
 func is_disposed() -> bool:
 	return _disposed
 
 
-func _stop_and_clear_players() -> void:
-	for player in [_effects_player, _creature_player, _ambient_player] + _effect_pool:
+func get_lifecycle_snapshot() -> Dictionary:
+	var valid_pool_players := 0
+	for player: AudioStreamPlayer in _effect_pool:
 		if player != null and is_instance_valid(player):
-			player.stop()
-			player.stream = null
+			valid_pool_players += 1
+	return {
+		"disposed": _disposed,
+		"pool_enabled": _pool_enabled,
+		"pool_size": valid_pool_players,
+		"cache_size": _cache.size(),
+		"child_count": get_child_count(),
+		"pool_cursor": _pool_cursor,
+	}
 
 
-func _replace_player(player: AudioStreamPlayer, player_name: String) -> AudioStreamPlayer:
-	_dispose_player(player)
-	return _create_player(player_name)
+func _stop_and_clear_players() -> void:
+	var seen: Dictionary = {}
+	for player: AudioStreamPlayer in _effect_pool:
+		_stop_and_clear_player(player, seen)
+	_stop_and_clear_player(_effects_player, seen)
+	_stop_and_clear_player(_creature_player, seen)
+	_stop_and_clear_player(_ambient_player, seen)
+
+
+func _stop_and_clear_player(player: AudioStreamPlayer, seen: Dictionary) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	var instance_id := player.get_instance_id()
+	if seen.has(instance_id):
+		return
+	seen[instance_id] = true
+	player.stop()
+	player.stream = null
 
 
 func _dispose_player(player: AudioStreamPlayer) -> void:

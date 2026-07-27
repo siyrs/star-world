@@ -5,8 +5,10 @@ const SOAK_CYCLES := 3
 const FRAMES_PER_CYCLE := 72
 const SAMPLE_INTERVAL_FRAMES := 12
 const MENU_SETTLE_FRAMES := 60
-const MENU_NODE_MARGIN := 40
-const CLEANUP_FRAMES := 8
+const MENU_BASELINE_SETTLE_FRAMES := 24
+const MENU_NODE_WARMUP_MARGIN := 256
+const MENU_NODE_STEADY_MARGIN := 12
+const CLEANUP_FRAMES := 40
 
 var checks := 0
 var failures: Array[String] = []
@@ -19,21 +21,46 @@ func _initialize() -> void:
 func _run() -> void:
 	var game = GameScene.instantiate()
 	root.add_child(game)
-	await process_frame
-	await process_frame
+	for _frame in MENU_BASELINE_SETTLE_FRAMES:
+		await process_frame
 	var hub: Node = game.get("service_hub")
 	var diagnostics: Node = game.get("runtime_diagnostics")
 	var initial_render_distance := int(hub.get("current_settings").get("render_distance", 3))
-	var menu_node_baseline := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	var initial_menu_nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	var warm_menu_floor := -1
+	var menu_node_floors: Array[int] = []
 	for cycle in SOAK_CYCLES:
 		await _run_world_cycle(game, hub, diagnostics, cycle, initial_render_distance)
-		var node_budget_reached := await _wait_for_node_budget(
-			menu_node_baseline + MENU_NODE_MARGIN
+		var menu_nodes := await _sample_menu_node_floor()
+		menu_node_floors.append(menu_nodes)
+		if cycle == 0:
+			warm_menu_floor = menu_nodes
+			_check(
+				menu_nodes <= initial_menu_nodes + MENU_NODE_WARMUP_MARGIN,
+				"first world cycle returns to a bounded lazily initialized menu node count",
+			)
+		else:
+			_check(
+				menu_nodes <= warm_menu_floor + MENU_NODE_STEADY_MARGIN,
+				"world cycle %d returns to the warmed menu node plateau" % (cycle + 1),
+			)
+		print(
+			"QA RUNTIME SOAK NODES | cycle=%d | initial=%d | warm_floor=%d | sampled_floor=%d | warmup_margin=%d | steady_margin=%d"
+			% [
+				cycle + 1,
+				initial_menu_nodes,
+				warm_menu_floor,
+				menu_nodes,
+				MENU_NODE_WARMUP_MARGIN,
+				MENU_NODE_STEADY_MARGIN,
+			]
 		)
-		var menu_nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	if not menu_node_floors.is_empty():
+		var minimum_floor := int(menu_node_floors.min())
+		var maximum_floor := int(menu_node_floors.max())
 		_check(
-			node_budget_reached and menu_nodes <= menu_node_baseline + MENU_NODE_MARGIN,
-			"world cycle %d returns to a bounded menu node count" % (cycle + 1),
+			maximum_floor - minimum_floor <= MENU_NODE_STEADY_MARGIN,
+			"post-warmup menu node floor remains stable across repeated world cycles",
 		)
 	var telemetry = diagnostics.get("telemetry")
 	_check(
@@ -41,7 +68,13 @@ func _run() -> void:
 		"long-running telemetry history remains bounded",
 	)
 	var audio = hub.get("audio_service")
-	if audio != null and audio.has_method("shutdown"):
+	if audio != null and audio.has_method("dispose"):
+		audio.call("dispose")
+		_check(
+			bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+			"runtime soak terminally disposes every generated audio playback node",
+		)
+	elif audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
 	game.queue_free()
 	for _frame in CLEANUP_FRAMES:
@@ -244,12 +277,15 @@ func _wait_for_menu_cleanup(world: Node, diagnostics: Node, hub: Node) -> bool:
 	return false
 
 
-func _wait_for_node_budget(maximum_nodes: int) -> bool:
+func _sample_menu_node_floor() -> int:
+	var minimum_nodes := 2147483647
 	for _frame in MENU_SETTLE_FRAMES:
 		await process_frame
-		if int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) <= maximum_nodes:
-			return true
-	return false
+		minimum_nodes = mini(
+			minimum_nodes,
+			int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		)
+	return minimum_nodes
 
 
 func _world_state(world_id: String, seed_value: int) -> Dictionary:
@@ -272,5 +308,8 @@ func _world_state(world_id: String, seed_value: int) -> Dictionary:
 
 func _check(condition: bool, description: String) -> void:
 	checks += 1
-	if not condition:
+	if condition:
+		print("  PASS  %s" % description)
+	else:
+		print("  FAIL  %s" % description)
 		failures.append(description)

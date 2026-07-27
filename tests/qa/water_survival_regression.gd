@@ -59,7 +59,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await _test_water_movement()
 	await _test_hostile_damage_pacing()
-	_test_passive_survival_pacing()
+	await _test_passive_survival_pacing()
 	if failures.is_empty():
 		print("QA WATER SURVIVAL PASS | checks=%d" % checks)
 		quit(0)
@@ -112,6 +112,7 @@ func _test_water_movement() -> void:
 	)
 	host.queue_free()
 	await process_frame
+	await process_frame
 
 
 func _test_hostile_damage_pacing() -> void:
@@ -151,46 +152,54 @@ func _test_hostile_damage_pacing() -> void:
 	var factory = FactoryScript.new()
 	var zombie = factory.create("zombie", Vector3.ZERO, player)
 	_check(is_equal_approx(float(zombie.attack_damage), 1.0), "zombie base damage is survivable")
-	zombie.queue_free()
+	zombie.free()
 	host.queue_free()
+	await process_frame
 	await process_frame
 
 
 func _test_passive_survival_pacing() -> void:
 	var survival = SurvivalScript.new()
+	root.add_child(survival)
+	await process_frame
 	survival.saturation = 0.0
 	survival.hunger = 20.0
-	survival.call("_process", 60.0)
+	var passive_interval := float(survival.passive_hunger_interval)
+	survival.call("_process", maxf(0.0, passive_interval - 1.0))
 	_check(
 		is_equal_approx(survival.hunger, 20.0),
-		"one idle minute does not consume a hunger point"
+		"passive hunger stays unchanged before the active difficulty interval"
 	)
-	survival.call("_process", 31.0)
+	survival.call("_process", 1.1)
 	_check(
 		is_equal_approx(survival.hunger, 19.0),
-		"passive hunger decreases gradually after the relaxed interval"
+		"passive hunger decreases once at the active difficulty interval"
 	)
-	survival.call("_process", 80.0)
+	survival.call("_process", maxf(0.0, passive_interval - 10.0))
 	survival.deserialize(
 		{"health": 20.0, "hunger": 20.0, "saturation": 0.0, "alive": true}
 	)
-	survival.call("_process", 20.0)
+	survival.call("_process", minf(20.0, passive_interval * 0.25))
 	_check(
 		is_equal_approx(survival.hunger, 20.0),
 		"loading a save resets stale passive hunger timing"
 	)
 	survival.hunger = 0.0
 	var health_before: float = survival.health
-	survival.call("_process", 3.0)
+	var starvation_interval := float(survival.starvation_damage_interval)
+	survival.call("_process", maxf(0.0, starvation_interval - 0.2))
 	_check(
 		is_equal_approx(survival.health, health_before),
-		"starvation does not damage the player instantly"
+		"starvation does not damage the player before the active difficulty interval"
 	)
-	survival.call("_process", 1.2)
+	survival.call("_process", 0.25)
 	_check(
 		is_equal_approx(survival.health, health_before - 1.0),
-		"starvation damage stays gradual at the tuned interval"
+		"starvation damage occurs exactly at the active difficulty interval"
 	)
+	survival.queue_free()
+	await process_frame
+	await process_frame
 
 
 func _check(condition: bool, description: String) -> void:
