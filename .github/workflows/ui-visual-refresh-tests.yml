@@ -30,6 +30,7 @@ jobs:
       primary_headless_timeout_milliseconds: 600000
       primary_headless_verbose: true
       domain_scripts: |
+        res://tests/qa/menu_keyboard_navigation_regression.gd
         res://tests/qa/ui_layout_regression.gd
         res://tests/qa/desktop_input_contract_regression.gd
         res://tests/qa/input_interaction_regression.gd
