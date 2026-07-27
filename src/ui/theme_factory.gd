@@ -532,7 +532,9 @@ static func _register_button(
 	padding: float,
 	border_width: int = 1
 ) -> void:
-	if variation != "Button":
+	# MenuButton is a built-in Godot theme type. Reuse that native type instead
+	# of attempting to mark the same name as a Button variation.
+	if variation not in ["Button", "MenuButton"]:
 		theme.set_type_variation(variation, "Button")
 	theme.set_font_size("font_size", variation, font_size)
 	theme.set_color("font_color", variation, Tokens.color(font))
