@@ -2,6 +2,9 @@ extends SceneTree
 
 const AudioServiceScript = preload("res://src/audio/audio_service.gd")
 
+const AUDIO_RELEASE_FRAMES := 30
+const AUDIO_RELEASE_SECONDS := 0.35
+
 var checks := 0
 var failures: Array[String] = []
 var _sound_events := 0
@@ -25,7 +28,7 @@ func _run() -> void:
 	audio.play_ui()
 	await process_frame
 	audio.shutdown()
-	for _frame in 4:
+	for _frame in 12:
 		await process_frame
 	var shutdown_cache: Dictionary = audio.get("_cache")
 	_check(shutdown_cache.is_empty(), "shutdown releases every generated stream cache entry")
@@ -33,7 +36,8 @@ func _run() -> void:
 		var player := audio.get_node_or_null(player_name) as AudioStreamPlayer
 		_check(player != null and player.stream == null, "%s stream reference is cleared" % player_name)
 	audio.dispose()
-	await process_frame
+	for _frame in 8:
+		await process_frame
 	_check(audio.is_disposed(), "explicit disposal marks the audio service terminal")
 	_check(audio.get_child_count() == 0, "explicit disposal frees all playback nodes")
 	_check(
@@ -46,9 +50,14 @@ func _run() -> void:
 	audio.start_ambient("forest")
 	await process_frame
 	_check(_sound_events == 0, "disposed audio service ignores future playback requests")
+	# Drop test-owned Dictionary aliases before asking the software audio backend
+	# to release the playback objects created by the two real sounds above.
+	initialized_cache = {}
+	shutdown_cache = {}
 	audio.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in AUDIO_RELEASE_FRAMES:
+		await process_frame
+	await create_timer(AUDIO_RELEASE_SECONDS, true, false, true).timeout
 	if failures.is_empty():
 		print("QA AUDIO LIFECYCLE PASS | checks=%d" % checks)
 		quit(0)
