@@ -18,7 +18,7 @@ jobs:
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
       domain_job_name: Semantic design system, responsive hierarchy and adjacent UI regression
-      domain_timeout_minutes: 80
+      domain_timeout_minutes: 85
       static_validators: |
         tests/developer_b/validate_ui_design_system.ps1
         tests/developer_b/validate_protected_save_deletion.ps1
@@ -32,6 +32,9 @@ jobs:
       domain_scripts: |
         res://tests/qa/ui_layout_regression.gd
         res://tests/qa/desktop_input_contract_regression.gd
+        res://tests/qa/input_interaction_regression.gd
+        res://tests/qa/inventory_transaction_regression.gd
+        res://tests/qa/furnace_machine_regression.gd
         res://tests/qa/settings_retest.gd
         res://tests/qa/protected_save_browser_regression.gd
         res://tests/qa/trash_manager_panel_regression.gd
