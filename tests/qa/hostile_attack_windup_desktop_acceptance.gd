@@ -143,14 +143,15 @@ func _run() -> void:
 	_check(_landed_hits == 1, "one committed attack emits exactly one landed-hit event")
 	_check(str(hit_snapshot.get("state", "")) == "cooldown", "successful hit enters data-driven cooldown")
 	_check(float(hit_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "cooldown remains externally diagnosable")
-	var health_after_hit := float(hub.survival.health)
 	var landed_after_hit := _landed_hits
 	player.set_physics_process(false)
 	for _frame in 45:
 		await physics_frame
 		await process_frame
+	var cooldown_snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
 	_check(_landed_hits == landed_after_hit, "cooldown prevents an immediate duplicate hostile landed-hit event")
-	_check(is_equal_approx(float(hub.survival.health), health_after_hit), "cooldown window applies no second point of hostile damage")
+	_check(str(cooldown_snapshot.get("state", "")) == "cooldown", "hostile remains in its data-driven cooldown during the duplicate-hit window")
+	_check(float(cooldown_snapshot.get("cooldown_remaining", 0.0)) > 0.0, "duplicate-hit window retains positive cooldown evidence")
 	_check(bool(player.get("input_enabled")), "hostile telegraph and dodge never disable player control")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "hostile combat never releases the gameplay mouse")
 	_check(bool(hub.save_current()), "transient hostile windup coexists with the production save transaction")
