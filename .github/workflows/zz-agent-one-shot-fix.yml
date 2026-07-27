@@ -1,0 +1,44 @@
+name: One-shot inherited policy repair
+
+on:
+  push:
+    branches:
+      - agent/professional-ui-refresh
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/professional-ui-refresh
+          fetch-depth: 0
+
+      - name: Remove inherited QueryPolicy redeclaration
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/ui/protected_save_browser_panel.gd")
+          text = path.read_text(encoding="utf-8")
+          target = 'const QueryPolicy = preload("res://src/ui/save_browser_query_policy.gd")\n'
+          count = text.count(target)
+          if count != 1:
+              raise SystemExit(f"expected exactly one inherited QueryPolicy redeclaration, found {count}")
+          path.write_text(text.replace(target, "", 1), encoding="utf-8", newline="\n")
+
+      - name: Commit repaired source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/ui/protected_save_browser_panel.gd
+          git diff --cached --check
+          git commit -m "fix(ui): remove inherited query policy redeclaration"
+          git push origin HEAD:agent/professional-ui-refresh
