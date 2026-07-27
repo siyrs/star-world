@@ -290,11 +290,18 @@ func _test_production_service_hub() -> void:
 	)
 	_check(int(hub.furnace_service.get_runtime_snapshot().get("machine_count", -1)) == 0, "return-to-menu clears machine state")
 	hub.save_service.delete_world(world_id)
-	if hub.audio_service != null and hub.audio_service.has_method("shutdown"):
-		hub.audio_service.shutdown()
+	if hub.audio_service != null and hub.audio_service.has_method("dispose"):
+		hub.audio_service.call("dispose")
+		_check(
+			bool(hub.audio_service.call("is_disposed"))
+			and hub.audio_service.get_child_count() == 0,
+			"machine fixture disposes generated audio playback nodes"
+		)
+	elif hub.audio_service != null and hub.audio_service.has_method("shutdown"):
+		hub.audio_service.call("shutdown")
 	hub.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 8:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:

@@ -3,6 +3,10 @@ extends PanelContainer
 
 signal dismissed
 
+const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
+
 var update_service: Node
 var _title: Label
 var _version_label: Label
@@ -16,7 +20,9 @@ var _download_started := false
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(680, 500)
+	theme = ThemeFactory.create_theme()
+	theme_type_variation = "ModalPanel"
+	custom_minimum_size = Vector2(720, 510)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_ui()
 	visible = false
@@ -54,50 +60,97 @@ func get_later_button() -> Button:
 	return _later_button
 
 
+func get_visual_snapshot() -> Dictionary:
+	return {
+		"panel": get_global_rect(),
+		"notes": _notes.get_global_rect() if _notes != null else Rect2(),
+		"progress_visible": _progress != null and _progress.visible,
+		"primary_variation": (
+			_primary_button.theme_type_variation if _primary_button != null else ""
+		),
+		"release_version": get_release_version(),
+	}
+
+
 func _build_ui() -> void:
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 14)
+	root.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	add_child(root)
-	_title = Label.new()
-	_title.text = "发现新版本"
-	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.add_theme_font_size_override("font_size", 30)
-	root.add_child(_title)
-	_version_label = Label.new()
-	_version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_version_label.modulate = Color("#8FD7F0")
-	root.add_child(_version_label)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	root.add_child(header)
+	var heading := VBoxContainer.new()
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	header.add_child(heading)
+	heading.add_child(UiKit.make_eyebrow("SECURE RELEASE UPDATE"))
+	_title = UiKit.make_title("发现新版本")
+	heading.add_child(_title)
+	_version_label = UiKit.make_badge("等待版本信息", "info")
+	header.add_child(_version_label)
+
+	var trust_card := UiKit.make_card("SuccessPanel")
+	root.add_child(trust_card)
+	var trust_label := Label.new()
+	trust_label.text = "✓ GitHub Release 来源 · SHA-256 与清单双重验证 · 启动失败自动回滚"
+	trust_label.theme_type_variation = "SuccessLabel"
+	trust_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	trust_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	trust_card.add_child(trust_label)
+
+	var notes_card := UiKit.make_card("InsetPanel")
+	notes_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(notes_card)
+	var notes_root := VBoxContainer.new()
+	notes_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	notes_card.add_child(notes_root)
+	var notes_title := Label.new()
+	notes_title.text = "版本说明"
+	notes_title.theme_type_variation = "SectionTitle"
+	notes_root.add_child(notes_title)
 	_notes = RichTextLabel.new()
 	_notes.bbcode_enabled = false
 	_notes.fit_content = false
 	_notes.scroll_active = true
-	_notes.custom_minimum_size = Vector2(620, 260)
-	root.add_child(_notes)
+	_notes.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_notes.custom_minimum_size = Vector2(630, 220)
+	_notes.add_theme_font_size_override("normal_font_size", Tokens.FONT_BODY)
+	notes_root.add_child(_notes)
+
 	_status = Label.new()
+	_status.theme_type_variation = "CaptionLabel"
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.custom_minimum_size.y = 40.0
 	root.add_child(_status)
+
 	_progress = ProgressBar.new()
 	_progress.min_value = 0.0
 	_progress.max_value = 100.0
 	_progress.value = 0.0
 	_progress.show_percentage = true
+	_progress.custom_minimum_size.y = 12.0
 	_progress.visible = false
 	root.add_child(_progress)
+
 	var actions := HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 14)
+	actions.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(actions)
-	_primary_button = Button.new()
-	_primary_button.text = "下载并自动更新"
-	_primary_button.custom_minimum_size = Vector2(250, 52)
-	_primary_button.pressed.connect(_on_primary_pressed)
-	actions.add_child(_primary_button)
-	_later_button = Button.new()
+	_later_button = UiKit.style_button(
+		Button.new(), "GhostButton", Vector2(170, Tokens.CONTROL_HEIGHT_LG)
+	)
 	_later_button.text = "稍后"
-	_later_button.custom_minimum_size = Vector2(150, 52)
 	_later_button.pressed.connect(_on_later_pressed)
 	actions.add_child(_later_button)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(spacer)
+	_primary_button = UiKit.style_button(
+		Button.new(), "PrimaryButton", Vector2(280, Tokens.CONTROL_HEIGHT_LG)
+	)
+	_primary_button.text = "下载并自动更新"
+	_primary_button.pressed.connect(_on_primary_pressed)
+	actions.add_child(_primary_button)
 
 
 func _on_update_available(release: Dictionary) -> void:
@@ -105,12 +158,13 @@ func _on_update_available(release: Dictionary) -> void:
 	_download_started = false
 	visible = true
 	_title.text = "发现新版本"
-	_version_label.text = "当前 v%s  →  最新 v%s" % [
+	_version_label.text = "v%s  →  v%s" % [
 		str(update_service.get("current_version")),
 		str(_release.get("version", "")),
 	]
 	_notes.text = str(_release.get("notes", "本次 Release 未提供更新说明。"))
-	_status.text = "更新来自 GitHub Release，下载包会进行 SHA-256 与清单双重校验。"
+	_status.text = "更新包会在下载完成后执行校验；中断后可从当前进度继续。"
+	_status.theme_type_variation = "CaptionLabel"
 	_progress.visible = false
 	_progress.value = 0.0
 	_primary_button.text = "下载并自动更新"
@@ -122,6 +176,7 @@ func _on_update_available(release: Dictionary) -> void:
 
 func _on_status_changed(state: StringName, message: String) -> void:
 	_status.text = message
+	_status.theme_type_variation = "CaptionLabel"
 	if state in [&"checksum", &"downloading"]:
 		_download_started = true
 		visible = true
@@ -136,6 +191,7 @@ func _on_status_changed(state: StringName, message: String) -> void:
 	elif state == &"failed":
 		_download_started = false
 		visible = true
+		_status.theme_type_variation = "DangerLabel"
 		_primary_button.disabled = false
 		_primary_button.text = "重试更新"
 		_later_button.visible = true
@@ -163,11 +219,13 @@ func _on_progress_changed(downloaded_bytes: int, total_bytes: int) -> void:
 
 func _on_update_failed(_reason: String, message: String) -> void:
 	_status.text = message
+	_status.theme_type_variation = "DangerLabel"
 
 
 func _on_install_started(version: String) -> void:
 	_title.text = "正在安装 v%s" % version
 	_status.text = "游戏即将退出；安装助手会切换版本、验证启动，失败时自动回滚。"
+	_status.theme_type_variation = "CaptionLabel"
 
 
 func _on_primary_pressed() -> void:
@@ -209,9 +267,4 @@ func _disconnect_service() -> void:
 
 
 func _format_bytes(value: int) -> String:
-	var amount := float(maxi(0, value))
-	for unit: String in ["B", "KB", "MB", "GB"]:
-		if amount < 1024.0 or unit == "GB":
-			return "%.1f %s" % [amount, unit]
-		amount /= 1024.0
-	return "%.1f GB" % amount
+	return UiKit.format_bytes(value)

@@ -25,28 +25,43 @@ func _exit_tree() -> void:
 
 
 func shutdown() -> void:
-	for player in [_effects_player, _creature_player, _ambient_player]:
-		if player != null and is_instance_valid(player):
-			player.stop()
-			player.stream = null
+	_stop_and_clear_players()
 	_cache.clear()
+	if _disposed:
+		return
+	_effects_player = _replace_player(_effects_player, "Effects")
+	_creature_player = _replace_player(_creature_player, "Creatures")
+	_ambient_player = _replace_player(_ambient_player, "Ambient")
 
 
 func dispose() -> void:
 	if _disposed:
 		return
-	shutdown()
+	_disposed = true
+	_stop_and_clear_players()
+	_cache.clear()
 	_dispose_player(_effects_player)
 	_dispose_player(_creature_player)
 	_dispose_player(_ambient_player)
 	_effects_player = null
 	_creature_player = null
 	_ambient_player = null
-	_disposed = true
 
 
 func is_disposed() -> bool:
 	return _disposed
+
+
+func _stop_and_clear_players() -> void:
+	for player in [_effects_player, _creature_player, _ambient_player]:
+		if player != null and is_instance_valid(player):
+			player.stop()
+			player.stream = null
+
+
+func _replace_player(player: AudioStreamPlayer, player_name: String) -> AudioStreamPlayer:
+	_dispose_player(player)
+	return _create_player(player_name)
 
 
 func _dispose_player(player: AudioStreamPlayer) -> void:

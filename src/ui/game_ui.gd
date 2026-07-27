@@ -24,9 +24,11 @@ const InventoryPanelScript = preload("res://src/ui/inventory_panel.gd")
 const CraftingPanelScript = preload("res://src/ui/crafting_panel.gd")
 const FurnacePanelScript = preload("res://src/ui/furnace_panel.gd")
 const ContainerPanelScript = preload("res://src/ui/container_panel.gd")
-const ExplorationJournalPanelScript = preload("res://src/ui/exploration_journal_panel.gd")
+const ExplorationJournalPanelScript = preload("res://src/ui/responsive_exploration_journal_panel.gd")
 const ExtensionOverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
 const PanelAnimator = preload("res://src/ui/ui_panel_animator.gd")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const InputActionsScript = preload("res://src/input/gameplay_input_actions.gd")
@@ -50,50 +52,62 @@ var crafting_panel
 var furnace_panel
 var container_panel
 var exploration_journal_panel: Control
+var _overlay_scrim: ColorRect
 var _pause_panel: PanelContainer
 var _death_panel: PanelContainer
 var _death_title: Label
 var _pause_status: Label
 var _overlay: int = Overlay.NONE
 var _gameplay_active := false
+var _desired_sizes: Dictionary = {}
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	InputActionsScript.ensure_default_bindings()
 	layer = 10
+
 	hud = HudScript.new()
 	add_child(hud)
 	guidance_overlay = GuidanceOverlayScript.new()
 	add_child(guidance_overlay)
+	_build_overlay_scrim()
+
 	inventory_panel = InventoryPanelScript.new()
-	_center_control(inventory_panel, Vector2(710, 520))
+	_center_control(inventory_panel, Vector2(760, 520))
 	add_child(inventory_panel)
 	inventory_panel.visible = false
 	inventory_panel.panel_closed.connect(_close_overlay)
+
 	crafting_panel = CraftingPanelScript.new()
-	_center_control(crafting_panel, Vector2(760, 590))
+	_center_control(crafting_panel, Vector2(820, 540))
 	add_child(crafting_panel)
 	crafting_panel.visible = false
 	crafting_panel.panel_closed.connect(_close_overlay)
+
 	furnace_panel = FurnacePanelScript.new()
-	_center_control(furnace_panel, Vector2(900, 540))
+	_center_control(furnace_panel, Vector2(940, 540))
 	add_child(furnace_panel)
 	furnace_panel.visible = false
 	furnace_panel.panel_closed.connect(_close_overlay)
+
 	container_panel = ContainerPanelScript.new()
-	_center_control(container_panel, Vector2(780, 680))
+	_center_control(container_panel, Vector2(840, 560))
 	add_child(container_panel)
 	container_panel.visible = false
 	container_panel.panel_closed.connect(_close_overlay)
+
 	exploration_journal_panel = ExplorationJournalPanelScript.new()
 	exploration_journal_panel.name = "ExplorationJournalPanel"
-	_center_control(exploration_journal_panel, Vector2(860, 540))
+	_center_control(exploration_journal_panel, Vector2(920, 550))
 	add_child(exploration_journal_panel)
 	exploration_journal_panel.visible = false
 	exploration_journal_panel.panel_closed.connect(_close_overlay)
+
 	_build_pause_panel()
 	_build_death_panel()
+	get_viewport().size_changed.connect(_apply_responsive_layout)
+	call_deferred("_apply_responsive_layout")
 
 
 func setup(
@@ -148,6 +162,7 @@ func begin_gameplay() -> void:
 	_gameplay_active = true
 	visible = true
 	guidance_overlay.begin_gameplay()
+	_apply_responsive_layout()
 	if survival != null and not bool(survival.get("alive")):
 		_death_title.text = "你倒下了"
 		_set_overlay(Overlay.DEATH, true)
@@ -165,6 +180,8 @@ func end_gameplay() -> void:
 	if furnace_panel != null:
 		furnace_panel.close_machine()
 	_hide_all_overlays()
+	if _overlay_scrim != null:
+		_overlay_scrim.visible = false
 	if inventory_panel != null and inventory_panel.has_method("cancel_swap_selection"):
 		inventory_panel.call("cancel_swap_selection")
 	if guidance_overlay != null:
@@ -264,6 +281,24 @@ func is_gameplay_input_blocked() -> bool:
 	return not _gameplay_active or _overlay != Overlay.NONE
 
 
+func get_visual_snapshot() -> Dictionary:
+	return {
+		"overlay": _overlay,
+		"scrim_visible": _overlay_scrim != null and _overlay_scrim.visible,
+		"inventory_rect": inventory_panel.get_global_rect() if inventory_panel != null else Rect2(),
+		"crafting_rect": crafting_panel.get_global_rect() if crafting_panel != null else Rect2(),
+		"furnace_rect": furnace_panel.get_global_rect() if furnace_panel != null else Rect2(),
+		"container_rect": container_panel.get_global_rect() if container_panel != null else Rect2(),
+		"journal_rect": (
+			exploration_journal_panel.get_global_rect()
+			if exploration_journal_panel != null
+			else Rect2()
+		),
+		"pause_rect": _pause_panel.get_global_rect() if _pause_panel != null else Rect2(),
+		"death_rect": _death_panel.get_global_rect() if _death_panel != null else Rect2(),
+	}
+
+
 func show_message(
 	message: String, seconds: float = 2.0, severity: String = "info", dedupe_key: String = ""
 ) -> void:
@@ -277,6 +312,7 @@ func show_save_result(saved: bool) -> void:
 	var message := "世界已保存" if saved else "保存失败，请检查磁盘空间或写入权限"
 	if _pause_status != null:
 		_pause_status.text = message
+		_pause_status.theme_type_variation = "SuccessLabel" if saved else "DangerLabel"
 	show_message(message, 3.0, "success" if saved else "error", "save_result")
 
 
@@ -351,6 +387,8 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 			container_panel.close_container()
 	_overlay = next_overlay
 	_hide_all_overlays()
+	if _overlay_scrim != null:
+		_overlay_scrim.visible = _overlay != Overlay.NONE
 	match _overlay:
 		Overlay.INVENTORY:
 			PanelAnimator.open(inventory_panel)
@@ -363,8 +401,9 @@ func _set_overlay(next_overlay: int, force: bool = false) -> void:
 		Overlay.PAUSE:
 			PanelAnimator.open(_pause_panel)
 			_pause_status.text = ""
+			_pause_status.theme_type_variation = "CaptionLabel"
 		Overlay.DEATH:
-			_death_panel.visible = true
+			PanelAnimator.open(_death_panel)
 	if _overlay == EXPLORATION_JOURNAL_OVERLAY and exploration_journal_panel != null:
 		PanelAnimator.open(exploration_journal_panel)
 	var context := _context_for_overlay()
@@ -412,85 +451,121 @@ func _context_for_overlay() -> StringName:
 			return InputContextScript.CONTEXT_GAMEPLAY
 
 
+func _build_overlay_scrim() -> void:
+	_overlay_scrim = ColorRect.new()
+	_overlay_scrim.name = "OverlayScrim"
+	_overlay_scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay_scrim.color = Color("#02070DB8")
+	_overlay_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay_scrim.visible = false
+	add_child(_overlay_scrim)
+
+
 func _build_pause_panel() -> void:
 	_pause_panel = PanelContainer.new()
+	_pause_panel.name = "PausePanel"
 	_pause_panel.theme = ThemeFactory.create_theme()
-	_center_control(_pause_panel, Vector2(440, 430))
+	_pause_panel.theme_type_variation = "ModalPanel"
+	_center_control(_pause_panel, Vector2(500, 480))
 	add_child(_pause_panel)
 	_pause_panel.visible = false
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 12)
+	content.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	_pause_panel.add_child(content)
-	var title := Label.new()
-	title.text = "游戏已暂停"
+	var eyebrow := UiKit.make_eyebrow("EXPEDITION PAUSED")
+	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(eyebrow)
+	var title := UiKit.make_title("游戏已暂停")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 30)
 	content.add_child(title)
-	var subtitle := Label.new()
-	subtitle.text = "世界模拟已停止，可以安心调整状态"
+	var subtitle := UiKit.make_subtitle("世界模拟、机器、作物与自动保存活动时间均已停止。")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.modulate = Color("#91AABD")
 	content.add_child(subtitle)
+	content.add_child(UiKit.make_divider())
 	_pause_status = Label.new()
+	_pause_status.name = "PauseStatus"
+	_pause_status.theme_type_variation = "CaptionLabel"
 	_pause_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pause_status.custom_minimum_size.y = 28
 	content.add_child(_pause_status)
-	var resume := Button.new()
+	var resume := UiKit.style_button(
+		Button.new(), "PrimaryButton", Vector2(0, Tokens.CONTROL_HEIGHT_LG)
+	)
 	resume.text = "继续游戏"
-	resume.custom_minimum_size.y = 54.0
 	resume.pressed.connect(_close_overlay)
 	content.add_child(resume)
-	var save := Button.new()
+	var save := UiKit.style_button(
+		Button.new(), "SecondaryButton", Vector2(0, Tokens.CONTROL_HEIGHT_MD)
+	)
 	save.text = "保存世界"
-	save.custom_minimum_size.y = 48.0
 	save.pressed.connect(_save_from_pause)
 	content.add_child(save)
-	var exit := Button.new()
+	var exit := UiKit.style_button(
+		Button.new(), "GhostButton", Vector2(0, Tokens.CONTROL_HEIGHT_MD)
+	)
 	exit.text = "保存并返回主菜单"
-	exit.custom_minimum_size.y = 48.0
 	exit.pressed.connect(_save_and_return_to_menu)
 	content.add_child(exit)
+	var hint := Label.new()
+	hint.text = "ESC 继续 · F5 快速保存"
+	hint.theme_type_variation = "SubduedLabel"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(hint)
 
 
 func _build_death_panel() -> void:
 	_death_panel = PanelContainer.new()
+	_death_panel.name = "DeathPanel"
 	_death_panel.theme = ThemeFactory.create_theme()
-	_center_control(_death_panel, Vector2(520, 300))
+	_death_panel.theme_type_variation = "ModalPanel"
+	_death_panel.add_theme_stylebox_override(
+		"panel",
+		Tokens.elevated_panel_style(
+			"#1E1118FA", Tokens.COLOR_DANGER, 1, Tokens.RADIUS_XL, Tokens.SPACE_XL, 18
+		)
+	)
+	_center_control(_death_panel, Vector2(540, 350))
 	add_child(_death_panel)
 	_death_panel.visible = false
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 14)
+	content.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	_death_panel.add_child(content)
-	_death_title = Label.new()
-	_death_title.text = "你倒下了"
+	var eyebrow := UiKit.make_eyebrow("EXPEDITION INTERRUPTED")
+	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	eyebrow.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_DANGER))
+	content.add_child(eyebrow)
+	_death_title = UiKit.make_title("你倒下了")
 	_death_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_death_title.add_theme_font_size_override("font_size", 34)
 	content.add_child(_death_title)
-	var hint := Label.new()
-	hint.text = "重生会恢复生命，并返回安全出生点"
+	var hint := UiKit.make_subtitle("重生会恢复生命，并返回当前地图的安全出生点。")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.modulate = Color("#91AABD")
 	content.add_child(hint)
-	var respawn := Button.new()
+	content.add_child(UiKit.make_divider())
+	var respawn := UiKit.style_button(
+		Button.new(), "PrimaryButton", Vector2(0, Tokens.CONTROL_HEIGHT_LG)
+	)
 	respawn.text = "重生"
-	respawn.custom_minimum_size.y = 54.0
 	respawn.pressed.connect(_respawn)
 	content.add_child(respawn)
-	var menu := Button.new()
+	var menu := UiKit.style_button(
+		Button.new(), "GhostButton", Vector2(0, Tokens.CONTROL_HEIGHT_MD)
+	)
 	menu.text = "返回主菜单"
-	menu.custom_minimum_size.y = 48.0
 	menu.pressed.connect(func() -> void: return_to_menu_requested.emit())
 	content.add_child(menu)
 
 
 func _save_from_pause() -> void:
-	_pause_status.text = "正在保存…"
+	_pause_status.text = "正在保存世界…"
+	_pause_status.theme_type_variation = "CaptionLabel"
 	show_message("正在保存…", 1.0, "info", "save_progress")
 	save_requested.emit()
 
 
 func _save_and_return_to_menu() -> void:
-	_pause_status.text = "正在保存并返回…"
+	_pause_status.text = "正在保存并返回主菜单…"
+	_pause_status.theme_type_variation = "CaptionLabel"
 	return_to_menu_requested.emit()
 
 
@@ -509,11 +584,42 @@ func _respawn() -> void:
 
 
 func _center_control(control: Control, desired_size: Vector2) -> void:
+	control.set_meta("star_desired_size", desired_size)
+	_desired_sizes[control.get_instance_id()] = desired_size
 	control.anchor_left = 0.5
 	control.anchor_right = 0.5
 	control.anchor_top = 0.5
 	control.anchor_bottom = 0.5
-	control.offset_left = -desired_size.x * 0.5
-	control.offset_right = desired_size.x * 0.5
-	control.offset_top = -desired_size.y * 0.5
-	control.offset_bottom = desired_size.y * 0.5
+	_fit_control(control, desired_size)
+
+
+func _fit_control(control: Control, desired_size: Vector2) -> void:
+	if control == null or not is_instance_valid(control):
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	if viewport_size.x <= 1.0 or viewport_size.y <= 1.0:
+		viewport_size = Vector2(1280, 720)
+	var safe_size := Vector2(
+		minf(desired_size.x, maxf(320.0, viewport_size.x - Tokens.PANEL_SAFE_MARGIN * 2.0)),
+		minf(desired_size.y, maxf(260.0, viewport_size.y - Tokens.PANEL_SAFE_MARGIN * 2.0))
+	)
+	control.offset_left = -safe_size.x * 0.5
+	control.offset_right = safe_size.x * 0.5
+	control.offset_top = -safe_size.y * 0.5
+	control.offset_bottom = safe_size.y * 0.5
+
+
+func _apply_responsive_layout() -> void:
+	for control in [
+		inventory_panel,
+		crafting_panel,
+		furnace_panel,
+		container_panel,
+		exploration_journal_panel,
+		_pause_panel,
+		_death_panel,
+	]:
+		if control == null or not is_instance_valid(control):
+			continue
+		var desired: Variant = control.get_meta("star_desired_size", control.custom_minimum_size)
+		_fit_control(control, desired if desired is Vector2 else control.custom_minimum_size)

@@ -5,6 +5,8 @@ signal overlay_visibility_changed(visible: bool)
 
 const Actions = preload("res://src/input/gameplay_input_actions.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
+const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 const HealthFormatter = preload(
 	"res://src/diagnostics/runtime_health_report_formatter.gd"
@@ -16,6 +18,9 @@ var gameplay_input: Node
 var _panel: PanelContainer
 var _label: Label
 var _health_label: Label
+var _status_badge: Label
+var _runtime_card: PanelContainer
+var _operations_card: PanelContainer
 var _overlay_visible := false
 
 
@@ -77,12 +82,26 @@ func get_panel_rect() -> Rect2:
 	return _panel.get_global_rect() if _panel != null else Rect2()
 
 
+func get_visual_snapshot() -> Dictionary:
+	return {
+		"panel": get_panel_rect(),
+		"runtime_card": _runtime_card.get_global_rect() if _runtime_card != null else Rect2(),
+		"operations_card": (
+			_operations_card.get_global_rect() if _operations_card != null else Rect2()
+		),
+		"status_badge": _status_badge.text if _status_badge != null else "",
+		"visible": _overlay_visible,
+	}
+
+
 func _build_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
 	_panel = PanelContainer.new()
+	_panel.name = "DiagnosticsDashboard"
 	_panel.theme = ThemeFactory.create_theme()
+	_panel.theme_type_variation = "DiagnosticsBackdrop"
 	_panel.anchor_left = 0.0
 	_panel.anchor_right = 1.0
 	_panel.anchor_top = 0.0
@@ -92,13 +111,77 @@ func _build_ui() -> void:
 	_panel.offset_top = 18.0
 	_panel.offset_bottom = -18.0
 	root.add_child(_panel)
+
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	_panel.add_child(content)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	content.add_child(header)
+	var heading := VBoxContainer.new()
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	header.add_child(heading)
+	heading.add_child(UiKit.make_eyebrow("LIVE RUNTIME TELEMETRY"))
+	var title := UiKit.make_title("运行诊断中心")
+	heading.add_child(title)
+	var subtitle := UiKit.make_subtitle("F3 关闭 · 只读采样 · 不修改世界、存档或领域状态")
+	heading.add_child(subtitle)
+	_status_badge = UiKit.make_badge("等待采样", "info")
+	header.add_child(_status_badge)
+
+	content.add_child(UiKit.make_divider())
 	var columns := HBoxContainer.new()
-	columns.add_theme_constant_override("separation", 18)
-	_panel.add_child(columns)
-	_label = _create_column_label("F3 运行诊断\n等待采样…")
-	columns.add_child(_label)
-	_health_label = _create_column_label("F3 运行与保存健康\n等待领域快照…")
-	columns.add_child(_health_label)
+	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	content.add_child(columns)
+
+	_runtime_card = _create_diagnostics_card(
+		columns,
+		"实时运行",
+		"帧、Chunk、输入、玩家与流式策略",
+		"F3 运行诊断\n等待采样…"
+	)
+	_label = _runtime_card.get_meta("content_label") as Label
+	_operations_card = _create_diagnostics_card(
+		columns,
+		"运行与保存健康",
+		"领域预算、存档、目录与检查点时间线",
+		"F3 运行与保存健康\n等待领域快照…"
+	)
+	_health_label = _operations_card.get_meta("content_label") as Label
+
+
+func _create_diagnostics_card(
+	parent: Control,
+	title: String,
+	subtitle: String,
+	initial_text: String
+) -> PanelContainer:
+	var card := UiKit.make_card("DiagnosticsCard")
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(card)
+	var card_root := VBoxContainer.new()
+	card_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	card.add_child(card_root)
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.theme_type_variation = "SectionTitle"
+	card_root.add_child(title_label)
+	var subtitle_label := UiKit.make_subtitle(subtitle)
+	card_root.add_child(subtitle_label)
+	card_root.add_child(UiKit.make_divider())
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	card_root.add_child(scroll)
+	var label := _create_column_label(initial_text)
+	scroll.add_child(label)
+	card.set_meta("content_label", label)
+	return card
 
 
 func _create_column_label(initial_text: String) -> Label:
@@ -109,6 +192,7 @@ func _create_column_label(initial_text: String) -> Label:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	label.mouse_filter = PASSTHROUGH_MOUSE_FILTER
 	label.focus_mode = Control.FOCUS_NONE
+	label.theme_type_variation = "CaptionLabel"
 	label.add_theme_font_size_override("font_size", 13)
 	label.text = initial_text
 	return label
@@ -130,6 +214,27 @@ func _on_snapshot_updated(snapshot: Dictionary) -> void:
 			else {}
 		)
 		_health_label.text = HealthFormatter.format(operations)
+	var health: Dictionary = snapshot.get("health", {})
+	var status := str(health.get("status", "healthy"))
+	if _status_badge != null:
+		_status_badge.text = {
+			"healthy":"运行正常",
+			"warning":"存在告警",
+			"critical":"严重压力",
+		}.get(status, status)
+		_status_badge.add_theme_color_override(
+			"font_color", Tokens.severity_color(status)
+		)
+		_status_badge.add_theme_stylebox_override(
+			"normal",
+			Tokens.panel_style(
+				"#0D1D2CEE",
+				_color_to_hex(Tokens.severity_color(status)),
+				1,
+				Tokens.RADIUS_XL,
+				7.0
+			)
+		)
 
 
 func _format_snapshot(snapshot: Dictionary) -> String:
@@ -239,14 +344,12 @@ func _format_snapshot(snapshot: Dictionary) -> String:
 
 
 func _adaptive_level_name(level_name: String) -> String:
-	return str(
-		{
-			"conservative": "保守",
-			"guarded": "受限",
-			"balanced": "均衡",
-			"throughput": "吞吐",
-		}.get(level_name, level_name)
-	)
+	return str({
+		"conservative": "保守",
+		"guarded": "受限",
+		"balanced": "均衡",
+		"throughput": "吞吐",
+	}.get(level_name, level_name))
 
 
 func _mouse_mode_name(mode: int) -> String:
@@ -269,3 +372,7 @@ func _disconnect_telemetry() -> void:
 	var callback := Callable(self, "_on_snapshot_updated")
 	if telemetry.is_connected("snapshot_updated", callback):
 		telemetry.disconnect("snapshot_updated", callback)
+
+
+func _color_to_hex(value: Color) -> String:
+	return "#%s" % value.to_html(true)

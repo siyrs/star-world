@@ -5,6 +5,7 @@ const SlotScript = preload("res://src/ui/inventory_slot.gd")
 const CrosshairScript = preload("res://src/ui/world_crosshair.gd")
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
 const HudIcons = preload("res://src/ui/hud_icon_factory.gd")
 
@@ -27,6 +28,7 @@ var _time_label: Label
 var _item_label: Label
 var _hotbar: HBoxContainer
 var _slot_buttons: Array = []
+var _message_panel: PanelContainer
 var _message_label: Label
 var _crosshair: Control
 
@@ -88,13 +90,15 @@ func refresh_inventory() -> void:
 
 
 func show_message(message: String, seconds: float = 2.0) -> void:
-	if _message_label == null:
+	if _message_label == null or _message_panel == null:
 		return
 	_message_label.text = message
-	_message_label.modulate.a = 1.0
+	_message_panel.visible = true
+	_message_panel.modulate.a = 1.0
 	var tween := create_tween()
 	tween.tween_interval(seconds)
-	tween.tween_property(_message_label, "modulate:a", 0.0, 0.35)
+	tween.tween_property(_message_panel, "modulate:a", 0.0, 0.35)
+	tween.tween_callback(func() -> void: _message_panel.visible = false)
 
 
 func get_layout_rects() -> Dictionary:
@@ -104,6 +108,7 @@ func get_layout_rects() -> Dictionary:
 		"selected_item": _item_panel.get_global_rect() if _item_panel != null else Rect2(),
 		"hotbar": _hotbar_panel.get_global_rect() if _hotbar_panel != null else Rect2(),
 		"crosshair": _crosshair.get_global_rect() if _crosshair != null else Rect2(),
+		"fallback_message": _message_panel.get_global_rect() if _message_panel != null else Rect2(),
 	}
 
 
@@ -125,65 +130,77 @@ func is_danger_warning_visible() -> bool:
 
 func _build_status_panel() -> void:
 	_status_panel = PanelContainer.new()
+	_status_panel.name = "VitalsCard"
 	_status_panel.position = Vector2(18, 18)
-	_status_panel.size = Vector2(286, 152)
-	_status_panel.custom_minimum_size = Vector2(286, 152)
-	_status_panel.add_theme_stylebox_override(
-		"panel",
-		Tokens.panel_style(Tokens.COLOR_SURFACE, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_LG, 12.0)
-	)
+	_status_panel.size = Vector2(274, 138)
+	_status_panel.custom_minimum_size = Vector2(274, 138)
+	_status_panel.theme_type_variation = "HudPanel"
 	add_child(_status_panel)
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	content.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	_status_panel.add_child(content)
 	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	content.add_child(header)
 	var title := Label.new()
-	title.text = "✦ STAR WORLD"
+	title.text = "STAR WORLD"
+	title.theme_type_variation = "EyebrowLabel"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 16)
-	title.modulate = Tokens.color(Tokens.COLOR_ACCENT)
 	header.add_child(title)
 	_time_label = Label.new()
 	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_time_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	_time_label.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
+	_time_label.theme_type_variation = "CaptionLabel"
 	header.add_child(_time_label)
+	content.add_child(UiKit.make_divider())
+
+	var health_row := HBoxContainer.new()
+	health_row.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	content.add_child(health_row)
 	_health_label = Label.new()
-	_health_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	content.add_child(_health_label)
-	_health_icons = _build_icon_row(content)
+	_health_label.custom_minimum_size.x = 78
+	_health_label.theme_type_variation = "CaptionLabel"
+	health_row.add_child(_health_label)
+	_health_icons = _build_icon_row(health_row)
+
+	var hunger_row := HBoxContainer.new()
+	hunger_row.add_theme_constant_override("separation", Tokens.SPACE_SM)
+	content.add_child(hunger_row)
 	_hunger_label = Label.new()
-	_hunger_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
-	content.add_child(_hunger_label)
-	_hunger_icons = _build_icon_row(content)
+	_hunger_label.custom_minimum_size.x = 78
+	_hunger_label.theme_type_variation = "CaptionLabel"
+	hunger_row.add_child(_hunger_label)
+	_hunger_icons = _build_icon_row(hunger_row)
 
 
 func _build_danger_panel() -> void:
 	_danger_panel = PanelContainer.new()
+	_danger_panel.name = "DangerCard"
 	_danger_panel.anchor_left = 1.0
 	_danger_panel.anchor_right = 1.0
 	_danger_panel.offset_left = -322.0
 	_danger_panel.offset_right = -18.0
 	_danger_panel.offset_top = 18.0
-	_danger_panel.offset_bottom = 122.0
-	_danger_panel.custom_minimum_size = Vector2(304, 104)
+	_danger_panel.offset_bottom = 132.0
+	_danger_panel.custom_minimum_size = Vector2(304, 114)
+	_danger_panel.theme_type_variation = "HudPanel"
 	add_child(_danger_panel)
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 3)
+	content.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	_danger_panel.add_child(content)
+	var eyebrow := Label.new()
+	eyebrow.text = "REGION THREAT"
+	eyebrow.theme_type_variation = "EyebrowLabel"
+	content.add_child(eyebrow)
 	_danger_label = Label.new()
-	_danger_label.add_theme_font_size_override("font_size", 17)
+	_danger_label.theme_type_variation = "SectionTitle"
 	content.add_child(_danger_label)
 	_danger_detail = Label.new()
-	_danger_detail.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_danger_detail.theme_type_variation = "CaptionLabel"
 	_danger_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_danger_detail.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	content.add_child(_danger_detail)
 	_danger_warning = Label.new()
-	_danger_warning.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_danger_warning.theme_type_variation = "DangerLabel"
 	_danger_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_danger_warning.modulate = Color("#FF8A72")
 	_danger_warning.visible = false
 	content.add_child(_danger_warning)
 	_danger_panel.visible = false
@@ -191,17 +208,21 @@ func _build_danger_panel() -> void:
 
 func _build_hotbar() -> void:
 	_hotbar_panel = PanelContainer.new()
+	_hotbar_panel.name = "HotbarDock"
 	_hotbar_panel.anchor_left = 0.5
 	_hotbar_panel.anchor_right = 0.5
 	_hotbar_panel.anchor_top = 1.0
 	_hotbar_panel.anchor_bottom = 1.0
-	_hotbar_panel.offset_left = -322.0
-	_hotbar_panel.offset_right = 322.0
-	_hotbar_panel.offset_top = -98.0
+	_hotbar_panel.offset_left = -316.0
+	_hotbar_panel.offset_right = 316.0
+	_hotbar_panel.offset_top = -92.0
 	_hotbar_panel.offset_bottom = -18.0
+	_hotbar_panel.theme_type_variation = "HudPanel"
 	_hotbar_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style(Tokens.COLOR_SURFACE, Tokens.COLOR_BORDER_STRONG, 1, Tokens.RADIUS_LG, 8.0)
+		Tokens.elevated_panel_style(
+			"#06121EEB", Tokens.COLOR_BORDER_STRONG, 1, Tokens.RADIUS_LG, 7.0, 8
+		)
 	)
 	add_child(_hotbar_panel)
 	_hotbar = HBoxContainer.new()
@@ -211,27 +232,30 @@ func _build_hotbar() -> void:
 	for index in 9:
 		var slot = SlotScript.new()
 		slot.configure(index)
-		slot.custom_minimum_size = Vector2(64, 58)
+		slot.custom_minimum_size = Vector2(62, 56)
 		_hotbar.add_child(slot)
 		_slot_buttons.append(slot)
+
 	_item_panel = PanelContainer.new()
+	_item_panel.name = "SelectedItemCard"
 	_item_panel.anchor_left = 0.5
 	_item_panel.anchor_right = 0.5
 	_item_panel.anchor_top = 1.0
 	_item_panel.anchor_bottom = 1.0
-	_item_panel.offset_left = -180.0
-	_item_panel.offset_right = 180.0
-	_item_panel.offset_top = -132.0
-	_item_panel.offset_bottom = -104.0
+	_item_panel.offset_left = -190.0
+	_item_panel.offset_right = 190.0
+	_item_panel.offset_top = -127.0
+	_item_panel.offset_bottom = -101.0
+	_item_panel.theme_type_variation = "InsetPanel"
 	_item_panel.add_theme_stylebox_override(
 		"panel",
-		Tokens.panel_style("#0D1724D9", "#365E77", 1, Tokens.RADIUS_SM, 4.0)
+		Tokens.panel_style("#06121ED9", Tokens.COLOR_BORDER, 1, Tokens.RADIUS_XL, 3.0)
 	)
 	add_child(_item_panel)
 	_item_label = Label.new()
 	_item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_item_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_item_label.add_theme_font_size_override("font_size", Tokens.FONT_CAPTION)
+	_item_label.theme_type_variation = "CaptionLabel"
 	_item_panel.add_child(_item_label)
 
 
@@ -242,23 +266,31 @@ func _build_crosshair() -> void:
 
 
 func _build_fallback_message() -> void:
+	_message_panel = PanelContainer.new()
+	_message_panel.name = "FallbackToast"
+	_message_panel.theme_type_variation = "HudPanel"
+	_message_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_message_panel.position = Vector2(-260, 20)
+	_message_panel.size = Vector2(520, 48)
+	_message_panel.visible = false
+	add_child(_message_panel)
 	_message_label = Label.new()
 	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_message_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_message_label.position = Vector2(-240, 88)
-	_message_label.size = Vector2(480, 40)
-	_message_label.modulate.a = 0.0
-	add_child(_message_label)
+	_message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_message_label.theme_type_variation = "CaptionLabel"
+	_message_panel.add_child(_message_label)
 
 
 func _build_icon_row(parent: Control) -> Array:
 	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_END
 	row.add_theme_constant_override("separation", 1)
 	parent.add_child(row)
 	var icons: Array = []
-	for i in 10:
+	for _index in 10:
 		var rect := TextureRect.new()
-		rect.custom_minimum_size = Vector2(18, 18)
+		rect.custom_minimum_size = Vector2(16, 16)
 		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		row.add_child(rect)
@@ -270,24 +302,28 @@ func _update_icon_row(icons: Array, current: float, maximum: float, kind: String
 	if icons.is_empty():
 		return
 	var units := clampi(int(round(current)), 0, int(round(maximum)))
-	for i in icons.size():
-		var points: int = clampi(units - i * 2, 0, 2)
+	for index in icons.size():
+		var points: int = clampi(units - index * 2, 0, 2)
 		var suffix := "full" if points == 2 else ("half" if points == 1 else "empty")
-		icons[i].texture = HudIcons.texture("%s_%s" % [kind, suffix])
+		icons[index].texture = HudIcons.texture("%s_%s" % [kind, suffix])
 
 
 func _on_health_changed(current: float, maximum: float) -> void:
 	_update_icon_row(_health_icons, current, maximum, "heart")
-	_health_label.text = "生命   %d / %d" % [ceili(current), ceili(maximum)]
+	_health_label.text = "生命 %d" % ceili(current)
+	_health_label.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_HEALTH))
 
 
 func _on_hunger_changed(current: float, maximum: float) -> void:
 	_update_icon_row(_hunger_icons, current, maximum, "drumstick")
-	_hunger_label.text = "饥饿   %d / %d" % [ceili(current), ceili(maximum)]
+	_hunger_label.text = "饥饿 %d" % ceili(current)
+	_hunger_label.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_HUNGER))
 
 
 func _on_time_changed(hours: float, day: int) -> void:
-	_time_label.text = "第 %d 天  %02d:%02d" % [day, int(hours), int(fmod(hours, 1.0) * 60.0)]
+	_time_label.text = "第 %d 天 · %02d:%02d" % [
+		day, int(hours), int(fmod(hours, 1.0) * 60.0)
+	]
 
 
 func _on_danger_changed(snapshot: Dictionary) -> void:
@@ -300,15 +336,16 @@ func _on_danger_changed(snapshot: Dictionary) -> void:
 			_danger_warning.text = ""
 		return
 	var tone := str(snapshot.get("tone", "info"))
-	var color := _danger_color(tone)
+	var border := _danger_color(tone)
 	_danger_panel.add_theme_stylebox_override(
-		"panel", Tokens.panel_style("#101A26E8", color, 2, Tokens.RADIUS_LG, 10.0)
+		"panel",
+		Tokens.elevated_panel_style("#071522F0", border, 2, Tokens.RADIUS_LG, 10.0, 8)
 	)
-	_danger_label.text = "区域危险  %s  ·  %d / 100" % [
+	_danger_label.text = "%s · %d / 100" % [
 		str(snapshot.get("tier_label", "未知")),
 		clampi(int(snapshot.get("score", 0)), 0, 100),
 	]
-	_danger_label.modulate = Color(color)
+	_danger_label.add_theme_color_override("font_color", Tokens.color(border))
 	var raw_reasons: Variant = snapshot.get("reasons", [])
 	var reasons: Array[String] = []
 	if raw_reasons is Array:
@@ -338,10 +375,10 @@ func _update_incoming_attack_warning(snapshot: Dictionary) -> void:
 
 func _danger_color(tone: String) -> String:
 	match tone:
-		"success": return "#58C783"
-		"warning": return "#E9B44C"
-		"error": return "#F06464"
-		_: return "#5FB4E8"
+		"success": return Tokens.COLOR_SUCCESS
+		"warning": return Tokens.COLOR_WARNING
+		"error": return Tokens.COLOR_DANGER
+		_: return Tokens.COLOR_ACCENT
 
 
 func _on_selected_slot_changed(index: int, slot: Dictionary) -> void:

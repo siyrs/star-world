@@ -66,7 +66,9 @@ Game Runtime
 │  └─ Resumable GitHub Release Auto-update
 │
 └─ Experience & Composition Layer
-   ├─ UI / Feedback / Audio
+   ├─ Professional Celestial UI Design System / UI Kit
+   ├─ Hero Menu / Responsive Management Workspaces
+   ├─ HUD / Feedback / Audio
    ├─ First-person Viewmodel
    ├─ Input Contexts / Guidance
    ├─ Canonical Settings / Fact-driven Autosave Feedback
@@ -197,8 +199,18 @@ Game Runtime
 - 多动物同周期产物、出生和成长合并反馈；
 - Agriculture、Husbandry 与 Ranch 均为显式生命周期参与者。
 
-### 5. 玩家体验、工具、装备与战斗
+### 5. 统一专业 UI 与玩家体验
 
+- 建立“星际远征”统一专业 UI 设计系统，使用语义颜色、8pt 间距、字体、圆角、控件高度和键盘焦点；
+- 主菜单从居中按钮堆叠重构为世界观 Hero + 远征 Command Deck；
+- 程序化星空增加星云、星座、轨道、卫星与行星，不依赖外部图片资产；
+- 地图、设置和存档统一标题、工具、内容、状态和固定操作层级；
+- HUD 建立生命/时间、威胁、当前物品、快捷栏、交互和教学优先级；
+- 背包、合成、容器、机器和探索日志使用统一工作区与内部滚动；
+- 暂停、死亡和更新提示使用共享暗幕、Modal 和主次操作；
+- F3 重构为运行与运营双卡诊断中心，保持完整鼠标穿透；
+- 1024×576 与 1280×720 均通过布局回归；
+- 同一真实旅程固定输出主菜单、地图、设置、存档、HUD、暂停、背包、合成、探索日志、F3 共十张截图；
 - 持久新手引导、上下文提示和有界消息队列；
 - 第一人称手持物、挥动、使用反馈和十阶段采集裂纹；
 - 木、石、铁、金、钻石工具能力层级；
@@ -207,6 +219,10 @@ Game Runtime
 - 普通僵尸和深渊重击者拥有可躲避攻击前摇；
 - 多敌对同步事件按帧合并，环境扫描不超过 125 样本；
 - 五敌对真实场地从 2,205 次即时修改优化为一次生产批次，场地构建由接近超时降至亚秒级。
+
+合同见：
+
+- [UI_DESIGN_SYSTEM.md](UI_DESIGN_SYSTEM.md)
 
 ### 6. 地图资源、生态、探矿与成长
 
@@ -226,6 +242,7 @@ Game Runtime
 - 结构完整性使用一个事件驱动、可暂停运行时，并向角色/F3 Snapshot 暴露有界诊断；
 - 最终 ServiceHub 拥有稳定 `RuntimeHealthReport` 节点，聚合层和 F3 均不反向修改领域状态；
 - 保存检查点时间线拥有独立 reusable Godot 门禁，验证真实暂停保存、自动保存、F3 关联和不持久化；
+- 统一专业 UI 拥有静态设计合同、双分辨率 Headless 回归和十屏真实桌面门禁；
 - 六个规模专项已迁移到 reusable Godot quality gate，自动保存另有独立复用门禁；
 - 严格导入、静态验证、等待式领域脚本、真实桌面和 Artifact 语义统一；
 - 总 Runtime、完整桌面矩阵和 Windows Release 仍由单一权威工作流显式拥有。
@@ -241,11 +258,12 @@ Game Runtime
 - 多敌对死亡、掉落、卸载和 Chunk 热返回压力；
 - 大量玻璃板/栅栏邻接切换与结构完整性连续压力；
 - Release 环境下的加载时间和退出资源报告；
-- 跨世界会话验证当前世界检查点过滤、旧历史保留和显式会话重置。
+- 跨世界会话验证当前世界检查点过滤、旧历史保留和显式会话重置；
+- 继续基于真实截图验证超宽屏、高 DPI 和控制器焦点，而不是在没有证据时扩展新 UI 状态。
 
 ### 2. 内容扩展前置条件
 
-新生物、远程攻击、Boss、更多机器或结构方块必须先形成可玩的闭环，并复用现有状态、预算、保存和桌面验收合同。不得通过复制 Timer、平行存档领域或全世界扫描快速堆内容。
+新生物、远程攻击、Boss、更多机器或结构方块必须先形成可玩的闭环，并复用现有状态、预算、保存、UI 和桌面验收合同。不得通过复制 Timer、平行存档领域或全世界扫描快速堆内容。
 
 ### 3. 自动化扩展前置条件
 

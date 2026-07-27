@@ -5,6 +5,7 @@ signal panel_closed
 
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
+const UiKit = preload("res://src/ui/ui_kit.gd")
 const JournalPolicyScript = preload("res://src/exploration/exploration_journal_policy.gd")
 
 var journal_service: Node
@@ -12,6 +13,10 @@ var reward_service: Node
 var _summary_label: Label
 var _milestone_box: VBoxContainer
 var _records_box: VBoxContainer
+var _milestone_scroll: ScrollContainer
+var _record_scroll: ScrollContainer
+var _milestone_panel: PanelContainer
+var _record_panel: PanelContainer
 var _summary_text := ""
 var _milestone_texts: Array[String] = []
 var _record_texts: Array[String] = []
@@ -21,7 +26,8 @@ var _claim_buttons: Dictionary = {}
 
 func _ready() -> void:
 	theme = ThemeFactory.create_theme()
-	custom_minimum_size = Vector2(860, 540)
+	theme_type_variation = "ElevatedPanel"
+	custom_minimum_size = Vector2(0, 0)
 	_build_ui()
 	refresh()
 
@@ -80,89 +86,116 @@ func get_layout_rects() -> Dictionary:
 		"panel": get_global_rect(),
 		"milestones": _milestone_box.get_global_rect() if _milestone_box != null else Rect2(),
 		"records": _records_box.get_global_rect() if _records_box != null else Rect2(),
+		"milestone_scroll": (
+			_milestone_scroll.get_global_rect() if _milestone_scroll != null else Rect2()
+		),
+		"record_scroll": _record_scroll.get_global_rect() if _record_scroll != null else Rect2(),
 	}
 
 
 func _build_ui() -> void:
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", Tokens.SPACE_MD)
+	root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	add_child(root)
+
 	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(header)
-	var title := Label.new()
-	title.text = "探索日志"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", Tokens.FONT_TITLE)
-	title.modulate = Tokens.color(Tokens.COLOR_ACCENT)
-	header.add_child(title)
-	var close_button := Button.new()
+	var heading := VBoxContainer.new()
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	header.add_child(heading)
+	heading.add_child(UiKit.make_eyebrow("EXPLORATION ARCHIVE"))
+	heading.add_child(UiKit.make_title("探索日志"))
+	heading.add_child(UiKit.make_subtitle("保留区块级趋势与里程碑，不暴露矿物或危险的精确坐标。"))
+	var close_button := UiKit.style_button(
+		Button.new(), "GhostButton", Vector2(132, Tokens.CONTROL_HEIGHT_MD)
+	)
 	close_button.text = "关闭 [J]"
-	close_button.pressed.connect(func(): panel_closed.emit())
+	close_button.pressed.connect(func() -> void: panel_closed.emit())
 	header.add_child(close_button)
+
 	_summary_label = Label.new()
+	_summary_label.name = "ExplorationSummary"
+	_summary_label.theme_type_variation = "CaptionLabel"
 	_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_summary_label.add_theme_font_size_override("font_size", Tokens.FONT_BODY)
+	_summary_label.custom_minimum_size.y = 48
 	_summary_label.add_theme_stylebox_override(
 		"normal",
 		Tokens.panel_style(
-			Tokens.COLOR_SURFACE_RAISED,
+			Tokens.COLOR_INSET,
 			Tokens.COLOR_BORDER_STRONG,
 			1,
-			Tokens.RADIUS_MD,
-			Tokens.SPACE_MD
+			Tokens.RADIUS_LG,
+			Tokens.SPACE_SM
 		)
 	)
 	root.add_child(_summary_label)
+
 	var body := HBoxContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	root.add_child(body)
-	var milestone_panel := PanelContainer.new()
-	milestone_panel.custom_minimum_size.x = 330
-	milestone_panel.add_theme_stylebox_override(
-		"panel",
-		Tokens.panel_style(Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_MD, Tokens.SPACE_MD)
-	)
-	body.add_child(milestone_panel)
+
+	_milestone_panel = UiKit.make_card("CardPanel", Vector2(330, 0))
+	_milestone_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(_milestone_panel)
 	var milestone_root := VBoxContainer.new()
 	milestone_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	milestone_panel.add_child(milestone_root)
+	_milestone_panel.add_child(milestone_root)
+	var milestone_header := HBoxContainer.new()
+	milestone_root.add_child(milestone_header)
 	var milestone_title := Label.new()
 	milestone_title.text = "里程碑与奖励"
-	milestone_title.add_theme_font_size_override("font_size", Tokens.FONT_BUTTON)
-	milestone_root.add_child(milestone_title)
-	var milestone_scroll := ScrollContainer.new()
-	milestone_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	milestone_root.add_child(milestone_scroll)
+	milestone_title.theme_type_variation = "SectionTitle"
+	milestone_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	milestone_header.add_child(milestone_title)
+	milestone_header.add_child(UiKit.make_badge("8 项", "warm"))
+	_milestone_scroll = ScrollContainer.new()
+	_milestone_scroll.name = "MilestoneScroll"
+	_milestone_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_milestone_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_milestone_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_milestone_scroll.custom_minimum_size.y = 270
+	milestone_root.add_child(_milestone_scroll)
 	_milestone_box = VBoxContainer.new()
 	_milestone_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_milestone_box.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	milestone_scroll.add_child(_milestone_box)
-	var record_panel := PanelContainer.new()
-	record_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	record_panel.add_theme_stylebox_override(
-		"panel",
-		Tokens.panel_style(Tokens.COLOR_SURFACE_SOFT, Tokens.COLOR_BORDER, 1, Tokens.RADIUS_MD, Tokens.SPACE_MD)
-	)
-	body.add_child(record_panel)
+	_milestone_scroll.add_child(_milestone_box)
+
+	_record_panel = UiKit.make_card("InsetPanel")
+	_record_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_record_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(_record_panel)
 	var record_root := VBoxContainer.new()
 	record_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	record_panel.add_child(record_root)
+	_record_panel.add_child(record_root)
+	var record_header := HBoxContainer.new()
+	record_root.add_child(record_header)
 	var record_title := Label.new()
-	record_title.text = "最近发现 · 只显示区块与粗粒度趋势"
-	record_title.add_theme_font_size_override("font_size", Tokens.FONT_BUTTON)
-	record_root.add_child(record_title)
-	var record_scroll := ScrollContainer.new()
-	record_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	record_root.add_child(record_scroll)
+	record_title.text = "最近发现"
+	record_title.theme_type_variation = "SectionTitle"
+	record_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	record_header.add_child(record_title)
+	record_header.add_child(UiKit.make_badge("区块级趋势", "info"))
+	_record_scroll = ScrollContainer.new()
+	_record_scroll.name = "RecordScroll"
+	_record_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_record_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_record_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_record_scroll.custom_minimum_size.y = 270
+	record_root.add_child(_record_scroll)
 	_records_box = VBoxContainer.new()
 	_records_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_records_box.add_theme_constant_override("separation", Tokens.SPACE_SM)
-	record_scroll.add_child(_records_box)
+	_record_scroll.add_child(_records_box)
+
 	var hint := Label.new()
-	hint.text = "奖励只能由事务服务领取；背包空间不足时会继续保留。探矿日志仍不保存矿物或危险的精确坐标。"
+	hint.text = "奖励领取是原子事务；背包空间不足时继续保留。更早记录仍存在存档中。"
+	hint.theme_type_variation = "SubduedLabel"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	root.add_child(hint)
 
 
@@ -223,19 +256,17 @@ func _render_milestones(snapshot: Dictionary, reward_snapshot: Dictionary) -> vo
 			"\n奖励：%s" % reward_label if not reward_label.is_empty() else "",
 		]
 		_milestone_texts.append(text)
-		var card := PanelContainer.new()
-		var border := Tokens.COLOR_BORDER
-		if reward_status == "claimed":
-			border = Tokens.COLOR_SUCCESS
-		elif reward_status == "claimable":
-			border = Tokens.COLOR_WARNING
+		var tone := "success" if reward_status == "claimed" else (
+			"warm" if reward_status == "claimable" else "info"
+		)
+		var card := UiKit.make_card("CardPanel")
 		card.add_theme_stylebox_override(
 			"panel",
 			Tokens.panel_style(
 				Tokens.COLOR_SURFACE_RAISED,
-				border,
+				Tokens.tone_border(tone),
 				1,
-				Tokens.RADIUS_SM,
+				Tokens.RADIUS_MD,
 				Tokens.SPACE_SM
 			)
 		)
@@ -245,12 +276,17 @@ func _render_milestones(snapshot: Dictionary, reward_snapshot: Dictionary) -> vo
 		card.add_child(card_root)
 		var label := Label.new()
 		label.text = text
+		label.theme_type_variation = "CaptionLabel"
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.modulate = Tokens.color(Tokens.COLOR_SUCCESS if reward_status == "claimed" else Tokens.COLOR_TEXT)
+		if reward_status == "claimed":
+			label.add_theme_color_override("font_color", Tokens.color(Tokens.COLOR_SUCCESS))
 		card_root.add_child(label)
 		if not reward.is_empty():
-			var claim_button := Button.new()
-			claim_button.custom_minimum_size.y = 34.0
+			var claim_button := UiKit.style_button(
+				Button.new(),
+				"PrimaryButton" if reward_status == "claimable" else "GhostButton",
+				Vector2(0, Tokens.CONTROL_HEIGHT_SM)
+			)
 			claim_button.text = (
 				"领取奖励"
 				if reward_status == "claimable"
@@ -275,16 +311,22 @@ func _render_records(snapshot: Dictionary) -> void:
 		var record: Dictionary = raw_record
 		var text := _record_text(record)
 		_record_texts.append(text)
-		var card := PanelContainer.new()
 		var danger_score := clampi(int(record.get("danger_score", 0)), 0, 100)
-		var border := Tokens.COLOR_DANGER if danger_score >= 70 else Tokens.COLOR_BORDER
+		var card := UiKit.make_card("CardPanel")
 		card.add_theme_stylebox_override(
 			"panel",
-			Tokens.panel_style(Tokens.COLOR_SURFACE_RAISED, border, 1, Tokens.RADIUS_SM, Tokens.SPACE_MD)
+			Tokens.panel_style(
+				Tokens.COLOR_SURFACE_RAISED,
+				Tokens.COLOR_DANGER if danger_score >= 70 else Tokens.COLOR_BORDER,
+				1,
+				Tokens.RADIUS_MD,
+				Tokens.SPACE_MD
+			)
 		)
 		_records_box.add_child(card)
 		var label := Label.new()
 		label.text = text
+		label.theme_type_variation = "CaptionLabel"
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card.add_child(label)
 	if bool(snapshot.get("has_more_records", false)):
@@ -317,7 +359,11 @@ func _record_text(record: Dictionary) -> String:
 		clampi(int(record.get("danger_score", 0)), 0, 100),
 	]
 	var reasons := _reason_text(record.get("danger_reasons", []))
-	return "%s\n%s%s" % [headline, detail, "\n主要风险：%s" % reasons if not reasons.is_empty() else ""]
+	return "%s\n%s%s" % [
+		headline,
+		detail,
+		"\n主要风险：%s" % reasons if not reasons.is_empty() else "",
+	]
 
 
 func _reward_by_milestone(snapshot: Dictionary) -> Dictionary:
@@ -356,8 +402,8 @@ func _reason_text(raw_reasons: Variant) -> String:
 func _add_empty_label(container: VBoxContainer, text: String) -> void:
 	var label := Label.new()
 	label.text = text
+	label.theme_type_variation = "MutedLabel"
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 	container.add_child(label)
 
 

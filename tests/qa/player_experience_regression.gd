@@ -290,12 +290,18 @@ func _test_integrated_player_experience() -> void:
 		"returning to the menu clears transient experience references",
 	)
 	_check(hub.save_service.delete_world(world_id), "player experience test world is cleaned up")
-	var audio = hub.get("audio_service")
-	if audio != null and audio.has_method("shutdown"):
+	var audio: Node = hub.get("audio_service") as Node
+	if audio != null and audio.has_method("dispose"):
+		audio.call("dispose")
+		_check(
+			bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+			"player experience fixture disposes generated audio playback nodes",
+		)
+	elif audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
 	game.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 8:
+		await process_frame
 
 
 func _press_key(keycode: Key) -> void:
