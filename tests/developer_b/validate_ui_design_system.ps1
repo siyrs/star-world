@@ -129,7 +129,7 @@ foreach ($token in @(
 )) {
   Assert-Matches $text.protected_menu $token "Production menu composition or keyboard contract is missing: $token"
 }
-foreach ($token in @('get_viewport_rect','custom_minimum_size','MapCatalogScroll')) {
+foreach ($token in @('get_viewport_rect','custom_minimum_size','_details','_map_buttons')) {
   Assert-Matches $text.responsive_map $token "Responsive map briefing is missing: $token"
 }
 foreach ($token in @('get_viewport_rect','SaveListScroll','custom_minimum_size')) {
