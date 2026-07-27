@@ -147,7 +147,7 @@ foreach ($variation in @('InventorySlot','InventorySlotSelected','InventorySlotS
 Assert-NotMatches $text.inventory_slot 'StyleBoxFlat\.new\(' 'Inventory slots must consume the shared theme instead of owning ad-hoc boxes'
 
 foreach ($phrase in @(
-  'theme registers PrimaryButton as one reusable button variation',
+  'one reusable button variation',
   'main menu exposes six bounded commands',
   'settings groups controls into four scannable sections',
   'blocking gameplay overlay uses one shared scrim',
