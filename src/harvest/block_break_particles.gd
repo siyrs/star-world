@@ -25,7 +25,7 @@ func _ready() -> void:
 	_rng.seed = 424242
 	_box_mesh = BoxMesh.new()
 	_box_mesh.size = Vector3(0.075, 0.075, 0.075)
-	for _index in MAX_PARTICLES:
+	for _index: int in MAX_PARTICLES:
 		var particle := MeshInstance3D.new()
 		particle.mesh = _box_mesh
 		particle.visible = false
@@ -36,15 +36,15 @@ func _ready() -> void:
 
 
 func spawn_burst(block_position: Vector3i, block_id: String) -> void:
-	var base_color := BlockRegistryScript.get_color(block_id)
+	var base_color: Color = BlockRegistryScript.get_color(block_id)
 	if base_color.a < 0.05:
 		base_color = Color("#777C82")
-	var center := Vector3(block_position) + Vector3(0.5, 0.5, 0.5)
+	var center: Vector3 = Vector3(block_position) + Vector3(0.5, 0.5, 0.5)
 	var spawned := 0
-	for _index in BURST_COUNT:
+	for _index: int in BURST_COUNT:
 		if _available.is_empty():
 			break
-		var particle := _available.pop_back()
+		var particle: MeshInstance3D = _available.pop_back()
 		particle.visible = true
 		particle.scale = Vector3.ONE
 		particle.global_position = center + Vector3(
@@ -99,21 +99,21 @@ func _process(delta: float) -> void:
 	if _active.is_empty():
 		set_process(false)
 		return
-	var elapsed := clampf(delta, 0.0, MAX_FRAME_STEP)
-	for index in range(_active.size() - 1, -1, -1):
+	var elapsed: float = clampf(delta, 0.0, MAX_FRAME_STEP)
+	for index: int in range(_active.size() - 1, -1, -1):
 		var entry: Dictionary = _active[index]
 		var particle := entry.get("node") as MeshInstance3D
 		if particle == null or not is_instance_valid(particle):
 			_active.remove_at(index)
 			continue
-		var velocity := entry.get("velocity", Vector3.ZERO) as Vector3
+		var velocity: Vector3 = entry.get("velocity", Vector3.ZERO) as Vector3
 		velocity.y -= GRAVITY * elapsed
 		particle.global_position += velocity * elapsed
 		entry["velocity"] = velocity
-		var remaining := float(entry.get("remaining", 0.0)) - elapsed
+		var remaining: float = float(entry.get("remaining", 0.0)) - elapsed
 		entry["remaining"] = remaining
-		var lifetime := maxf(0.05, float(entry.get("lifetime", 0.7)))
-		var scale_value := clampf(remaining / lifetime * 2.2, 0.0, 1.0)
+		var lifetime: float = maxf(0.05, float(entry.get("lifetime", 0.7)))
+		var scale_value: float = clampf(remaining / lifetime * 2.2, 0.0, 1.0)
 		particle.scale = Vector3.ONE * maxf(0.05, scale_value)
 		if remaining <= 0.0:
 			_recycle(particle)
@@ -134,10 +134,10 @@ func _recycle(particle: MeshInstance3D) -> void:
 
 
 func _material_for(color: Color) -> StandardMaterial3D:
-	var key := color.to_html(false)
+	var key: String = color.to_html(false)
 	if _materials.has(key):
 		_material_cache_hit_count += 1
-		return _materials[key]
+		return _materials[key] as StandardMaterial3D
 	_material_cache_miss_count += 1
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
