@@ -1,4 +1,3 @@
-class_name ResponsiveMainMenu
 extends "res://src/ui/main_menu.gd"
 
 const CompactTokens = preload("res://src/ui/design_tokens.gd")
