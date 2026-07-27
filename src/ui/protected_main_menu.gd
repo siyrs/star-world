@@ -39,7 +39,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not event.is_action_pressed("ui_cancel"):
 		return
-	var cancellable_panel_visible := (
+	var cancellable_panel_visible: bool = (
 		(_map_panel != null and _map_panel.visible)
 		or (_save_panel != null and _save_panel.visible)
 		or (_settings_panel != null and _settings_panel.visible)
