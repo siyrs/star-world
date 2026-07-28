@@ -46,6 +46,13 @@ func _run() -> void:
 	_check(visible_summary.contains("地表地标"), "map briefing labels the world landmark identity")
 	_check(visible_summary.contains(summary), "map briefing displays the authoritative POI summary")
 	await _capture(_map_capture_path, "map selection POI briefing screenshot is saved")
+	var primary_copy_error := DirAccess.copy_absolute(_map_capture_path, _capture_path)
+	_check(
+		primary_copy_error == OK
+		and FileAccess.file_exists(_capture_path)
+		and FileAccess.get_size(_capture_path) > 0,
+		"map briefing also satisfies the reusable desktop runner primary capture contract"
+	)
 
 	var generator = GeneratorScript.new()
 	generator.configure("desert_ruins", TEST_SEED)
