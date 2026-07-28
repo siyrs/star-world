@@ -73,7 +73,7 @@ foreach ($binding in $bindings) {
     if ($axis -lt 0 -or $axis -gt 7 -or [Math]::Abs([Math]::Abs($value) - 1.0) -gt 0.0001) {
       throw "Invalid controller axis for $action"
     }
-    $physicalKey = "axis:$axis:$([Math]::Sign($value))"
+    $physicalKey = "axis:${axis}:$([Math]::Sign($value))"
   } else {
     throw "Unknown controller binding kind: $kind"
   }
