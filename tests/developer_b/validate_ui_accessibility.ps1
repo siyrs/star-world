@@ -4,7 +4,7 @@ $root = Resolve-Path "$PSScriptRoot\..\.."
 $policyPath = Join-Path $root 'src\settings\ui_accessibility_policy.gd'
 $settingsPolicyPath = Join-Path $root 'src\settings\game_settings_policy.gd'
 $servicePath = Join-Path $root 'src\ui\ui_accessibility_service.gd'
-$hubPath = Join-Path $root 'src\ui\accessibility_service_hub.gd'
+$hubPath = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
 $menuPath = Join-Path $root 'src\ui\accessibility_protected_main_menu.gd'
 $gameUiPath = Join-Path $root 'src\ui\accessibility_machine_game_ui.gd'
 $settingsPanelPath = Join-Path $root 'src\ui\hardened_settings_panel.gd'
@@ -54,8 +54,14 @@ if ($settingsPolicy -notmatch 'normalize_ui_scale') { throw 'Game settings must 
 foreach ($needle in @('ThemeDB.fallback_base_scale','input_mode_changed','prefers_focus_navigation','get_snapshot','dispose')) {
     if ($service -notmatch [regex]::Escape($needle)) { throw "Accessibility service is missing contract: $needle" }
 }
+if ($hub -notmatch 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"') {
+    throw 'Accessibility must retain the stable Exploration Hub inheritance entry point'
+}
 if ($hub -notmatch '_add_service' -or $hub -notmatch 'setup_accessibility' -or $hub -notmatch 'ui_accessibility') {
     throw 'Final composition must install one accessibility state owner and wire both UI roots'
+}
+if ($hub -notmatch 'func\s+_exit_tree\s*\([\s\S]{0,500}super\._exit_tree') {
+    throw 'Accessibility composition must preserve deterministic inherited shutdown'
 }
 if ($menu -notmatch 'MODE_MOUSE' -or $menu -notmatch '_release_owned_focus' -or $menu -notmatch 'get_accessibility_navigation_snapshot') {
     throw 'Main menu must transfer focus ownership by active input mode'
@@ -67,7 +73,9 @@ if ($settingsPanel -notmatch 'get_ui_scale_control' -or $settingsPanel -notmatch
     throw 'Settings UI must expose the authoritative scale catalog'
 }
 
-if ($serviceScene -notmatch 'accessibility_service_hub\.gd') { throw 'Production service scene does not use accessibility composition' }
+if ($serviceScene -notmatch 'exploration_progression_service_hub\.gd') {
+    throw 'Production service scene must retain the stable exploration composition entry point'
+}
 if ($menuScene -notmatch 'accessibility_protected_main_menu\.gd') { throw 'Production menu scene does not use accessibility navigation' }
 if ($gameUiScene -notmatch 'accessibility_machine_game_ui\.gd') { throw 'Production game UI scene does not use accessibility navigation' }
 
@@ -80,4 +88,4 @@ if ($workflow -notmatch 'ui-accessibility-controller-focus\.png' -or $workflow -
     throw 'Accessibility workflow must retain controller screenshot and JSON evidence'
 }
 
-Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 high_dpi_desktop=1'
+Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 high_dpi_desktop=1 stable_hub=1'
