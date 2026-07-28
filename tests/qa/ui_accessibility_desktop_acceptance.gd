@@ -95,26 +95,31 @@ func _run() -> void:
 
 	menu.visible = false
 	hub.game_ui.begin_gameplay()
-	hub.game_ui.open_inventory()
-	for _frame in 5:
-		await process_frame
+	var focused := await _open_and_wait_for_overlay_focus(
+		hub.game_ui,
+		Callable(hub.game_ui, "open_inventory"),
+		1
+	)
 	var overlay_snapshot: Dictionary = hub.game_ui.call("get_accessibility_focus_snapshot")
 	_check(int(overlay_snapshot.get("overlay", 0)) == 1, "gameplay inventory opens under controller mode")
-	_check(bool(overlay_snapshot.get("focus_inside_game_ui", false)), "controller mode focuses a visible inventory control")
+	_check(focused and bool(overlay_snapshot.get("focus_inside_active_overlay", false)), "controller mode focuses a visible inventory control after the production entrance animation")
+	_check(int(overlay_snapshot.get("focus_restore_failure_count", -1)) == 0, "first inventory presentation does not record a failed focus restore")
 
 	var mouse := InputEventMouseMotion.new()
 	mouse.relative = Vector2(8.0, 0.0)
 	root.push_input(mouse, true)
 	await process_frame
 	_check(root.gui_get_focus_owner() == null, "real mouse motion releases controller focus")
+	var restore_wait := _create_focus_wait_state(hub.game_ui, 1)
 	await _push_joypad_axis(JOY_AXIS_LEFT_X, 0.8)
-	for _frame in 3:
-		await process_frame
+	var restored := await _finish_focus_wait(hub.game_ui, restore_wait)
 	_check(
-		bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_game_ui", false)),
+		restored
+		and bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_active_overlay", false)),
 		"returning to controller input restores inventory focus"
 	)
 
+	overlay_snapshot = hub.game_ui.call("get_accessibility_focus_snapshot")
 	var report := {
 		"checks": checks,
 		"failures": failures.duplicate(),
@@ -125,6 +130,8 @@ func _run() -> void:
 		"settings_rect": [settings_rect.position.x, settings_rect.position.y, settings_rect.size.x, settings_rect.size.y],
 		"settings_capture": _settings_capture,
 		"controller_capture": _controller_capture,
+		"overlay_focus_success_count": int(overlay_snapshot.get("focus_restore_success_count", 0)),
+		"overlay_focus_failure_count": int(overlay_snapshot.get("focus_restore_failure_count", 0)),
 	}
 	_write_report(report)
 	await _finish(hub, original_settings)
@@ -188,6 +195,49 @@ func _push_joypad_button(button: JoyButton) -> void:
 	release.pressed = false
 	root.push_input(release, true)
 	await process_frame
+
+
+func _open_and_wait_for_overlay_focus(
+	game_ui: Node,
+	opener: Callable,
+	expected_overlay: int
+) -> bool:
+	var wait_state := _create_focus_wait_state(game_ui, expected_overlay)
+	opener.call()
+	return await _finish_focus_wait(game_ui, wait_state)
+
+
+func _create_focus_wait_state(game_ui: Node, expected_overlay: int) -> Dictionary:
+	var state := {
+		"completed": false,
+		"success": false,
+		"expected_overlay": expected_overlay,
+	}
+	var success_callback := func(overlay: int) -> void:
+		if overlay == int(state["expected_overlay"]):
+			state["completed"] = true
+			state["success"] = true
+	var failure_callback := func(overlay: int) -> void:
+		if overlay == int(state["expected_overlay"]):
+			state["completed"] = true
+	game_ui.connect("accessibility_focus_restored", success_callback)
+	game_ui.connect("accessibility_focus_restore_failed", failure_callback)
+	state["success_callback"] = success_callback
+	state["failure_callback"] = failure_callback
+	state["deadline_msec"] = Time.get_ticks_msec() + 1500
+	return state
+
+
+func _finish_focus_wait(game_ui: Node, state: Dictionary) -> bool:
+	while not bool(state["completed"]) and Time.get_ticks_msec() < int(state["deadline_msec"]):
+		await process_frame
+	var success_callback: Callable = state["success_callback"]
+	var failure_callback: Callable = state["failure_callback"]
+	if game_ui.is_connected("accessibility_focus_restored", success_callback):
+		game_ui.disconnect("accessibility_focus_restored", success_callback)
+	if game_ui.is_connected("accessibility_focus_restore_failed", failure_callback):
+		game_ui.disconnect("accessibility_focus_restore_failed", failure_callback)
+	return bool(state["success"])
 
 
 func _capture(path: String, description: String) -> void:
