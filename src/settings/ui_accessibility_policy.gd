@@ -4,6 +4,9 @@ extends RefCounted
 const MODE_MOUSE: StringName = &"mouse"
 const MODE_KEYBOARD: StringName = &"keyboard"
 const MODE_CONTROLLER: StringName = &"controller"
+const COMMAND_NONE: StringName = &""
+const COMMAND_ACCEPT: StringName = &"accept"
+const COMMAND_CANCEL: StringName = &"cancel"
 const DEFAULT_SCALE := 1.0
 const ALLOWED_SCALES: Array[float] = [0.8, 1.0, 1.25, 1.5]
 const CONTROLLER_AXIS_THRESHOLD := 0.55
@@ -73,3 +76,17 @@ static func classify_event(
 		var key_event := event as InputEventKey
 		return MODE_KEYBOARD if key_event.pressed and not key_event.echo else normalize_mode(current_mode)
 	return normalize_mode(current_mode)
+
+
+static func controller_command(event: InputEvent) -> StringName:
+	if event is not InputEventJoypadButton:
+		return COMMAND_NONE
+	var button_event := event as InputEventJoypadButton
+	if not button_event.pressed:
+		return COMMAND_NONE
+	match button_event.button_index:
+		JOY_BUTTON_A:
+			return COMMAND_ACCEPT
+		JOY_BUTTON_B:
+			return COMMAND_CANCEL
+	return COMMAND_NONE
