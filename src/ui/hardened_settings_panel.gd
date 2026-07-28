@@ -2,6 +2,40 @@ class_name HardenedSettingsPanel
 extends "res://src/ui/settings_panel.gd"
 
 var _survival_difficulty: OptionButton
+var _ui_scale: OptionButton
+
+
+func _build_visual_card() -> void:
+	var card_root := _make_setting_card(
+		"视觉、性能与界面",
+		"视距影响设备压力；界面缩放只改变本地 UI，不修改世界或存档内容。",
+		"02"
+	)
+	var distance_row := _make_control_row(card_root, "区块视距", "影响加载范围和设备压力")
+	_render_distance = OptionButton.new()
+	_render_distance.custom_minimum_size = Vector2(230, Tokens.CONTROL_HEIGHT_MD)
+	for value in range(1, 6):
+		_render_distance.add_item("%d chunks" % value, value)
+	distance_row.add_child(_render_distance)
+
+	var scale_row := _make_control_row(
+		card_root,
+		"界面缩放",
+		"80% 适合小屏，125% 与 150% 适合高 DPI 显示器和远距离阅读。"
+	)
+	_ui_scale = OptionButton.new()
+	_ui_scale.name = "UiScale"
+	_ui_scale.custom_minimum_size = Vector2(230, Tokens.CONTROL_HEIGHT_MD)
+	for scale: float in SettingsPolicy.allowed_ui_scales():
+		_ui_scale.add_item(SettingsPolicy.ui_scale_label(scale))
+		_ui_scale.set_item_metadata(_ui_scale.item_count - 1, scale)
+	scale_row.add_child(_ui_scale)
+
+	_fullscreen = _make_switch_row(
+		card_root,
+		"全屏显示",
+		"以当前显示器分辨率运行，并保留紧凑与高 DPI 的安全布局。"
+	)
 
 
 func _build_world_card() -> void:
@@ -49,10 +83,15 @@ func _load_values() -> void:
 	_select_difficulty_by_id(
 		str(settings.get("survival_difficulty", defaults.survival_difficulty))
 	)
+	_select_scale(float(settings.get("ui_scale", defaults.ui_scale)))
 
 
 func get_survival_difficulty_control() -> OptionButton:
 	return _survival_difficulty
+
+
+func get_ui_scale_control() -> OptionButton:
+	return _ui_scale
 
 
 func _select_difficulty_by_id(profile_id: String) -> void:
@@ -64,10 +103,28 @@ func _select_difficulty_by_id(profile_id: String) -> void:
 			return
 
 
+func _select_scale(scale: float) -> void:
+	if _ui_scale == null:
+		return
+	var normalized := SettingsPolicy.normalize_ui_scale(scale)
+	for index in _ui_scale.item_count:
+		if is_equal_approx(float(_ui_scale.get_item_metadata(index)), normalized):
+			_ui_scale.select(index)
+			return
+
+
 func _selected_difficulty_id() -> String:
 	if _survival_difficulty == null or _survival_difficulty.selected < 0:
 		return str(SettingsPolicy.DEFAULTS.survival_difficulty)
 	return str(_survival_difficulty.get_item_metadata(_survival_difficulty.selected))
+
+
+func _selected_ui_scale() -> float:
+	if _ui_scale == null or _ui_scale.selected < 0:
+		return float(SettingsPolicy.DEFAULTS.ui_scale)
+	return SettingsPolicy.normalize_ui_scale(
+		_ui_scale.get_item_metadata(_ui_scale.selected)
+	)
 
 
 func _apply() -> void:
@@ -82,6 +139,7 @@ func _apply() -> void:
 		"show_interaction_prompts": _show_interaction_prompts.button_pressed,
 		"camera_bob": _camera_bob.button_pressed,
 		"survival_difficulty": _selected_difficulty_id(),
+		"ui_scale": _selected_ui_scale(),
 	})
 	_status.text = "正在保存并应用设置…"
 	_status.theme_type_variation = "CaptionLabel"

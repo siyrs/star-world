@@ -1,0 +1,57 @@
+name: High-DPI and controller accessibility quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-accessibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Strict interface scale, input mode and focus ownership regression
+      domain_timeout_minutes: 45
+      static_validators: |
+        tests/developer_b/validate_ui_accessibility.ps1
+        tests/developer_b/validate_ui_design_system.ps1
+      primary_headless_script: res://tests/qa/ui_accessibility_regression.gd
+      primary_headless_output_base: build\ui-accessibility-runtime
+      primary_headless_timeout_milliseconds: 480000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/settings_retest.gd
+        res://tests/qa/menu_keyboard_navigation_regression.gd
+        res://tests/qa/ui_design_system_regression.gd
+        res://tests/qa/desktop_input_contract_regression.gd
+        res://tests/qa/experience_hardening_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: ui-accessibility-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/ui-accessibility-runtime.stdout.log
+        build/ui-accessibility-runtime.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real 150-percent high-DPI and controller focus acceptance
+      desktop_timeout_minutes: 35
+      desktop_script: res://tests/qa/ui_accessibility_desktop_acceptance.gd
+      desktop_output_path: build\ui-accessibility-high-dpi-settings.png
+      desktop_timeout_milliseconds: 300000
+      desktop_artifact_name: ui-accessibility-evidence
+      desktop_artifact_paths: |
+        build/ui-accessibility-high-dpi-settings.png
+        build/ui-accessibility-controller-focus.png
+        build/ui-accessibility-high-dpi-settings.json
+        build/ui-accessibility-high-dpi-settings.stdout.log
+        build/ui-accessibility-high-dpi-settings.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14

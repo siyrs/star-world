@@ -3,6 +3,7 @@ extends SceneTree
 const AutosaveScript = preload("res://src/save/autosave_runtime_participant.gd")
 const SettingsPolicy = preload("res://src/settings/game_settings_policy.gd")
 const ServiceHubScene = preload("res://scenes/ui/service_hub.tscn")
+const CLEANUP_FRAMES := 40
 
 var checks := 0
 var failures: Array[String] = []
@@ -417,13 +418,22 @@ func _finish_production_fixture(
 		if not world_id.is_empty() and hub.save_service.world_exists(world_id):
 			hub.save_service.delete_world(world_id)
 		var audio: Node = hub.get("audio_service") as Node
-		if audio != null and audio.has_method("shutdown"):
+		if audio != null and audio.has_method("dispose"):
+			audio.call("dispose")
+			_check(
+				bool(audio.call("is_disposed")) and audio.get_child_count() == 0,
+				"autosave fixture terminally disposes generated audio nodes"
+			)
+		elif audio != null and audio.has_method("shutdown"):
 			audio.call("shutdown")
+		var accessibility: Node = hub.get("ui_accessibility") as Node
+		if accessibility != null and accessibility.has_method("dispose"):
+			accessibility.call("dispose")
 	if runtime != null and is_instance_valid(runtime):
 		runtime.call("shutdown")
 	if hub != null and is_instance_valid(hub):
 		hub.queue_free()
-	for _frame in 5:
+	for _frame in CLEANUP_FRAMES:
 		await process_frame
 
 

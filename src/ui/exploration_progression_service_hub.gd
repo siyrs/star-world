@@ -10,6 +10,9 @@ const JournalRewardParticipantScript = preload(
 const AutosaveRuntimeParticipantScript = preload(
 	"res://src/save/autosave_runtime_participant.gd"
 )
+const UiAccessibilityServiceScript = preload(
+	"res://src/ui/ui_accessibility_service.gd"
+)
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
 const AUTOSAVE_RUNTIME_FEATURE := &"autosave_runtime"
@@ -23,10 +26,20 @@ var exploration_runtime_participant: Node
 var exploration_journal_reward_participant: Node
 var pickup_stack_coordinator: Node
 var autosave_runtime_participant: Node
+var ui_accessibility: Node
 
 
 func _ready() -> void:
 	super._ready()
+	ui_accessibility = _add_service(
+		UiAccessibilityServiceScript.new(),
+		"UiAccessibility"
+	)
+	ui_accessibility.call("setup", current_settings)
+	if main_menu != null and main_menu.has_method("setup_accessibility"):
+		main_menu.call("setup_accessibility", ui_accessibility)
+	if game_ui != null and game_ui.has_method("setup_accessibility"):
+		game_ui.call("setup_accessibility", ui_accessibility)
 	current_settings = SettingsPolicyScript.normalize(current_settings)
 	_apply_settings(current_settings)
 	exploration_runtime_participant = _register_feature_participant(
@@ -82,6 +95,8 @@ func _ready() -> void:
 
 
 func _apply_settings(settings: Dictionary) -> void:
+	if ui_accessibility != null and ui_accessibility.has_method("apply_settings"):
+		ui_accessibility.call("apply_settings", settings)
 	if survival != null and survival.has_method("set_difficulty_profile"):
 		survival.call(
 			"set_difficulty_profile",
@@ -109,6 +124,12 @@ func get_autosave_snapshot() -> Dictionary:
 	return autosave_runtime_participant.call("get_snapshot")
 
 
+func get_ui_accessibility_snapshot() -> Dictionary:
+	if ui_accessibility == null or not ui_accessibility.has_method("get_snapshot"):
+		return {}
+	return ui_accessibility.call("get_snapshot")
+
+
 func get_character_snapshot() -> Dictionary:
 	var snapshot: Dictionary = super.get_character_snapshot()
 	snapshot["ecology"] = (
@@ -122,6 +143,7 @@ func get_character_snapshot() -> Dictionary:
 		if survival != null and survival.has_method("get_tuning_snapshot")
 		else {}
 	)
+	snapshot["ui_accessibility"] = get_ui_accessibility_snapshot()
 	return snapshot
 
 

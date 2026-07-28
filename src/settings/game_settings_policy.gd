@@ -1,6 +1,10 @@
 class_name GameSettingsPolicy
 extends RefCounted
 
+const UiAccessibilityPolicyScript = preload(
+	"res://src/settings/ui_accessibility_policy.gd"
+)
+
 const DEFAULTS := {
 	"mouse_sensitivity": 0.18,
 	"render_distance": 3,
@@ -12,6 +16,7 @@ const DEFAULTS := {
 	"autosave_minutes": 5,
 	"camera_bob": true,
 	"survival_difficulty": "relaxed",
+	"ui_scale": UiAccessibilityPolicyScript.DEFAULT_SCALE,
 }
 const AUTOSAVE_MINUTES := [0, 2, 5, 10, 15]
 const SURVIVAL_DIFFICULTIES: Array[String] = ["relaxed", "balanced", "challenging"]
@@ -46,6 +51,14 @@ static func allowed_survival_difficulties() -> Array[String]:
 static func survival_difficulty_label(profile_id: String) -> String:
 	var normalized := normalize_survival_difficulty(profile_id)
 	return str(SURVIVAL_DIFFICULTY_LABELS[normalized])
+
+
+static func allowed_ui_scales() -> Array[float]:
+	return UiAccessibilityPolicyScript.allowed_scales()
+
+
+static func ui_scale_label(value: Variant) -> String:
+	return UiAccessibilityPolicyScript.scale_label(value)
 
 
 static func normalize(raw_settings: Dictionary = {}) -> Dictionary:
@@ -101,6 +114,7 @@ static func normalize(raw_settings: Dictionary = {}) -> Dictionary:
 	normalized["survival_difficulty"] = normalize_survival_difficulty(
 		raw_settings.get("survival_difficulty")
 	)
+	normalized["ui_scale"] = normalize_ui_scale(raw_settings.get("ui_scale"))
 	return normalized
 
 
@@ -135,6 +149,10 @@ static func normalize_survival_difficulty(value: Variant) -> String:
 		if requested in SURVIVAL_DIFFICULTIES
 		else str(DEFAULTS["survival_difficulty"])
 	)
+
+
+static func normalize_ui_scale(value: Variant) -> float:
+	return UiAccessibilityPolicyScript.normalize_scale(value)
 
 
 static func _number_or_default(value: Variant, default_value: float) -> float:
