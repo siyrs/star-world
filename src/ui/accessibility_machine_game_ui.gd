@@ -7,7 +7,6 @@ signal accessibility_focus_restore_failed(overlay: int)
 const AccessibilityPolicy = preload(
 	"res://src/settings/ui_accessibility_policy.gd"
 )
-const PanelAnimator = preload("res://src/ui/ui_panel_animator.gd")
 const FOCUS_RESTORE_ATTEMPTS := 2
 
 var _ui_accessibility_service: Node
@@ -101,8 +100,8 @@ func _restore_accessibility_focus(
 ) -> void:
 	if wait_for_presentation:
 		# The panel becomes visible immediately, but its focus geometry is not stable
-		# until the production entrance animation finishes. Use the shared animation
-		# duration instead of guessing a frame count in each caller or test.
+		# until the production entrance animation finishes. Reuse the inherited
+		# animation contract instead of guessing a frame count in each caller or test.
 		await get_tree().create_timer(
 			PanelAnimator.DURATION,
 			true,
