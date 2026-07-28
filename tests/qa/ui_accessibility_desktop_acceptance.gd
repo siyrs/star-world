@@ -112,10 +112,19 @@ func _run() -> void:
 	_check(bool(navigation.get("main_visible", false)), "controller B returns to the main command deck")
 	_check(str(navigation.get("focus_text", "")) == "继续游戏", "controller return restores the primary command focus")
 
-	# Windows may emit a synthetic relative mouse movement while the menu is
-	# hidden and high-DPI controls are relaid out. The real input path must keep
-	# controller ownership during the bounded guard.
-	var ignored_before := int(accessibility.call("get_snapshot").get("ignored_mouse_motion_count", 0))
+	# Reproduce the real Windows order: the menu becomes hidden, which starts the
+	# transition guard, and the platform then emits relative pointer movement as
+	# the high-DPI window is relaid out.
+	var before_transition: Dictionary = accessibility.call("get_snapshot")
+	menu.visible = false
+	await process_frame
+	var guarded_after_hide: Dictionary = accessibility.call("get_snapshot")
+	_check(
+		int(guarded_after_hide.get("ui_transition_guard_count", 0))
+		> int(before_transition.get("ui_transition_guard_count", 0)),
+		"hiding the production menu starts a bounded UI transition guard"
+	)
+	var ignored_before := int(guarded_after_hide.get("ignored_mouse_motion_count", 0))
 	var synthetic_motion := InputEventMouseMotion.new()
 	synthetic_motion.relative = Vector2(8.0, 0.0)
 	root.push_input(synthetic_motion, true)
@@ -124,10 +133,9 @@ func _run() -> void:
 	_check(
 		str(guarded_snapshot.get("input_mode", "")) == "controller"
 		and int(guarded_snapshot.get("ignored_mouse_motion_count", 0)) == ignored_before + 1,
-		"synthetic high-DPI mouse motion cannot steal controller ownership"
+		"synthetic high-DPI mouse motion cannot steal controller ownership during menu transition"
 	)
 
-	menu.visible = false
 	hub.game_ui.begin_gameplay()
 	var focused := await _open_and_wait_for_overlay_focus(
 		hub.game_ui,
@@ -172,7 +180,9 @@ func _run() -> void:
 		"overlay_focus_success_count": int(overlay_snapshot.get("focus_restore_success_count", 0)),
 		"overlay_focus_failure_count": int(overlay_snapshot.get("focus_restore_failure_count", 0)),
 		"ignored_mouse_motion_count": int(accessibility_snapshot.get("ignored_mouse_motion_count", 0)),
+		"ui_transition_guard_count": int(accessibility_snapshot.get("ui_transition_guard_count", 0)),
 		"controller_mouse_motion_guard_msec": int(accessibility_snapshot.get("controller_mouse_motion_guard_msec", 0)),
+		"ui_transition_mouse_motion_guard_msec": int(accessibility_snapshot.get("ui_transition_mouse_motion_guard_msec", 0)),
 	}
 	_write_report(report)
 	await _finish(hub, original_settings)
