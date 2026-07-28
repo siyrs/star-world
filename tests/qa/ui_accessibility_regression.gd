@@ -118,7 +118,7 @@ func _test_runtime_composition() -> void:
 	mouse.relative = Vector2(6.0, 0.0)
 	accessibility.call("_input", mouse)
 	await process_frame
-	_check(get_root().gui_get_focus_owner() == null, "mouse mode releases menu keyboard focus")
+	_check(root.gui_get_focus_owner() == null, "mouse mode releases menu keyboard focus")
 
 	accessibility.call("_input", joy)
 	for _frame in 3:
@@ -138,7 +138,7 @@ func _test_runtime_composition() -> void:
 
 	accessibility.call("_input", mouse)
 	await process_frame
-	_check(get_root().gui_get_focus_owner() == null, "mouse mode releases gameplay overlay focus")
+	_check(root.gui_get_focus_owner() == null, "mouse mode releases gameplay overlay focus")
 	accessibility.call("_input", joy)
 	for _frame in 3:
 		await process_frame
