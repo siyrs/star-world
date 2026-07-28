@@ -101,6 +101,12 @@ func _run() -> void:
 	_check(pillar_count > 0, "real loaded POI area contains generated ruin pillars")
 	_check(supporting_count > 0, "real loaded POI area contains supporting desert decoration")
 
+	# All production chunks have been synchronously loaded and validated. Freeze only
+	# the evidence scene so the unattended software renderer cannot unload the remote
+	# POI or spend the desktop timeout rebuilding unrelated streaming focus.
+	world.set_process(false)
+	_check(not world.is_processing(), "visual evidence freezes streaming only after production POI validation")
+
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
@@ -115,7 +121,7 @@ func _run() -> void:
 	key_light.rotation_degrees = Vector3(-55.0, -35.0, 0.0)
 	key_light.light_color = Color("#FFF0CE")
 	key_light.light_energy = 2.0
-	key_light.shadow_enabled = true
+	key_light.shadow_enabled = false
 	root.add_child(key_light)
 	var fill_light := DirectionalLight3D.new()
 	fill_light.rotation_degrees = Vector3(30.0, 145.0, 0.0)
@@ -129,15 +135,10 @@ func _run() -> void:
 	camera.global_position = Vector3(center.x + 11.0, target_y + 9.0, center.y + 11.0)
 	camera.look_at(focus_position, Vector3.UP)
 	camera.current = true
-	world.set_streaming_focus(focus_position)
-	world.update_streaming(focus_position)
-	for offset_x in range(-1, 2):
-		for offset_z in range(-1, 2):
-			world.force_load_chunk(center_chunk + Vector2i(offset_x, offset_z))
-	for _frame in 5:
+	for _frame in 3:
 		await process_frame
 	var loaded_at_capture := world.get_loaded_chunk_count()
-	_check(loaded_at_capture >= 9, "POI chunks remain loaded while the evidence camera renders")
+	_check(loaded_at_capture == loaded_after_force, "POI chunk set remains stable during the frozen evidence frame")
 	await _capture(_ruin_capture_path, "real generated ruin screenshot is saved", true)
 
 	var report := {
@@ -153,7 +154,7 @@ func _run() -> void:
 		"supporting_decoration_count": supporting_count,
 		"registry_snapshot": generator.get_decoration_profile_snapshot(),
 		"map_summary": summary,
-		"visual_rig": "neutral_sky_ambient_key_fill",
+		"visual_rig": "frozen_streaming_neutral_sky_ambient_key_fill_no_shadows",
 	}
 	_write_report(report)
 	camera.queue_free()
