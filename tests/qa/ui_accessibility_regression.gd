@@ -117,35 +117,43 @@ func _test_runtime_composition() -> void:
 	_check(str(hub.main_menu.call("get_accessibility_navigation_snapshot").get("focus_text", "")) == "继续游戏", "returning to controller mode restores menu focus deterministically")
 
 	hub.game_ui.begin_gameplay()
-	hub.game_ui.open_inventory()
-	for _frame in 4:
-		await process_frame
+	var focused := await _open_and_wait_for_overlay_focus(
+		hub.game_ui,
+		Callable(hub.game_ui, "open_inventory"),
+		1
+	)
 	var overlay_snapshot: Dictionary = hub.game_ui.call("get_accessibility_focus_snapshot")
 	_check(int(overlay_snapshot.get("overlay", 0)) == 1, "production inventory overlay opens for accessibility focus")
-	_check(bool(overlay_snapshot.get("focus_inside_active_overlay", false)), "controller mode focuses a visible control inside the active overlay")
+	_check(focused and bool(overlay_snapshot.get("focus_inside_active_overlay", false)), "controller mode focuses a visible control inside the active overlay after presentation")
+	_check(int(overlay_snapshot.get("focus_restore_failure_count", -1)) == 0, "presented inventory focus does not consume a failed restore")
 	hub.game_ui.call("_unhandled_input", _joy_button(JOY_BUTTON_A))
 	for _frame in 3:
 		await process_frame
 	_check(hub.game_ui.get_active_overlay() == 0, "raw controller A activates the focused overlay close command")
 
-	hub.game_ui.open_inventory()
-	for _frame in 3:
-		await process_frame
+	focused = await _open_and_wait_for_overlay_focus(
+		hub.game_ui,
+		Callable(hub.game_ui, "open_inventory"),
+		1
+	)
+	_check(focused, "reopened inventory completes the same presentation focus contract")
 	hub.game_ui.call("_unhandled_input", _joy_button(JOY_BUTTON_B))
 	for _frame in 3:
 		await process_frame
 	_check(hub.game_ui.get_active_overlay() == 0, "raw controller B closes a gameplay overlay")
 
-	hub.game_ui.open_inventory()
-	for _frame in 3:
-		await process_frame
+	focused = await _open_and_wait_for_overlay_focus(
+		hub.game_ui,
+		Callable(hub.game_ui, "open_inventory"),
+		1
+	)
+	_check(focused, "third inventory opening remains deterministically focusable")
 	accessibility.call("_input", mouse)
 	await process_frame
 	_check(root.gui_get_focus_owner() == null, "mouse mode releases gameplay overlay focus")
 	accessibility.call("_input", controller_event)
-	for _frame in 3:
-		await process_frame
-	_check(bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_active_overlay", false)), "controller mode restores focus inside the active overlay")
+	var restored_after_device_change := await _wait_for_overlay_focus_signal(hub.game_ui, 1)
+	_check(restored_after_device_change and bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_active_overlay", false)), "controller mode restores focus inside the active overlay")
 
 	hub.game_ui.end_gameplay()
 	hub.call("_on_settings_changed", original_settings)
@@ -157,6 +165,54 @@ func _test_runtime_composition() -> void:
 	hub.queue_free()
 	for _frame in 40:
 		await process_frame
+
+
+func _open_and_wait_for_overlay_focus(
+	game_ui: Node,
+	opener: Callable,
+	expected_overlay: int
+) -> bool:
+	var wait_state := _create_focus_wait_state(game_ui, expected_overlay)
+	opener.call()
+	return await _finish_focus_wait(game_ui, wait_state)
+
+
+func _wait_for_overlay_focus_signal(game_ui: Node, expected_overlay: int) -> bool:
+	var wait_state := _create_focus_wait_state(game_ui, expected_overlay)
+	return await _finish_focus_wait(game_ui, wait_state)
+
+
+func _create_focus_wait_state(game_ui: Node, expected_overlay: int) -> Dictionary:
+	var state := {
+		"completed": false,
+		"success": false,
+		"expected_overlay": expected_overlay,
+	}
+	var success_callback := func(overlay: int) -> void:
+		if overlay == int(state["expected_overlay"]):
+			state["completed"] = true
+			state["success"] = true
+	var failure_callback := func(overlay: int) -> void:
+		if overlay == int(state["expected_overlay"]):
+			state["completed"] = true
+	game_ui.connect("accessibility_focus_restored", success_callback)
+	game_ui.connect("accessibility_focus_restore_failed", failure_callback)
+	state["success_callback"] = success_callback
+	state["failure_callback"] = failure_callback
+	state["deadline_msec"] = Time.get_ticks_msec() + 1500
+	return state
+
+
+func _finish_focus_wait(game_ui: Node, state: Dictionary) -> bool:
+	while not bool(state["completed"]) and Time.get_ticks_msec() < int(state["deadline_msec"]):
+		await process_frame
+	var success_callback: Callable = state["success_callback"]
+	var failure_callback: Callable = state["failure_callback"]
+	if game_ui.is_connected("accessibility_focus_restored", success_callback):
+		game_ui.disconnect("accessibility_focus_restored", success_callback)
+	if game_ui.is_connected("accessibility_focus_restore_failed", failure_callback):
+		game_ui.disconnect("accessibility_focus_restore_failed", failure_callback)
+	return bool(state["success"])
 
 
 func _joy_button(button: JoyButton) -> InputEventJoypadButton:
