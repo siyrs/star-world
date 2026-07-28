@@ -146,7 +146,7 @@ func _test_production_player_composition() -> void:
 	player.bind_input_service(service)
 	service.set_active(true)
 	player.set_input_enabled(true)
-	var yaw_before := player.rotation.y
+	var yaw_before: float = float(player.rotation.y)
 	Input.action_press(Actions.LOOK_RIGHT, 0.9)
 	player.call("_process", 0.25)
 	Input.action_release(Actions.LOOK_RIGHT)
