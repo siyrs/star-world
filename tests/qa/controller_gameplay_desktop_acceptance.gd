@@ -54,23 +54,29 @@ func _run() -> void:
 	_check(movement.x > 0.5 and movement.y < -0.3, "real left-stick events produce diagonal movement")
 	_parse_axis(JOY_AXIS_LEFT_X, 0.0)
 	_parse_axis(JOY_AXIS_LEFT_Y, 0.0)
+	await process_frame
 
 	var yaw_before: float = float(player.rotation.y)
 	_parse_axis(JOY_AXIS_RIGHT_X, 0.86)
+	await process_frame
 	player.call("_process", 0.25)
 	_parse_axis(JOY_AXIS_RIGHT_X, 0.0)
+	await process_frame
 	var player_snapshot: Dictionary = player.call("get_controller_gameplay_snapshot")
 	_check(player.rotation.y < yaw_before, "real right-stick input rotates the production player camera")
 	_check(int(player_snapshot.get("look_frame_count", 0)) == 1, "right-stick camera movement records one exact frame")
 
 	_parse_button(JOY_BUTTON_A, true)
+	await process_frame
 	_check(bool(gameplay_input.call("is_jump_just_pressed")), "real controller A reaches the authoritative jump action")
 	_parse_button(JOY_BUTTON_A, false)
 	await process_frame
 
 	_parse_axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	await process_frame
 	player.call("_process", 0.016)
 	_parse_axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
+	await process_frame
 	player.call("_process", 0.016)
 	player_snapshot = player.call("get_controller_gameplay_snapshot")
 	_check(int(player_snapshot.get("primary_press_count", 0)) == 1, "real right trigger starts the shared attack/harvest path once")
@@ -78,6 +84,7 @@ func _run() -> void:
 
 	var hotbar_before := int(player_snapshot.get("selected_hotbar_index", 0))
 	_parse_button(JOY_BUTTON_DPAD_RIGHT, true)
+	await process_frame
 	player.call("_process", 0.016)
 	_parse_button(JOY_BUTTON_DPAD_RIGHT, false)
 	await process_frame
