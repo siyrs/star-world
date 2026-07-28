@@ -10,6 +10,8 @@ var _input_mode: StringName = Policy.MODE_KEYBOARD
 var _ui_scale := Policy.DEFAULT_SCALE
 var _mode_change_count := 0
 var _scale_change_count := 0
+var _ignored_mouse_motion_count := 0
+var _last_controller_input_msec := -1
 var _disposed := false
 
 
@@ -28,14 +30,30 @@ func setup(settings: Dictionary) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	consume_input_event(event, Time.get_ticks_msec())
+
+
+func consume_input_event(event: InputEvent, now_msec: int = -1) -> bool:
 	if _disposed:
-		return
+		return false
+	var resolved_now := Time.get_ticks_msec() if now_msec < 0 else now_msec
+	if Policy.is_intentional_controller_event(event):
+		_last_controller_input_msec = resolved_now
+	if Policy.should_ignore_mouse_motion_after_controller(
+		event,
+		_input_mode,
+		resolved_now,
+		_last_controller_input_msec
+	):
+		_ignored_mouse_motion_count += 1
+		return false
 	var next_mode := Policy.classify_event(event, _input_mode)
 	if next_mode == _input_mode:
-		return
+		return false
 	_input_mode = next_mode
 	_mode_change_count += 1
 	input_mode_changed.emit(_input_mode)
+	return true
 
 
 func apply_settings(settings: Dictionary) -> void:
@@ -70,6 +88,9 @@ func get_snapshot() -> Dictionary:
 		"focus_navigation": prefers_focus_navigation(),
 		"mode_change_count": _mode_change_count,
 		"scale_change_count": _scale_change_count,
+		"ignored_mouse_motion_count": _ignored_mouse_motion_count,
+		"controller_mouse_motion_guard_msec": Policy.CONTROLLER_MOUSE_MOTION_GUARD_MSEC,
+		"last_controller_input_msec": _last_controller_input_msec,
 		"disposed": _disposed,
 	}
 
