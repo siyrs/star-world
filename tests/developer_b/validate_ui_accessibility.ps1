@@ -54,14 +54,17 @@ if ($settingsPolicy -notmatch 'normalize_ui_scale') { throw 'Game settings must 
 foreach ($needle in @('ThemeDB.fallback_base_scale','input_mode_changed','prefers_focus_navigation','get_snapshot','dispose')) {
     if ($service -notmatch [regex]::Escape($needle)) { throw "Accessibility service is missing contract: $needle" }
 }
+if ($service -notmatch 'func\s+_exit_tree\s*\([\s\S]{0,120}dispose\(\)') {
+    throw 'Accessibility service must own terminal cleanup without changing hub lifecycle forwarding'
+}
 if ($hub -notmatch 'extends\s+"res://src/ui/runtime_health_service_hub\.gd"') {
     throw 'Accessibility must retain the stable Exploration Hub inheritance entry point'
 }
 if ($hub -notmatch '_add_service' -or $hub -notmatch 'setup_accessibility' -or $hub -notmatch 'ui_accessibility') {
     throw 'Final composition must install one accessibility state owner and wire both UI roots'
 }
-if ($hub -notmatch 'func\s+_exit_tree\s*\([\s\S]{0,500}super\._exit_tree') {
-    throw 'Accessibility composition must preserve deterministic inherited shutdown'
+if ($hub -match 'func\s+_exit_tree\s*\(') {
+    throw 'Exploration hub must remain a thin registration layer and not take over exit forwarding'
 }
 if ($menu -notmatch 'MODE_MOUSE' -or $menu -notmatch '_release_owned_focus' -or $menu -notmatch 'get_accessibility_navigation_snapshot') {
     throw 'Main menu must transfer focus ownership by active input mode'
@@ -88,4 +91,4 @@ if ($workflow -notmatch 'ui-accessibility-controller-focus\.png' -or $workflow -
     throw 'Accessibility workflow must retain controller screenshot and JSON evidence'
 }
 
-Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 high_dpi_desktop=1 stable_hub=1'
+Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
