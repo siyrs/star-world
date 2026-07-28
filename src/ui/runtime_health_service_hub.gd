@@ -2,7 +2,7 @@ class_name RuntimeHealthServiceHub
 extends "res://src/ui/ranch_progression_service_hub.gd"
 
 const RuntimeHealthReportServiceScript = preload(
-	"res://src/diagnostics/runtime_health_report_service.gd"
+	"res://src/diagnostics/session_scoped_runtime_health_report_service.gd"
 )
 const SaveTimelinePolicyScript = preload(
 	"res://src/save/save_checkpoint_timeline_policy.gd"
