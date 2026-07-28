@@ -4,8 +4,10 @@ extends "res://src/ui/machine_game_ui.gd"
 const AccessibilityPolicy = preload(
 	"res://src/settings/ui_accessibility_policy.gd"
 )
+const FOCUS_RESTORE_ATTEMPTS := 4
 
 var _ui_accessibility_service: Node
+var _focus_restore_request_id := 0
 
 
 func setup_accessibility(service: Node) -> void:
@@ -25,6 +27,7 @@ func setup_accessibility(service: Node) -> void:
 
 
 func _exit_tree() -> void:
+	_focus_restore_request_id += 1
 	_disconnect_accessibility_service()
 
 
@@ -54,28 +57,55 @@ func _handle_controller_overlay_command(event: InputEvent) -> bool:
 func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	super._set_overlay(next_overlay, force)
 	if _overlay != Overlay.NONE:
-		call_deferred("_restore_accessibility_focus")
+		_queue_accessibility_focus_restore()
+	else:
+		_focus_restore_request_id += 1
 
 
 func _on_accessibility_input_mode_changed(mode: StringName) -> void:
 	if mode == AccessibilityPolicy.MODE_MOUSE:
+		_focus_restore_request_id += 1
 		_release_owned_focus()
 		return
 	if _overlay != Overlay.NONE:
-		call_deferred("_restore_accessibility_focus")
+		_queue_accessibility_focus_restore()
 
 
-func _restore_accessibility_focus() -> void:
-	if (
-		_ui_accessibility_service == null
-		or not bool(_ui_accessibility_service.call("prefers_focus_navigation"))
-		or _overlay == Overlay.NONE
-	):
-		return
-	var focus_root := _focus_root_for_overlay()
-	var target := _find_visible_focusable(focus_root) if focus_root != null else null
-	if target != null:
-		target.grab_focus()
+func _queue_accessibility_focus_restore() -> void:
+	_focus_restore_request_id += 1
+	call_deferred("_restore_accessibility_focus", _focus_restore_request_id)
+
+
+func _restore_accessibility_focus(request_id: int) -> void:
+	for _attempt in FOCUS_RESTORE_ATTEMPTS:
+		if request_id != _focus_restore_request_id:
+			return
+		if (
+			_ui_accessibility_service == null
+			or not bool(_ui_accessibility_service.call("prefers_focus_navigation"))
+			or _overlay == Overlay.NONE
+		):
+			return
+		var focus_root := _focus_root_for_overlay()
+		if focus_root != null and focus_root.is_visible_in_tree():
+			var focus_owner: Control = get_viewport().gui_get_focus_owner()
+			if (
+				focus_owner != null
+				and focus_owner != focus_root
+				and not focus_root.is_ancestor_of(focus_owner)
+			):
+				focus_owner.release_focus()
+			var target := _find_visible_focusable(focus_root)
+			if target != null:
+				target.grab_focus()
+				await get_tree().process_frame
+				focus_owner = get_viewport().gui_get_focus_owner()
+				if (
+					focus_owner != null
+					and (focus_owner == focus_root or focus_root.is_ancestor_of(focus_owner))
+				):
+					return
+		await get_tree().process_frame
 
 
 func _focus_root_for_overlay() -> Control:
@@ -163,4 +193,5 @@ func get_accessibility_focus_snapshot() -> Dictionary:
 			and focus_root != null
 			and (focus_owner == focus_root or focus_root.is_ancestor_of(focus_owner))
 		),
+		"focus_restore_request_id": _focus_restore_request_id,
 	}
