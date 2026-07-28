@@ -112,6 +112,21 @@ func _run() -> void:
 	_check(bool(navigation.get("main_visible", false)), "controller B returns to the main command deck")
 	_check(str(navigation.get("focus_text", "")) == "继续游戏", "controller return restores the primary command focus")
 
+	# Windows may emit a synthetic relative mouse movement while the menu is
+	# hidden and high-DPI controls are relaid out. The real input path must keep
+	# controller ownership during the bounded guard.
+	var ignored_before := int(accessibility.call("get_snapshot").get("ignored_mouse_motion_count", 0))
+	var synthetic_motion := InputEventMouseMotion.new()
+	synthetic_motion.relative = Vector2(8.0, 0.0)
+	root.push_input(synthetic_motion, true)
+	await process_frame
+	var guarded_snapshot: Dictionary = accessibility.call("get_snapshot")
+	_check(
+		str(guarded_snapshot.get("input_mode", "")) == "controller"
+		and int(guarded_snapshot.get("ignored_mouse_motion_count", 0)) == ignored_before + 1,
+		"synthetic high-DPI mouse motion cannot steal controller ownership"
+	)
+
 	menu.visible = false
 	hub.game_ui.begin_gameplay()
 	var focused := await _open_and_wait_for_overlay_focus(
@@ -124,11 +139,15 @@ func _run() -> void:
 	_check(focused and bool(overlay_snapshot.get("focus_inside_active_overlay", false)), "controller mode focuses a visible inventory control after the production entrance animation")
 	_check(int(overlay_snapshot.get("focus_restore_failure_count", -1)) == 0, "first inventory presentation does not record a failed focus restore")
 
-	var mouse := InputEventMouseMotion.new()
-	mouse.relative = Vector2(8.0, 0.0)
-	root.push_input(mouse, true)
+	# A mouse button is explicit intent and must take over immediately even while
+	# motion hysteresis is active.
+	await _push_mouse_button(MOUSE_BUTTON_MIDDLE)
 	await process_frame
-	_check(root.gui_get_focus_owner() == null, "real mouse motion releases controller focus")
+	_check(
+		str(accessibility.call("get_input_mode")) == "mouse"
+		and root.gui_get_focus_owner() == null,
+		"real mouse button immediately releases controller focus"
+	)
 	var restore_state := _create_focus_wait_state(hub.game_ui, 1)
 	await _push_joypad_axis(JOY_AXIS_LEFT_X, 0.8)
 	var restored := await _finish_focus_wait(hub.game_ui, restore_state)
@@ -139,6 +158,7 @@ func _run() -> void:
 	)
 
 	overlay_snapshot = hub.game_ui.call("get_accessibility_focus_snapshot")
+	var accessibility_snapshot: Dictionary = accessibility.call("get_snapshot")
 	var report := {
 		"checks": checks,
 		"failures": failures.duplicate(),
@@ -151,6 +171,8 @@ func _run() -> void:
 		"controller_capture": _controller_capture,
 		"overlay_focus_success_count": int(overlay_snapshot.get("focus_restore_success_count", 0)),
 		"overlay_focus_failure_count": int(overlay_snapshot.get("focus_restore_failure_count", 0)),
+		"ignored_mouse_motion_count": int(accessibility_snapshot.get("ignored_mouse_motion_count", 0)),
+		"controller_mouse_motion_guard_msec": int(accessibility_snapshot.get("controller_mouse_motion_guard_msec", 0)),
 	}
 	_write_report(report)
 	await _finish(hub, original_settings)
@@ -212,6 +234,23 @@ func _push_joypad_button(button: JoyButton) -> void:
 	var release := InputEventJoypadButton.new()
 	release.button_index = button
 	release.pressed = false
+	root.push_input(release, true)
+	await process_frame
+
+
+func _push_mouse_button(button: MouseButton) -> void:
+	var press := InputEventMouseButton.new()
+	press.button_index = button
+	press.pressed = true
+	press.position = Vector2.ZERO
+	press.global_position = Vector2.ZERO
+	root.push_input(press, true)
+	await process_frame
+	var release := InputEventMouseButton.new()
+	release.button_index = button
+	release.pressed = false
+	release.position = Vector2.ZERO
+	release.global_position = Vector2.ZERO
 	root.push_input(release, true)
 	await process_frame
 
