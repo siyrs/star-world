@@ -126,10 +126,7 @@ foreach ($token in @(
   if ($text.Workflow -notmatch $token) { throw "World-scoped checkpoint workflow is missing gate or evidence: $token" }
 }
 
-if (
-  $text.RunAll -notmatch 'validate_world_scoped_save_checkpoint_sessions\.ps1'
-  -or $text.RunAll -notmatch 'world_scoped_save_checkpoint_session_regression\.gd'
-) {
+if ($text.RunAll -notmatch 'validate_world_scoped_save_checkpoint_sessions\.ps1' -or $text.RunAll -notmatch 'world_scoped_save_checkpoint_session_regression\.gd') {
   throw 'Full regression entry point must permanently include world-scoped checkpoint coverage'
 }
 
