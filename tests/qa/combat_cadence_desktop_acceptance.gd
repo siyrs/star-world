@@ -119,9 +119,9 @@ func _run() -> void:
 	var target_start := target.global_position
 	var health_before := float(target.get("health"))
 
-	# Both clicks are dispatched in one real input batch. The authoritative combat
-	# service must accept one hit and reject the second click through cooldown.
-	_rapid_double_click_center()
+	# Dispatch both real clicks without frame waits. The authoritative combat service
+	# must accept one hit and reject the second event from the same input batch.
+	_dispatch_click_batch(2)
 	var rejected_visible := await _wait_until(
 		func() -> bool:
 			var last_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
@@ -209,20 +209,18 @@ func _run() -> void:
 	_check(bool(player.get("input_enabled")), "closing inventory restores player input")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing inventory recaptures the mouse")
 	if not inventory_closed:
-		# Do not wait on physics while a blocking overlay may still own input.
 		hub.game_ui.call("close_overlay")
 		await process_frame
 		await _finish(game, hub)
 		return
 
-	# Knockback has already been proven by real movement. Re-center and freeze the
-	# target so the final post-cooldown strike tests cadence rather than flee AI.
+	# Knockback has already been proven. Re-center and freeze flee movement so the
+	# final real click isolates cadence recovery and defeat semantics.
 	target.set("move_speed", 0.0)
 	target.set("_flee_timer", 0.0)
 	if target.has_method("clear_combat_motion"):
 		target.call("clear_combat_motion")
 	target.global_position = target_start
-	await physics_frame
 	await process_frame
 	var cooldown_at_wait_start: Dictionary = hub.combat_service.get_cooldown_snapshot()
 	var cooldown_timeout_ms := maxi(
@@ -241,7 +239,10 @@ func _run() -> void:
 
 	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
 	_check(_ray_hits(player, target), "center ray reacquires the target after cooldown")
-	await _left_click_center()
+	# The final real click is also dispatched as one press/release batch. Waiting is
+	# exclusively state-based, so a slow software renderer cannot deadlock between
+	# the press and release events.
+	_dispatch_click_batch(1)
 	var second_hit_visible := await _wait_until(
 		func() -> bool:
 			var last_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
@@ -269,6 +270,7 @@ func _run() -> void:
 		"cooldown_at_wait_start": cooldown_at_wait_start.duplicate(true),
 		"durability_before": durability_before,
 		"durability_after": _main_hand_durability(hub),
+		"final_click_dispatch": "single_input_batch",
 	}
 	_write_report()
 	await _finish(game, hub)
@@ -319,20 +321,11 @@ func _ray_hits(player: Node3D, expected: Node) -> bool:
 	return ray.is_colliding() and ray.get_collider() == expected
 
 
-func _rapid_double_click_center() -> void:
+func _dispatch_click_batch(click_count: int) -> void:
 	var center := Vector2(root.size) * 0.5
-	for _click in 2:
+	for _click in maxi(1, click_count):
 		_push_mouse_button(center, true)
 		_push_mouse_button(center, false)
-
-
-func _left_click_center() -> void:
-	var center := Vector2(root.size) * 0.5
-	_push_mouse_button(center, true)
-	await process_frame
-	_push_mouse_button(center, false)
-	await process_frame
-	await process_frame
 
 
 func _push_mouse_button(position: Vector2, pressed: bool) -> void:

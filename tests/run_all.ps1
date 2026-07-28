@@ -48,6 +48,8 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_machine_scale.ps1"
 & "$PSScriptRoot\developer_b\validate_auto_update.ps1"
 & "$PSScriptRoot\developer_b\validate_resource_distribution.ps1"
+& "$PSScriptRoot\developer_b\validate_world_decoration_registry.ps1"
+& "$PSScriptRoot\developer_b\validate_world_decoration_hot_path.ps1"
 & "$PSScriptRoot\developer_b\validate_prospecting.ps1"
 & "$PSScriptRoot\developer_b\validate_ecology_danger.ps1"
 & "$PSScriptRoot\developer_b\validate_multi_hostile_danger.ps1"
@@ -100,6 +102,8 @@ Invoke-GodotTest 'res://tests/qa/machine_automation_regression.gd'
 Invoke-GodotTest 'res://tests/qa/machine_scale_runtime_regression.gd'
 Invoke-GodotTest 'res://tests/qa/auto_update_regression.gd'
 Invoke-GodotTest 'res://tests/qa/resource_distribution_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_decoration_registry_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_decoration_hot_path_regression.gd'
 Invoke-GodotTest 'res://tests/qa/prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ecology_danger_regression.gd'
 Invoke-GodotTest 'res://tests/qa/multi_hostile_arena_batch_regression.gd'
@@ -174,4 +178,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
+Write-Host 'PASS: cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'

@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "default_profile": "star_continent",
+  "max_rules_per_profile": 16,
+  "profiles": [
+    {
+      "id": "star_continent",
+      "name": "星辉草原",
+      "summary": "草丛与双色野花点缀河谷，树木周围保持清晰出生与建造空间。",
+      "tree_exclusion_density": 185,
+      "rules": [
+        {
+          "id": "grassland_tall_grass",
+          "type": "surface_roll",
+          "block_id": "tall_grass",
+          "surface_offset": 1,
+          "minimum_surface_y": 18,
+          "exclude_tree": true,
+          "roll_salt": 911,
+          "minimum_roll": 0,
+          "maximum_roll": 600
+        },
+        {
+          "id": "grassland_red_flower",
+          "type": "surface_roll",
+          "block_id": "flower_red",
+          "surface_offset": 1,
+          "minimum_surface_y": 18,
+          "exclude_tree": true,
+          "roll_salt": 911,
+          "minimum_roll": 600,
+          "maximum_roll": 680
+        },
+        {
+          "id": "grassland_yellow_flower",
+          "type": "surface_roll",
+          "block_id": "flower_yellow",
+          "surface_offset": 1,
+          "minimum_surface_y": 18,
+          "exclude_tree": true,
+          "roll_salt": 911,
+          "minimum_roll": 680,
+          "maximum_roll": 740
+        }
+      ]
+    },
+    {
+      "id": "desert_ruins",
+      "name": "荒漠遗迹",
+      "summary": "每个 48×48 区域拥有确定性的遗迹候选，断柱、碎片、仙人掌与枯灌木共享固定预算。",
+      "tree_exclusion_density": 0,
+      "rules": [
+        {
+          "id": "desert_ruin_pillars",
+          "type": "ruin_grid",
+          "block_id": "ruin_pillar",
+          "cell_size": 48,
+          "site_roll_salt": 971,
+          "site_minimum_roll": 4200,
+          "center_x_salt": 953,
+          "center_z_salt": 967,
+          "center_offset_span": 24,
+          "local_radius": 4,
+          "grid_spacing": 3,
+          "height_roll_salt": 983,
+          "minimum_height": 1,
+          "maximum_height": 4
+        },
+        {
+          "id": "desert_cactus",
+          "type": "column_roll",
+          "block_id": "cactus",
+          "roll_salt": 937,
+          "maximum_roll": 90,
+          "height_roll_salt": 941,
+          "minimum_height": 1,
+          "maximum_height": 2
+        },
+        {
+          "id": "desert_ruin_debris",
+          "type": "ruin_debris",
+          "block_id": "ruin_pillar",
+          "surface_offset": 1,
+          "cell_size": 48,
+          "site_roll_salt": 971,
+          "site_minimum_roll": 4200,
+          "center_x_salt": 953,
+          "center_z_salt": 967,
+          "center_offset_span": 24,
+          "local_radius": 9,
+          "roll_salt": 991,
+          "maximum_roll": 110
+        },
+        {
+          "id": "desert_dead_bush",
+          "type": "surface_roll",
+          "block_id": "dead_bush",
+          "surface_offset": 1,
+          "roll_salt": 977,
+          "minimum_roll": 0,
+          "maximum_roll": 150
+        }
+      ]
+    },
+    {
+      "id": "frozen_wastes",
+      "name": "冰封荒原",
+      "summary": "稀疏枯灌木保留荒寒感，不额外改变旧 Seed 的冰雪地表签名。",
+      "tree_exclusion_density": 0,
+      "rules": [
+        {
+          "id": "frozen_dead_bush",
+          "type": "surface_roll",
+          "block_id": "dead_bush",
+          "surface_offset": 1,
+          "roll_salt": 983,
+          "minimum_roll": 0,
+          "maximum_roll": 60
+        }
+      ]
+    },
+    {
+      "id": "sky_islands",
+      "name": "天空群岛",
+      "summary": "仅在岛体强度足够的区域生成草丛与野花，并避开浮空树冠。",
+      "tree_exclusion_density": 90,
+      "rules": [
+        {
+          "id": "sky_tall_grass",
+          "type": "surface_roll",
+          "block_id": "tall_grass",
+          "surface_offset": 1,
+          "minimum_sky_strength": 0.35,
+          "exclude_tree": true,
+          "roll_salt": 907,
+          "minimum_roll": 0,
+          "maximum_roll": 500
+        },
+        {
+          "id": "sky_yellow_flower",
+          "type": "surface_roll",
+          "block_id": "flower_yellow",
+          "surface_offset": 1,
+          "minimum_sky_strength": 0.35,
+          "exclude_tree": true,
+          "roll_salt": 907,
+          "minimum_roll": 500,
+          "maximum_roll": 580
+        },
+        {
+          "id": "sky_red_flower",
+          "type": "surface_roll",
+          "block_id": "flower_red",
+          "surface_offset": 1,
+          "minimum_sky_strength": 0.35,
+          "exclude_tree": true,
+          "roll_salt": 907,
+          "minimum_roll": 580,
+          "maximum_roll": 640
+        }
+      ]
+    },
+    {
+      "id": "abyss_world",
+      "name": "深渊晶洞",
+      "summary": "低频发光晶体标记危险洞域，不暴露矿物坐标，也不改变地下资源概率。",
+      "tree_exclusion_density": 0,
+      "rules": [
+        {
+          "id": "abyss_glow_crystal",
+          "type": "surface_roll",
+          "block_id": "glow_crystal",
+          "surface_offset": 1,
+          "roll_salt": 991,
+          "minimum_roll": 0,
+          "maximum_roll": 130
+        }
+      ]
+    }
+  ]
+}
