@@ -9,6 +9,7 @@ $targetResolverPath = Join-Path $root 'src\interaction\voxel_target_resolver.gd'
 $previewPath = Join-Path $root 'src\interaction\placement_preview_policy.gd'
 $movementPath = Join-Path $root 'src\player\player_movement_controller.gd'
 $ladderPlayerPath = Join-Path $root 'src\player\ladder_climbing_player.gd'
+$controllerPlayerPath = Join-Path $root 'src\player\controller_exploration_player.gd'
 $explorationPlayerPath = Join-Path $root 'src\player\exploration_player.gd'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
 $workflowPath = Join-Path $root '.github\workflows\directional-ladder-tests.yml'
@@ -18,7 +19,7 @@ $desktopPath = Join-Path $root 'tests\qa\directional_ladder_desktop_acceptance.g
 
 foreach ($path in @(
   $registryPath,$policyPath,$orientationPath,$geometryPath,$targetResolverPath,
-  $previewPath,$movementPath,$ladderPlayerPath,$explorationPlayerPath,$runAllPath,
+  $previewPath,$movementPath,$ladderPlayerPath,$controllerPlayerPath,$explorationPlayerPath,$runAllPath,
   $workflowPath,$doorWorkflowPath,$regressionPath,$desktopPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Directional ladder file is missing: $path" }
@@ -32,6 +33,7 @@ $targetResolverText = Get-Content -Raw -Encoding UTF8 $targetResolverPath
 $previewText = Get-Content -Raw -Encoding UTF8 $previewPath
 $movementText = Get-Content -Raw -Encoding UTF8 $movementPath
 $ladderPlayerText = Get-Content -Raw -Encoding UTF8 $ladderPlayerPath
+$controllerPlayerText = Get-Content -Raw -Encoding UTF8 $controllerPlayerPath
 $explorationPlayerText = Get-Content -Raw -Encoding UTF8 $explorationPlayerPath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
 $workflowText = Get-Content -Raw -Encoding UTF8 $workflowPath
@@ -103,8 +105,11 @@ foreach ($method in @('resolve_ladder_velocity','_step_ladder')) {
 if ($movementText -notmatch 'detached_ladder' -or $movementText -notmatch 'on_ladder') {
   throw 'Movement controller must expose explicit ladder entry and detach results'
 }
-if ($explorationPlayerText -notmatch 'extends\s+"res://src/player/ladder_climbing_player\.gd"') {
-  throw 'Production exploration player must inherit ladder climbing behavior'
+if ($explorationPlayerText -notmatch 'extends\s+"res://src/player/controller_exploration_player\.gd"') {
+  throw 'Production exploration player must preserve the controller composition adapter'
+}
+if ($controllerPlayerText -notmatch 'extends\s+"res://src/player/ladder_climbing_player\.gd"') {
+  throw 'Controller gameplay composition must preserve ladder climbing behavior'
 }
 foreach ($method in @(
   'get_ladder_movement_snapshot','_physics_process','_append_ladder_context',
@@ -132,4 +137,4 @@ if ($doorWorkflowText -notmatch 'Invoke-Godot\.ps1' -or $doorWorkflowText -match
   throw 'Double-door workflow must retain the reliable waited Godot invocation contract'
 }
 
-Write-Host "PASS directional_ladders variants=4 canonical_id=25 thickness=0.125 contact_cells=18 climb_speed=3.2 desktop=1 ci_wait=1"
+Write-Host "PASS directional_ladders variants=4 canonical_id=25 thickness=0.125 contact_cells=18 climb_speed=3.2 controller_adapter=1 desktop=1 ci_wait=1"
