@@ -1,13 +1,19 @@
 class_name AccessibilityMachineGameUI
 extends "res://src/ui/machine_game_ui.gd"
 
+signal accessibility_focus_restored(overlay: int)
+signal accessibility_focus_restore_failed(overlay: int)
+
 const AccessibilityPolicy = preload(
 	"res://src/settings/ui_accessibility_policy.gd"
 )
-const FOCUS_RESTORE_ATTEMPTS := 4
+const PanelAnimator = preload("res://src/ui/ui_panel_animator.gd")
+const FOCUS_RESTORE_ATTEMPTS := 2
 
 var _ui_accessibility_service: Node
 var _focus_restore_request_id := 0
+var _focus_restore_success_count := 0
+var _focus_restore_failure_count := 0
 
 
 func setup_accessibility(service: Node) -> void:
@@ -44,7 +50,15 @@ func _handle_controller_overlay_command(event: InputEvent) -> bool:
 	match AccessibilityPolicy.controller_command(event):
 		AccessibilityPolicy.COMMAND_ACCEPT:
 			var focus_owner: Control = get_viewport().gui_get_focus_owner()
-			if focus_owner is BaseButton and is_ancestor_of(focus_owner):
+			var focus_root := _focus_root_for_overlay()
+			if (
+				focus_owner is BaseButton
+				and focus_root != null
+				and (
+					focus_owner == focus_root
+					or focus_root.is_ancestor_of(focus_owner)
+				)
+			):
 				(focus_owner as BaseButton).pressed.emit()
 				return true
 		AccessibilityPolicy.COMMAND_CANCEL:
@@ -57,7 +71,8 @@ func _handle_controller_overlay_command(event: InputEvent) -> bool:
 func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	super._set_overlay(next_overlay, force)
 	if _overlay != Overlay.NONE:
-		_queue_accessibility_focus_restore()
+		_release_focus_outside_active_overlay()
+		_queue_accessibility_focus_restore(true)
 	else:
 		_focus_restore_request_id += 1
 
@@ -68,15 +83,32 @@ func _on_accessibility_input_mode_changed(mode: StringName) -> void:
 		_release_owned_focus()
 		return
 	if _overlay != Overlay.NONE:
-		_queue_accessibility_focus_restore()
+		_queue_accessibility_focus_restore(false)
 
 
-func _queue_accessibility_focus_restore() -> void:
+func _queue_accessibility_focus_restore(wait_for_presentation: bool) -> void:
 	_focus_restore_request_id += 1
-	call_deferred("_restore_accessibility_focus", _focus_restore_request_id)
+	call_deferred(
+		"_restore_accessibility_focus",
+		_focus_restore_request_id,
+		wait_for_presentation
+	)
 
 
-func _restore_accessibility_focus(request_id: int) -> void:
+func _restore_accessibility_focus(
+	request_id: int,
+	wait_for_presentation: bool
+) -> void:
+	if wait_for_presentation:
+		# The panel becomes visible immediately, but its focus geometry is not stable
+		# until the production entrance animation finishes. Use the shared animation
+		# duration instead of guessing a frame count in each caller or test.
+		await get_tree().create_timer(
+			PanelAnimator.DURATION,
+			true,
+			false,
+			true
+		).timeout
 	for _attempt in FOCUS_RESTORE_ATTEMPTS:
 		if request_id != _focus_restore_request_id:
 			return
@@ -88,24 +120,26 @@ func _restore_accessibility_focus(request_id: int) -> void:
 			return
 		var focus_root := _focus_root_for_overlay()
 		if focus_root != null and focus_root.is_visible_in_tree():
-			var focus_owner: Control = get_viewport().gui_get_focus_owner()
-			if (
-				focus_owner != null
-				and focus_owner != focus_root
-				and not focus_root.is_ancestor_of(focus_owner)
-			):
-				focus_owner.release_focus()
+			_release_focus_outside_active_overlay()
 			var target := _find_visible_focusable(focus_root)
 			if target != null:
 				target.grab_focus()
 				await get_tree().process_frame
-				focus_owner = get_viewport().gui_get_focus_owner()
+				var focus_owner: Control = get_viewport().gui_get_focus_owner()
 				if (
 					focus_owner != null
-					and (focus_owner == focus_root or focus_root.is_ancestor_of(focus_owner))
+					and (
+						focus_owner == focus_root
+						or focus_root.is_ancestor_of(focus_owner)
+					)
 				):
+					_focus_restore_success_count += 1
+					accessibility_focus_restored.emit(_overlay)
 					return
 		await get_tree().process_frame
+	if request_id == _focus_restore_request_id and _overlay != Overlay.NONE:
+		_focus_restore_failure_count += 1
+		accessibility_focus_restore_failed.emit(_overlay)
 
 
 func _focus_root_for_overlay() -> Control:
@@ -134,6 +168,15 @@ func _focus_root_for_overlay() -> Control:
 			if fallback != null:
 				return child as Control
 	return null
+
+
+func _release_focus_outside_active_overlay() -> void:
+	var focus_owner: Control = get_viewport().gui_get_focus_owner()
+	var focus_root := _focus_root_for_overlay()
+	if focus_owner == null or focus_root == null:
+		return
+	if focus_owner != focus_root and not focus_root.is_ancestor_of(focus_owner):
+		focus_owner.release_focus()
 
 
 func _release_owned_focus() -> void:
@@ -194,4 +237,6 @@ func get_accessibility_focus_snapshot() -> Dictionary:
 			and (focus_owner == focus_root or focus_root.is_ancestor_of(focus_owner))
 		),
 		"focus_restore_request_id": _focus_restore_request_id,
+		"focus_restore_success_count": _focus_restore_success_count,
+		"focus_restore_failure_count": _focus_restore_failure_count,
 	}
