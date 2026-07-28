@@ -28,50 +28,30 @@ func _run() -> void:
 
 
 func _test_policy() -> void:
-	_check(
-		Policy.allowed_scales() == [0.8, 1.0, 1.25, 1.5],
-		"accessibility policy owns four stable interface scales"
-	)
+	_check(Policy.allowed_scales() == [0.8, 1.0, 1.25, 1.5], "accessibility policy owns four stable interface scales")
 	_check(is_equal_approx(Policy.normalize_scale(null), 1.0), "invalid scale uses the canonical default")
 	_check(is_equal_approx(Policy.normalize_scale(NAN), 1.0), "non-finite scale uses the canonical default")
 	_check(is_equal_approx(Policy.normalize_scale(1.12), 1.0), "scale normalization chooses the nearest stable option")
 	_check(is_equal_approx(Policy.normalize_scale(1.13), 1.25), "scale normalization advances after the midpoint")
 	_check(Policy.scale_label(1.5) == "150%", "scale labels remain player-facing and deterministic")
 
-	var joy_button := InputEventJoypadButton.new()
-	joy_button.button_index = JOY_BUTTON_DPAD_DOWN
-	joy_button.pressed = true
-	_check(
-		Policy.classify_event(joy_button) == Policy.MODE_CONTROLLER,
-		"pressed joypad buttons select controller mode"
-	)
+	var joy_button := _joy_button(JOY_BUTTON_DPAD_DOWN)
+	_check(Policy.classify_event(joy_button) == Policy.MODE_CONTROLLER, "pressed joypad buttons select controller mode")
 	var quiet_axis := InputEventJoypadMotion.new()
 	quiet_axis.axis = JOY_AXIS_LEFT_X
 	quiet_axis.axis_value = 0.2
-	_check(
-		Policy.classify_event(quiet_axis, Policy.MODE_KEYBOARD) == Policy.MODE_KEYBOARD,
-		"small stick drift does not steal the input mode"
-	)
+	_check(Policy.classify_event(quiet_axis, Policy.MODE_KEYBOARD) == Policy.MODE_KEYBOARD, "small stick drift does not steal the input mode")
 	var active_axis := InputEventJoypadMotion.new()
 	active_axis.axis = JOY_AXIS_LEFT_X
 	active_axis.axis_value = 0.8
-	_check(
-		Policy.classify_event(active_axis, Policy.MODE_MOUSE) == Policy.MODE_CONTROLLER,
-		"intentional stick movement selects controller mode"
-	)
+	_check(Policy.classify_event(active_axis, Policy.MODE_MOUSE) == Policy.MODE_CONTROLLER, "intentional stick movement selects controller mode")
 	var mouse_motion := InputEventMouseMotion.new()
 	mouse_motion.relative = Vector2(4.0, 0.0)
-	_check(
-		Policy.classify_event(mouse_motion, Policy.MODE_CONTROLLER) == Policy.MODE_MOUSE,
-		"real mouse motion selects mouse mode"
-	)
+	_check(Policy.classify_event(mouse_motion, Policy.MODE_CONTROLLER) == Policy.MODE_MOUSE, "real mouse motion selects mouse mode")
 	var key := InputEventKey.new()
 	key.keycode = KEY_TAB
 	key.pressed = true
-	_check(
-		Policy.classify_event(key, Policy.MODE_MOUSE) == Policy.MODE_KEYBOARD,
-		"pressed keyboard input restores keyboard mode"
-	)
+	_check(Policy.classify_event(key, Policy.MODE_MOUSE) == Policy.MODE_KEYBOARD, "pressed keyboard input restores keyboard mode")
 
 	var normalized := SettingsPolicy.normalize({
 		"ui_scale": 1.49,
@@ -98,15 +78,10 @@ func _test_runtime_composition() -> void:
 	var snapshot: Dictionary = accessibility.call("get_snapshot")
 	_check(is_equal_approx(float(snapshot.get("ui_scale", 0.0)), 1.25), "authoritative settings apply the selected interface scale")
 	_check(is_equal_approx(ThemeDB.fallback_base_scale, 1.25), "runtime applies scale through the global theme fallback")
-	_check(
-		str(hub.get_character_snapshot().get("ui_accessibility", {}).get("ui_scale_label", "")) == "125%",
-		"character diagnostics expose the accessibility snapshot"
-	)
+	_check(str(hub.get_character_snapshot().get("ui_accessibility", {}).get("ui_scale_label", "")) == "125%", "character diagnostics expose the accessibility snapshot")
 
-	var joy := InputEventJoypadButton.new()
-	joy.button_index = JOY_BUTTON_DPAD_DOWN
-	joy.pressed = true
-	accessibility.call("_input", joy)
+	var controller_event := _joy_button(JOY_BUTTON_DPAD_DOWN)
+	accessibility.call("_input", controller_event)
 	hub.main_menu.show_main()
 	for _frame in 3:
 		await process_frame
@@ -114,19 +89,32 @@ func _test_runtime_composition() -> void:
 	_check(str(navigation.get("input_mode", "")) == "controller", "controller mode reaches the production menu")
 	_check(str(navigation.get("focus_text", "")) == "继续游戏", "controller mode restores the primary menu focus")
 
+	var menu_buttons: Array = hub.main_menu.get("_menu_buttons")
+	var create_button: Button = menu_buttons[1] as Button if menu_buttons.size() > 1 else null
+	_check(create_button != null, "production menu exposes the second controller command")
+	if create_button != null:
+		create_button.grab_focus()
+		hub.main_menu.call("_unhandled_input", _joy_button(JOY_BUTTON_A))
+		for _frame in 3:
+			await process_frame
+		navigation = hub.main_menu.call("get_accessibility_navigation_snapshot")
+		_check(bool(navigation.get("map_visible", false)), "raw controller A activates the focused menu command")
+		hub.main_menu.call("_unhandled_input", _joy_button(JOY_BUTTON_B))
+		for _frame in 3:
+			await process_frame
+		navigation = hub.main_menu.call("get_accessibility_navigation_snapshot")
+		_check(bool(navigation.get("main_visible", false)), "raw controller B returns from a menu workspace")
+		_check(str(navigation.get("focus_text", "")) == "继续游戏", "controller return restores the primary menu focus")
+
 	var mouse := InputEventMouseMotion.new()
 	mouse.relative = Vector2(6.0, 0.0)
 	accessibility.call("_input", mouse)
 	await process_frame
 	_check(root.gui_get_focus_owner() == null, "mouse mode releases menu keyboard focus")
-
-	accessibility.call("_input", joy)
+	accessibility.call("_input", controller_event)
 	for _frame in 3:
 		await process_frame
-	_check(
-		str(hub.main_menu.call("get_accessibility_navigation_snapshot").get("focus_text", "")) == "继续游戏",
-		"returning to controller mode restores menu focus deterministically"
-	)
+	_check(str(hub.main_menu.call("get_accessibility_navigation_snapshot").get("focus_text", "")) == "继续游戏", "returning to controller mode restores menu focus deterministically")
 
 	hub.game_ui.begin_gameplay()
 	hub.game_ui.open_inventory()
@@ -134,18 +122,30 @@ func _test_runtime_composition() -> void:
 		await process_frame
 	var overlay_snapshot: Dictionary = hub.game_ui.call("get_accessibility_focus_snapshot")
 	_check(int(overlay_snapshot.get("overlay", 0)) == 1, "production inventory overlay opens for accessibility focus")
-	_check(bool(overlay_snapshot.get("focus_inside_game_ui", false)), "controller mode focuses a visible gameplay overlay control")
+	_check(bool(overlay_snapshot.get("focus_inside_active_overlay", false)), "controller mode focuses a visible control inside the active overlay")
+	hub.game_ui.call("_unhandled_input", _joy_button(JOY_BUTTON_A))
+	for _frame in 3:
+		await process_frame
+	_check(hub.game_ui.get_active_overlay() == 0, "raw controller A activates the focused overlay close command")
 
+	hub.game_ui.open_inventory()
+	for _frame in 3:
+		await process_frame
+	hub.game_ui.call("_unhandled_input", _joy_button(JOY_BUTTON_B))
+	for _frame in 3:
+		await process_frame
+	_check(hub.game_ui.get_active_overlay() == 0, "raw controller B closes a gameplay overlay")
+
+	hub.game_ui.open_inventory()
+	for _frame in 3:
+		await process_frame
 	accessibility.call("_input", mouse)
 	await process_frame
 	_check(root.gui_get_focus_owner() == null, "mouse mode releases gameplay overlay focus")
-	accessibility.call("_input", joy)
+	accessibility.call("_input", controller_event)
 	for _frame in 3:
 		await process_frame
-	_check(
-		bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_game_ui", false)),
-		"controller mode restores gameplay overlay focus"
-	)
+	_check(bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_active_overlay", false)), "controller mode restores focus inside the active overlay")
 
 	hub.game_ui.end_gameplay()
 	hub.call("_on_settings_changed", original_settings)
@@ -157,6 +157,13 @@ func _test_runtime_composition() -> void:
 	hub.queue_free()
 	for _frame in 40:
 		await process_frame
+
+
+func _joy_button(button: JoyButton) -> InputEventJoypadButton:
+	var event := InputEventJoypadButton.new()
+	event.button_index = button
+	event.pressed = true
+	return event
 
 
 func _check(condition: bool, description: String) -> void:
