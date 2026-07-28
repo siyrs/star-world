@@ -132,6 +132,7 @@ func dispose() -> void:
 	#
 	# Production instances are children of the composition root and remain owned
 	# by the scene tree. Isolated policy/clock fixtures have no parent, so terminal
-	# dispose must release them immediately instead of leaking a raw Node.
+	# dispose schedules release through Godot's global message queue. Deferring is
+	# required because an Object cannot free itself while its method call is locked.
 	if get_parent() == null and not is_inside_tree():
-		free()
+		call_deferred("free")
