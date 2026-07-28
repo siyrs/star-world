@@ -48,6 +48,17 @@ if ($policy -notmatch 'ALLOWED_SCALES[^\n]+0\.8[^\n]+1\.0[^\n]+1\.25[^\n]+1\.5')
 if ($policy -notmatch 'CONTROLLER_AXIS_THRESHOLD\s*:=\s*0\.55') {
     throw 'Controller mode detection must retain a hard drift threshold'
 }
+if ($policy -notmatch 'CONTROLLER_MOUSE_MOTION_GUARD_MSEC\s*:=\s*350') {
+    throw 'Controller ownership must retain one explicit 350ms synthetic-motion guard'
+}
+foreach ($hysteresisContract in @(
+    'is_intentional_controller_event','is_intentional_mouse_motion',
+    'should_ignore_mouse_motion_after_controller'
+)) {
+    if ($policy -notmatch [regex]::Escape($hysteresisContract)) {
+        throw "Controller hysteresis policy is missing contract: $hysteresisContract"
+    }
+}
 foreach ($controllerContract in @('controller_command','COMMAND_ACCEPT','COMMAND_CANCEL','JOY_BUTTON_A','JOY_BUTTON_B')) {
     if ($policy -notmatch [regex]::Escape($controllerContract)) {
         throw "Controller command policy is missing contract: $controllerContract"
@@ -58,7 +69,11 @@ if ($settingsPolicy -notmatch '"ui_scale"\s*:\s*UiAccessibilityPolicyScript\.DEF
 }
 if ($settingsPolicy -notmatch 'normalize_ui_scale') { throw 'Game settings must normalize interface scale' }
 
-foreach ($needle in @('ThemeDB.fallback_base_scale','input_mode_changed','prefers_focus_navigation','get_snapshot','dispose')) {
+foreach ($needle in @(
+    'ThemeDB.fallback_base_scale','input_mode_changed','prefers_focus_navigation',
+    'get_snapshot','dispose','consume_input_event','ignored_mouse_motion_count',
+    'controller_mouse_motion_guard_msec'
+)) {
     if ($service -notmatch [regex]::Escape($needle)) { throw "Accessibility service is missing contract: $needle" }
 }
 if ($service -notmatch 'func\s+_exit_tree\s*\([\s\S]{0,120}dispose\(\)') {
@@ -98,6 +113,12 @@ foreach ($testText in @($headless,$desktop)) {
     if ($testText -notmatch '_open_and_wait_for_overlay_focus' -or $testText -notmatch 'accessibility_focus_restored') {
         throw 'Accessibility tests must synchronize with the production overlay focus lifecycle'
     }
+    if ($testText -notmatch 'ignored_mouse_motion_count') {
+        throw 'Accessibility tests must retain synthetic mouse-motion evidence'
+    }
+}
+if ($headless -notmatch 'exact guard boundary' -or $desktop -notmatch 'synthetic high-DPI mouse motion') {
+    throw 'Accessibility regressions must cover deterministic and real-window hysteresis boundaries'
 }
 if ($settingsPanel -notmatch 'get_ui_scale_control' -or $settingsPanel -notmatch 'allowed_ui_scales') {
     throw 'Settings UI must expose the authoritative scale catalog'
@@ -118,4 +139,4 @@ if ($workflow -notmatch 'ui-accessibility-controller-focus\.png' -or $workflow -
     throw 'Accessibility workflow must retain controller screenshot and JSON evidence'
 }
 
-Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 scoped_overlay_focus=1 presentation_bound=1 focus_attempts=2 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
+Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 controller_mouse_guard_ms=350 ignored_motion_exact=1 mouse_button_immediate=1 scoped_overlay_focus=1 presentation_bound=1 focus_attempts=2 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
