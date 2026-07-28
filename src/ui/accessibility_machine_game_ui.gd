@@ -36,18 +36,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _handle_controller_overlay_command(event: InputEvent) -> bool:
-	if _overlay == Overlay.NONE or event is not InputEventJoypadButton:
+	if _overlay == Overlay.NONE:
 		return false
-	var button_event := event as InputEventJoypadButton
-	if not button_event.pressed:
-		return false
-	match button_event.button_index:
-		JOY_BUTTON_A:
+	match AccessibilityPolicy.controller_command(event):
+		AccessibilityPolicy.COMMAND_ACCEPT:
 			var focus_owner: Control = get_viewport().gui_get_focus_owner()
 			if focus_owner is BaseButton and is_ancestor_of(focus_owner):
 				(focus_owner as BaseButton).pressed.emit()
 				return true
-		JOY_BUTTON_B:
+		AccessibilityPolicy.COMMAND_CANCEL:
 			if _overlay != Overlay.DEATH:
 				close_overlay()
 				return true
