@@ -4,17 +4,18 @@
 
 保存系统继续保持**单一权威保存事务**：所有手动保存、自动保存、返回主菜单保存和维护级系统保存都复用 `GameplayServiceHub.save_current()`，检查点时间线只记录结果，不创建第二个 Timer、第二份文件或平行存档域。
 
-本能力解决三个玩家与运维问题：
+本能力解决四个玩家与运维问题：
 
 - F3 过去只能看到最近一次保存成功或失败，无法判断来源；
 - 自动保存、手动保存和最终返回保存无法在同一健康历史中关联；
-- 成功返回主菜单后，运行健康报告可能继续显示旧世界 ID。
+- 成功返回主菜单后，运行健康报告可能继续显示旧世界 ID；
+- 只按 world ID 过滤会让其他世界或同一世界上一次进入的保存误显示为当前记录。
 
 ## 状态所有者
 
-`RuntimeHealthReportService` 是会话级检查点证据的唯一状态所有者。
+`RuntimeHealthReportService` 是运行会话级检查点证据的唯一状态所有者。生产组合根挂载其窄扩展 `SessionScopedRuntimeHealthReportService`，只增加世界会话作用域标量，不复制历史、来源累计或保存事务。
 
-`SaveCheckpointTimelinePolicy` 只负责严格归一化与有界投影，`SaveCheckpointTimelineFormatter` 只负责 F3 文本。二者都是纯 `RefCounted`，不采样、不写盘、不修改玩法领域。
+`SaveCheckpointTimelinePolicy` 负责严格归一化与 12 条有界投影；`WorldScopedSaveCheckpointTimelinePolicy` 在其结果上按进入 sequence 边界过滤当前世界本次进入。`SaveCheckpointTimelineFormatter` 只负责 F3 文本。三个策略/格式化对象都是纯 `RefCounted`，不采样、不写盘、不修改玩法领域。
 
 ## 来源合同
 
@@ -35,18 +36,30 @@ system
 - 被淘汰事件只增加 `history_dropped_count`，来源累计计数保持精确；
 - world ID 最长 128 字符；
 - 每个事件只保留 sequence、reason、world ID、结果、字节、耗时和单调时间戳；
+- 世界进入会话只保存两个瞬时标量：session sequence 与进入前 save sequence；
 - 自动保存投影只保留 enabled、active、paused、pending、saving、周期、下次时间和失败退避标量；
-- F3 只显示来源累计、12 条历史预算、最近检查点和下一次自动保存。
+- F3 只显示来源累计、本次进入数量、12 条全局历史预算、最近检查点和下一次自动保存。
 
 ## 生命周期
 
-`begin_world()` 设置当前权威世界 ID；保存失败且玩家仍在世界时保持该 ID 和 runtime attachment。只有成功返回主菜单或世界启动失败后，组合根才调用 `end_world()` 清空当前世界 ID。
+`begin_world()` 设置当前权威世界 ID，并为每次有效进入建立新的瞬时 session sequence。它同时记录进入前的全局保存 sequence；当前事件必须满足 world ID 相同且 event sequence 大于该边界。
 
-会话历史不会因切换世界自动清空；显式 `clear_session_counters()` 才会重置历史、sequence、来源计数和淘汰计数。
+因此：
+
+- A → B 时，B 不继承 A 的最近检查点；
+- A → 退出 → 再次进入 A 时，旧 A 事件也不会进入本次记录；
+- 全局 12 条历史、来源累计和 dropped 计数继续保留；
+- 当前世界本次进入尚未保存时，F3 明确显示“当前世界本次进入尚无保存记录”，禁止回退到全局最近事件。
+
+`end_world()` 清空活动世界 ID 和当前 session，但不丢弃全局历史。显式 `clear_session_counters()` 才会重置历史、save sequence、来源计数和淘汰计数；若重置发生在活动世界，该世界重新基准为 session 1。
+
+详细合同见 [WORLD_SCOPED_SAVE_CHECKPOINT_SESSIONS.md](WORLD_SCOPED_SAVE_CHECKPOINT_SESSIONS.md)。
 
 ## 持久化边界
 
 检查点时间线是运行诊断，不进入 `world.json`、catalog sidecar、trash manifest 或 settings。真实测试会对保存后的完整 payload 做字符串和结构检查，禁止 `save_timeline`、`checkpoint_history` 与 `save_checkpoint` 字段出现。
+
+世界会话作用域同样不持久化：`current_world_session_sequence`、`current_world_session_started_after_sequence`、`current_session_history` 与 `last_current_session_event` 都只存在于内存快照。
 
 ## 真实验收
 
@@ -58,5 +71,7 @@ system
 - 真实暂停菜单按钮产生 manual 检查点；
 - 未暂停活动时间触发真实 autosave，并持久化背包变化；
 - F3 同时显示手动与自动来源、最近自动保存成功和下一次倒计时；
-- 1280×720 真实桌面截图和 JSON 报告；
+- A → B → A 的真实桌面旅程验证跨世界隔离与同一世界重新进入；
+- B 首次进入和 A 再次进入均固定输出“本次 0”与无保存提示，禁止回退旧事件；
+- 1280×720 双截图和 JSON 报告；
 - 全量 Godot 桌面矩阵及 Windows Release 继续作为主分支合入条件。
