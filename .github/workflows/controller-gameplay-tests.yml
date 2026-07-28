@@ -1,0 +1,57 @@
+name: Data-driven controller gameplay quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: controller-gameplay-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Strict controller profile, InputMap ownership and production player regression
+      domain_timeout_minutes: 45
+      static_validators: |
+        tests/developer_b/validate_controller_gameplay.ps1
+        tests/developer_b/validate_ui_accessibility.ps1
+      primary_headless_script: res://tests/qa/controller_gameplay_regression.gd
+      primary_headless_output_base: build\controller-gameplay-runtime
+      primary_headless_timeout_milliseconds: 480000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/input_interaction_regression.gd
+        res://tests/qa/movement_lifecycle_regression.gd
+        res://tests/qa/desktop_input_contract_regression.gd
+        res://tests/qa/ui_accessibility_regression.gd
+        res://tests/qa/combat_cadence_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: controller-gameplay-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/controller-gameplay-runtime.stdout.log
+        build/controller-gameplay-runtime.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real dual-stick, trigger, hotbar and overlay controller acceptance
+      desktop_timeout_minutes: 35
+      desktop_script: res://tests/qa/controller_gameplay_desktop_acceptance.gd
+      desktop_output_path: build\controller-gameplay-inventory.png
+      desktop_timeout_milliseconds: 300000
+      desktop_artifact_name: controller-gameplay-evidence
+      desktop_artifact_paths: |
+        build/controller-gameplay-inventory.png
+        build/controller-gameplay-pause.png
+        build/controller-gameplay-inventory.json
+        build/controller-gameplay-inventory.stdout.log
+        build/controller-gameplay-inventory.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
