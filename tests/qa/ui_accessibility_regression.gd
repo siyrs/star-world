@@ -53,6 +53,7 @@ func _test_policy() -> void:
 	_check(is_equal_approx(Policy.normalize_scale(1.12), 1.0), "scale normalization chooses the nearest stable option")
 	_check(is_equal_approx(Policy.normalize_scale(1.13), 1.25), "scale normalization advances after the midpoint")
 	_check(Policy.scale_label(1.5) == "150%", "scale labels remain player-facing and deterministic")
+	_check(Policy.CONTROLLER_MOUSE_MOTION_GUARD_MSEC == 350, "controller mouse-motion hysteresis has one explicit bounded duration")
 
 	var joy_button := _joy_button(JOY_BUTTON_DPAD_DOWN)
 	_check(Policy.classify_event(joy_button) == Policy.MODE_CONTROLLER, "pressed joypad buttons select controller mode")
@@ -64,9 +65,26 @@ func _test_policy() -> void:
 	active_axis.axis = JOY_AXIS_LEFT_X
 	active_axis.axis_value = 0.8
 	_check(Policy.classify_event(active_axis, Policy.MODE_MOUSE) == Policy.MODE_CONTROLLER, "intentional stick movement selects controller mode")
-	var mouse_motion := InputEventMouseMotion.new()
-	mouse_motion.relative = Vector2(4.0, 0.0)
-	_check(Policy.classify_event(mouse_motion, Policy.MODE_CONTROLLER) == Policy.MODE_MOUSE, "real mouse motion selects mouse mode")
+	var mouse_motion := _mouse_motion(Vector2(4.0, 0.0))
+	_check(Policy.classify_event(mouse_motion, Policy.MODE_CONTROLLER) == Policy.MODE_MOUSE, "real mouse motion classifies as mouse outside service hysteresis")
+	_check(
+		Policy.should_ignore_mouse_motion_after_controller(
+			mouse_motion, Policy.MODE_CONTROLLER, 1349, 1000
+		),
+		"mouse motion inside the controller guard is ignored"
+	)
+	_check(
+		not Policy.should_ignore_mouse_motion_after_controller(
+			mouse_motion, Policy.MODE_CONTROLLER, 1350, 1000
+		),
+		"mouse motion at the exact guard boundary is accepted"
+	)
+	_check(
+		not Policy.should_ignore_mouse_motion_after_controller(
+			_mouse_button(MOUSE_BUTTON_LEFT), Policy.MODE_CONTROLLER, 1001, 1000
+		),
+		"mouse buttons are never delayed by controller hysteresis"
+	)
 	var key := InputEventKey.new()
 	key.keycode = KEY_TAB
 	key.pressed = true
@@ -100,6 +118,26 @@ func _test_runtime_composition() -> void:
 	_check(str(hub.get_character_snapshot().get("ui_accessibility", {}).get("ui_scale_label", "")) == "125%", "character diagnostics expose the accessibility snapshot")
 
 	var controller_event := _joy_button(JOY_BUTTON_DPAD_DOWN)
+	accessibility.call("consume_input_event", controller_event, 1000)
+	var synthetic_motion := _mouse_motion(Vector2(8.0, 0.0))
+	_check(
+		not bool(accessibility.call("consume_input_event", synthetic_motion, 1200))
+		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_CONTROLLER,
+		"service ignores synthetic mouse motion shortly after controller input"
+	)
+	snapshot = accessibility.call("get_snapshot")
+	_check(int(snapshot.get("ignored_mouse_motion_count", 0)) == 1, "service exposes the exact ignored motion count")
+	_check(
+		bool(accessibility.call("consume_input_event", _mouse_button(MOUSE_BUTTON_MIDDLE), 1201))
+		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
+		"mouse button immediately takes ownership during the motion guard"
+	)
+	accessibility.call("consume_input_event", controller_event, 2000)
+	_check(
+		bool(accessibility.call("consume_input_event", synthetic_motion, 2350))
+		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
+		"mouse motion takes ownership at the exact guard boundary"
+	)
 	accessibility.call("_input", controller_event)
 	hub.main_menu.show_main()
 	for _frame in 3:
@@ -125,11 +163,10 @@ func _test_runtime_composition() -> void:
 		_check(bool(navigation.get("main_visible", false)), "raw controller B returns from a menu workspace")
 		_check(str(navigation.get("focus_text", "")) == "继续游戏", "controller return restores the primary menu focus")
 
-	var mouse := InputEventMouseMotion.new()
-	mouse.relative = Vector2(6.0, 0.0)
-	accessibility.call("_input", mouse)
+	var mouse_click := _mouse_button(MOUSE_BUTTON_MIDDLE)
+	accessibility.call("_input", mouse_click)
 	await process_frame
-	_check(root.gui_get_focus_owner() == null, "mouse mode releases menu keyboard focus")
+	_check(root.gui_get_focus_owner() == null, "mouse button releases menu keyboard focus")
 	accessibility.call("_input", controller_event)
 	for _frame in 3:
 		await process_frame
@@ -167,9 +204,9 @@ func _test_runtime_composition() -> void:
 		1
 	)
 	_check(focused, "third inventory opening remains deterministically focusable")
-	accessibility.call("_input", mouse)
+	accessibility.call("_input", mouse_click)
 	await process_frame
-	_check(root.gui_get_focus_owner() == null, "mouse mode releases gameplay overlay focus")
+	_check(root.gui_get_focus_owner() == null, "mouse button releases gameplay overlay focus")
 	var restore_state := _create_focus_wait_state(hub.game_ui, 1)
 	accessibility.call("_input", controller_event)
 	var restored_after_device_change := await _finish_focus_wait(hub.game_ui, restore_state)
@@ -219,6 +256,19 @@ func _finish_focus_wait(game_ui: Node, state: FocusWaitState) -> bool:
 
 func _joy_button(button: JoyButton) -> InputEventJoypadButton:
 	var event := InputEventJoypadButton.new()
+	event.button_index = button
+	event.pressed = true
+	return event
+
+
+func _mouse_motion(relative: Vector2) -> InputEventMouseMotion:
+	var event := InputEventMouseMotion.new()
+	event.relative = relative
+	return event
+
+
+func _mouse_button(button: MouseButton) -> InputEventMouseButton:
+	var event := InputEventMouseButton.new()
 	event.button_index = button
 	event.pressed = true
 	return event
