@@ -11,7 +11,9 @@ var _ui_scale := Policy.DEFAULT_SCALE
 var _mode_change_count := 0
 var _scale_change_count := 0
 var _ignored_mouse_motion_count := 0
+var _ui_transition_guard_count := 0
 var _last_controller_input_msec := -1
+var _mouse_motion_guard_until_msec := -1
 var _disposed := false
 
 
@@ -33,18 +35,24 @@ func _input(event: InputEvent) -> void:
 	consume_input_event(event, Time.get_ticks_msec())
 
 
+func begin_ui_transition_guard(now_msec: int = -1) -> void:
+	if _disposed:
+		return
+	var resolved_now := Time.get_ticks_msec() if now_msec < 0 else now_msec
+	_mouse_motion_guard_until_msec = maxi(
+		_mouse_motion_guard_until_msec,
+		resolved_now + Policy.UI_TRANSITION_MOUSE_MOTION_GUARD_MSEC
+	)
+	_ui_transition_guard_count += 1
+
+
 func consume_input_event(event: InputEvent, now_msec: int = -1) -> bool:
 	if _disposed:
 		return false
 	var resolved_now := Time.get_ticks_msec() if now_msec < 0 else now_msec
 	if Policy.is_intentional_controller_event(event):
 		_last_controller_input_msec = resolved_now
-	if Policy.should_ignore_mouse_motion_after_controller(
-		event,
-		_input_mode,
-		resolved_now,
-		_last_controller_input_msec
-	):
+	if _should_ignore_mouse_motion(event, resolved_now):
 		_ignored_mouse_motion_count += 1
 		return false
 	var next_mode := Policy.classify_event(event, _input_mode)
@@ -56,11 +64,26 @@ func consume_input_event(event: InputEvent, now_msec: int = -1) -> bool:
 	return true
 
 
+func _should_ignore_mouse_motion(event: InputEvent, now_msec: int) -> bool:
+	if not Policy.is_intentional_mouse_motion(event):
+		return false
+	if now_msec < _mouse_motion_guard_until_msec:
+		return true
+	return Policy.should_ignore_mouse_motion_after_controller(
+		event,
+		_input_mode,
+		now_msec,
+		_last_controller_input_msec
+	)
+
+
 func apply_settings(settings: Dictionary) -> void:
 	if _disposed:
 		return
 	var next_scale := Policy.normalize_scale(settings.get("ui_scale", Policy.DEFAULT_SCALE))
 	var changed := not is_equal_approx(next_scale, _ui_scale)
+	if changed:
+		begin_ui_transition_guard()
 	_ui_scale = next_scale
 	ThemeDB.fallback_base_scale = _ui_scale
 	if changed:
@@ -89,8 +112,11 @@ func get_snapshot() -> Dictionary:
 		"mode_change_count": _mode_change_count,
 		"scale_change_count": _scale_change_count,
 		"ignored_mouse_motion_count": _ignored_mouse_motion_count,
+		"ui_transition_guard_count": _ui_transition_guard_count,
 		"controller_mouse_motion_guard_msec": Policy.CONTROLLER_MOUSE_MOTION_GUARD_MSEC,
+		"ui_transition_mouse_motion_guard_msec": Policy.UI_TRANSITION_MOUSE_MOTION_GUARD_MSEC,
 		"last_controller_input_msec": _last_controller_input_msec,
+		"mouse_motion_guard_until_msec": _mouse_motion_guard_until_msec,
 		"disposed": _disposed,
 	}
 
