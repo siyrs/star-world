@@ -68,6 +68,12 @@ func _handle_controller_overlay_command(event: InputEvent) -> bool:
 
 
 func _set_overlay(next_overlay: int, force: bool = false) -> void:
+	if (
+		_ui_accessibility_service != null
+		and _ui_accessibility_service.has_method("begin_ui_transition_guard")
+		and (force or next_overlay != _overlay)
+	):
+		_ui_accessibility_service.call("begin_ui_transition_guard")
 	super._set_overlay(next_overlay, force)
 	if _overlay != Overlay.NONE:
 		_release_focus_outside_active_overlay()
