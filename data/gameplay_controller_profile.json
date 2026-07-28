@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "profile_id": "standard_gamepad",
+  "name": "标准双摇杆手柄",
+  "movement_deadzone": 0.22,
+  "look_deadzone": 0.18,
+  "look_response_exponent": 1.55,
+  "look_speed_radians_per_second": 2.8,
+  "trigger_threshold": 0.55,
+  "bindings": [
+    {"action": "move_left", "kind": "axis", "axis": 0, "value": -1.0},
+    {"action": "move_right", "kind": "axis", "axis": 0, "value": 1.0},
+    {"action": "move_forward", "kind": "axis", "axis": 1, "value": -1.0},
+    {"action": "move_backward", "kind": "axis", "axis": 1, "value": 1.0},
+    {"action": "look_left", "kind": "axis", "axis": 2, "value": -1.0},
+    {"action": "look_right", "kind": "axis", "axis": 2, "value": 1.0},
+    {"action": "look_up", "kind": "axis", "axis": 3, "value": -1.0},
+    {"action": "look_down", "kind": "axis", "axis": 3, "value": 1.0},
+    {"action": "secondary_action", "kind": "axis", "axis": 4, "value": 1.0},
+    {"action": "primary_action", "kind": "axis", "axis": 5, "value": 1.0},
+    {"action": "jump", "kind": "button", "button": 0},
+    {"action": "toggle_crafting", "kind": "button", "button": 2},
+    {"action": "toggle_inventory", "kind": "button", "button": 3},
+    {"action": "toggle_exploration_journal", "kind": "button", "button": 4},
+    {"action": "ui_cancel", "kind": "button", "button": 6},
+    {"action": "sprint", "kind": "button", "button": 7},
+    {"action": "quick_save", "kind": "button", "button": 10},
+    {"action": "toggle_guidance", "kind": "button", "button": 11},
+    {"action": "toggle_diagnostics", "kind": "button", "button": 12},
+    {"action": "hotbar_previous", "kind": "button", "button": 13},
+    {"action": "hotbar_next", "kind": "button", "button": 14}
+  ]
+}

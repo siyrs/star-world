@@ -41,6 +41,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_runtime_health_sources.ps1"
 & "$PSScriptRoot\developer_b\validate_ui_design_system.ps1"
 & "$PSScriptRoot\developer_b\validate_ui_accessibility.ps1"
+& "$PSScriptRoot\developer_b\validate_controller_gameplay.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
@@ -90,6 +91,7 @@ Invoke-GodotTest 'res://tests/developer_b/run_tests.gd'
 Invoke-GodotTest 'res://tests/qa/integration_regression.gd'
 Invoke-GodotTest 'res://tests/qa/input_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/movement_lifecycle_regression.gd'
+Invoke-GodotTest 'res://tests/qa/controller_gameplay_regression.gd'
 Invoke-GodotTest 'res://tests/qa/physics_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/pickup_stack_regression.gd'
 Invoke-GodotTest 'res://tests/qa/pickup_shared_runtime_regression.gd'
@@ -178,4 +180,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
+Write-Host 'PASS: data-driven controller gameplay + cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'

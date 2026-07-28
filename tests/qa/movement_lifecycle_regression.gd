@@ -43,7 +43,8 @@ func _run() -> void:
 
 
 func _test_binding_repair() -> void:
-	InputMap.erase_action(Actions.MOVE_FORWARD)
+	if InputMap.has_action(Actions.MOVE_FORWARD):
+		InputMap.erase_action(Actions.MOVE_FORWARD)
 	var input_service = GameplayInputScript.new()
 	var repaired: Array = input_service.ensure_bindings(true)
 	root.add_child(input_service)
@@ -103,6 +104,7 @@ func _test_spawn_recovery() -> void:
 		world, Vector3(0.5, -50.0, 0.5), Vector3(2.5, 1.05, 2.5)
 	)
 	_check(below_world.y >= 1.0, "a saved position below the world is rejected")
+	world.free()
 
 
 func _test_player_state_recovery() -> void:
@@ -209,10 +211,13 @@ func _test_integrated_wasd_lifecycle() -> void:
 	)
 	_check(resumed_distance > 0.1, "movement resumes after the UI overlay closes")
 
-	hub.audio_service.stop_ambient()
+	if hub.audio_service.has_method("dispose"):
+		hub.audio_service.dispose()
+	else:
+		hub.audio_service.stop_ambient()
 	game.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 20:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:
