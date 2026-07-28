@@ -55,7 +55,7 @@ func _run() -> void:
 	_parse_axis(JOY_AXIS_LEFT_X, 0.0)
 	_parse_axis(JOY_AXIS_LEFT_Y, 0.0)
 
-	var yaw_before := player.rotation.y
+	var yaw_before: float = float(player.rotation.y)
 	_parse_axis(JOY_AXIS_RIGHT_X, 0.86)
 	player.call("_process", 0.25)
 	_parse_axis(JOY_AXIS_RIGHT_X, 0.0)

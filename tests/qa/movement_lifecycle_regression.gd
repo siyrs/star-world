@@ -43,7 +43,8 @@ func _run() -> void:
 
 
 func _test_binding_repair() -> void:
-	InputMap.erase_action(Actions.MOVE_FORWARD)
+	if InputMap.has_action(Actions.MOVE_FORWARD):
+		InputMap.erase_action(Actions.MOVE_FORWARD)
 	var input_service = GameplayInputScript.new()
 	var repaired: Array = input_service.ensure_bindings(true)
 	root.add_child(input_service)
@@ -103,6 +104,7 @@ func _test_spawn_recovery() -> void:
 		world, Vector3(0.5, -50.0, 0.5), Vector3(2.5, 1.05, 2.5)
 	)
 	_check(below_world.y >= 1.0, "a saved position below the world is rejected")
+	world.free()
 
 
 func _test_player_state_recovery() -> void:
