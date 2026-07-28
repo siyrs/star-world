@@ -61,11 +61,16 @@ func _run() -> void:
 	await _capture(_settings_capture, "high-DPI settings screenshot is saved")
 
 	menu.show_main()
-	await _push_joypad_button(JOY_BUTTON_DPAD_DOWN)
+	await _push_joypad_axis(JOY_AXIS_LEFT_X, 0.8)
 	for _frame in 3:
 		await process_frame
 	var navigation: Dictionary = menu.call("get_accessibility_navigation_snapshot")
-	_check(str(navigation.get("input_mode", "")) == "controller", "real D-Pad input selects controller mode")
+	_check(str(navigation.get("input_mode", "")) == "controller", "real stick input selects controller mode")
+	_check(str(navigation.get("focus_text", "")) == "继续游戏", "controller mode establishes the primary menu focus")
+	await _push_joypad_button(JOY_BUTTON_DPAD_DOWN)
+	for _frame in 3:
+		await process_frame
+	navigation = menu.call("get_accessibility_navigation_snapshot")
 	_check(str(navigation.get("focus_text", "")) == "创建新世界", "D-Pad moves focus to the second main command")
 	await _capture(_controller_capture, "controller focus screenshot is saved")
 
@@ -102,7 +107,7 @@ func _run() -> void:
 	root.push_input(mouse, true)
 	await process_frame
 	_check(root.gui_get_focus_owner() == null, "real mouse motion releases controller focus")
-	await _push_joypad_button(JOY_BUTTON_DPAD_DOWN)
+	await _push_joypad_axis(JOY_AXIS_LEFT_X, 0.8)
 	for _frame in 3:
 		await process_frame
 	_check(
@@ -155,6 +160,19 @@ func _click_control(control: Control) -> void:
 	release.global_position = target
 	release.button_index = MOUSE_BUTTON_LEFT
 	release.pressed = false
+	root.push_input(release, true)
+	await process_frame
+
+
+func _push_joypad_axis(axis: JoyAxis, value: float) -> void:
+	var motion := InputEventJoypadMotion.new()
+	motion.axis = axis
+	motion.axis_value = value
+	root.push_input(motion, true)
+	await process_frame
+	var release := InputEventJoypadMotion.new()
+	release.axis = axis
+	release.axis_value = 0.0
 	root.push_input(release, true)
 	await process_frame
 
