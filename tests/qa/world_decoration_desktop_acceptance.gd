@@ -75,7 +75,6 @@ func _run() -> void:
 	world.start_world("desert_ruins", TEST_SEED, "world-decoration-desktop", {})
 	_check(world.is_started, "production VoxelWorld starts with the data-driven decoration profile")
 	_check(world.profile_id == "desert_ruins", "production VoxelWorld retains the desert profile id")
-	world.set_streaming_focus(focus_position)
 	world.update_streaming(focus_position)
 	var center_chunk: Vector2i = world.block_to_chunk(Vector3i(center.x, 0, center.y))
 	for offset_x in range(-1, 2):
