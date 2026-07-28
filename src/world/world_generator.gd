@@ -3,6 +3,8 @@ extends RefCounted
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const ResourceDistributionRegistryScript = preload("res://src/world/resource_distribution_registry.gd")
+const WorldDecorationRegistryScript = preload("res://src/world/world_decoration_registry.gd")
+const WorldDecorationPolicyScript = preload("res://src/world/world_decoration_policy.gd")
 const WORLD_HEIGHT := 64
 const SEA_LEVEL := 18
 const RESOURCE_ROLL_SALT := 211
@@ -13,6 +15,7 @@ var height_noise := FastNoiseLite.new()
 var detail_noise := FastNoiseLite.new()
 var cave_noise := FastNoiseLite.new()
 var resource_distribution = ResourceDistributionRegistryScript.new()
+var world_decorations = WorldDecorationRegistryScript.new()
 
 
 func configure(p_profile_id: String, p_seed: int) -> void:
@@ -45,6 +48,23 @@ func normalize_profile_id(value: String) -> String:
 		_: return "star_continent"
 
 
+func get_decoration_profile_snapshot() -> Dictionary:
+	return world_decorations.get_snapshot(profile_id)
+
+
+func get_decoration_summary() -> String:
+	return world_decorations.get_summary(profile_id)
+
+
+func get_poi_snapshot(x: int, z: int) -> Dictionary:
+	return WorldDecorationPolicyScript.get_poi_snapshot(
+		world_decorations.get_profile(profile_id),
+		x,
+		z,
+		Callable(self, "_hash_roll")
+	)
+
+
 func get_block(block_position: Vector3i) -> String:
 	if block_position.y < 0 or block_position.y >= WORLD_HEIGHT:
 		return BlockRegistryScript.AIR
@@ -68,9 +88,18 @@ func get_block(block_position: Vector3i) -> String:
 				return decoration
 		return BlockRegistryScript.AIR
 	if profile_id == "abyss_world" and block_position.y > 3 and block_position.y < terrain_height - 2:
-		var cave_density := cave_noise.get_noise_3d(block_position.x, block_position.y * 0.9, block_position.z)
+		var cave_density := cave_noise.get_noise_3d(
+			block_position.x,
+			block_position.y * 0.9,
+			block_position.z
+		)
 		if cave_density > 0.51:
-			return "lava" if block_position.y <= 4 and _hash_roll(block_position.x, block_position.y, block_position.z, 17) < 3600 else BlockRegistryScript.AIR
+			return (
+				"lava"
+				if block_position.y <= 4
+				and _hash_roll(block_position.x, block_position.y, block_position.z, 17) < 3600
+				else BlockRegistryScript.AIR
+			)
 	return _layer_block(block_position, terrain_height)
 
 
@@ -111,9 +140,13 @@ func find_walkable_surface(x: int, z: int) -> int:
 		if not BlockRegistryScript.is_solid(block_id) or block_id in ["leaves", "ice"]:
 			continue
 		# The player origin starts above the surface and the first-person camera
-		# occupies the third cell.  Keep all three cells clear so a nearby tree
-		# canopy cannot hide the initial view even when the body itself fits.
-		if get_block(Vector3i(x, y + 1, z)) == BlockRegistryScript.AIR and get_block(Vector3i(x, y + 2, z)) == BlockRegistryScript.AIR and get_block(Vector3i(x, y + 3, z)) == BlockRegistryScript.AIR:
+		# occupies the third cell. Keep all three cells clear so nearby decoration
+		# or a tree canopy cannot hide the initial view even when the body fits.
+		if (
+			get_block(Vector3i(x, y + 1, z)) == BlockRegistryScript.AIR
+			and get_block(Vector3i(x, y + 2, z)) == BlockRegistryScript.AIR
+			and get_block(Vector3i(x, y + 3, z)) == BlockRegistryScript.AIR
+		):
 			return y
 	return -1
 
@@ -172,7 +205,10 @@ func _sky_island_strength(x: int, z: int) -> float:
 		for cell_z in range(base_cell_z - 1, base_cell_z + 2):
 			var offset_x := _hash_roll(cell_x, 0, cell_z, 91) % 15 - 7
 			var offset_z := _hash_roll(cell_x, 0, cell_z, 131) % 15 - 7
-			var center := Vector2(cell_x * cell_size + cell_size / 2 + offset_x, cell_z * cell_size + cell_size / 2 + offset_z)
+			var center := Vector2(
+				cell_x * cell_size + cell_size / 2 + offset_x,
+				cell_z * cell_size + cell_size / 2 + offset_z
+			)
 			var radius := 11.0 + float(_hash_roll(cell_x, 0, cell_z, 177) % 8)
 			var strength := 1.0 - Vector2(x, z).distance_to(center) / radius
 			best = maxf(best, strength)
@@ -192,11 +228,21 @@ func _get_tree_block(position: Vector3i, terrain_height: int) -> String:
 				continue
 			if profile_id == "sky_islands" and _sky_island_strength(tree_x, tree_z) < 0.45:
 				continue
-			if position.x == tree_x and position.z == tree_z and position.y >= ground + 1 and position.y <= ground + 4:
+			if (
+				position.x == tree_x
+				and position.z == tree_z
+				and position.y >= ground + 1
+				and position.y <= ground + 4
+			):
 				return "wood"
 			var dx := absi(position.x - tree_x)
 			var dz := absi(position.z - tree_z)
-			if position.y >= ground + 3 and position.y <= ground + 5 and dx <= 2 and dz <= 2:
+			if (
+				position.y >= ground + 3
+				and position.y <= ground + 5
+				and dx <= 2
+				and dz <= 2
+			):
 				if position.y < ground + 5 or dx + dz <= 2:
 					return "leaves"
 	return BlockRegistryScript.AIR
@@ -206,106 +252,35 @@ func _tree_here(x: int, z: int, density: int = 185) -> bool:
 	return _hash_roll(x, 0, z, 701) < density
 
 
-# Surface decoration layer: flowers, tall grass, cacti, dead bushes and the
-# desert ruin structures. Everything derives from deterministic hashes so old
-# saves see the same decorations in unexplored chunks.
+# Surface decorations and low-frequency POI structures are interpreted from a
+# strict registry. Hash salts and thresholds remain identical to the legacy
+# generator so unexplored chunks in existing worlds preserve their Seed output.
 func _get_decoration_block(position: Vector3i, terrain_height: int) -> String:
-	var x := position.x
-	var z := position.z
-	match profile_id:
-		"star_continent":
-			if position.y != terrain_height + 1 or terrain_height < SEA_LEVEL:
-				return BlockRegistryScript.AIR
-			if _tree_here(x, z, 185):
-				return BlockRegistryScript.AIR
-			var roll := _hash_roll(x, 0, z, 911)
-			if roll < 600:
-				return "tall_grass"
-			if roll < 680:
-				return "flower_red"
-			if roll < 740:
-				return "flower_yellow"
-		"desert_ruins":
-			var pillar_height := _ruin_pillar_height(x, z)
-			if pillar_height > 0 and position.y <= terrain_height + pillar_height:
-				return "ruin_pillar"
-			var cactus_height := _cactus_height(x, z)
-			if cactus_height > 0 and position.y <= terrain_height + cactus_height:
-				return "cactus"
-			if position.y != terrain_height + 1:
-				return BlockRegistryScript.AIR
-			if _ruin_debris_here(x, z):
-				return "ruin_pillar"
-			if _hash_roll(x, 0, z, 977) < 150:
-				return "dead_bush"
-		"frozen_wastes":
-			if position.y != terrain_height + 1:
-				return BlockRegistryScript.AIR
-			if _hash_roll(x, 0, z, 983) < 60:
-				return "dead_bush"
-		"sky_islands":
-			if position.y != terrain_height + 1:
-				return BlockRegistryScript.AIR
-			if _sky_island_strength(x, z) < 0.35:
-				return BlockRegistryScript.AIR
-			if _tree_here(x, z, 90):
-				return BlockRegistryScript.AIR
-			var roll := _hash_roll(x, 0, z, 907)
-			if roll < 500:
-				return "tall_grass"
-			if roll < 580:
-				return "flower_yellow"
-			if roll < 640:
-				return "flower_red"
-		"abyss_world":
-			if position.y != terrain_height + 1:
-				return BlockRegistryScript.AIR
-			if _hash_roll(x, 0, z, 991) < 130:
-				return "glow_crystal"
-	return BlockRegistryScript.AIR
-
-
-func _cactus_height(x: int, z: int) -> int:
-	if _hash_roll(x, 0, z, 937) < 90:
-		return 1 + _hash_roll(x, 0, z, 941) % 2
-	return 0
-
-
-# Ruins: one site per 48x48 cell, a broken 3x3 pillar grid with debris around
-# it, placed by hash so every seed produces different archaeology.
-func _ruin_site_center(cell_x: int, cell_z: int) -> Vector2i:
-	var offset_x := _hash_roll(cell_x, 0, cell_z, 953) % 24 - 12
-	var offset_z := _hash_roll(cell_x, 0, cell_z, 967) % 24 - 12
-	return Vector2i(cell_x * 48 + 24 + offset_x, cell_z * 48 + 24 + offset_z)
-
-
-func _ruin_pillar_height(x: int, z: int) -> int:
-	var cell_x := floori(float(x) / 48.0)
-	var cell_z := floori(float(z) / 48.0)
-	if _hash_roll(cell_x, 0, cell_z, 971) < 4200:
-		return 0
-	var center := _ruin_site_center(cell_x, cell_z)
-	var local_x := x - center.x
-	var local_z := z - center.y
-	if absi(local_x) > 4 or absi(local_z) > 4:
-		return 0
-	if posmod(local_x, 3) != 0 or posmod(local_z, 3) != 0:
-		return 0
-	return 1 + _hash_roll(x, 0, z, 983) % 4
-
-
-func _ruin_debris_here(x: int, z: int) -> bool:
-	var cell_x := floori(float(x) / 48.0)
-	var cell_z := floori(float(z) / 48.0)
-	if _hash_roll(cell_x, 0, cell_z, 971) < 4200:
-		return false
-	var center := _ruin_site_center(cell_x, cell_z)
-	if absi(x - center.x) > 9 or absi(z - center.y) > 9:
-		return false
-	return _hash_roll(x, 0, z, 991) < 110
+	var profile := world_decorations.get_profile(profile_id)
+	var tree_density := int(profile.get("tree_exclusion_density", 0))
+	var tree_present := tree_density > 0 and _tree_here(position.x, position.z, tree_density)
+	var sky_strength := (
+		_sky_island_strength(position.x, position.z)
+		if profile_id == "sky_islands"
+		else 1.0
+	)
+	return WorldDecorationPolicyScript.resolve_block(
+		profile,
+		position,
+		terrain_height,
+		tree_present,
+		sky_strength,
+		Callable(self, "_hash_roll")
+	)
 
 
 func _hash_roll(x: int, y: int, z: int, salt: int) -> int:
-	var value := (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ seed_value ^ (salt * 265443576)
+	var value := (
+		(x * 73856093)
+		^ (y * 19349663)
+		^ (z * 83492791)
+		^ seed_value
+		^ (salt * 265443576)
+	)
 	value = (value ^ (value >> 13)) * 1274126177
 	return int(value & 0x7FFFFFFF) % 10000
