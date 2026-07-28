@@ -6,6 +6,7 @@ $profileScriptPath = Join-Path $projectRoot 'src\input\gameplay_controller_profi
 $actionsPath = Join-Path $projectRoot 'src\input\gameplay_input_actions.gd'
 $servicePath = Join-Path $projectRoot 'src\input\gameplay_input_service.gd'
 $playerPath = Join-Path $projectRoot 'src\player\controller_exploration_player.gd'
+$explorationPlayerPath = Join-Path $projectRoot 'src\player\exploration_player.gd'
 $basePlayerPath = Join-Path $projectRoot 'src\player\first_person_player.gd'
 $scenePath = Join-Path $projectRoot 'scenes\game\player.tscn'
 $regressionPath = Join-Path $projectRoot 'tests\qa\controller_gameplay_regression.gd'
@@ -18,6 +19,7 @@ foreach ($path in @(
   $actionsPath,
   $servicePath,
   $playerPath,
+  $explorationPlayerPath,
   $basePlayerPath,
   $scenePath,
   $regressionPath,
@@ -118,17 +120,25 @@ foreach ($required in @(
 )) {
   if (-not $playerText.Contains($required)) { throw "Controller player is missing '$required'" }
 }
-foreach ($forbidden in @('InputEventJoypad','JOY_BUTTON_','JOY_AXIS_')) {
-  if ($playerText.Contains($forbidden)) { throw "Physical controller mapping leaked into production player: $forbidden" }
+$explorationPlayerText = Get-Content -Raw -Encoding UTF8 $explorationPlayerPath
+if (-not $explorationPlayerText.Contains('res://src/player/controller_exploration_player.gd')) {
+  throw 'ExplorationPlayer does not compose the controller gameplay layer'
 }
-$basePlayerText = Get-Content -Raw -Encoding UTF8 $basePlayerPath
-foreach ($forbidden in @('InputEventJoypad','JOY_BUTTON_','JOY_AXIS_')) {
-  if ($basePlayerText.Contains($forbidden)) { throw "Physical controller mapping leaked into base player: $forbidden" }
+if (-not $explorationPlayerText.Contains('bind_prospecting_service')) {
+  throw 'ExplorationPlayer lost the existing prospecting port'
+}
+foreach ($productionText in @($playerText, $explorationPlayerText, (Get-Content -Raw -Encoding UTF8 $basePlayerPath))) {
+  foreach ($forbidden in @('InputEventJoypad','JOY_BUTTON_','JOY_AXIS_')) {
+    if ($productionText.Contains($forbidden)) { throw "Physical controller mapping leaked into production player code: $forbidden" }
+  }
 }
 
 $sceneText = Get-Content -Raw -Encoding UTF8 $scenePath
-if (-not $sceneText.Contains('res://src/player/controller_exploration_player.gd')) {
-  throw 'Production player scene does not mount the controller gameplay composition layer'
+if (-not $sceneText.Contains('res://src/player/exploration_player.gd')) {
+  throw 'Production player scene must preserve the canonical exploration adapter entry point'
+}
+if ($sceneText.Contains('res://src/player/controller_exploration_player.gd')) {
+  throw 'Production scene bypasses the canonical exploration adapter'
 }
 
 $workflowText = Get-Content -Raw -Encoding UTF8 $workflowPath

@@ -1,5 +1,5 @@
 class_name ControllerExplorationPlayer
-extends "res://src/player/exploration_player.gd"
+extends "res://src/player/ladder_climbing_player.gd"
 
 var _controller_primary_active := false
 var _controller_primary_press_count := 0
