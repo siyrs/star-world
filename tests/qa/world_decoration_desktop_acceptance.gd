@@ -60,7 +60,7 @@ func _run() -> void:
 	_check(not active_site.is_empty(), "bounded nearby cells contain an active deterministic ruin site")
 	if active_site.is_empty():
 		panel.queue_free()
-		await _finish(null, {})
+		await _finish()
 		return
 	var center: Vector2i = active_site.get("center", Vector2i.ZERO)
 
@@ -79,7 +79,7 @@ func _run() -> void:
 	_check(world.get_loaded_chunk_count() >= 9, "real world synchronously loads the bounded POI viewing area")
 
 	var pillar_count := 0
-	var debris_or_cactus_count := 0
+	var supporting_count := 0
 	for x in range(center.x - 10, center.x + 11):
 		for z in range(center.y - 10, center.y + 11):
 			var surface := generator.get_surface_height(x, z)
@@ -91,23 +91,42 @@ func _run() -> void:
 				if actual == "ruin_pillar":
 					pillar_count += 1
 				elif actual in ["cactus", "dead_bush"]:
-					debris_or_cactus_count += 1
+					supporting_count += 1
 	_check(pillar_count > 0, "real loaded POI area contains generated ruin pillars")
-	_check(debris_or_cactus_count > 0, "real loaded POI area contains supporting desert decoration")
+	_check(supporting_count > 0, "real loaded POI area contains supporting desert decoration")
 
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-55.0, -35.0, 0.0)
-	light.shadow_enabled = true
-	root.add_child(light)
+	var world_environment := WorldEnvironment.new()
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color("#7890A6")
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color("#FFF0D0")
+	environment.ambient_light_energy = 1.25
+	world_environment.environment = environment
+	root.add_child(world_environment)
+
+	var key_light := DirectionalLight3D.new()
+	key_light.rotation_degrees = Vector3(-55.0, -35.0, 0.0)
+	key_light.light_color = Color("#FFF0CE")
+	key_light.light_energy = 2.0
+	key_light.shadow_enabled = true
+	root.add_child(key_light)
+	var fill_light := DirectionalLight3D.new()
+	fill_light.rotation_degrees = Vector3(30.0, 145.0, 0.0)
+	fill_light.light_color = Color("#BFD8FF")
+	fill_light.light_energy = 0.9
+	root.add_child(fill_light)
+
 	var camera := Camera3D.new()
+	camera.fov = 58.0
 	root.add_child(camera)
 	var target_y := generator.get_surface_height(center.x, center.y) + 1.5
-	camera.global_position = Vector3(center.x + 14.0, target_y + 13.0, center.y + 14.0)
+	camera.global_position = Vector3(center.x + 11.0, target_y + 9.0, center.y + 11.0)
 	camera.look_at(Vector3(center.x, target_y, center.y), Vector3.UP)
 	camera.current = true
-	for _frame in 4:
+	for _frame in 5:
 		await process_frame
-	await _capture(_ruin_capture_path, "real generated ruin screenshot is saved")
+	await _capture(_ruin_capture_path, "real generated ruin screenshot is saved", true)
 
 	var report := {
 		"checks": checks,
@@ -118,26 +137,26 @@ func _run() -> void:
 		"center": [center.x, center.y],
 		"loaded_chunks": world.get_loaded_chunk_count(),
 		"pillar_count": pillar_count,
-		"supporting_decoration_count": debris_or_cactus_count,
+		"supporting_decoration_count": supporting_count,
 		"registry_snapshot": generator.get_decoration_profile_snapshot(),
 		"map_summary": summary,
+		"visual_rig": "neutral_sky_ambient_key_fill",
 	}
 	_write_report(report)
 	camera.queue_free()
-	light.queue_free()
+	fill_light.queue_free()
+	key_light.queue_free()
+	world_environment.queue_free()
 	panel.queue_free()
 	world.clear_world()
 	world.queue_free()
-	await _finish(world, report)
+	await _finish()
 
 
 func _find_active_ruin_site(generator) -> Dictionary:
 	for cell_x in range(-5, 6):
 		for cell_z in range(-5, 6):
-			var snapshot: Dictionary = generator.get_poi_snapshot(
-				cell_x * 48 + 24,
-				cell_z * 48 + 24
-			)
+			var snapshot: Dictionary = generator.get_poi_snapshot(cell_x * 48 + 24, cell_z * 48 + 24)
 			var sites: Array = snapshot.get("sites", [])
 			if sites.is_empty():
 				continue
@@ -180,15 +199,32 @@ func _click_control(control: Control) -> void:
 	await process_frame
 
 
-func _capture(path: String, description: String) -> void:
+func _capture(path: String, description: String, require_readable_world: bool = false) -> void:
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "%s renders a non-empty viewport" % description)
 	if image == null or image.is_empty():
 		return
+	if require_readable_world:
+		_check(_has_readable_world_luminance(image), "real ruin evidence contains readable lit world geometry")
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var error := image.save_png(path)
 	_check(error == OK and FileAccess.file_exists(path), description)
+
+
+func _has_readable_world_luminance(image: Image) -> bool:
+	var visible_samples := 0
+	var step_x := maxi(1, floori(float(image.get_width()) / 48.0))
+	var step_y := maxi(1, floori(float(image.get_height()) / 28.0))
+	for y in range(0, image.get_height(), step_y):
+		for x in range(0, image.get_width(), step_x):
+			var color := image.get_pixel(x, y)
+			var luminance := color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722
+			if luminance >= 0.16:
+				visible_samples += 1
+				if visible_samples >= 80:
+					return true
+	return false
 
 
 func _write_report(report: Dictionary) -> void:
@@ -201,8 +237,8 @@ func _write_report(report: Dictionary) -> void:
 		_check(FileAccess.file_exists(_report_path), "world decoration JSON report is saved")
 
 
-func _finish(_world: Node, _report: Dictionary) -> void:
-	for _frame in 12:
+func _finish() -> void:
+	for _frame in 16:
 		await process_frame
 	if failures.is_empty():
 		print(
@@ -213,10 +249,7 @@ func _finish(_world: Node, _report: Dictionary) -> void:
 	else:
 		for failure: String in failures:
 			push_error("QA WORLD DECORATION DESKTOP FAILURE: %s" % failure)
-		print(
-			"QA WORLD DECORATION DESKTOP FAIL | checks=%d | failures=%d"
-			% [checks, failures.size()]
-		)
+		print("QA WORLD DECORATION DESKTOP FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 		quit(1)
 
 
