@@ -18,6 +18,10 @@ func _enter_tree() -> void:
 	set_process_input(true)
 
 
+func _exit_tree() -> void:
+	dispose()
+
+
 func setup(settings: Dictionary) -> void:
 	_disposed = false
 	apply_settings(settings)
