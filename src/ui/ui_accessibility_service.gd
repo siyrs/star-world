@@ -129,3 +129,9 @@ func dispose() -> void:
 	# The global scale is process state. A retiring hub must not overwrite a
 	# replacement hub that may already own ThemeDB; callers restore or reapply
 	# their authoritative settings explicitly.
+	#
+	# Production instances are children of the composition root and remain owned
+	# by the scene tree. Isolated policy/clock fixtures have no parent, so terminal
+	# dispose must release them immediately instead of leaking a raw Node.
+	if get_parent() == null and not is_inside_tree():
+		free()
