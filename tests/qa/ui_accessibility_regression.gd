@@ -2,6 +2,7 @@ extends SceneTree
 
 const Policy = preload("res://src/settings/ui_accessibility_policy.gd")
 const SettingsPolicy = preload("res://src/settings/game_settings_policy.gd")
+const AccessibilityService = preload("res://src/ui/ui_accessibility_service.gd")
 const ServiceHubScene = preload("res://scenes/ui/service_hub.tscn")
 
 var checks := 0
@@ -118,46 +119,52 @@ func _test_runtime_composition() -> void:
 	_check(is_equal_approx(ThemeDB.fallback_base_scale, 1.25), "runtime applies scale through the global theme fallback")
 	_check(str(hub.get_character_snapshot().get("ui_accessibility", {}).get("ui_scale_label", "")) == "125%", "character diagnostics expose the accessibility snapshot")
 
+	# Use an isolated service for synthetic timestamps. The production service has
+	# already opened a real Theme transition guard, so mixing it with artificial
+	# clock values would make the boundary test depend on process uptime.
+	var timing_service: Node = AccessibilityService.new()
+	timing_service.call("setup", {"ui_scale":1.0})
 	var controller_event := _joy_button(JOY_BUTTON_DPAD_DOWN)
-	accessibility.call("consume_input_event", controller_event, 1000)
+	timing_service.call("consume_input_event", controller_event, 1000)
 	var synthetic_motion := _mouse_motion(Vector2(8.0, 0.0))
 	_check(
-		not bool(accessibility.call("consume_input_event", synthetic_motion, 1200))
-		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_CONTROLLER,
+		not bool(timing_service.call("consume_input_event", synthetic_motion, 1200))
+		and StringName(timing_service.call("get_input_mode")) == Policy.MODE_CONTROLLER,
 		"service ignores synthetic mouse motion shortly after controller input"
 	)
-	snapshot = accessibility.call("get_snapshot")
+	snapshot = timing_service.call("get_snapshot")
 	_check(int(snapshot.get("ignored_mouse_motion_count", 0)) == 1, "service exposes the exact ignored motion count")
 	_check(
-		bool(accessibility.call("consume_input_event", _mouse_button(MOUSE_BUTTON_MIDDLE), 1201))
-		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
+		bool(timing_service.call("consume_input_event", _mouse_button(MOUSE_BUTTON_MIDDLE), 1201))
+		and StringName(timing_service.call("get_input_mode")) == Policy.MODE_MOUSE,
 		"mouse button immediately takes ownership during the motion guard"
 	)
-	accessibility.call("consume_input_event", controller_event, 2000)
+	timing_service.call("consume_input_event", controller_event, 2000)
 	_check(
-		bool(accessibility.call("consume_input_event", synthetic_motion, 2350))
-		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
+		bool(timing_service.call("consume_input_event", synthetic_motion, 2350))
+		and StringName(timing_service.call("get_input_mode")) == Policy.MODE_MOUSE,
 		"mouse motion takes ownership at the exact controller guard boundary"
 	)
 
-	accessibility.call("consume_input_event", controller_event, 3000)
-	accessibility.call("begin_ui_transition_guard", 3200)
+	timing_service.call("consume_input_event", controller_event, 3000)
+	timing_service.call("begin_ui_transition_guard", 3200)
 	_check(
-		not bool(accessibility.call("consume_input_event", synthetic_motion, 3800))
-		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_CONTROLLER,
+		not bool(timing_service.call("consume_input_event", synthetic_motion, 3800))
+		and StringName(timing_service.call("get_input_mode")) == Policy.MODE_CONTROLLER,
 		"UI transition guard ignores motion after the controller-only guard has expired"
 	)
-	snapshot = accessibility.call("get_snapshot")
+	snapshot = timing_service.call("get_snapshot")
 	_check(
 		int(snapshot.get("ignored_mouse_motion_count", 0)) == 2
-		and int(snapshot.get("ui_transition_guard_count", 0)) >= 2,
+		and int(snapshot.get("ui_transition_guard_count", 0)) == 1,
 		"service exposes exact transition and ignored-motion evidence"
 	)
 	_check(
-		bool(accessibility.call("consume_input_event", _mouse_button(MOUSE_BUTTON_MIDDLE), 3801))
-		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
+		bool(timing_service.call("consume_input_event", _mouse_button(MOUSE_BUTTON_MIDDLE), 3801))
+		and StringName(timing_service.call("get_input_mode")) == Policy.MODE_MOUSE,
 		"mouse button immediately takes ownership during a UI transition guard"
 	)
+	timing_service.call("dispose")
 
 	accessibility.call("_input", controller_event)
 	hub.main_menu.show_main()
