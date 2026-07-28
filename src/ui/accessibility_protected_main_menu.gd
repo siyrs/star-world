@@ -19,12 +19,18 @@ func setup_accessibility(service: Node) -> void:
 		and not _ui_accessibility_service.is_connected("input_mode_changed", callback)
 	):
 		_ui_accessibility_service.connect("input_mode_changed", callback)
+	var visibility_callback := Callable(self, "_on_menu_visibility_changed")
+	if not visibility_changed.is_connected(visibility_callback):
+		visibility_changed.connect(visibility_callback)
 	_on_accessibility_input_mode_changed(
 		StringName(_ui_accessibility_service.call("get_input_mode"))
 	)
 
 
 func _exit_tree() -> void:
+	var visibility_callback := Callable(self, "_on_menu_visibility_changed")
+	if visibility_changed.is_connected(visibility_callback):
+		visibility_changed.disconnect(visibility_callback)
 	_disconnect_accessibility_service()
 
 
@@ -56,6 +62,14 @@ func _has_cancellable_subpage() -> bool:
 		or (_settings_panel != null and _settings_panel.visible)
 		or (_update_panel != null and _update_panel.visible)
 	)
+
+
+func _on_menu_visibility_changed() -> void:
+	if (
+		_ui_accessibility_service != null
+		and _ui_accessibility_service.has_method("begin_ui_transition_guard")
+	):
+		_ui_accessibility_service.call("begin_ui_transition_guard")
 
 
 func _on_accessibility_input_mode_changed(mode: StringName) -> void:
