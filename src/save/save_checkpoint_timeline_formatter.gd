@@ -1,7 +1,9 @@
 class_name SaveCheckpointTimelineFormatter
 extends RefCounted
 
-const PolicyScript = preload("res://src/save/save_checkpoint_timeline_policy.gd")
+const PolicyScript = preload(
+	"res://src/save/world_scoped_save_checkpoint_timeline_policy.gd"
+)
 
 
 static func format_f3(raw_timeline: Variant) -> Array[String]:
@@ -14,17 +16,23 @@ static func format_f3(raw_timeline: Variant) -> Array[String]:
 			maxi(0, int(counts.get("return_to_menu", 0))),
 			maxi(0, int(counts.get("system", 0))),
 		],
-		"检查点历史：%d/%d · 已丢弃 %d" % [
+		"检查点历史：本次 %d · 会话 %d/%d · 已丢弃 %d" % [
+			maxi(0, int(timeline.get("current_session_history_count", 0))),
 			maxi(0, int(timeline.get("history_count", 0))),
-			maxi(0, int(timeline.get("history_limit", PolicyScript.MAX_EVENTS))),
+			maxi(0, int(timeline.get("history_limit", PolicyScript.BasePolicy.MAX_EVENTS))),
 			maxi(0, int(timeline.get("history_dropped_count", 0))),
 		],
 	]
-	var event: Dictionary = timeline.get("last_current_world_event", {})
-	if event.is_empty():
+	var current_world_id := str(timeline.get("current_world_id", ""))
+	var event: Dictionary = timeline.get("last_current_session_event", {})
+	if event.is_empty() and current_world_id.is_empty():
 		event = timeline.get("last_event", {})
 	if event.is_empty():
-		lines.append("最近检查点：本会话尚无保存记录")
+		lines.append(
+			"最近检查点：当前世界本次进入尚无保存记录"
+			if not current_world_id.is_empty()
+			else "最近检查点：本会话尚无保存记录"
+		)
 	else:
 		var outcome := "成功" if bool(event.get("success", false)) else "失败"
 		var age_seconds := _age_seconds(
@@ -33,7 +41,7 @@ static func format_f3(raw_timeline: Variant) -> Array[String]:
 		)
 		lines.append(
 			"最近检查点：%s%s · %s · %.2f ms · %s前" % [
-				str(event.get("reason_label", PolicyScript.reason_label(event.get("reason", "")))),
+				str(event.get("reason_label", PolicyScript.BasePolicy.reason_label(event.get("reason", "")))),
 				outcome,
 				_format_bytes(maxi(0, int(event.get("bytes", 0)))),
 				maxf(0.0, float(event.get("elapsed_milliseconds", 0.0))),
@@ -45,7 +53,7 @@ static func format_f3(raw_timeline: Variant) -> Array[String]:
 
 
 static func _format_autosave(raw_snapshot: Variant) -> String:
-	var snapshot := PolicyScript.project_autosave(raw_snapshot)
+	var snapshot := PolicyScript.BasePolicy.project_autosave(raw_snapshot)
 	if not bool(snapshot.get("enabled", false)):
 		return "自动保存：已关闭"
 	if bool(snapshot.get("saving", false)):
