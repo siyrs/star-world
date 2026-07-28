@@ -79,4 +79,6 @@ func dispose() -> void:
 		return
 	_disposed = true
 	set_process_input(false)
-	ThemeDB.fallback_base_scale = Policy.DEFAULT_SCALE
+	# The global scale is process state. A retiring hub must not overwrite a
+	# replacement hub that may already own ThemeDB; callers restore or reapply
+	# their authoritative settings explicitly.
