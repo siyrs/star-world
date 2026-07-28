@@ -28,6 +28,32 @@ func _exit_tree() -> void:
 	_disconnect_accessibility_service()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if _handle_controller_overlay_command(event):
+		get_viewport().set_input_as_handled()
+		return
+	super._unhandled_input(event)
+
+
+func _handle_controller_overlay_command(event: InputEvent) -> bool:
+	if _overlay == Overlay.NONE or event is not InputEventJoypadButton:
+		return false
+	var button_event := event as InputEventJoypadButton
+	if not button_event.pressed:
+		return false
+	match button_event.button_index:
+		JOY_BUTTON_A:
+			var focus_owner: Control = get_viewport().gui_get_focus_owner()
+			if focus_owner is BaseButton and is_ancestor_of(focus_owner):
+				(focus_owner as BaseButton).pressed.emit()
+				return true
+		JOY_BUTTON_B:
+			if _overlay != Overlay.DEATH:
+				close_overlay()
+				return true
+	return false
+
+
 func _set_overlay(next_overlay: int, force: bool = false) -> void:
 	super._set_overlay(next_overlay, force)
 	if _overlay != Overlay.NONE:
@@ -49,9 +75,38 @@ func _restore_accessibility_focus() -> void:
 		or _overlay == Overlay.NONE
 	):
 		return
-	var target := _find_visible_focusable(self)
+	var focus_root := _focus_root_for_overlay()
+	var target := _find_visible_focusable(focus_root) if focus_root != null else null
 	if target != null:
 		target.grab_focus()
+
+
+func _focus_root_for_overlay() -> Control:
+	match _overlay:
+		Overlay.INVENTORY:
+			return inventory_panel
+		Overlay.CRAFTING:
+			return crafting_panel
+		Overlay.FURNACE:
+			return furnace_panel
+		Overlay.CONTAINER:
+			return container_panel
+		Overlay.PAUSE:
+			return _pause_panel
+		Overlay.DEATH:
+			return _death_panel
+		EXPLORATION_JOURNAL_OVERLAY:
+			return exploration_journal_panel
+		REPAIR_OVERLAY:
+			return repair_panel
+		STONECUTTER_OVERLAY:
+			return stonecutter_panel
+	for child: Node in get_children():
+		if child is Control and (child as Control).is_visible_in_tree():
+			var fallback := _find_visible_focusable(child)
+			if fallback != null:
+				return child as Control
+	return null
 
 
 func _release_owned_focus() -> void:
@@ -61,6 +116,8 @@ func _release_owned_focus() -> void:
 
 
 func _find_visible_focusable(node: Node) -> Control:
+	if node == null:
+		return null
 	if node is Control:
 		var control := node as Control
 		var disabled := false
@@ -93,6 +150,7 @@ func _disconnect_accessibility_service() -> void:
 
 func get_accessibility_focus_snapshot() -> Dictionary:
 	var focus_owner: Control = get_viewport().gui_get_focus_owner()
+	var focus_root := _focus_root_for_overlay()
 	return {
 		"overlay": _overlay,
 		"input_mode": (
@@ -101,5 +159,11 @@ func get_accessibility_focus_snapshot() -> Dictionary:
 			else AccessibilityPolicy.MODE_KEYBOARD
 		),
 		"focus_owner": focus_owner,
+		"focus_root": focus_root,
 		"focus_inside_game_ui": focus_owner != null and is_ancestor_of(focus_owner),
+		"focus_inside_active_overlay": (
+			focus_owner != null
+			and focus_root != null
+			and (focus_owner == focus_root or focus_root.is_ancestor_of(focus_owner))
+		),
 	}
