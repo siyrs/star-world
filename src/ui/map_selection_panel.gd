@@ -9,6 +9,7 @@ const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const UiKit = preload("res://src/ui/ui_kit.gd")
 const ResourceDistributionRegistryScript = preload("res://src/world/resource_distribution_registry.gd")
+const WorldDecorationRegistryScript = preload("res://src/world/world_decoration_registry.gd")
 
 var _profiles: Array = []
 var _selected_map_id: String = ""
@@ -23,6 +24,7 @@ var _create_button: Button
 var _back_button: Button
 var _rng := RandomNumberGenerator.new()
 var _resource_registry = ResourceDistributionRegistryScript.new()
+var _decoration_registry = WorldDecorationRegistryScript.new()
 
 
 func _ready() -> void:
@@ -59,9 +61,15 @@ func _build_ui() -> void:
 	heading.add_child(UiKit.make_eyebrow("创建世界"))
 	var title := UiKit.make_title("选择远征世界")
 	heading.add_child(title)
-	var subtitle := UiKit.make_subtitle("先选择地图生态，再定义世界名称与种子。每张地图拥有独立资源、危险与环境特征。")
+	var subtitle := UiKit.make_subtitle(
+		"先选择地图生态，再定义世界名称与种子。每张地图拥有独立资源、危险、地标与环境特征。"
+	)
 	heading.add_child(subtitle)
-	_back_button = UiKit.style_button(Button.new(), "GhostButton", Vector2(118, Tokens.CONTROL_HEIGHT_MD))
+	_back_button = UiKit.style_button(
+		Button.new(),
+		"GhostButton",
+		Vector2(118, Tokens.CONTROL_HEIGHT_MD)
+	)
 	_back_button.text = "返回"
 	_back_button.pressed.connect(func() -> void: back_requested.emit())
 	header.add_child(_back_button)
@@ -79,7 +87,9 @@ func _build_ui() -> void:
 	var catalog_root := VBoxContainer.new()
 	catalog_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	catalog_panel.add_child(catalog_root)
-	catalog_root.add_child(UiKit.make_section_header("地图目录", "五种稳定地图签名 · 旧 Seed 结果保持兼容"))
+	catalog_root.add_child(
+		UiKit.make_section_header("地图目录", "五种稳定地图签名 · 旧 Seed 结果保持兼容")
+	)
 	var map_scroll := ScrollContainer.new()
 	map_scroll.name = "MapCatalogScroll"
 	map_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -145,6 +155,7 @@ func _build_ui() -> void:
 	_details.add_theme_font_size_override("normal_font_size", Tokens.FONT_BODY)
 	briefing_root.add_child(_details)
 	_resource_summary_label = Label.new()
+	_resource_summary_label.name = "WorldIdentitySummary"
 	_resource_summary_label.theme_type_variation = "MutedLabel"
 	_resource_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	briefing_root.add_child(_resource_summary_label)
@@ -154,7 +165,12 @@ func _build_ui() -> void:
 	var setup_root := VBoxContainer.new()
 	setup_root.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	setup_panel.add_child(setup_root)
-	setup_root.add_child(UiKit.make_section_header("世界档案", "名称可以随时识别；相同 Seed 与地图会生成相同基础资源分布。"))
+	setup_root.add_child(
+		UiKit.make_section_header(
+			"世界档案",
+			"名称可以随时识别；相同 Seed 与地图会生成相同基础资源、地标与装饰。"
+		)
+	)
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", Tokens.SPACE_MD)
 	setup_root.add_child(name_row)
@@ -185,13 +201,19 @@ func _build_ui() -> void:
 	_seed.custom_minimum_size.y = Tokens.CONTROL_HEIGHT_MD
 	_seed.text = str(_rng.randi())
 	seed_row.add_child(_seed)
-	var random_button := UiKit.style_button(Button.new(), "ToolbarButton", Vector2(92, Tokens.CONTROL_HEIGHT_MD))
+	var random_button := UiKit.style_button(
+		Button.new(),
+		"ToolbarButton",
+		Vector2(92, Tokens.CONTROL_HEIGHT_MD)
+	)
 	random_button.text = "随机"
 	random_button.pressed.connect(func() -> void: _seed.text = str(_rng.randi()))
 	seed_row.add_child(random_button)
 
 	_create_button = UiKit.style_button(
-		Button.new(), "PrimaryButton", Vector2(0, Tokens.CONTROL_HEIGHT_LG)
+		Button.new(),
+		"PrimaryButton",
+		Vector2(0, Tokens.CONTROL_HEIGHT_LG)
 	)
 	_create_button.text = "创建并进入世界"
 	_create_button.pressed.connect(_emit_create)
@@ -211,6 +233,7 @@ func _select_profile(map_id: String) -> void:
 		if str(profile.get("id", "")) != map_id:
 			continue
 		var resource_summary := get_resource_summary(map_id)
+		var decoration_summary := get_decoration_summary(map_id)
 		_selected_badge.text = str(profile.get("difficulty", "未知难度"))
 		_selected_badge.add_theme_color_override(
 			"font_color",
@@ -231,7 +254,9 @@ func _select_profile(map_id: String) -> void:
 			str(profile.get("generator", "")),
 			str(profile.get("difficulty", "")),
 		]
-		_resource_summary_label.text = "资源特点 · %s" % resource_summary
+		_resource_summary_label.text = (
+			"资源特点 · %s\n地表地标 · %s" % [resource_summary, decoration_summary]
+		)
 		break
 
 
@@ -256,6 +281,10 @@ func get_resource_summary(map_id: String) -> String:
 	return _resource_registry.get_summary(map_id)
 
 
+func get_decoration_summary(map_id: String) -> String:
+	return _decoration_registry.get_summary(map_id)
+
+
 func get_selected_map_id() -> String:
 	return _selected_map_id
 
@@ -275,4 +304,6 @@ func get_visual_snapshot() -> Dictionary:
 		),
 		"details_rect": _details.get_global_rect() if _details != null else Rect2(),
 		"create_rect": _create_button.get_global_rect() if _create_button != null else Rect2(),
+		"resource_summary": get_resource_summary(_selected_map_id),
+		"decoration_summary": get_decoration_summary(_selected_map_id),
 	}

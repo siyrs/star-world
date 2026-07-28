@@ -1,0 +1,56 @@
+name: Data-driven world POI and decoration quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: world-decoration-poi-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Strict decoration registry, cached hot path, Seed compatibility and bounded POI regression
+      domain_timeout_minutes: 45
+      static_validators: |
+        tests/developer_b/validate_world_decoration_registry.ps1
+        tests/developer_b/validate_world_decoration_hot_path.ps1
+      primary_headless_script: res://tests/qa/world_decoration_registry_regression.gd
+      primary_headless_output_base: build\world-decoration-registry
+      primary_headless_timeout_milliseconds: 600000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/world_decoration_hot_path_regression.gd
+        res://tests/qa/resource_distribution_regression.gd
+        res://tests/qa/ui_design_system_regression.gd
+        res://tests/qa/integration_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: world-decoration-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/world-decoration-registry.stdout.log
+        build/world-decoration-registry.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real map briefing, deterministic ruin, loaded chunks and visual acceptance
+      desktop_timeout_minutes: 45
+      desktop_script: res://tests/qa/world_decoration_desktop_acceptance.gd
+      desktop_output_path: build\world-decoration-desktop.png
+      desktop_timeout_milliseconds: 420000
+      desktop_artifact_name: world-decoration-evidence
+      desktop_artifact_paths: |
+        build/world-decoration-desktop-map.png
+        build/world-decoration-desktop-ruin.png
+        build/world-decoration-desktop.json
+        build/world-decoration-desktop.stdout.log
+        build/world-decoration-desktop.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
