@@ -7,6 +7,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://world-decoration-desktop.png"
 const TEST_SEED := 734521
+const VISUAL_BACKGROUND := Color("#7890A6")
 
 var checks := 0
 var failures: Array[String] = []
@@ -63,6 +64,8 @@ func _run() -> void:
 		await _finish()
 		return
 	var center: Vector2i = active_site.get("center", Vector2i.ZERO)
+	var target_y := generator.get_surface_height(center.x, center.y) + 1.5
+	var focus_position := Vector3(center.x + 0.5, target_y, center.y + 0.5)
 
 	panel.visible = false
 	var world = VoxelWorldScript.new()
@@ -72,11 +75,14 @@ func _run() -> void:
 	world.start_world("desert_ruins", TEST_SEED, "world-decoration-desktop", {})
 	_check(world.is_started, "production VoxelWorld starts with the data-driven decoration profile")
 	_check(world.profile_id == "desert_ruins", "production VoxelWorld retains the desert profile id")
+	world.set_streaming_focus(focus_position)
+	world.update_streaming(focus_position)
 	var center_chunk: Vector2i = world.block_to_chunk(Vector3i(center.x, 0, center.y))
 	for offset_x in range(-1, 2):
 		for offset_z in range(-1, 2):
 			world.force_load_chunk(center_chunk + Vector2i(offset_x, offset_z))
-	_check(world.get_loaded_chunk_count() >= 9, "real world synchronously loads the bounded POI viewing area")
+	var loaded_after_force := world.get_loaded_chunk_count()
+	_check(loaded_after_force >= 9, "real world synchronously loads the bounded POI viewing area")
 
 	var pillar_count := 0
 	var supporting_count := 0
@@ -98,7 +104,7 @@ func _run() -> void:
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("#7890A6")
+	environment.background_color = VISUAL_BACKGROUND
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("#FFF0D0")
 	environment.ambient_light_energy = 1.25
@@ -120,12 +126,18 @@ func _run() -> void:
 	var camera := Camera3D.new()
 	camera.fov = 58.0
 	root.add_child(camera)
-	var target_y := generator.get_surface_height(center.x, center.y) + 1.5
 	camera.global_position = Vector3(center.x + 11.0, target_y + 9.0, center.y + 11.0)
-	camera.look_at(Vector3(center.x, target_y, center.y), Vector3.UP)
+	camera.look_at(focus_position, Vector3.UP)
 	camera.current = true
+	world.set_streaming_focus(focus_position)
+	world.update_streaming(focus_position)
+	for offset_x in range(-1, 2):
+		for offset_z in range(-1, 2):
+			world.force_load_chunk(center_chunk + Vector2i(offset_x, offset_z))
 	for _frame in 5:
 		await process_frame
+	var loaded_at_capture := world.get_loaded_chunk_count()
+	_check(loaded_at_capture >= 9, "POI chunks remain loaded while the evidence camera renders")
 	await _capture(_ruin_capture_path, "real generated ruin screenshot is saved", true)
 
 	var report := {
@@ -135,7 +147,8 @@ func _run() -> void:
 		"seed": TEST_SEED,
 		"site": active_site.duplicate(true),
 		"center": [center.x, center.y],
-		"loaded_chunks": world.get_loaded_chunk_count(),
+		"loaded_chunks_after_force": loaded_after_force,
+		"loaded_chunks_at_capture": loaded_at_capture,
 		"pillar_count": pillar_count,
 		"supporting_decoration_count": supporting_count,
 		"registry_snapshot": generator.get_decoration_profile_snapshot(),
@@ -206,24 +219,36 @@ func _capture(path: String, description: String, require_readable_world: bool = 
 	if image == null or image.is_empty():
 		return
 	if require_readable_world:
-		_check(_has_readable_world_luminance(image), "real ruin evidence contains readable lit world geometry")
+		_check(_has_readable_world_geometry(image), "real ruin evidence contains readable lit POI geometry")
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var error := image.save_png(path)
 	_check(error == OK and FileAccess.file_exists(path), description)
 
 
-func _has_readable_world_luminance(image: Image) -> bool:
-	var visible_samples := 0
-	var step_x := maxi(1, floori(float(image.get_width()) / 48.0))
-	var step_y := maxi(1, floori(float(image.get_height()) / 28.0))
-	for y in range(0, image.get_height(), step_y):
+func _has_readable_world_geometry(image: Image) -> bool:
+	var foreground_samples := 0
+	var unique_colors: Dictionary = {}
+	var step_x := maxi(1, floori(float(image.get_width()) / 64.0))
+	var step_y := maxi(1, floori(float(image.get_height()) / 36.0))
+	for y in range(image.get_height() / 3, image.get_height(), step_y):
 		for x in range(0, image.get_width(), step_x):
 			var color := image.get_pixel(x, y)
-			var luminance := color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722
-			if luminance >= 0.16:
-				visible_samples += 1
-				if visible_samples >= 80:
-					return true
+			var distance_from_sky := (
+				absf(color.r - VISUAL_BACKGROUND.r)
+				+ absf(color.g - VISUAL_BACKGROUND.g)
+				+ absf(color.b - VISUAL_BACKGROUND.b)
+			)
+			if distance_from_sky < 0.12:
+				continue
+			foreground_samples += 1
+			var key := "%d,%d,%d" % [
+				int(color.r * 15.0),
+				int(color.g * 15.0),
+				int(color.b * 15.0),
+			]
+			unique_colors[key] = true
+			if foreground_samples >= 120 and unique_colors.size() >= 16:
+				return true
 	return false
 
 
