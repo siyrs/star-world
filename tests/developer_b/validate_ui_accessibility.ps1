@@ -51,6 +51,9 @@ if ($policy -notmatch 'CONTROLLER_AXIS_THRESHOLD\s*:=\s*0\.55') {
 if ($policy -notmatch 'CONTROLLER_MOUSE_MOTION_GUARD_MSEC\s*:=\s*350') {
     throw 'Controller ownership must retain one explicit 350ms synthetic-motion guard'
 }
+if ($policy -notmatch 'UI_TRANSITION_MOUSE_MOTION_GUARD_MSEC\s*:=\s*750') {
+    throw 'UI transitions must retain one explicit 750ms synthetic-motion guard'
+}
 foreach ($hysteresisContract in @(
     'is_intentional_controller_event','is_intentional_mouse_motion',
     'should_ignore_mouse_motion_after_controller'
@@ -71,8 +74,9 @@ if ($settingsPolicy -notmatch 'normalize_ui_scale') { throw 'Game settings must 
 
 foreach ($needle in @(
     'ThemeDB.fallback_base_scale','input_mode_changed','prefers_focus_navigation',
-    'get_snapshot','dispose','consume_input_event','ignored_mouse_motion_count',
-    'controller_mouse_motion_guard_msec'
+    'get_snapshot','dispose','consume_input_event','begin_ui_transition_guard',
+    'ignored_mouse_motion_count','ui_transition_guard_count',
+    'controller_mouse_motion_guard_msec','ui_transition_mouse_motion_guard_msec'
 )) {
     if ($service -notmatch [regex]::Escape($needle)) { throw "Accessibility service is missing contract: $needle" }
 }
@@ -88,7 +92,11 @@ if ($hub -notmatch '_add_service' -or $hub -notmatch 'setup_accessibility' -or $
 if ($hub -match 'func\s+_exit_tree\s*\(') {
     throw 'Exploration hub must remain a thin registration layer and not take over exit forwarding'
 }
-foreach ($menuContract in @('MODE_MOUSE','_release_owned_focus','get_accessibility_navigation_snapshot','_handle_controller_command','controller_command')) {
+foreach ($menuContract in @(
+    'MODE_MOUSE','_release_owned_focus','get_accessibility_navigation_snapshot',
+    '_handle_controller_command','controller_command','_on_menu_visibility_changed',
+    'begin_ui_transition_guard'
+)) {
     if ($menu -notmatch [regex]::Escape($menuContract)) {
         throw "Main menu accessibility contract is missing: $menuContract"
     }
@@ -97,7 +105,7 @@ foreach ($overlayContract in @(
     '_restore_accessibility_focus','_focus_root_for_overlay','focus_inside_active_overlay',
     '_handle_controller_overlay_command','controller_command','PanelAnimator.DURATION',
     'accessibility_focus_restored','accessibility_focus_restore_failed',
-    'focus_restore_success_count','focus_restore_failure_count'
+    'focus_restore_success_count','focus_restore_failure_count','begin_ui_transition_guard'
 )) {
     if ($gameUi -notmatch [regex]::Escape($overlayContract)) {
         throw "Gameplay overlay accessibility contract is missing: $overlayContract"
@@ -113,12 +121,15 @@ foreach ($testText in @($headless,$desktop)) {
     if ($testText -notmatch '_open_and_wait_for_overlay_focus' -or $testText -notmatch 'accessibility_focus_restored') {
         throw 'Accessibility tests must synchronize with the production overlay focus lifecycle'
     }
-    if ($testText -notmatch 'ignored_mouse_motion_count') {
-        throw 'Accessibility tests must retain synthetic mouse-motion evidence'
+    if ($testText -notmatch 'ignored_mouse_motion_count' -or $testText -notmatch 'ui_transition_guard_count') {
+        throw 'Accessibility tests must retain transition and ignored-motion evidence'
     }
 }
-if ($headless -notmatch 'exact guard boundary' -or $desktop -notmatch 'synthetic high-DPI mouse motion') {
-    throw 'Accessibility regressions must cover deterministic and real-window hysteresis boundaries'
+if ($headless -notmatch 'exact controller guard boundary' -or $headless -notmatch 'UI transition guard ignores motion') {
+    throw 'Headless accessibility regression must cover both hysteresis budgets'
+}
+if ($desktop -notmatch 'hiding the production menu starts a bounded UI transition guard' -or $desktop -notmatch 'synthetic high-DPI mouse motion') {
+    throw 'Desktop accessibility regression must reproduce real Windows transition ordering'
 }
 if ($settingsPanel -notmatch 'get_ui_scale_control' -or $settingsPanel -notmatch 'allowed_ui_scales') {
     throw 'Settings UI must expose the authoritative scale catalog'
@@ -139,4 +150,4 @@ if ($workflow -notmatch 'ui-accessibility-controller-focus\.png' -or $workflow -
     throw 'Accessibility workflow must retain controller screenshot and JSON evidence'
 }
 
-Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 controller_mouse_guard_ms=350 ignored_motion_exact=1 mouse_button_immediate=1 scoped_overlay_focus=1 presentation_bound=1 focus_attempts=2 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
+Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 controller_mouse_guard_ms=350 transition_mouse_guard_ms=750 transition_sources=theme|menu|overlay ignored_motion_exact=1 mouse_button_immediate=1 scoped_overlay_focus=1 presentation_bound=1 focus_attempts=2 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
