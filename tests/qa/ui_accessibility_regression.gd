@@ -54,6 +54,7 @@ func _test_policy() -> void:
 	_check(is_equal_approx(Policy.normalize_scale(1.13), 1.25), "scale normalization advances after the midpoint")
 	_check(Policy.scale_label(1.5) == "150%", "scale labels remain player-facing and deterministic")
 	_check(Policy.CONTROLLER_MOUSE_MOTION_GUARD_MSEC == 350, "controller mouse-motion hysteresis has one explicit bounded duration")
+	_check(Policy.UI_TRANSITION_MOUSE_MOTION_GUARD_MSEC == 750, "UI transitions own one bounded synthetic-motion duration")
 
 	var joy_button := _joy_button(JOY_BUTTON_DPAD_DOWN)
 	_check(Policy.classify_event(joy_button) == Policy.MODE_CONTROLLER, "pressed joypad buttons select controller mode")
@@ -136,8 +137,28 @@ func _test_runtime_composition() -> void:
 	_check(
 		bool(accessibility.call("consume_input_event", synthetic_motion, 2350))
 		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
-		"mouse motion takes ownership at the exact guard boundary"
+		"mouse motion takes ownership at the exact controller guard boundary"
 	)
+
+	accessibility.call("consume_input_event", controller_event, 3000)
+	accessibility.call("begin_ui_transition_guard", 3200)
+	_check(
+		not bool(accessibility.call("consume_input_event", synthetic_motion, 3800))
+		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_CONTROLLER,
+		"UI transition guard ignores motion after the controller-only guard has expired"
+	)
+	snapshot = accessibility.call("get_snapshot")
+	_check(
+		int(snapshot.get("ignored_mouse_motion_count", 0)) == 2
+		and int(snapshot.get("ui_transition_guard_count", 0)) >= 2,
+		"service exposes exact transition and ignored-motion evidence"
+	)
+	_check(
+		bool(accessibility.call("consume_input_event", _mouse_button(MOUSE_BUTTON_MIDDLE), 3801))
+		and StringName(accessibility.call("get_input_mode")) == Policy.MODE_MOUSE,
+		"mouse button immediately takes ownership during a UI transition guard"
+	)
+
 	accessibility.call("_input", controller_event)
 	hub.main_menu.show_main()
 	for _frame in 3:
