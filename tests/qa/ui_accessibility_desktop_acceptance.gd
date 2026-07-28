@@ -13,6 +13,25 @@ var _controller_capture := ""
 var _report_path := ""
 
 
+class FocusWaitState:
+	extends RefCounted
+	var completed := false
+	var success := false
+	var expected_overlay := 0
+
+	func _init(overlay: int) -> void:
+		expected_overlay = overlay
+
+	func on_success(overlay: int) -> void:
+		if overlay == expected_overlay:
+			completed = true
+			success = true
+
+	func on_failure(overlay: int) -> void:
+		if overlay == expected_overlay:
+			completed = true
+
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -110,9 +129,9 @@ func _run() -> void:
 	root.push_input(mouse, true)
 	await process_frame
 	_check(root.gui_get_focus_owner() == null, "real mouse motion releases controller focus")
-	var restore_wait := _create_focus_wait_state(hub.game_ui, 1)
+	var restore_state := _create_focus_wait_state(hub.game_ui, 1)
 	await _push_joypad_axis(JOY_AXIS_LEFT_X, 0.8)
-	var restored := await _finish_focus_wait(hub.game_ui, restore_wait)
+	var restored := await _finish_focus_wait(hub.game_ui, restore_state)
 	_check(
 		restored
 		and bool(hub.game_ui.call("get_accessibility_focus_snapshot").get("focus_inside_active_overlay", false)),
@@ -202,42 +221,29 @@ func _open_and_wait_for_overlay_focus(
 	opener: Callable,
 	expected_overlay: int
 ) -> bool:
-	var wait_state := _create_focus_wait_state(game_ui, expected_overlay)
+	var state := _create_focus_wait_state(game_ui, expected_overlay)
 	opener.call()
-	return await _finish_focus_wait(game_ui, wait_state)
+	return await _finish_focus_wait(game_ui, state)
 
 
-func _create_focus_wait_state(game_ui: Node, expected_overlay: int) -> Dictionary:
-	var state := {
-		"completed": false,
-		"success": false,
-		"expected_overlay": expected_overlay,
-	}
-	var success_callback := func(overlay: int) -> void:
-		if overlay == int(state["expected_overlay"]):
-			state["completed"] = true
-			state["success"] = true
-	var failure_callback := func(overlay: int) -> void:
-		if overlay == int(state["expected_overlay"]):
-			state["completed"] = true
-	game_ui.connect("accessibility_focus_restored", success_callback)
-	game_ui.connect("accessibility_focus_restore_failed", failure_callback)
-	state["success_callback"] = success_callback
-	state["failure_callback"] = failure_callback
-	state["deadline_msec"] = Time.get_ticks_msec() + 1500
+func _create_focus_wait_state(game_ui: Node, expected_overlay: int) -> FocusWaitState:
+	var state := FocusWaitState.new(expected_overlay)
+	game_ui.connect("accessibility_focus_restored", Callable(state, "on_success"))
+	game_ui.connect("accessibility_focus_restore_failed", Callable(state, "on_failure"))
 	return state
 
 
-func _finish_focus_wait(game_ui: Node, state: Dictionary) -> bool:
-	while not bool(state["completed"]) and Time.get_ticks_msec() < int(state["deadline_msec"]):
+func _finish_focus_wait(game_ui: Node, state: FocusWaitState) -> bool:
+	var deadline_msec := Time.get_ticks_msec() + 1500
+	while not state.completed and Time.get_ticks_msec() < deadline_msec:
 		await process_frame
-	var success_callback: Callable = state["success_callback"]
-	var failure_callback: Callable = state["failure_callback"]
+	var success_callback := Callable(state, "on_success")
+	var failure_callback := Callable(state, "on_failure")
 	if game_ui.is_connected("accessibility_focus_restored", success_callback):
 		game_ui.disconnect("accessibility_focus_restored", success_callback)
 	if game_ui.is_connected("accessibility_focus_restore_failed", failure_callback):
 		game_ui.disconnect("accessibility_focus_restore_failed", failure_callback)
-	return bool(state["success"])
+	return state.success
 
 
 func _capture(path: String, description: String) -> void:
