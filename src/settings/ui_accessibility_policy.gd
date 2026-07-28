@@ -12,6 +12,7 @@ const ALLOWED_SCALES: Array[float] = [0.8, 1.0, 1.25, 1.5]
 const CONTROLLER_AXIS_THRESHOLD := 0.55
 const MOUSE_MOTION_THRESHOLD_SQUARED := 4.0
 const CONTROLLER_MOUSE_MOTION_GUARD_MSEC := 350
+const UI_TRANSITION_MOUSE_MOTION_GUARD_MSEC := 750
 
 
 static func allowed_scales() -> Array[float]:
