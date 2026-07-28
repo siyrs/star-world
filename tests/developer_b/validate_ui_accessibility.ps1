@@ -46,6 +46,11 @@ if ($policy -notmatch 'ALLOWED_SCALES[^\n]+0\.8[^\n]+1\.0[^\n]+1\.25[^\n]+1\.5')
 if ($policy -notmatch 'CONTROLLER_AXIS_THRESHOLD\s*:=\s*0\.55') {
     throw 'Controller mode detection must retain a hard drift threshold'
 }
+foreach ($controllerContract in @('controller_command','COMMAND_ACCEPT','COMMAND_CANCEL','JOY_BUTTON_A','JOY_BUTTON_B')) {
+    if ($policy -notmatch [regex]::Escape($controllerContract)) {
+        throw "Controller command policy is missing contract: $controllerContract"
+    }
+}
 if ($settingsPolicy -notmatch '"ui_scale"\s*:\s*UiAccessibilityPolicyScript\.DEFAULT_SCALE') {
     throw 'Game settings must persist canonical interface scale'
 }
@@ -66,11 +71,15 @@ if ($hub -notmatch '_add_service' -or $hub -notmatch 'setup_accessibility' -or $
 if ($hub -match 'func\s+_exit_tree\s*\(') {
     throw 'Exploration hub must remain a thin registration layer and not take over exit forwarding'
 }
-if ($menu -notmatch 'MODE_MOUSE' -or $menu -notmatch '_release_owned_focus' -or $menu -notmatch 'get_accessibility_navigation_snapshot') {
-    throw 'Main menu must transfer focus ownership by active input mode'
+foreach ($menuContract in @('MODE_MOUSE','_release_owned_focus','get_accessibility_navigation_snapshot','_handle_controller_command','controller_command')) {
+    if ($menu -notmatch [regex]::Escape($menuContract)) {
+        throw "Main menu accessibility contract is missing: $menuContract"
+    }
 }
-if ($gameUi -notmatch '_restore_accessibility_focus' -or $gameUi -notmatch 'focus_inside_game_ui') {
-    throw 'Gameplay overlays must restore controller focus deterministically'
+foreach ($overlayContract in @('_restore_accessibility_focus','_focus_root_for_overlay','focus_inside_active_overlay','_handle_controller_overlay_command','controller_command')) {
+    if ($gameUi -notmatch [regex]::Escape($overlayContract)) {
+        throw "Gameplay overlay accessibility contract is missing: $overlayContract"
+    }
 }
 if ($settingsPanel -notmatch 'get_ui_scale_control' -or $settingsPanel -notmatch 'allowed_ui_scales') {
     throw 'Settings UI must expose the authoritative scale catalog'
@@ -91,4 +100,4 @@ if ($workflow -notmatch 'ui-accessibility-controller-focus\.png' -or $workflow -
     throw 'Accessibility workflow must retain controller screenshot and JSON evidence'
 }
 
-Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
+Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 scoped_overlay_focus=1 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
