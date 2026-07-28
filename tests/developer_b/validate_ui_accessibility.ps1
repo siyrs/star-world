@@ -36,6 +36,8 @@ $settingsPanel = Get-Content -Raw -Encoding UTF8 $settingsPanelPath
 $serviceScene = Get-Content -Raw -Encoding UTF8 $serviceScenePath
 $menuScene = Get-Content -Raw -Encoding UTF8 $menuScenePath
 $gameUiScene = Get-Content -Raw -Encoding UTF8 $gameUiScenePath
+$headless = Get-Content -Raw -Encoding UTF8 $headlessPath
+$desktop = Get-Content -Raw -Encoding UTF8 $desktopPath
 $workflow = Get-Content -Raw -Encoding UTF8 $workflowPath
 $runAll = Get-Content -Raw -Encoding UTF8 $runAllPath
 
@@ -76,9 +78,25 @@ foreach ($menuContract in @('MODE_MOUSE','_release_owned_focus','get_accessibili
         throw "Main menu accessibility contract is missing: $menuContract"
     }
 }
-foreach ($overlayContract in @('_restore_accessibility_focus','_focus_root_for_overlay','focus_inside_active_overlay','_handle_controller_overlay_command','controller_command')) {
+foreach ($overlayContract in @(
+    '_restore_accessibility_focus','_focus_root_for_overlay','focus_inside_active_overlay',
+    '_handle_controller_overlay_command','controller_command','PanelAnimator.DURATION',
+    'accessibility_focus_restored','accessibility_focus_restore_failed',
+    'focus_restore_success_count','focus_restore_failure_count'
+)) {
     if ($gameUi -notmatch [regex]::Escape($overlayContract)) {
         throw "Gameplay overlay accessibility contract is missing: $overlayContract"
+    }
+}
+if ($gameUi -notmatch 'FOCUS_RESTORE_ATTEMPTS\s*:=\s*2') {
+    throw 'Presented overlay focus must retain a bounded two-attempt confirmation budget'
+}
+if ($gameUi -match 'Timer\.new\(') {
+    throw 'Overlay focus must reuse the presentation lifecycle instead of owning Timer nodes'
+}
+foreach ($testText in @($headless,$desktop)) {
+    if ($testText -notmatch '_open_and_wait_for_overlay_focus' -or $testText -notmatch 'accessibility_focus_restored') {
+        throw 'Accessibility tests must synchronize with the production overlay focus lifecycle'
     }
 }
 if ($settingsPanel -notmatch 'get_ui_scale_control' -or $settingsPanel -notmatch 'allowed_ui_scales') {
@@ -100,4 +118,4 @@ if ($workflow -notmatch 'ui-accessibility-controller-focus\.png' -or $workflow -
     throw 'Accessibility workflow must retain controller screenshot and JSON evidence'
 }
 
-Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 scoped_overlay_focus=1 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
+Write-Host 'PASS ui accessibility scales=4 input_modes=3 controller_focus=1 controller_accept_cancel=1 scoped_overlay_focus=1 presentation_bound=1 focus_attempts=2 high_dpi_desktop=1 stable_hub=1 self_cleanup=1'
