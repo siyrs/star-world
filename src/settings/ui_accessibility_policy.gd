@@ -11,6 +11,7 @@ const DEFAULT_SCALE := 1.0
 const ALLOWED_SCALES: Array[float] = [0.8, 1.0, 1.25, 1.5]
 const CONTROLLER_AXIS_THRESHOLD := 0.55
 const MOUSE_MOTION_THRESHOLD_SQUARED := 4.0
+const CONTROLLER_MOUSE_MOTION_GUARD_MSEC := 350
 
 
 static func allowed_scales() -> Array[float]:
@@ -48,30 +49,48 @@ static func normalize_mode(value: Variant) -> StringName:
 	)
 
 
+static func is_intentional_controller_event(event: InputEvent) -> bool:
+	if event is InputEventJoypadButton:
+		return (event as InputEventJoypadButton).pressed
+	if event is InputEventJoypadMotion:
+		return absf((event as InputEventJoypadMotion).axis_value) >= CONTROLLER_AXIS_THRESHOLD
+	return false
+
+
+static func is_intentional_mouse_motion(event: InputEvent) -> bool:
+	return (
+		event is InputEventMouseMotion
+		and (event as InputEventMouseMotion).relative.length_squared()
+		>= MOUSE_MOTION_THRESHOLD_SQUARED
+	)
+
+
+static func should_ignore_mouse_motion_after_controller(
+	event: InputEvent,
+	current_mode: StringName,
+	now_msec: int,
+	last_controller_input_msec: int
+) -> bool:
+	if normalize_mode(current_mode) != MODE_CONTROLLER:
+		return false
+	if not is_intentional_mouse_motion(event) or last_controller_input_msec < 0:
+		return false
+	var elapsed_msec := maxi(0, now_msec - last_controller_input_msec)
+	return elapsed_msec < CONTROLLER_MOUSE_MOTION_GUARD_MSEC
+
+
 static func classify_event(
 	event: InputEvent,
 	current_mode: StringName = MODE_KEYBOARD
 ) -> StringName:
 	if event == null:
 		return normalize_mode(current_mode)
-	if event is InputEventJoypadButton:
-		return MODE_CONTROLLER if (event as InputEventJoypadButton).pressed else normalize_mode(current_mode)
-	if event is InputEventJoypadMotion:
-		var joy_motion := event as InputEventJoypadMotion
-		return (
-			MODE_CONTROLLER
-			if absf(joy_motion.axis_value) >= CONTROLLER_AXIS_THRESHOLD
-			else normalize_mode(current_mode)
-		)
+	if is_intentional_controller_event(event):
+		return MODE_CONTROLLER
 	if event is InputEventMouseButton:
 		return MODE_MOUSE if (event as InputEventMouseButton).pressed else normalize_mode(current_mode)
-	if event is InputEventMouseMotion:
-		var mouse_motion := event as InputEventMouseMotion
-		return (
-			MODE_MOUSE
-			if mouse_motion.relative.length_squared() >= MOUSE_MOTION_THRESHOLD_SQUARED
-			else normalize_mode(current_mode)
-		)
+	if is_intentional_mouse_motion(event):
+		return MODE_MOUSE
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		return MODE_KEYBOARD if key_event.pressed and not key_event.echo else normalize_mode(current_mode)
