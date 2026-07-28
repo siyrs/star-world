@@ -211,10 +211,13 @@ func _test_integrated_wasd_lifecycle() -> void:
 	)
 	_check(resumed_distance > 0.1, "movement resumes after the UI overlay closes")
 
-	hub.audio_service.stop_ambient()
+	if hub.audio_service.has_method("dispose"):
+		hub.audio_service.dispose()
+	else:
+		hub.audio_service.stop_ambient()
 	game.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 20:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:
