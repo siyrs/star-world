@@ -28,6 +28,41 @@ func _exit_tree() -> void:
 	_disconnect_accessibility_service()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if _handle_controller_command(event):
+		get_viewport().set_input_as_handled()
+		return
+	super._unhandled_input(event)
+
+
+func _handle_controller_command(event: InputEvent) -> bool:
+	if event is not InputEventJoypadButton:
+		return false
+	var button_event := event as InputEventJoypadButton
+	if not button_event.pressed:
+		return false
+	match button_event.button_index:
+		JOY_BUTTON_A:
+			var focus_owner: Control = get_viewport().gui_get_focus_owner()
+			if focus_owner is BaseButton and is_ancestor_of(focus_owner):
+				(focus_owner as BaseButton).pressed.emit()
+				return true
+		JOY_BUTTON_B:
+			if _has_cancellable_subpage():
+				show_main()
+				return true
+	return false
+
+
+func _has_cancellable_subpage() -> bool:
+	return (
+		(_map_panel != null and _map_panel.visible)
+		or (_save_panel != null and _save_panel.visible)
+		or (_settings_panel != null and _settings_panel.visible)
+		or (_update_panel != null and _update_panel.visible)
+	)
+
+
 func _on_accessibility_input_mode_changed(mode: StringName) -> void:
 	if mode == AccessibilityPolicy.MODE_MOUSE:
 		_release_owned_focus()
