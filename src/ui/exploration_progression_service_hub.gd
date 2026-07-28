@@ -94,16 +94,6 @@ func _ready() -> void:
 			autosave_runtime_participant.connect("autosave_completed", callback)
 
 
-func _exit_tree() -> void:
-	if (
-		ui_accessibility != null
-		and is_instance_valid(ui_accessibility)
-		and ui_accessibility.has_method("dispose")
-	):
-		ui_accessibility.call("dispose")
-	super._exit_tree()
-
-
 func _apply_settings(settings: Dictionary) -> void:
 	if ui_accessibility != null and ui_accessibility.has_method("apply_settings"):
 		ui_accessibility.call("apply_settings", settings)
