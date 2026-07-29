@@ -15,6 +15,7 @@ $paths = [ordered]@{
   GameUiScene = Join-Path $root 'scenes\ui\game_ui.tscn'
   RecoveryTest = Join-Path $root 'tests\qa\world_session_recovery_regression.gd'
   QuitTest = Join-Path $root 'tests\qa\graceful_application_quit_regression.gd'
+  UiTest = Join-Path $root 'tests\qa\session_recovery_ui_regression.gd'
   Desktop = Join-Path $root 'tests\qa\world_session_recovery_desktop_acceptance.gd'
   Workflow = Join-Path $root '.github\workflows\crash-safe-session-recovery-tests.yml'
   RunAll = Join-Path $root 'tests\run_all.ps1'
@@ -86,10 +87,12 @@ foreach ($token in @(
   'setup_session_recovery',
   'continue_world_requested\.emit',
   'quit_requested\.emit',
-  '_rewire_quit_command'
+  '_rewire_quit_command',
+  '_regular_primary_button\.visible\s*=\s*not\s+visible',
+  'visible_regular_command_count'
 )) {
   if ($text.MainMenu -notmatch $token) {
-    throw "Recovery-aware main menu is missing command or intent routing: $token"
+    throw "Recovery-aware main menu is missing command or bounded compact behavior: $token"
   }
 }
 if ($text.MainMenu -match 'get_tree\(\)\.quit|SceneTree\.quit') {
@@ -176,6 +179,16 @@ foreach ($phrase in @(
   }
 }
 foreach ($phrase in @(
+  'recovery command deck remains inside the 1024x576 viewport',
+  'recovery replaces only the duplicate generic primary CTA without changing the bounded command contract',
+  'keyboard and controller focus prioritizes recovery while the card is active',
+  'safe desktop exit remains inside the 1024x576 pause viewport'
+)) {
+  if ($text.UiTest -notmatch [regex]::Escape($phrase)) {
+    throw "Compact recovery UI regression is missing assertion: $phrase"
+  }
+}
+foreach ($phrase in @(
   'restart exposes exactly the interrupted world and checkpoint count',
   'real mouse recovery command reloads the interrupted world',
   'pause overlay exposes the safe desktop exit command',
@@ -192,6 +205,7 @@ foreach ($token in @(
   'validate_crash_safe_session_recovery\.ps1',
   'world_session_recovery_regression\.gd',
   'graceful_application_quit_regression\.gd',
+  'session_recovery_ui_regression\.gd',
   'world_session_recovery_desktop_acceptance\.gd',
   'session-recovery-candidate\.png',
   'session-recovery-safe-quit\.png',
@@ -203,14 +217,15 @@ foreach ($token in @(
   }
 }
 
-if ($text.RunAll -notmatch 'validate_crash_safe_session_recovery\.ps1') {
-  throw 'Full regression entry point must include crash-safe recovery static coverage'
-}
-if ($text.RunAll -notmatch 'world_session_recovery_regression\.gd') {
-  throw 'Full regression entry point must include restart recovery coverage'
-}
-if ($text.RunAll -notmatch 'graceful_application_quit_regression\.gd') {
-  throw 'Full regression entry point must include application quit coverage'
+foreach ($token in @(
+  'validate_crash_safe_session_recovery\.ps1',
+  'world_session_recovery_regression\.gd',
+  'graceful_application_quit_regression\.gd',
+  'session_recovery_ui_regression\.gd'
+)) {
+  if ($text.RunAll -notmatch $token) {
+    throw "Full regression entry point is missing crash-safe recovery coverage: $token"
+  }
 }
 
 foreach ($phrase in @(
@@ -244,4 +259,4 @@ if ($text.Roadmap -notmatch '异常会话恢复') {
   throw 'Product roadmap must record crash-safe session recovery'
 }
 
-Write-Host 'PASS crash_safe_session_recovery marker=strict-primary-only world_state=authoritative quit=single-coordinator wm_close=final-save failure=blocked restart=real desktop=three-screen release=windows'
+Write-Host 'PASS crash_safe_session_recovery marker=strict-primary-only world_state=authoritative quit=single-coordinator wm_close=final-save failure=blocked restart=real compact=1024x576 desktop=three-screen release=windows'
