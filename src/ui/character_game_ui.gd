@@ -17,12 +17,15 @@ func _ready() -> void:
 
 
 func setup_character_progression(
-	equipment_service: Node, attribute_service: Node, combat_service: Node = null
+	equipment_service: Node,
+	attribute_service: Node,
+	combat_service: Node = null,
+	ranged_combat_service: Node = null
 ) -> void:
 	if inventory_panel != null and inventory_panel.has_method("setup_character_services"):
 		inventory_panel.call("setup_character_services", equipment_service, attribute_service)
 	if combat_feedback_overlay != null and combat_feedback_overlay.has_method("setup"):
-		combat_feedback_overlay.call("setup", combat_service)
+		combat_feedback_overlay.call("setup", combat_service, ranged_combat_service)
 
 
 func begin_gameplay() -> void:
