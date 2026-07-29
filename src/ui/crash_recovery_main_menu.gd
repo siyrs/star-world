@@ -16,6 +16,7 @@ var _recovery_candidate: Dictionary = {}
 func _ready() -> void:
 	super._ready()
 	_build_recovery_card()
+	_rewire_quit_command()
 	call_deferred("_refresh_recovery_candidate")
 
 
@@ -64,6 +65,7 @@ func get_recovery_visual_snapshot() -> Dictionary:
 func get_visual_snapshot() -> Dictionary:
 	var snapshot: Dictionary = super.get_visual_snapshot()
 	snapshot["session_recovery"] = get_recovery_visual_snapshot()
+	snapshot["status_text"] = _status.text if _status != null else ""
 	return snapshot
 
 
@@ -74,6 +76,8 @@ func _quit() -> void:
 
 
 func _focus_primary_action() -> void:
+	if not _can_own_focus():
+		return
 	if (
 		_recovery_card != null
 		and _recovery_card.visible
@@ -133,6 +137,16 @@ func _build_recovery_card() -> void:
 	_recovery_card.visible = false
 
 
+func _rewire_quit_command() -> void:
+	for button: Button in _menu_buttons:
+		if button.text != "退出":
+			continue
+		_disconnect_button_callbacks(button)
+		button.pressed.connect(_quit)
+		_connect_button_audio(button)
+		return
+
+
 func _refresh_recovery_candidate() -> void:
 	if _recovery_card == null:
 		return
@@ -164,6 +178,7 @@ func _refresh_recovery_candidate() -> void:
 		% [map_id, checkpoint_count]
 	)
 	_apply_responsive_layout()
+	call_deferred("_focus_primary_action")
 
 
 func _recover_last_session() -> void:
