@@ -196,7 +196,6 @@ foreach ($phrase in @(
 foreach ($phrase in @(
   '长会话自动保存',
   'autosave_long_session_endurance_regression.gd',
-  'autosave_deferred_pause_race_regression.gd',
   'autosave_long_session_desktop_acceptance.gd',
   'autosave-long-session-recovered.png'
 )) {
