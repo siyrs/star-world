@@ -67,7 +67,7 @@ func _run() -> void:
 	_check(ranged.process_mode == Node.PROCESS_MODE_PAUSABLE, "ranged charge and cooldown use the shared pause contract")
 	var runtime := ranged.get("projectile_runtime") as Node
 	_check(runtime != null and runtime.process_mode == Node.PROCESS_MODE_PAUSABLE, "all projectiles share one pausable runtime")
-	_check(int(runtime.get("MAX_ACTIVE_PROJECTILES")) == 64, "projectile runtime exposes a hard active-node budget")
+	_check(ProjectileRuntimeScript.MAX_ACTIVE_PROJECTILES == 64, "projectile runtime exposes a hard active-node budget")
 
 	var target := RangedTarget.new()
 	target.name = "RangedTarget"
@@ -121,7 +121,7 @@ func _run() -> void:
 	inventory.add_item("arrow", 1)
 	runtime.set_physics_process(false)
 	runtime.call("clear", "capacity_fixture")
-	for index in int(runtime.get("MAX_ACTIVE_PROJECTILES")):
+	for index in ProjectileRuntimeScript.MAX_ACTIVE_PROJECTILES:
 		var spawned: Dictionary = runtime.call(
 			"spawn_projectile",
 			{
