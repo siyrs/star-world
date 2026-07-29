@@ -46,6 +46,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_ui_accessibility.ps1"
 & "$PSScriptRoot\developer_b\validate_controller_gameplay.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_ranged_combat.ps1"
+& "$PSScriptRoot\developer_b\validate_bounded_firearms.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_base.ps1"
 & "$PSScriptRoot\developer_b\validate_stonecutter_machine.ps1"
 & "$PSScriptRoot\developer_b\validate_machine_capability.ps1"
@@ -163,6 +164,8 @@ Invoke-GodotTest 'res://tests/qa/equipment_combat_regression.gd'
 Invoke-GodotTest 'res://tests/qa/combat_cadence_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ranged_combat_registry_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ranged_combat_runtime_regression.gd'
+Invoke-GodotTest 'res://tests/qa/firearm_registry_regression.gd'
+Invoke-GodotTest 'res://tests/qa/firearm_runtime_regression.gd'
 Invoke-GodotTest 'res://tests/qa/hostile_attack_windup_regression.gd'
 Invoke-GodotTest 'res://tests/qa/abyss_elite_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_regression.gd'
@@ -192,4 +195,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: bounded ranged combat + crash-safe session recovery + compact recovery UI + final-save application quit + fixed-point long-session autosave + deferred pause-race safety + world-scoped checkpoint sessions + data-driven controller gameplay + cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
+Write-Host 'PASS: full Star World regression suite including bounded firearm combat'
