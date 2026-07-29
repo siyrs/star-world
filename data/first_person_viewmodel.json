@@ -5,6 +5,7 @@
   "base_scale": 0.72,
   "block_scale": 0.72,
   "tool_scale": 0.82,
+  "firearm_scale": 0.76,
   "item_scale": 0.68,
   "switch_seconds": 0.18,
   "swing_seconds": 0.28,
