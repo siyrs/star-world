@@ -8,6 +8,7 @@
 - 保存检查点时间线和 F3；
 - 多小时运行的漂移、去重与历史淘汰；
 - 真实保存失败后的恢复；
+- 到期、deferred flush 与 Pause 的同帧竞态；
 - 现有 Runtime Soak、完整桌面和 Windows Release 门禁。
 
 ## 发现 1：调度数学与 I/O 生命周期耦合
@@ -49,6 +50,19 @@ elapsed_active_seconds = 0
 ## 发现 4：F3 对连续失败的语义不够直接
 
 失败 Toast 会说明多久后重试，但 F3 普通自动保存行只显示倒计时。Toast 消失后，玩家无法从长期诊断面明确判断当前是在正常周期还是连续失败退避。
+
+## 发现 5：deferred 保存暂停竞态
+
+深度并发自审发现：到期后会先 `call_deferred("_flush_autosave")`。若 due 已形成，但 deferred 保存真正执行前刚好进入 Pause，原重构草案会先消费 pending，再通过 `_should_advance()` 发现暂停并返回。
+
+结果不会永久漏存，因为 Resume 后 remaining 已为 0，下一帧会再次形成 due；但会：
+
+- 丢失恢复后的第一帧活动时间；
+- 多产生一次无意义的 due 转换；
+- 破坏“正常生产帧不丢失活动时间”的新合同；
+- 让暂停菜单手动保存与 pending 取消的顺序更难证明。
+
+该窗口很窄且误差最多 1 秒，但既然已经被识别，就不能留在主分支。
 
 ## 决策
 
@@ -94,6 +108,21 @@ elapsed_active_seconds = 0
 
 恢复成功后清零，不显示历史失败假象。
 
+### 5. Pause 前不消费 pending
+
+`_flush_autosave()` 必须按以下顺序执行：
+
+```text
+确认 pending
+→ 确认当前仍可保存
+→ 消费 pending
+→ 调用唯一 save_current()
+```
+
+如果 Pause 已生效，则 pending 保留。`pause_changed(false)` 会重新 deferred 同一个 flush。多个 deferred 回调是幂等的：第一个成功消费 pending，后续回调立即退出。
+
+若暂停菜单中的手动保存先成功，`world_save_completed` 会清除 pending；Resume 后不会补写冗余自动保存。
+
 ## 兼容性
 
 - 设置仍为 0/2/5/10/15 分钟；
@@ -115,6 +144,19 @@ elapsed_active_seconds = 0
 - carry 最大 1 秒；
 - discarded = 0；
 - 有硬迭代预算。
+
+### deferred Pause 竞态
+
+独立 Fake Hub/SimulationPauseService 在同一调用栈中：
+
+1. 形成 due；
+2. 立即 Pause；
+3. 让 deferred flush 执行；
+4. 证明 pending 仍在、save count 为 0；
+5. Resume 并证明只保存一次；
+6. 第二轮 due 后 Pause；
+7. 执行手动保存并清除 pending；
+8. Resume 证明不会重复自动保存。
 
 ### 正式 Headless
 
@@ -152,6 +194,10 @@ elapsed_active_seconds = 0
 
 拒绝。自动保存调度是会话瞬时状态，持久化会制造无意义迁移和跨会话错误恢复。
 
+### Pause 时消费 pending，Resume 后重新 due
+
+拒绝。虽然只会延后一个恢复帧，但会重新引入可避免的活动时间丢失，并使手动保存去重依赖额外帧。
+
 ### 只增加一个更长的场景测试
 
 拒绝。没有纯策略时，测试会慢、脆弱，并且难以覆盖 8 小时精确数学。
@@ -163,6 +209,7 @@ elapsed_active_seconds = 0
 - 静态架构合同；
 - Godot 4.7 严格导入；
 - 8 小时纯策略；
+- deferred Pause 竞态；
 - 正式 Headless 保存/失败/恢复；
 - 真实桌面双截图；
 - 原自动保存、时间线、世界会话、失败返回、运行健康和 Runtime Soak；
