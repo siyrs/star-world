@@ -117,6 +117,58 @@ func try_attack_target(target: Node, attacker: Node3D) -> Dictionary:
 	return result
 
 
+func resolve_projectile_hit(
+	target: Node,
+	attacker: Node3D,
+	shot: Dictionary
+) -> Dictionary:
+	var target_available := _target_available(target)
+	var result := {
+		"handled": target_available,
+		"accepted": false,
+		"status": "rejected",
+		"reason": "invalid_target" if not target_available else "target_rejected",
+		"attack_kind": "ranged",
+		"weapon_item_id": str(shot.get("weapon_item_id", "")),
+		"ammo_item_id": str(shot.get("ammo_item_id", "")),
+		"charge_ratio": clampf(float(shot.get("charge_ratio", 0.0)), 0.0, 1.0),
+		"target_id": target.get_instance_id() if target_available else 0,
+		"target_name": _target_name(target) if target_available else "",
+	}
+	if not target_available:
+		return result
+	var damage_result := calculator.calculate_raw(
+		maxf(0.0, float(shot.get("raw_damage", 0.0))),
+		_target_attributes(target),
+		"player_ranged_attack"
+	)
+	result.merge(damage_result, true)
+	var direction := _vector3_from_array(shot.get("shot_direction", []), Vector3.FORWARD)
+	var horizontal := Vector3(direction.x, 0.0, direction.z)
+	if horizontal.length_squared() <= 0.0001:
+		horizontal = Vector3.FORWARD
+	var knockback := (
+		horizontal.normalized() * maxf(0.0, float(shot.get("knockback_horizontal", 0.0)))
+		+ Vector3.UP * maxf(0.0, float(shot.get("knockback_vertical", 0.0)))
+	)
+	result["knockback"] = [knockback.x, knockback.y, knockback.z]
+	result["hit_stun_seconds"] = maxf(0.0, float(shot.get("hit_stun_seconds", 0.0)))
+	for key: Variant in ["projectile_id", "impact_position", "impact_normal", "impact_velocity"]:
+		if shot.has(key):
+			result[key] = shot[key]
+	var applied := _apply_hit(target, attacker, result)
+	if not bool(applied.get("applied", false)):
+		attack_rejected.emit(result.duplicate(true))
+		return result
+	result.merge(applied, true)
+	result["handled"] = true
+	result["accepted"] = true
+	result["status"] = "hit"
+	result["reason"] = "ok"
+	outgoing_attack_resolved.emit(result.duplicate(true))
+	return result
+
+
 func resolve_outgoing_attack(defender_attributes: Dictionary = {}) -> Dictionary:
 	var attacker := _attribute_snapshot()
 	var result: Dictionary = calculator.calculate(attacker, defender_attributes, "player_attack")
@@ -196,7 +248,7 @@ func _target_available(target: Node) -> bool:
 func _target_attributes(target: Node) -> Dictionary:
 	if target == null:
 		return {}
-	for method_name in ["get_attribute_snapshot", "get_combat_attributes"]:
+	for method_name: String in ["get_attribute_snapshot", "get_combat_attributes"]:
 		if target.has_method(method_name):
 			var raw: Variant = target.call(method_name)
 			if raw is Dictionary:
@@ -207,7 +259,7 @@ func _target_attributes(target: Node) -> Dictionary:
 func _target_name(target: Node) -> String:
 	if target == null:
 		return ""
-	for property in target.get_property_list():
+	for property: Dictionary in target.get_property_list():
 		if str(property.get("name", "")) == "display_name":
 			return str(target.get("display_name"))
 	return target.name
@@ -228,3 +280,11 @@ func _attribute_snapshot() -> Dictionary:
 	if attribute_service.has_method("get_values"):
 		return attribute_service.call("get_values")
 	return {}
+
+
+func _vector3_from_array(value: Variant, fallback: Vector3) -> Vector3:
+	if value is Array and value.size() >= 3:
+		var result := Vector3(float(value[0]), float(value[1]), float(value[2]))
+		if is_finite(result.x) and is_finite(result.y) and is_finite(result.z):
+			return result.normalized() if result.length_squared() > 0.0001 else fallback
+	return fallback
