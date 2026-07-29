@@ -1,5 +1,5 @@
 class_name ZombieCreature
-extends "res://src/entity/base_creature.gd"
+extends "res://src/entity/hostile_melee_creature.gd"
 
 
 func _ready() -> void:
@@ -17,7 +17,11 @@ func _ready() -> void:
 			"hostile_attack":{
 				"species_id":"zombie",
 				"source_id":"zombie",
+				"attack_kind":"melee",
+				"delivery_kind":"direct",
 				"detection_range":18.0,
+				"minimum_range":0.0,
+				"preferred_range":1.35,
 				"attack_range":1.65,
 				"windup_seconds":0.8,
 				"cooldown_seconds":5.0,
@@ -25,6 +29,8 @@ func _ready() -> void:
 				"cancel_recovery_seconds":0.6,
 				"target_leash_multiplier":1.4,
 				"telegraph_radius_multiplier":1.05,
+				"requires_line_of_sight":false,
+				"cover_probe_count":0,
 			}
 		})
 	super._ready()
