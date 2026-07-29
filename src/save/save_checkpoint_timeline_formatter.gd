@@ -62,6 +62,15 @@ static func _format_autosave(raw_snapshot: Variant) -> String:
 		return "自动保存：已到期，等待本帧检查点"
 	var next_seconds := maxf(0.0, float(snapshot.get("next_in_seconds", 0.0)))
 	var suffix := "（暂停期间不计时）" if bool(snapshot.get("paused", false)) else ""
+	var failure_count := maxi(
+		0, int(snapshot.get("consecutive_failure_count", 0))
+	)
+	if failure_count > 0:
+		return "自动保存：连续失败 %d 次 · %s后重试%s" % [
+			failure_count,
+			_format_duration(next_seconds),
+			suffix,
+		]
 	return "自动保存：%s后%s" % [_format_duration(next_seconds), suffix]
 
 
