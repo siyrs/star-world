@@ -148,10 +148,7 @@ foreach ($token in @(
   }
 }
 
-if (
-  $text.RunAll -notmatch 'validate_autosave_long_session\.ps1'
-  -or $text.RunAll -notmatch 'autosave_long_session_endurance_regression\.gd'
-) {
+if ($text.RunAll -notmatch 'validate_autosave_long_session\.ps1' -or $text.RunAll -notmatch 'autosave_long_session_endurance_regression\.gd') {
   throw 'Full regression entry point must permanently include long-session autosave coverage'
 }
 
