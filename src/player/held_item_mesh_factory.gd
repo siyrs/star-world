@@ -5,6 +5,7 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const TextureAtlasScript = preload("res://src/block/block_texture_atlas.gd")
 const ShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 const ConnectionPolicyScript = preload("res://src/block/block_connection_policy.gd")
+const FIREARM_TOOL_TYPES: Array[String] = ["pistol", "carbine", "shotgun"]
 
 const FACE_DIRECTIONS := [
 	Vector3(1,0,0),
@@ -27,6 +28,8 @@ func build_model(item_id: String, definition: Dictionary, block_id: String = "")
 	match kind:
 		"block":
 			_build_block(root,block_id)
+		"firearm":
+			_build_firearm(root,definition)
 		"tool":
 			_build_tool(root,definition)
 		"food":
@@ -44,7 +47,10 @@ func build_model(item_id: String, definition: Dictionary, block_id: String = "")
 func _classify(definition: Dictionary, block_id: String) -> String:
 	if block_id not in ["","air"] or str(definition.get("category","")) == "block":
 		return "block"
-	if not str(definition.get("tool_type","")).is_empty():
+	var tool_type := str(definition.get("tool_type",""))
+	if tool_type in FIREARM_TOOL_TYPES:
+		return "firearm"
+	if not tool_type.is_empty():
 		return "tool"
 	match str(definition.get("category","")):
 		"food":
@@ -65,6 +71,41 @@ func _build_block(root: Node3D, block_id: String) -> void:
 	mesh_instance.material_override = _block_material()
 	mesh_instance.rotation_degrees = Vector3(18.0,-28.0,0.0)
 	root.add_child(mesh_instance)
+
+
+func _build_firearm(root: Node3D, definition: Dictionary) -> void:
+	var body_color := _item_color(definition)
+	var dark := body_color.darkened(0.30)
+	var metal := body_color.lightened(0.18)
+	var wood := Color("#8B5A32")
+	var tool_type := str(definition.get("tool_type", "pistol"))
+	match tool_type:
+		"pistol":
+			_add_box(root,"Grip",Vector3(0.18,0.42,0.20),Vector3(0.03,-0.24,0.10),dark)
+			_add_box(root,"Frame",Vector3(0.24,0.22,0.62),Vector3(0.0,0.02,-0.16),body_color)
+			_add_box(root,"Slide",Vector3(0.27,0.16,0.72),Vector3(0.0,0.17,-0.18),metal)
+			_add_box(root,"Barrel",Vector3(0.12,0.12,0.34),Vector3(0.0,0.12,-0.67),dark)
+			_add_box(root,"Sight",Vector3(0.08,0.07,0.10),Vector3(0.0,0.29,-0.43),Color("#222427"))
+			root.rotation_degrees = Vector3(-6.0,0.0,0.0)
+		"carbine":
+			_add_box(root,"Stock",Vector3(0.34,0.28,0.62),Vector3(0.0,-0.02,0.50),wood)
+			_add_box(root,"Receiver",Vector3(0.34,0.32,0.72),Vector3(0.0,0.03,-0.06),body_color)
+			_add_box(root,"Grip",Vector3(0.18,0.42,0.20),Vector3(0.02,-0.30,0.10),dark)
+			_add_box(root,"Magazine",Vector3(0.22,0.38,0.24),Vector3(0.0,-0.31,-0.20),metal.darkened(0.12))
+			_add_box(root,"Handguard",Vector3(0.28,0.25,0.64),Vector3(0.0,0.03,-0.73),dark)
+			_add_box(root,"Barrel",Vector3(0.10,0.10,0.72),Vector3(0.0,0.05,-1.39),metal)
+			_add_box(root,"FrontSight",Vector3(0.08,0.16,0.08),Vector3(0.0,0.18,-1.47),Color("#202326"))
+			_add_box(root,"RearSight",Vector3(0.10,0.10,0.12),Vector3(0.0,0.25,-0.16),Color("#202326"))
+			root.rotation_degrees = Vector3(-2.0,0.0,0.0)
+		"shotgun":
+			_add_box(root,"Stock",Vector3(0.36,0.30,0.72),Vector3(0.0,-0.03,0.55),wood)
+			_add_box(root,"Receiver",Vector3(0.34,0.32,0.64),Vector3(0.0,0.02,-0.10),body_color)
+			_add_box(root,"Grip",Vector3(0.18,0.40,0.20),Vector3(0.02,-0.30,0.10),wood.darkened(0.18))
+			_add_box(root,"Pump",Vector3(0.38,0.28,0.54),Vector3(0.0,-0.03,-0.74),wood.darkened(0.10))
+			_add_box(root,"Barrel",Vector3(0.13,0.13,1.18),Vector3(0.0,0.12,-1.12),metal)
+			_add_box(root,"Tube",Vector3(0.11,0.11,0.88),Vector3(0.0,-0.04,-0.98),dark)
+			_add_box(root,"BeadSight",Vector3(0.07,0.07,0.07),Vector3(0.0,0.23,-1.70),Color("#E2C45B"))
+			root.rotation_degrees = Vector3(-2.0,0.0,0.0)
 
 
 func _build_tool(root: Node3D, definition: Dictionary) -> void:
