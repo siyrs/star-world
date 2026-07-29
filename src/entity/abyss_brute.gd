@@ -1,5 +1,5 @@
 class_name AbyssBruteCreature
-extends "res://src/entity/base_creature.gd"
+extends "res://src/entity/hostile_melee_creature.gd"
 
 var elite: bool = true
 var danger_weight: float = 2.0
@@ -28,7 +28,11 @@ func _ready() -> void:
 			"hostile_attack":{
 				"species_id":"abyss_brute",
 				"source_id":"abyss_brute",
+				"attack_kind":"melee",
+				"delivery_kind":"direct",
 				"detection_range":20.0,
+				"minimum_range":0.0,
+				"preferred_range":1.8,
 				"attack_range":2.2,
 				"windup_seconds":1.35,
 				"cooldown_seconds":7.0,
@@ -36,6 +40,8 @@ func _ready() -> void:
 				"cancel_recovery_seconds":0.85,
 				"target_leash_multiplier":1.35,
 				"telegraph_radius_multiplier":1.2,
+				"requires_line_of_sight":false,
+				"cover_probe_count":0,
 			}
 		})
 	super._ready()
