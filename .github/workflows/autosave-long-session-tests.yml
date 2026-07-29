@@ -30,6 +30,7 @@ jobs:
       primary_headless_verbose: true
       domain_scripts: |
         res://tests/qa/bounded_autosave_runtime_regression.gd
+        res://tests/qa/autosave_deferred_pause_race_regression.gd
         res://tests/qa/save_checkpoint_timeline_regression.gd
         res://tests/qa/world_scoped_save_checkpoint_session_regression.gd
         res://tests/qa/runtime_health_failed_return_regression.gd
