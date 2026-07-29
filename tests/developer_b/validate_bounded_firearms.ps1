@@ -16,6 +16,7 @@ $paths = [ordered]@{
   Equipment = Join-Path $root 'src\equipment\equipment_service.gd'
   Actions = Join-Path $root 'src\input\gameplay_input_actions.gd'
   ControllerProfile = Join-Path $root 'src\input\gameplay_controller_profile.gd'
+  ControllerData = Join-Path $root 'data\gameplay_controller_profile.json'
   Input = Join-Path $root 'src\input\gameplay_input_service.gd'
   ControllerPlayer = Join-Path $root 'src\player\controller_exploration_player.gd'
   Player = Join-Path $root 'src\player\character_progression_player.gd'
@@ -42,7 +43,7 @@ foreach ($entry in $paths.GetEnumerator()) {
 }
 $text = @{}
 foreach ($entry in $paths.GetEnumerator()) {
-  if ($entry.Key -notin @('Data','RangedData','ItemsData','RecipesData','ViewData')) {
+  if ($entry.Key -notin @('Data','RangedData','ItemsData','RecipesData','ControllerData','ViewData')) {
     $text[$entry.Key] = Get-Content -Raw -Encoding UTF8 $entry.Value
   }
 }
@@ -169,10 +170,13 @@ if ($text.Hub -match 'current_state\["firearm"\]|current_state\["ranged_combat"\
 foreach ($token in @('const\s+RELOAD','KEY_R','is_reload_just_pressed')) {
   if (($text.Actions + $text.Input) -notmatch $token) { throw "Logical reload input is missing: $token" }
 }
-foreach ($token in @('"reload"','button\s*9')) {
-  if (($text.ControllerProfile + (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\gameplay_controller_profile.json'))) -notmatch $token) {
-    throw "Controller reload profile is missing: $token"
-  }
+$controllerData = Get-Content -Raw -Encoding UTF8 $paths.ControllerData | ConvertFrom-Json
+$reloadBindings = @($controllerData.bindings | Where-Object { [string]$_.action -eq 'reload' })
+if ($reloadBindings.Count -ne 1 -or [string]$reloadBindings[0].kind -ne 'button' -or [int]$reloadBindings[0].button -ne 9) {
+  throw 'Controller reload must have exactly one left-shoulder button 9 binding'
+}
+if ($text.ControllerProfile -notmatch '"reload"' -or $text.ControllerProfile -notmatch '_button\("reload",\s*9\)') {
+  throw 'Controller profile script fallback must preserve reload on button 9'
 }
 foreach ($token in @('is_reload_just_pressed','request_ranged_reload','reload_count')) {
   if ($text.ControllerPlayer -notmatch $token) { throw "Controller player reload routing is missing: $token" }
