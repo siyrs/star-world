@@ -36,6 +36,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_protected_save_deletion.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_trash_manager.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_autosave.ps1"
+& "$PSScriptRoot\developer_b\validate_autosave_long_session.ps1"
 & "$PSScriptRoot\developer_b\validate_save_checkpoint_timeline.ps1"
 & "$PSScriptRoot\developer_b\validate_world_scoped_save_checkpoint_sessions.ps1"
 & "$PSScriptRoot\developer_b\validate_runtime_health_report.ps1"
@@ -116,6 +117,7 @@ Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
 Invoke-GodotTest 'res://tests/qa/map_signature_prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/service_hub_feature_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/bounded_autosave_runtime_regression.gd'
+Invoke-GodotTest 'res://tests/qa/autosave_long_session_endurance_regression.gd'
 Invoke-GodotTest 'res://tests/qa/save_checkpoint_timeline_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_scoped_save_checkpoint_session_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_runtime_lifecycle_regression.gd'
@@ -182,4 +184,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: world-scoped checkpoint sessions + data-driven controller gameplay + cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
+Write-Host 'PASS: fixed-point long-session autosave + world-scoped checkpoint sessions + data-driven controller gameplay + cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
