@@ -29,6 +29,10 @@ var _shot_count := 0
 var _rejection_count := 0
 var _cancel_count := 0
 var _last_result: Dictionary = {}
+var _profile_cache_initialized := false
+var _cached_weapon_id := ""
+var _cached_profile: Dictionary = {}
+var _profile_refresh_count := 0
 
 
 func _ready() -> void:
@@ -56,12 +60,15 @@ func setup(p_inventory: Node, p_equipment: Node, p_combat: Node) -> void:
 	equipment_service = p_equipment
 	combat_service = p_combat
 	registry.ensure_loaded()
+	_profile_cache_initialized = false
+	_cached_weapon_id = ""
+	_cached_profile.clear()
 	if projectile_runtime != null:
 		projectile_runtime.call("setup", combat_service)
 
 
 func has_ranged_weapon() -> bool:
-	return not get_active_profile().is_empty()
+	return not _active_profile_ref().is_empty()
 
 
 func get_equipped_weapon_id() -> String:
@@ -72,11 +79,11 @@ func get_equipped_weapon_id() -> String:
 
 
 func get_active_profile() -> Dictionary:
-	return registry.get_profile(get_equipped_weapon_id())
+	return _active_profile_ref().duplicate(true)
 
 
 func begin_charge() -> Dictionary:
-	var profile := get_active_profile()
+	var profile := _active_profile_ref()
 	if profile.is_empty():
 		return {"handled": false, "accepted": false, "reason": "not_ranged_weapon"}
 	if _charging:
@@ -210,7 +217,9 @@ func clear(reason: String = "clear") -> void:
 
 
 func get_snapshot() -> Dictionary:
-	var profile := get_active_profile()
+	# This path is read every frame by the HUD. Use the cached immutable registry
+	# profile and only duplicate small mutable diagnostic dictionaries.
+	var profile := _active_profile_ref()
 	var active_profile := _charge_profile if _charging else profile
 	var ammo_item_id := str(profile.get("ammo_item_id", ""))
 	return {
@@ -229,9 +238,20 @@ func get_snapshot() -> Dictionary:
 		"shot_count": _shot_count,
 		"rejection_count": _rejection_count,
 		"cancel_count": _cancel_count,
+		"profile_refresh_count": _profile_refresh_count,
 		"last_result": _last_result.duplicate(true),
 		"projectiles": projectile_runtime.call("get_snapshot") if projectile_runtime != null else {},
 	}
+
+
+func _active_profile_ref() -> Dictionary:
+	var weapon_id := get_equipped_weapon_id()
+	if not _profile_cache_initialized or weapon_id != _cached_weapon_id:
+		_cached_weapon_id = weapon_id
+		_cached_profile = registry.get_profile(weapon_id)
+		_profile_cache_initialized = true
+		_profile_refresh_count += 1
+	return _cached_profile
 
 
 func _has_ammo(profile: Dictionary) -> bool:
