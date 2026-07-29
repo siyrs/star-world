@@ -6,6 +6,9 @@ signal craft_succeeded(recipe_id: String, output: Dictionary)
 signal craft_failed(recipe_id: String, reason: String)
 
 const DEFAULT_DATA_PATH := "res://data/recipes.json"
+const DEFAULT_EXTENSION_PATHS: Array[String] = [
+	"res://data/ranged_combat.json",
+]
 const VALID_STATIONS := ["hand", "workbench"]
 
 var inventory
@@ -25,27 +28,34 @@ func setup(inventory_service) -> void:
 
 
 func load_recipes(path: String = DEFAULT_DATA_PATH) -> bool:
-	_recipes.clear()
-	if not FileAccess.file_exists(path):
-		push_error("Recipe registry is missing: %s" % path)
+	var source_paths: Array[String] = [path]
+	if path == DEFAULT_DATA_PATH:
+		for extension_path: String in DEFAULT_EXTENSION_PATHS:
+			source_paths.append(extension_path)
+	var staged: Dictionary = {}
+	for source_path: String in source_paths:
+		var parsed := _read_source(source_path)
+		if parsed.is_empty():
+			return false
+		var raw_recipes: Variant = parsed.get("recipes", [])
+		if raw_recipes is not Array:
+			push_error("Invalid recipe registry: %s" % source_path)
+			return false
+		for raw_recipe: Variant in raw_recipes:
+			if raw_recipe is not Dictionary:
+				push_error("Invalid recipe entry in: %s" % source_path)
+				return false
+			var recipe_id := str(raw_recipe.get("id", "")).strip_edges()
+			var station := str(raw_recipe.get("station", "hand"))
+			if recipe_id.is_empty() or station not in VALID_STATIONS or staged.has(recipe_id):
+				push_error("Duplicate or invalid recipe '%s' in: %s" % [recipe_id, source_path])
+				return false
+			staged[recipe_id] = raw_recipe.duplicate(true)
+	if staged.is_empty():
 		return false
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return false
-	var parsed = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary or not parsed.has("recipes"):
-		push_error("Invalid recipe registry: %s" % path)
-		return false
-	for raw_recipe in parsed["recipes"]:
-		if raw_recipe is not Dictionary:
-			continue
-		var recipe_id := str(raw_recipe.get("id", ""))
-		var station := str(raw_recipe.get("station", "hand"))
-		if recipe_id.is_empty() or station not in VALID_STATIONS:
-			continue
-		_recipes[recipe_id] = raw_recipe.duplicate(true)
+	_recipes = staged
 	recipes_loaded.emit(_recipes.size())
-	return not _recipes.is_empty()
+	return true
 
 
 func set_station(station: String) -> void:
@@ -62,7 +72,7 @@ func get_recipe(recipe_id: String) -> Dictionary:
 
 func get_recipes(station_filter: String = "") -> Array:
 	var result: Array = []
-	for recipe in _recipes.values():
+	for recipe: Variant in _recipes.values():
 		if station_filter.is_empty() or str(recipe.get("station", "hand")) == station_filter:
 			result.append(recipe.duplicate(true))
 	return result
@@ -70,7 +80,7 @@ func get_recipes(station_filter: String = "") -> Array:
 
 func get_available_recipes() -> Array:
 	var result: Array = []
-	for recipe in _recipes.values():
+	for recipe: Variant in _recipes.values():
 		if _station_allowed(str(recipe.get("station", "hand"))) and can_craft(str(recipe.get("id", ""))):
 			result.append(recipe.duplicate(true))
 	return result
@@ -121,12 +131,12 @@ func craft(recipe_id: String, times: int = 1) -> bool:
 		if not inventory.has_items(required):
 			craft_failed.emit(recipe_id, "requirements_or_station")
 			return false
-		for item_id in required:
+		for item_id: Variant in required:
 			inventory.remove_item(str(item_id), int(required[item_id]))
 		var leftover: int = inventory.add_item(output_id, output_count)
 		if leftover > 0:
 			inventory.remove_item(output_id, output_count - leftover)
-			for item_id in required:
+			for item_id: Variant in required:
 				inventory.add_item(str(item_id), int(required[item_id]))
 			craft_failed.emit(recipe_id, "inventory_full")
 			return false
@@ -149,3 +159,18 @@ func _station_allowed(required_station: String) -> bool:
 	if required_station == "hand":
 		return true
 	return required_station == active_station
+
+
+func _read_source(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		push_error("Recipe registry is missing: %s" % path)
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("Unable to open recipe registry: %s" % path)
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if parsed is not Dictionary or not parsed.has("recipes"):
+		push_error("Invalid recipe registry: %s" % path)
+		return {}
+	return parsed

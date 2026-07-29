@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "bow",
+      "name": "猎弓",
+      "category": "weapon",
+      "tool_type": "bow",
+      "max_stack": 1,
+      "durability": 384,
+      "power": 2,
+      "mining_speed": 1.0,
+      "equipment": {
+        "slot": "main_hand",
+        "attributes": {}
+      },
+      "color": "#9A6A3B"
+    },
+    {
+      "id": "arrow",
+      "name": "箭矢",
+      "category": "ammunition",
+      "max_stack": 64,
+      "color": "#D8D3C5"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "bow",
+      "name": "猎弓",
+      "station": "workbench",
+      "ingredients": {
+        "stick": 3,
+        "string": 3
+      },
+      "output": {
+        "id": "bow",
+        "count": 1
+      }
+    },
+    {
+      "id": "arrows",
+      "name": "箭矢",
+      "station": "workbench",
+      "ingredients": {
+        "stone": 1,
+        "stick": 1,
+        "feather": 1
+      },
+      "output": {
+        "id": "arrow",
+        "count": 4
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "id": "bow",
+      "weapon_item_id": "bow",
+      "ammo_item_id": "arrow",
+      "draw_seconds": 0.8,
+      "minimum_draw_ratio": 0.18,
+      "minimum_damage": 2.0,
+      "maximum_damage": 7.0,
+      "minimum_speed": 12.0,
+      "maximum_speed": 32.0,
+      "gravity": 5.5,
+      "max_distance": 64.0,
+      "max_lifetime_seconds": 5.0,
+      "cooldown_seconds": 0.55,
+      "knockback_horizontal": 3.4,
+      "knockback_vertical": 0.35,
+      "hit_stun_seconds": 0.16,
+      "durability_cost": 1,
+      "collision_mask": 5
+    }
+  ]
+}

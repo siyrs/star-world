@@ -10,6 +10,7 @@ const REPEATED_HOSTILE_DAMAGE_COOLDOWN := 4.5
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
+var ranged_combat_service: Node
 var _base_walk_speed := 0.0
 var _base_sprint_speed := 0.0
 var _hostile_damage_grace_remaining := 0.0
@@ -52,6 +53,8 @@ func setup_gameplay_services(services: Dictionary) -> void:
 		bind_attribute_service(services["attributes"])
 	if services.get("combat") is Node:
 		bind_combat_service(services["combat"])
+	if services.get("ranged_combat") is Node:
+		bind_ranged_combat_service(services["ranged_combat"])
 
 
 func bind_equipment_service(p_equipment_service: Node) -> void:
@@ -70,6 +73,10 @@ func bind_combat_service(p_combat_service: Node) -> void:
 	combat_service = p_combat_service
 
 
+func bind_ranged_combat_service(p_ranged_combat_service: Node) -> void:
+	ranged_combat_service = p_ranged_combat_service
+
+
 func set_respawn_position(position: Vector3) -> bool:
 	if not (is_finite(position.x) and is_finite(position.y) and is_finite(position.z)):
 		return false
@@ -84,6 +91,12 @@ func reset_respawn_position() -> void:
 
 func get_respawn_position() -> Vector3:
 	return spawn_position
+
+
+func get_ranged_combat_snapshot() -> Dictionary:
+	if ranged_combat_service == null or not ranged_combat_service.has_method("get_snapshot"):
+		return {}
+	return ranged_combat_service.call("get_snapshot")
 
 
 func take_damage(amount: float, source: String = "world") -> void:
@@ -113,6 +126,61 @@ func take_damage(amount: float, source: String = "world") -> void:
 	if hostile_damage:
 		_hostile_damage_cooldown_remaining = REPEATED_HOSTILE_DAMAGE_COOLDOWN
 	combat_result_reported.emit(result.duplicate(true))
+
+
+func _start_primary_action() -> void:
+	if ranged_combat_service != null and ranged_combat_service.has_method("begin_charge"):
+		var raw_result: Variant = ranged_combat_service.call("begin_charge")
+		if raw_result is Dictionary:
+			var result: Dictionary = raw_result
+			if bool(result.get("handled", false)):
+				if not bool(result.get("accepted", false)):
+					_primary_action_held = false
+				combat_result_reported.emit(result.duplicate(true))
+				return
+	super._start_primary_action()
+
+
+func _advance_harvest(delta: float) -> void:
+	if (
+		ranged_combat_service != null
+		and ranged_combat_service.has_method("get_snapshot")
+		and bool(ranged_combat_service.call("get_snapshot").get("charging", false))
+	):
+		if ranged_combat_service.has_method("advance_charge"):
+			ranged_combat_service.call("advance_charge", delta)
+		return
+	super._advance_harvest(delta)
+
+
+func _cancel_harvest(reason: String) -> void:
+	if ranged_combat_service != null and ranged_combat_service.has_method("get_snapshot"):
+		var snapshot: Dictionary = ranged_combat_service.call("get_snapshot")
+		if bool(snapshot.get("charging", false)):
+			var result: Dictionary = {}
+			if reason in ["released", "controller_released"]:
+				var firing := _ranged_origin_and_direction()
+				result = ranged_combat_service.call(
+					"release_charge",
+					firing.get("origin", global_position),
+					firing.get("direction", -global_transform.basis.z),
+					self
+				)
+			else:
+				result = ranged_combat_service.call("cancel_charge", reason)
+			combat_result_reported.emit(result.duplicate(true))
+			if bool(result.get("accepted", false)):
+				_report_player_action(
+					&"ranged_fire",
+					{
+						"weapon_item_id": str(result.get("weapon_item_id", "")),
+						"ammo_item_id": str(result.get("ammo_item_id", "")),
+						"charge_ratio": float(result.get("charge_ratio", 0.0)),
+						"damage": float(result.get("damage", 0.0)),
+					}
+				)
+			return
+	super._cancel_harvest(reason)
 
 
 func _try_attack_entity(collider: Node) -> bool:
@@ -159,6 +227,19 @@ func _consume_selected_durability(reason: String) -> void:
 		combat_service.call("consume_attack_durability", 1)
 		return
 	super._consume_selected_durability(reason)
+
+
+func _ranged_origin_and_direction() -> Dictionary:
+	var direction := -global_transform.basis.z
+	var origin := global_position + Vector3.UP * 1.55
+	if interaction_ray != null and is_instance_valid(interaction_ray):
+		direction = -interaction_ray.global_transform.basis.z
+		origin = interaction_ray.global_position
+	direction = direction.normalized() if direction.length_squared() > 0.0001 else Vector3.FORWARD
+	return {
+		"origin": origin + direction * 0.35,
+		"direction": direction,
+	}
 
 
 func _on_attributes_changed(_snapshot: Dictionary) -> void:

@@ -4,6 +4,7 @@ extends "res://src/ui/tool_progression_service_hub.gd"
 const EquipmentServiceScript = preload("res://src/equipment/equipment_service.gd")
 const AttributeServiceScript = preload("res://src/attribute/attribute_service.gd")
 const CombatServiceScript = preload("res://src/combat/combat_service.gd")
+const RangedCombatServiceScript = preload("res://src/combat/ranged_combat_service.gd")
 const AgricultureRuntimeParticipantScript = preload(
 	"res://src/agriculture/scalable_agriculture_runtime_participant.gd"
 )
@@ -13,6 +14,7 @@ const AGRICULTURE_RUNTIME_FEATURE := &"agriculture_runtime"
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
+var ranged_combat_service: Node
 var agriculture_service: Node
 var agriculture_interaction: Node
 var agriculture_runtime_participant: Node
@@ -27,6 +29,10 @@ func _ready() -> void:
 	attribute_service.call("setup", equipment_service)
 	combat_service = _add_service(CombatServiceScript.new(), "CombatService")
 	combat_service.call("setup", attribute_service, equipment_service)
+	ranged_combat_service = _add_service(
+		RangedCombatServiceScript.new(), "RangedCombatService"
+	)
+	ranged_combat_service.call("setup", inventory, equipment_service, combat_service)
 	agriculture_runtime_participant = _register_feature_participant(
 		AGRICULTURE_RUNTIME_FEATURE,
 		AgricultureRuntimeParticipantScript.new(),
@@ -45,13 +51,20 @@ func _ready() -> void:
 		block_interaction.call("register_extension", rest_service)
 	if game_ui != null and game_ui.has_method("setup_character_progression"):
 		game_ui.call(
-			"setup_character_progression", equipment_service, attribute_service, combat_service
+			"setup_character_progression",
+			equipment_service,
+			attribute_service,
+			combat_service,
+			ranged_combat_service
 		)
 	_connect_character_feedback()
+	_connect_ranged_feedback()
 	_connect_rest_feedback()
 
 
 func _begin_world(state: Dictionary) -> void:
+	if ranged_combat_service != null:
+		ranged_combat_service.call("clear", "begin_world")
 	if equipment_service != null:
 		equipment_service.call("deserialize", state.get("equipment", {}))
 	if attribute_service != null:
@@ -79,6 +92,8 @@ func attach_game(
 		player.call("bind_attribute_service", attribute_service)
 	if player.has_method("bind_combat_service"):
 		player.call("bind_combat_service", combat_service)
+	if player.has_method("bind_ranged_combat_service"):
+		player.call("bind_ranged_combat_service", ranged_combat_service)
 
 
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
@@ -92,14 +107,14 @@ func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -
 
 
 func handle_world_start_failed(reason: String) -> void:
-	_clear_progression_state()
+	_clear_progression_state("world_start_failed")
 	super.handle_world_start_failed(reason)
 
 
 func return_to_menu() -> void:
 	super.return_to_menu()
 	if current_world_id.is_empty():
-		_clear_progression_state()
+		_clear_progression_state("return_to_menu")
 
 
 func get_character_snapshot() -> Dictionary:
@@ -111,6 +126,11 @@ func get_character_snapshot() -> Dictionary:
 			attribute_service.call("get_snapshot") if attribute_service != null else {}
 		),
 		"combat": combat_service.call("get_snapshot") if combat_service != null else {},
+		"ranged_combat": (
+			ranged_combat_service.call("get_snapshot")
+			if ranged_combat_service != null
+			else {}
+		),
 		"agriculture": (
 			agriculture_service.call("get_runtime_snapshot")
 			if agriculture_service != null
@@ -128,7 +148,7 @@ func _exit_tree() -> void:
 		and block_interaction.has_method("unregister_extension")
 	):
 		block_interaction.call("unregister_extension", rest_service)
-	_clear_progression_state()
+	_clear_progression_state("shutdown")
 	super._exit_tree()
 
 
@@ -138,6 +158,13 @@ func _connect_character_feedback() -> void:
 	equipment_service.connect("item_equipped", Callable(self, "_on_item_equipped"))
 	equipment_service.connect("item_unequipped", Callable(self, "_on_item_unequipped"))
 	equipment_service.connect("item_broken", Callable(self, "_on_equipped_item_broken"))
+
+
+func _connect_ranged_feedback() -> void:
+	if ranged_combat_service == null:
+		return
+	ranged_combat_service.connect("shot_fired", Callable(self, "_on_ranged_shot_fired"))
+	ranged_combat_service.connect("shot_rejected", Callable(self, "_on_ranged_shot_rejected"))
 
 
 func _connect_rest_feedback() -> void:
@@ -173,6 +200,29 @@ func _on_equipped_item_broken(
 	)
 
 
+func _on_ranged_shot_fired(result: Dictionary) -> void:
+	_publish_character_message(
+		"箭矢已发射 · 蓄力 %d%%" % int(round(float(result.get("charge_ratio", 0.0)) * 100.0)),
+		"info",
+		"ranged:fired",
+		1.4
+	)
+
+
+func _on_ranged_shot_rejected(result: Dictionary) -> void:
+	var reason := str(result.get("reason", "rejected"))
+	var message: String = str({
+		"no_ammo": "没有箭矢",
+		"undercharged": "蓄力不足，未消耗箭矢",
+		"cooldown": "猎弓尚未准备好",
+		"projectile_capacity": "场景中的飞行箭矢已达到上限",
+		"weapon_changed": "蓄力期间武器已改变",
+	}.get(reason, "本次远程攻击未生效"))
+	_publish_character_message(
+		message, "warning", "ranged:rejected:%s" % reason, 2.2
+	)
+
+
 func _on_spawn_point_changed(_position: Vector3, _bed_position: Vector3i) -> void:
 	if audio_service != null and audio_service.has_method("play_block_place"):
 		audio_service.call("play_block_place", "wool")
@@ -194,7 +244,9 @@ func _publish_character_message(
 		player_experience.call("publish_message", message, severity, duration, dedupe_key)
 
 
-func _clear_progression_state() -> void:
+func _clear_progression_state(reason: String = "clear") -> void:
+	if ranged_combat_service != null and ranged_combat_service.has_method("clear"):
+		ranged_combat_service.call("clear", reason)
 	if rest_service != null and rest_service.has_method("clear"):
 		rest_service.call("clear")
 	if equipment_service != null and equipment_service.has_method("clear"):
