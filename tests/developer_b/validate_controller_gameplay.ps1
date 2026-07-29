@@ -6,6 +6,7 @@ $profileScriptPath = Join-Path $projectRoot 'src\input\gameplay_controller_profi
 $actionsPath = Join-Path $projectRoot 'src\input\gameplay_input_actions.gd'
 $servicePath = Join-Path $projectRoot 'src\input\gameplay_input_service.gd'
 $playerPath = Join-Path $projectRoot 'src\player\controller_exploration_player.gd'
+$characterPlayerPath = Join-Path $projectRoot 'src\player\character_progression_player.gd'
 $explorationPlayerPath = Join-Path $projectRoot 'src\player\exploration_player.gd'
 $basePlayerPath = Join-Path $projectRoot 'src\player\first_person_player.gd'
 $scenePath = Join-Path $projectRoot 'scenes\game\player.tscn'
@@ -19,6 +20,7 @@ foreach ($path in @(
   $actionsPath,
   $servicePath,
   $playerPath,
+  $characterPlayerPath,
   $explorationPlayerPath,
   $basePlayerPath,
   $scenePath,
@@ -47,14 +49,14 @@ if ($triggerThreshold -lt 0.1 -or $triggerThreshold -gt 0.95) { throw 'Trigger t
 $requiredActions = @(
   'move_left','move_right','move_forward','move_backward',
   'look_left','look_right','look_up','look_down',
-  'jump','sprint','primary_action','secondary_action',
+  'jump','sprint','primary_action','secondary_action','reload',
   'hotbar_previous','hotbar_next','toggle_inventory','toggle_crafting',
   'toggle_exploration_journal','toggle_guidance','toggle_diagnostics',
   'quick_save','ui_cancel'
 )
 $bindings = @($data.bindings)
-if ($bindings.Count -ne 21 -or $bindings.Count -gt 32) {
-  throw "Controller gameplay binding count must be exactly 21 and at most 32; actual=$($bindings.Count)"
+if ($bindings.Count -ne 22 -or $bindings.Count -gt 32) {
+  throw "Controller gameplay binding count must be exactly 22 and at most 32; actual=$($bindings.Count)"
 }
 $actionCounts = @{}
 $physicalCounts = @{}
@@ -85,12 +87,18 @@ foreach ($action in $requiredActions) {
 foreach ($physicalKey in $physicalCounts.Keys) {
   if ([int]$physicalCounts[$physicalKey] -ne 1) { throw "Controller physical binding conflict: $physicalKey" }
 }
+$reloadBinding = @($bindings | Where-Object { [string]$_.action -eq 'reload' })
+if ($reloadBinding.Count -ne 1 -or [string]$reloadBinding[0].kind -ne 'button' -or [int]$reloadBinding[0].button -ne 9) {
+  throw 'Controller reload must use the previously free left-shoulder button 9'
+}
 
 $actionsText = Get-Content -Raw -Encoding UTF8 $actionsPath
 foreach ($required in @(
   'ControllerProfileScript',
   'PRIMARY_ACTION',
   'SECONDARY_ACTION',
+  'RELOAD',
+  'KEY_R',
   'HOTBAR_PREVIOUS',
   'HOTBAR_NEXT',
   '_ensure_controller_binding',
@@ -105,6 +113,7 @@ foreach ($required in @(
   'get_look_vector',
   'is_primary_action_pressed',
   'is_secondary_action_just_pressed',
+  'is_reload_just_pressed',
   'get_hotbar_cycle_just_pressed',
   'get_controller_profile_snapshot'
 )) {
@@ -116,9 +125,15 @@ foreach ($required in @(
   '_sync_controller_primary',
   '_apply_controller_look',
   '_handle_controller_commands',
+  'is_reload_just_pressed',
+  'request_ranged_reload',
   'get_controller_gameplay_snapshot'
 )) {
   if (-not $playerText.Contains($required)) { throw "Controller player is missing '$required'" }
+}
+$characterPlayerText = Get-Content -Raw -Encoding UTF8 $characterPlayerPath
+if (-not $characterPlayerText.Contains('func request_ranged_reload')) {
+  throw 'Character player does not expose the device-independent reload port'
 }
 $explorationPlayerText = Get-Content -Raw -Encoding UTF8 $explorationPlayerPath
 if (-not $explorationPlayerText.Contains('res://src/player/controller_exploration_player.gd')) {
@@ -127,7 +142,7 @@ if (-not $explorationPlayerText.Contains('res://src/player/controller_exploratio
 if (-not $explorationPlayerText.Contains('bind_prospecting_service')) {
   throw 'ExplorationPlayer lost the existing prospecting port'
 }
-foreach ($productionText in @($playerText, $explorationPlayerText, (Get-Content -Raw -Encoding UTF8 $basePlayerPath))) {
+foreach ($productionText in @($playerText, $characterPlayerText, $explorationPlayerText, (Get-Content -Raw -Encoding UTF8 $basePlayerPath))) {
   foreach ($forbidden in @('InputEventJoypad','JOY_BUTTON_','JOY_AXIS_')) {
     if ($productionText.Contains($forbidden)) { throw "Physical controller mapping leaked into production player code: $forbidden" }
   }
@@ -152,4 +167,4 @@ foreach ($required in @(
   if (-not $workflowText.Contains($required)) { throw "Controller gameplay workflow is missing '$required'" }
 }
 
-Write-Host "PASS controller gameplay bindings=$($bindings.Count) movement_deadzone=$movementDeadzone look_deadzone=$lookDeadzone trigger=$triggerThreshold"
+Write-Host "PASS controller gameplay bindings=$($bindings.Count) reload=button9 movement_deadzone=$movementDeadzone look_deadzone=$lookDeadzone trigger=$triggerThreshold"
