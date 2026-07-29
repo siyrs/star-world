@@ -8,9 +8,11 @@ const MeshFactoryScript = preload("res://src/player/held_item_mesh_factory.gd")
 const GROUND_SUPPORT_UP := 0.08
 const GROUND_SUPPORT_DOWN := 0.24
 const GROUND_SUPPORT_MAX_UPWARD_SPEED := 0.15
+const MAIN_HAND_SLOT := "main_hand"
 
 var player: Node
 var inventory: Node
+var equipment_service: Node
 var harvest_service: Node
 var policy = PolicyScript.new()
 var mesh_factory = MeshFactoryScript.new()
@@ -19,6 +21,7 @@ var active := true
 var current_item_id := ""
 var current_block_id := ""
 var current_model_kind := "empty"
+var current_item_source := "empty"
 var mining_active := false
 var _model: Node3D
 var _elapsed := 0.0
@@ -41,10 +44,16 @@ func _ready() -> void:
 	_refresh_selected_item()
 
 
-func setup(p_player: Node, p_inventory: Node = null, p_harvest_service: Node = null) -> void:
+func setup(
+	p_player: Node,
+	p_inventory: Node = null,
+	p_harvest_service: Node = null,
+	p_equipment_service: Node = null
+) -> void:
 	_bind_player(p_player)
 	_bind_inventory(p_inventory)
 	_bind_harvest_service(p_harvest_service)
+	_bind_equipment_service(p_equipment_service)
 	_refresh_selected_item()
 
 
@@ -67,6 +76,7 @@ func get_snapshot() -> Dictionary:
 		"active": active,
 		"visible": visible,
 		"item_id": current_item_id,
+		"item_source": current_item_source,
 		"block_id": current_block_id,
 		"model_kind": current_model_kind,
 		"part_count": int(_model.get_meta("part_count", 0)) if _model != null else 0,
@@ -110,6 +120,7 @@ func _load_config() -> void:
 		"base_scale":0.72,
 		"block_scale":0.72,
 		"tool_scale":0.82,
+		"firearm_scale":0.76,
 		"item_scale":0.68,
 		"switch_seconds":0.18,
 		"swing_seconds":0.28,
@@ -156,6 +167,16 @@ func _bind_inventory(value: Node) -> void:
 	_refresh_selected_item()
 
 
+func _bind_equipment_service(value: Node) -> void:
+	if equipment_service == value:
+		return
+	_disconnect_equipment()
+	equipment_service = value
+	if equipment_service != null and equipment_service.has_signal("equipment_changed"):
+		equipment_service.connect("equipment_changed", Callable(self, "_on_equipment_changed"))
+	_refresh_selected_item()
+
+
 func _bind_harvest_service(value: Node) -> void:
 	if harvest_service == value:
 		return
@@ -181,6 +202,9 @@ func _refresh_bindings() -> void:
 	var next_inventory: Variant = player.get("inventory")
 	if next_inventory is Node:
 		_bind_inventory(next_inventory)
+	var next_equipment: Variant = player.get("equipment_service")
+	if next_equipment is Node:
+		_bind_equipment_service(next_equipment)
 	var next_harvest: Variant = player.get("harvest_service")
 	if next_harvest is Node:
 		_bind_harvest_service(next_harvest)
@@ -188,14 +212,22 @@ func _refresh_bindings() -> void:
 
 func _refresh_selected_item() -> void:
 	var slot: Dictionary = {}
-	if inventory != null and inventory.has_method("get_selected_item"):
+	var source := "empty"
+	if equipment_service != null and equipment_service.has_method("get_slot"):
+		var raw_equipped: Variant = equipment_service.call("get_slot", MAIN_HAND_SLOT)
+		if raw_equipped is Dictionary and not raw_equipped.is_empty():
+			slot = raw_equipped
+			source = "equipment"
+	if slot.is_empty() and inventory != null and inventory.has_method("get_selected_item"):
 		var raw_slot: Variant = inventory.call("get_selected_item")
 		if raw_slot is Dictionary:
 			slot = raw_slot
+			source = "inventory" if not slot.is_empty() else "empty"
 	var item_id := str(slot.get("item_id", ""))
-	if item_id == current_item_id and _model != null:
+	if item_id == current_item_id and source == current_item_source and _model != null:
 		return
 	current_item_id = item_id
+	current_item_source = source
 	var definition: Dictionary = {}
 	if not item_id.is_empty() and inventory != null:
 		var registry: Variant = inventory.get("registry")
@@ -254,6 +286,8 @@ func _update_transform(_delta: float) -> void:
 			kind_scale = float(config.get("block_scale", _base_scale))
 		"tool":
 			kind_scale = float(config.get("tool_scale", _base_scale))
+		"firearm":
+			kind_scale = float(config.get("firearm_scale", _base_scale))
 	var final_scale := maxf(0.05, kind_scale * float(sample.get("scale_multiplier", 1.0)))
 	scale = Vector3.ONE * final_scale
 
@@ -283,6 +317,10 @@ func _refresh_visibility() -> void:
 
 
 func _on_selected_slot_changed(_index: int, _slot: Dictionary) -> void:
+	_refresh_selected_item()
+
+
+func _on_equipment_changed(_snapshot: Dictionary) -> void:
 	_refresh_selected_item()
 
 
@@ -319,6 +357,14 @@ func _disconnect_inventory() -> void:
 		inventory.disconnect("selected_slot_changed", callback)
 
 
+func _disconnect_equipment() -> void:
+	if equipment_service == null or not equipment_service.has_signal("equipment_changed"):
+		return
+	var callback := Callable(self, "_on_equipment_changed")
+	if equipment_service.is_connected("equipment_changed", callback):
+		equipment_service.disconnect("equipment_changed", callback)
+
+
 func _disconnect_harvest() -> void:
 	if harvest_service == null:
 		return
@@ -336,6 +382,7 @@ func _disconnect_harvest() -> void:
 func _exit_tree() -> void:
 	_disconnect_player()
 	_disconnect_inventory()
+	_disconnect_equipment()
 	_disconnect_harvest()
 
 
