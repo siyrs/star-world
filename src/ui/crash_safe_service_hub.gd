@@ -3,7 +3,7 @@ extends "res://src/ui/exploration_progression_service_hub.gd"
 
 signal application_quit_requested(source: StringName)
 
-const SessionRecoveryServiceScript = preload(
+const WorldSessionRecoveryServiceScript = preload(
 	"res://src/save/world_session_recovery_service.gd"
 )
 
@@ -17,7 +17,7 @@ var _last_application_quit_source: StringName = &""
 func _ready() -> void:
 	super._ready()
 	world_session_recovery_service = _add_service(
-		SessionRecoveryServiceScript.new(), "WorldSessionRecovery"
+		WorldSessionRecoveryServiceScript.new(), "WorldSessionRecovery"
 	)
 	if world_session_recovery_service != null:
 		world_session_recovery_service.call("setup", save_service)
