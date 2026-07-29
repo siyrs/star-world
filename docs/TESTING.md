@@ -153,6 +153,68 @@ build/bounded-autosave-desktop.stderr.log
 
 真实桌面旅程必须验证设置页、真实 Pause/Resume、未保存背包变化、一次生产自动保存、重新加载完整性和 HUD 成功提示。
 
+## 长会话自动保存
+
+### 静态合同
+
+```powershell
+powershell -ExecutionPolicy Bypass -File `
+  .\tests\developer_b\validate_autosave_long_session.ps1
+```
+
+覆盖：
+
+- 纯 `AutosaveSchedulePolicy`；
+- 整数微秒和有符号舍入余数；
+- 单次最多 1 秒帧越界 carry；
+- 巨型 delta 不触发追赶式保存风暴；
+- `AutosaveRuntimeParticipant` 只保留生命周期与副作用；
+- F3 连续失败与恢复文本；
+- 长会话文档、架构审计、统一入口和 reusable CI。
+
+### 8 小时纯策略与生产恢复
+
+```powershell
+godot --headless --path . `
+  --script res://tests/qa/autosave_long_session_endurance_regression.gd `
+  -- --disable-update-check
+```
+
+该脚本验证：
+
+- 混合 16.67ms 至 1s 帧累计 8 小时；
+- 5 分钟周期恰好 96 个检查点；
+- 最终倒计时回到完整 300 秒；
+- 正常生产 delta 的 discarded overshoot 为 0；
+- 八次真实自动保存和一次手动保存；
+- 三次真实失败、15/60/300 秒退避和真实恢复；
+- 13 条检查点收敛为 12 条且 dropped = 1；
+- 失败期间背包变化由恢复保存完整提交；
+- fixed-point 调度状态不进入 `world.json`。
+
+### 真实桌面失败与恢复
+
+```powershell
+.\tests\ci\run_godot_desktop_test.ps1 `
+  -Godot C:\path\to\Godot_v4.7-stable_win64_console.exe `
+  -ProjectRoot . `
+  -ScriptPath res://tests/qa/autosave_long_session_desktop_acceptance.gd `
+  -OutputPath build\autosave-long-session-backoff.png `
+  -TimeoutMilliseconds 1200000
+```
+
+输出：
+
+```text
+build/autosave-long-session-backoff.png
+build/autosave-long-session-recovered.png
+build/autosave-long-session-report.json
+build/autosave-long-session-backoff.stdout.log
+build/autosave-long-session-backoff.stderr.log
+```
+
+第一张截图必须显示连续三次失败和 300 秒退避；第二张必须显示恢复成功、当前世界本次进入 12 条检查点和精确 dropped 计数。JSON 必须包含运行时计数、时间线、F3 文本、面板矩形和最终持久化物品数。
+
 ## 保存检查点时间线
 
 ### 静态合同
