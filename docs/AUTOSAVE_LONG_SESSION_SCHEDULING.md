@@ -81,6 +81,17 @@ interval - 0.15 s
 - 手动保存建立新的完整周期，清除旧 carry；
 - 暂停发生在 pending 与 flush 之间时保留 carry，恢复后重新提交同一个到期事实。
 
+### deferred 保存暂停边界
+
+到期事实通过 deferred 保存执行，使同帧手动保存能够取消冗余写入。若到期后、deferred flush 前刚好进入 Pause：
+
+- pending 必须保持为 true；
+- 暂停期间不执行磁盘写入；
+- 恢复时由 `pause_changed(false)` 重新安排同一个 flush；
+- 多个 deferred 回调仍只允许第一个消费 pending；
+- 若暂停菜单中的手动保存先成功，则 pending 被权威 `world_save_completed` 清除，恢复后不得补写第二次自动保存；
+- 不允许通过“先消费 pending、再判断 Pause”丢失恢复后的第一帧活动时间。
+
 ## 状态转换
 
 ### 配置变化
@@ -162,6 +173,16 @@ window sequence / transition count
 - 生产大小 delta 不丢弃活动时间；
 - 迭代次数具有硬上限。
 
+### deferred Pause 竞态
+
+`autosave_deferred_pause_race_regression.gd` 在同一调用栈中先形成 due、再切换 Pause：
+
+- deferred flush 必须在暂停期间保持 pending；
+- Resume 只执行一次保存并开始完整新周期；
+- 第二轮 pending 可由暂停菜单手动保存取消；
+- Resume 不得产生重复自动保存；
+- attempt、success、manual reset 和未来倒计时必须精确。
+
 ### 生产 Headless
 
 同一正式世界执行：
@@ -194,6 +215,7 @@ stdout / stderr
 - 新静态合同；
 - Godot 4.7 严格导入；
 - 8 小时纯调度回归；
+- deferred Pause 竞态与手动取消回归；
 - 生产保存、失败与恢复回归；
 - 原 bounded autosave、checkpoint timeline、world session、failed return、runtime health 和 runtime soak 相邻回归；
 - 真实桌面双截图与 JSON；
