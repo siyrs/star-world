@@ -1,0 +1,66 @@
+name: Crash-safe session recovery and application quit quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crash-safe-session-recovery-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Strict restart marker, authoritative recovery, final-save quit and fail-closed window close
+      domain_timeout_minutes: 90
+      static_validators: |
+        tests/developer_b/validate_crash_safe_session_recovery.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_bounded_autosave.ps1
+        tests/developer_b/validate_save_checkpoint_timeline.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+      primary_headless_script: res://tests/qa/world_session_recovery_regression.gd
+      primary_headless_output_base: build\world-session-recovery-runtime
+      primary_headless_timeout_milliseconds: 900000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/graceful_application_quit_regression.gd
+        res://tests/qa/bounded_autosave_runtime_regression.gd
+        res://tests/qa/autosave_deferred_pause_race_regression.gd
+        res://tests/qa/save_checkpoint_timeline_regression.gd
+        res://tests/qa/world_scoped_save_checkpoint_session_regression.gd
+        res://tests/qa/save_recovery_regression.gd
+        res://tests/qa/runtime_health_failed_return_regression.gd
+        res://tests/qa/runtime_health_report_regression.gd
+        res://tests/qa/ui_design_system_regression.gd
+        res://tests/qa/runtime_soak_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: crash-safe-session-recovery-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/world-session-recovery-runtime.stdout.log
+        build/world-session-recovery-runtime.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real interrupted restart, authoritative resume and safe save-and-quit
+      desktop_timeout_minutes: 120
+      desktop_script: res://tests/qa/world_session_recovery_desktop_acceptance.gd
+      desktop_output_path: build\session-recovery-candidate.png
+      desktop_timeout_milliseconds: 1200000
+      desktop_artifact_name: crash-safe-session-recovery-evidence
+      desktop_artifact_paths: |
+        build/session-recovery-candidate.png
+        build/session-recovery-safe-quit.png
+        build/session-recovery-clean-exit.png
+        build/session-recovery-report.json
+        build/session-recovery-candidate.stdout.log
+        build/session-recovery-candidate.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
