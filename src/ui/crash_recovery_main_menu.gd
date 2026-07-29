@@ -76,7 +76,11 @@ func _quit() -> void:
 
 
 func _focus_primary_action() -> void:
-	if not _can_own_focus():
+	if (
+		not _can_own_focus()
+		or _main_panel == null
+		or not _main_panel.visible
+	):
 		return
 	if (
 		_recovery_card != null
@@ -178,7 +182,8 @@ func _refresh_recovery_candidate() -> void:
 		% [map_id, checkpoint_count]
 	)
 	_apply_responsive_layout()
-	call_deferred("_focus_primary_action")
+	if _main_panel != null and _main_panel.visible:
+		call_deferred("_focus_primary_action")
 
 
 func _recover_last_session() -> void:
