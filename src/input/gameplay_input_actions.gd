@@ -15,6 +15,7 @@ const JUMP: StringName = &"jump"
 const SPRINT: StringName = &"sprint"
 const PRIMARY_ACTION: StringName = &"primary_action"
 const SECONDARY_ACTION: StringName = &"secondary_action"
+const RELOAD: StringName = &"reload"
 const HOTBAR_PREVIOUS: StringName = &"hotbar_previous"
 const HOTBAR_NEXT: StringName = &"hotbar_next"
 const QUICK_SAVE: StringName = &"quick_save"
@@ -43,6 +44,7 @@ const DEFAULT_KEY_BINDINGS := {
 	MOVE_RIGHT: [KEY_D, KEY_RIGHT],
 	JUMP: [KEY_SPACE],
 	SPRINT: [KEY_SHIFT],
+	RELOAD: [KEY_R],
 	QUICK_SAVE: [KEY_F5],
 	TOGGLE_INVENTORY: [KEY_E],
 	TOGGLE_CRAFTING: [KEY_C],
