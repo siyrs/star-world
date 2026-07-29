@@ -7,6 +7,7 @@ $paths = [ordered]@{
   Participant = Join-Path $root 'src\save\autosave_runtime_participant.gd'
   Formatter = Join-Path $root 'src\save\save_checkpoint_timeline_formatter.gd'
   Regression = Join-Path $root 'tests\qa\autosave_long_session_endurance_regression.gd'
+  PauseRace = Join-Path $root 'tests\qa\autosave_deferred_pause_race_regression.gd'
   Desktop = Join-Path $root 'tests\qa\autosave_long_session_desktop_acceptance.gd'
   Workflow = Join-Path $root '.github\workflows\autosave-long-session-tests.yml'
   RunAll = Join-Path $root 'tests\run_all.ps1'
@@ -68,7 +69,9 @@ foreach ($token in @(
   'call_deferred\("_flush_autosave"\)',
   'hub\.call\("save_current"\)',
   'RETRY_DELAYS_SECONDS[^\n]*15\.0[^\n]*60\.0[^\n]*300\.0',
-  'MAX_PROCESS_DELTA_SECONDS\s*:=\s*1\.0'
+  'MAX_PROCESS_DELTA_SECONDS\s*:=\s*1\.0',
+  'func\s+_flush_autosave\s*\([\s\S]{0,600}if\s+not\s+_should_advance\(\)[\s\S]{0,300}SchedulePolicyScript\.consume_pending',
+  'func\s+_on_pause_changed\s*\([\s\S]{0,500}SchedulePolicyScript\.is_pending[\s\S]{0,300}call_deferred\("_flush_autosave"\)'
 )) {
   if ($text.Participant -notmatch $token) {
     throw "Autosave participant is missing delegated long-session behavior: $token"
@@ -116,6 +119,17 @@ if ($text.Regression -notmatch 'due_count\s*==\s*96') {
 }
 
 foreach ($phrase in @(
+  'pausing before deferred flush preserves pending without writing',
+  'resume flushes the preserved boundary exactly once',
+  'manual save cancels the paused pending boundary and resets the schedule',
+  'resume after manual cancellation does not duplicate the autosave'
+)) {
+  if ($text.PauseRace -notmatch [regex]::Escape($phrase)) {
+    throw "Deferred pause race regression is missing assertion: $phrase"
+  }
+}
+
+foreach ($phrase in @(
   'real long-session journey produces eight successful automatic checkpoints before manual save',
   'real pause button interleaves one manual checkpoint without duplicate autosave',
   'three real autosave failures reach the bounded 300-second retry tier',
@@ -135,6 +149,7 @@ foreach ($token in @(
   'validate_autosave_long_session\.ps1',
   'autosave_long_session_endurance_regression\.gd',
   'bounded_autosave_runtime_regression\.gd',
+  'autosave_deferred_pause_race_regression\.gd',
   'save_checkpoint_timeline_regression\.gd',
   'world_scoped_save_checkpoint_session_regression\.gd',
   'runtime_soak_regression\.gd',
@@ -148,14 +163,15 @@ foreach ($token in @(
   }
 }
 
-if ($text.RunAll -notmatch 'validate_autosave_long_session\.ps1' -or $text.RunAll -notmatch 'autosave_long_session_endurance_regression\.gd') {
-  throw 'Full regression entry point must permanently include long-session autosave coverage'
+if ($text.RunAll -notmatch 'validate_autosave_long_session\.ps1' -or $text.RunAll -notmatch 'autosave_long_session_endurance_regression\.gd' -or $text.RunAll -notmatch 'autosave_deferred_pause_race_regression\.gd') {
+  throw 'Full regression entry point must permanently include long-session autosave and pause-race coverage'
 }
 
 foreach ($phrase in @(
   '整数微秒',
   '有界帧越界 carry',
   '单 pending',
+  'deferred 保存',
   '8 小时',
   '96 个检查点',
   '15 / 60 / 300',
@@ -169,6 +185,7 @@ foreach ($phrase in @(
 foreach ($phrase in @(
   '固定点调度与长期无漂移',
   'discarded_overshoot_seconds',
+  '暂停发生在 pending 与 flush 之间',
   '连续失败 N 次',
   'AutosaveSchedulePolicy'
 )) {
@@ -179,6 +196,7 @@ foreach ($phrase in @(
 foreach ($phrase in @(
   '长会话自动保存',
   'autosave_long_session_endurance_regression.gd',
+  'autosave_deferred_pause_race_regression.gd',
   'autosave_long_session_desktop_acceptance.gd',
   'autosave-long-session-recovered.png'
 )) {
@@ -189,6 +207,7 @@ foreach ($phrase in @(
 foreach ($phrase in @(
   '调度数学与 I/O 生命周期耦合',
   '每个周期丢弃不足一帧',
+  'deferred 保存暂停竞态',
   '纯固定点调度策略',
   '不在同一帧追赶多个保存',
   '真实桌面双截图'
@@ -198,4 +217,4 @@ foreach ($phrase in @(
   }
 }
 
-Write-Host 'PASS autosave_long_session policy=fixed-point precision=usec carry=1s catchup=bounded horizon=8h checkpoints=96 failures=3 retry=300s history=12 dropped=1 persistence=none desktop=dual-evidence'
+Write-Host 'PASS autosave_long_session policy=fixed-point precision=usec carry=1s pause-race=pending-preserved catchup=bounded horizon=8h checkpoints=96 failures=3 retry=300s history=12 dropped=1 persistence=none desktop=dual-evidence'
