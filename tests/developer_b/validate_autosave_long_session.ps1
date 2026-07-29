@@ -83,7 +83,7 @@ if ($text.Participant -match 'Timer\.new\(|FileAccess|DirAccess|AtomicJsonStore'
 
 foreach ($token in @(
   '连续失败\s+%d\s+次',
-  'last_retry_delay_seconds',
+  'next_in_seconds',
   'consecutive_failure_count',
   'current_session_history_count'
 )) {
