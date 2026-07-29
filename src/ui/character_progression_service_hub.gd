@@ -5,16 +5,21 @@ const EquipmentServiceScript = preload("res://src/equipment/equipment_service.gd
 const AttributeServiceScript = preload("res://src/attribute/attribute_service.gd")
 const CombatServiceScript = preload("res://src/combat/combat_service.gd")
 const RangedCombatServiceScript = preload("res://src/combat/ranged_combat_service.gd")
+const ProjectileRuntimeServiceScript = preload(
+	"res://src/combat/projectile_runtime_service.gd"
+)
 const AgricultureRuntimeParticipantScript = preload(
 	"res://src/agriculture/scalable_agriculture_runtime_participant.gd"
 )
 const RestServiceScript = preload("res://src/rest/rest_service.gd")
 const AGRICULTURE_RUNTIME_FEATURE := &"agriculture_runtime"
+const HOSTILE_PROJECTILE_CAPACITY := 24
 
 var equipment_service: Node
 var attribute_service: Node
 var combat_service: Node
 var ranged_combat_service: Node
+var hostile_projectile_runtime: Node3D
 var agriculture_service: Node
 var agriculture_interaction: Node
 var agriculture_runtime_participant: Node
@@ -33,6 +38,14 @@ func _ready() -> void:
 		RangedCombatServiceScript.new(), "RangedCombatService"
 	)
 	ranged_combat_service.call("setup", inventory, equipment_service, combat_service)
+	hostile_projectile_runtime = _add_service(
+		ProjectileRuntimeServiceScript.new(), "HostileProjectileRuntime"
+	) as Node3D
+	if hostile_projectile_runtime != null:
+		hostile_projectile_runtime.call(
+			"setup", combat_service, HOSTILE_PROJECTILE_CAPACITY
+		)
+	_connect_hostile_projectile_runtime()
 	agriculture_runtime_participant = _register_feature_participant(
 		AGRICULTURE_RUNTIME_FEATURE,
 		AgricultureRuntimeParticipantScript.new(),
@@ -65,6 +78,8 @@ func _ready() -> void:
 func _begin_world(state: Dictionary) -> void:
 	if ranged_combat_service != null:
 		ranged_combat_service.call("clear", "begin_world")
+	if hostile_projectile_runtime != null:
+		hostile_projectile_runtime.call("clear", "begin_world")
 	if equipment_service != null:
 		equipment_service.call("deserialize", state.get("equipment", {}))
 	if attribute_service != null:
@@ -82,6 +97,7 @@ func attach_game(
 	ground_resolver: Callable = Callable()
 ) -> void:
 	super.attach_game(world, player, sun, environment, ground_resolver)
+	_bind_existing_hostile_projectile_users()
 	if rest_service != null:
 		rest_service.call("attach_world", world, player)
 	if player == null:
@@ -131,6 +147,11 @@ func get_character_snapshot() -> Dictionary:
 			if ranged_combat_service != null
 			else {}
 		),
+		"hostile_projectiles": (
+			hostile_projectile_runtime.call("get_snapshot")
+			if hostile_projectile_runtime != null
+			else {}
+		),
 		"agriculture": (
 			agriculture_service.call("get_runtime_snapshot")
 			if agriculture_service != null
@@ -142,6 +163,7 @@ func get_character_snapshot() -> Dictionary:
 
 
 func _exit_tree() -> void:
+	_disconnect_hostile_projectile_runtime()
 	if (
 		block_interaction != null
 		and rest_service != null
@@ -168,6 +190,39 @@ func _connect_ranged_feedback() -> void:
 	ranged_combat_service.connect("reload_started", Callable(self, "_on_ranged_reload_started"))
 	ranged_combat_service.connect("reload_completed", Callable(self, "_on_ranged_reload_completed"))
 	ranged_combat_service.connect("reload_cancelled", Callable(self, "_on_ranged_reload_cancelled"))
+
+
+func _connect_hostile_projectile_runtime() -> void:
+	if creature_spawner == null or not creature_spawner.has_signal("creature_spawned"):
+		return
+	var callback := Callable(self, "_on_creature_spawned_for_projectiles")
+	if not creature_spawner.is_connected("creature_spawned", callback):
+		creature_spawner.connect("creature_spawned", callback)
+	_bind_existing_hostile_projectile_users()
+
+
+func _disconnect_hostile_projectile_runtime() -> void:
+	if creature_spawner == null or not creature_spawner.has_signal("creature_spawned"):
+		return
+	var callback := Callable(self, "_on_creature_spawned_for_projectiles")
+	if creature_spawner.is_connected("creature_spawned", callback):
+		creature_spawner.disconnect("creature_spawned", callback)
+
+
+func _bind_existing_hostile_projectile_users() -> void:
+	if creature_spawner == null or not is_instance_valid(creature_spawner):
+		return
+	for child: Node in creature_spawner.get_children():
+		_on_creature_spawned_for_projectiles(child as Node3D)
+
+
+func _on_creature_spawned_for_projectiles(creature: Node3D) -> void:
+	if (
+		creature != null
+		and is_instance_valid(creature)
+		and creature.has_method("bind_projectile_runtime")
+	):
+		creature.call("bind_projectile_runtime", hostile_projectile_runtime)
 
 
 func _connect_rest_feedback() -> void:
@@ -297,6 +352,8 @@ func _publish_character_message(
 func _clear_progression_state(reason: String = "clear") -> void:
 	if ranged_combat_service != null and ranged_combat_service.has_method("clear"):
 		ranged_combat_service.call("clear", reason)
+	if hostile_projectile_runtime != null and hostile_projectile_runtime.has_method("clear"):
+		hostile_projectile_runtime.call("clear", reason)
 	if rest_service != null and rest_service.has_method("clear"):
 		rest_service.call("clear")
 	if equipment_service != null and equipment_service.has_method("clear"):
