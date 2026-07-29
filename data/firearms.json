@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "gunpowder",
+      "name": "火药",
+      "category": "material",
+      "max_stack": 64,
+      "color": "#34363A"
+    },
+    {
+      "id": "light_round",
+      "name": "轻型弹药",
+      "category": "ammunition",
+      "max_stack": 64,
+      "color": "#D9B45A"
+    },
+    {
+      "id": "shotgun_shell",
+      "name": "霰弹",
+      "category": "ammunition",
+      "max_stack": 32,
+      "color": "#B84D3E"
+    },
+    {
+      "id": "star_pistol",
+      "name": "星火手枪",
+      "category": "weapon",
+      "tool_type": "pistol",
+      "max_stack": 1,
+      "durability": 420,
+      "power": 2,
+      "mining_speed": 1.0,
+      "equipment": {
+        "slot": "main_hand",
+        "attributes": {}
+      },
+      "color": "#6F747A"
+    },
+    {
+      "id": "frontier_carbine",
+      "name": "拓荒卡宾枪",
+      "category": "weapon",
+      "tool_type": "carbine",
+      "max_stack": 1,
+      "durability": 720,
+      "power": 3,
+      "mining_speed": 1.0,
+      "equipment": {
+        "slot": "main_hand",
+        "attributes": {}
+      },
+      "color": "#59636A"
+    },
+    {
+      "id": "scattergun",
+      "name": "裂岩霰弹枪",
+      "category": "weapon",
+      "tool_type": "shotgun",
+      "max_stack": 1,
+      "durability": 560,
+      "power": 3,
+      "mining_speed": 1.0,
+      "equipment": {
+        "slot": "main_hand",
+        "attributes": {}
+      },
+      "color": "#765844"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "gunpowder_batch",
+      "name": "火药",
+      "station": "workbench",
+      "ingredients": {
+        "coal": 2,
+        "sand": 2
+      },
+      "output": {
+        "id": "gunpowder",
+        "count": 4
+      }
+    },
+    {
+      "id": "light_rounds",
+      "name": "轻型弹药",
+      "station": "workbench",
+      "ingredients": {
+        "iron_ingot": 1,
+        "gunpowder": 2
+      },
+      "output": {
+        "id": "light_round",
+        "count": 12
+      }
+    },
+    {
+      "id": "shotgun_shells",
+      "name": "霰弹",
+      "station": "workbench",
+      "ingredients": {
+        "iron_ingot": 1,
+        "gunpowder": 2,
+        "leather": 1
+      },
+      "output": {
+        "id": "shotgun_shell",
+        "count": 6
+      }
+    },
+    {
+      "id": "star_pistol",
+      "name": "星火手枪",
+      "station": "workbench",
+      "ingredients": {
+        "iron_ingot": 5,
+        "oak_planks": 1,
+        "string": 1
+      },
+      "output": {
+        "id": "star_pistol",
+        "count": 1
+      }
+    },
+    {
+      "id": "frontier_carbine",
+      "name": "拓荒卡宾枪",
+      "station": "workbench",
+      "ingredients": {
+        "iron_ingot": 9,
+        "oak_planks": 3,
+        "string": 1
+      },
+      "output": {
+        "id": "frontier_carbine",
+        "count": 1
+      }
+    },
+    {
+      "id": "scattergun",
+      "name": "裂岩霰弹枪",
+      "station": "workbench",
+      "ingredients": {
+        "iron_ingot": 7,
+        "oak_planks": 4,
+        "leather": 1
+      },
+      "output": {
+        "id": "scattergun",
+        "count": 1
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "id": "star_pistol",
+      "weapon_item_id": "star_pistol",
+      "ammo_item_id": "light_round",
+      "action_kind": "firearm",
+      "delivery_kind": "hitscan",
+      "fire_mode": "semi",
+      "magazine_capacity": 8,
+      "reload_seconds": 1.2,
+      "fire_interval_seconds": 0.26,
+      "pellet_count": 1,
+      "spread_degrees": 0.55,
+      "damage_per_pellet": 6.5,
+      "max_distance": 52.0,
+      "knockback_horizontal": 2.6,
+      "knockback_vertical": 0.18,
+      "hit_stun_seconds": 0.08,
+      "recoil_pitch_degrees": 1.4,
+      "recoil_yaw_degrees": 0.25,
+      "durability_cost": 1,
+      "collision_mask": 5
+    },
+    {
+      "id": "frontier_carbine",
+      "weapon_item_id": "frontier_carbine",
+      "ammo_item_id": "light_round",
+      "action_kind": "firearm",
+      "delivery_kind": "hitscan",
+      "fire_mode": "auto",
+      "magazine_capacity": 24,
+      "reload_seconds": 1.75,
+      "fire_interval_seconds": 0.1,
+      "pellet_count": 1,
+      "spread_degrees": 1.1,
+      "damage_per_pellet": 4.25,
+      "max_distance": 68.0,
+      "knockback_horizontal": 1.8,
+      "knockback_vertical": 0.12,
+      "hit_stun_seconds": 0.06,
+      "recoil_pitch_degrees": 0.65,
+      "recoil_yaw_degrees": 0.35,
+      "durability_cost": 1,
+      "collision_mask": 5
+    },
+    {
+      "id": "scattergun",
+      "weapon_item_id": "scattergun",
+      "ammo_item_id": "shotgun_shell",
+      "action_kind": "firearm",
+      "delivery_kind": "hitscan",
+      "fire_mode": "pump",
+      "magazine_capacity": 5,
+      "reload_seconds": 2.15,
+      "fire_interval_seconds": 0.95,
+      "pellet_count": 7,
+      "spread_degrees": 5.8,
+      "damage_per_pellet": 2.6,
+      "max_distance": 30.0,
+      "knockback_horizontal": 4.8,
+      "knockback_vertical": 0.32,
+      "hit_stun_seconds": 0.18,
+      "recoil_pitch_degrees": 3.2,
+      "recoil_yaw_degrees": 0.8,
+      "durability_cost": 1,
+      "collision_mask": 5
+    }
+  ]
+}
