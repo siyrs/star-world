@@ -5,10 +5,10 @@ $root = Resolve-Path "$PSScriptRoot\..\.."
 $paths = [ordered]@{
   Policy = Join-Path $root 'src\save\world_session_recovery_policy.gd'
   Service = Join-Path $root 'src\save\world_session_recovery_service.gd'
-  MainMenu = Join-Path $root 'src\ui\crash_recovery_main_menu.gd'
-  GameUi = Join-Path $root 'src\ui\crash_recovery_game_ui.gd'
-  Hub = Join-Path $root 'src\ui\crash_safe_service_hub.gd'
-  Game = Join-Path $root 'src\core\crash_safe_game.gd'
+  MainMenu = Join-Path $root 'src\ui\accessibility_protected_main_menu.gd'
+  GameUi = Join-Path $root 'src\ui\accessibility_machine_game_ui.gd'
+  Hub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
+  Game = Join-Path $root 'src\core\batched_game.gd'
   GameScene = Join-Path $root 'scenes\game\game.tscn'
   HubScene = Join-Path $root 'scenes\ui\service_hub.tscn'
   MenuScene = Join-Path $root 'scenes\ui\main_menu.tscn'
@@ -28,6 +28,17 @@ $paths = [ordered]@{
 foreach ($entry in $paths.GetEnumerator()) {
   if (-not (Test-Path -LiteralPath $entry.Value)) {
     throw "Crash-safe session recovery contract file is missing: $($entry.Key) $($entry.Value)"
+  }
+}
+
+foreach ($removedWrapper in @(
+  'src\core\crash_safe_game.gd',
+  'src\ui\crash_safe_service_hub.gd',
+  'src\ui\crash_recovery_main_menu.gd',
+  'src\ui\crash_recovery_game_ui.gd'
+)) {
+  if (Test-Path -LiteralPath (Join-Path $root $removedWrapper)) {
+    throw "Crash-safe recovery must extend stable production entry points instead of keeping wrapper: $removedWrapper"
   }
 }
 
@@ -79,7 +90,8 @@ if ($text.Service -match 'Timer\.new\(|func\s+save_into\s*\(|payload\["session_r
 }
 
 foreach ($token in @(
-  'class_name\s+CrashRecoveryMainMenu',
+  'class_name\s+AccessibilityProtectedMainMenu',
+  'extends\s+"res://src/ui/protected_main_menu\.gd"',
   'RecoverLastSessionButton',
   'DismissSessionRecoveryButton',
   '恢复上次世界',
@@ -88,11 +100,11 @@ foreach ($token in @(
   'continue_world_requested\.emit',
   'quit_requested\.emit',
   '_rewire_quit_command',
-  '_regular_primary_button\.visible\s*=\s*not\s+visible',
+  '_regular_primary_button\.visible\s*=\s*not\s+recovery_visible',
   'visible_regular_command_count'
 )) {
   if ($text.MainMenu -notmatch $token) {
-    throw "Recovery-aware main menu is missing command or bounded compact behavior: $token"
+    throw "Stable accessible main menu is missing recovery or bounded compact behavior: $token"
   }
 }
 if ($text.MainMenu -match 'get_tree\(\)\.quit|SceneTree\.quit') {
@@ -100,7 +112,8 @@ if ($text.MainMenu -match 'get_tree\(\)\.quit|SceneTree\.quit') {
 }
 
 foreach ($token in @(
-  'class_name\s+CrashRecoveryGameUI',
+  'class_name\s+AccessibilityMachineGameUI',
+  'extends\s+"res://src/ui/machine_game_ui\.gd"',
   'signal\s+quit_to_desktop_requested',
   'SafeQuitDesktopButton',
   '保存并退出游戏',
@@ -109,22 +122,25 @@ foreach ($token in @(
   'quit_to_desktop_requested\.emit'
 )) {
   if ($text.GameUi -notmatch $token) {
-    throw "Gameplay UI is missing safe desktop quit behavior: $token"
+    throw "Stable accessible gameplay UI is missing safe desktop quit behavior: $token"
   }
 }
 
 foreach ($token in @(
-  'class_name\s+CrashSafeServiceHub',
+  'class_name\s+ExplorationProgressionServiceHub',
+  'extends\s+"res://src/ui/runtime_health_service_hub\.gd"',
   'WorldSessionRecoveryServiceScript',
   'application_quit_requested',
   'func\s+prepare_application_quit\s*\(',
   'return_to_menu\(\)',
   'current_world_id\.is_empty\(\)',
   'world_session_recovery_service\.call\("end_world"',
-  'world_session_recovery_service\.call\("abort_world"'
+  'world_session_recovery_service\.call\("abort_world"',
+  'snapshot\["session_recovery"\]',
+  'snapshot\["application_quit"\]'
 )) {
   if ($text.Hub -notmatch $token) {
-    throw "Crash-safe service hub is missing authoritative coordination: $token"
+    throw "Stable exploration hub is missing authoritative recovery coordination: $token"
   }
 }
 if ($text.Hub -match 'save_service\.save_world|FileAccess|DirAccess|Timer\.new\(') {
@@ -132,28 +148,31 @@ if ($text.Hub -match 'save_service\.save_world|FileAccess|DirAccess|Timer\.new\(
 }
 
 foreach ($token in @(
-  'class_name\s+CrashSafeStarWorldGame',
+  'class_name\s+BatchedStarWorldGame',
+  'extends\s+"res://src/core/game\.gd"',
   'auto_accept_quit\s*=\s*false',
   'NOTIFICATION_WM_CLOSE_REQUEST',
   'func\s+request_application_quit\s*\(',
   'prepare_application_quit',
   'application_quit_prepared',
   'application_quit_blocked',
-  'tree\.quit\(0\)'
+  'tree\.quit\(0\)',
+  'BATCHED_WORLD_SCRIPT_PATH',
+  'BATCHED_PLAYER_SCENE_PATH'
 )) {
   if ($text.Game -notmatch $token) {
-    throw "Crash-safe game root is missing window-close or quit ownership: $token"
+    throw "Stable batched game root is missing window-close or quit ownership: $token"
   }
 }
 
 foreach ($pair in @(
-  @{ Text = $text.GameScene; Pattern = 'res://src/core/crash_safe_game\.gd' },
-  @{ Text = $text.HubScene; Pattern = 'res://src/ui/crash_safe_service_hub\.gd' },
-  @{ Text = $text.MenuScene; Pattern = 'res://src/ui/crash_recovery_main_menu\.gd' },
-  @{ Text = $text.GameUiScene; Pattern = 'res://src/ui/crash_recovery_game_ui\.gd' }
+  @{ Text = $text.GameScene; Pattern = 'res://src/core/batched_game\.gd' },
+  @{ Text = $text.HubScene; Pattern = 'res://src/ui/exploration_progression_service_hub\.gd' },
+  @{ Text = $text.MenuScene; Pattern = 'res://src/ui/accessibility_protected_main_menu\.gd' },
+  @{ Text = $text.GameUiScene; Pattern = 'res://src/ui/accessibility_machine_game_ui\.gd' }
 )) {
   if ($pair.Text -notmatch $pair.Pattern) {
-    throw "Production scene is missing crash-safe composition: $($pair.Pattern)"
+    throw "Production scene must retain its stable public entry point: $($pair.Pattern)"
   }
 }
 
@@ -235,7 +254,8 @@ foreach ($phrase in @(
   '失败时取消退出',
   '不进入 world.json',
   '真实桌面',
-  'Windows Release'
+  'Windows Release',
+  '稳定入口'
 )) {
   if ($text.Contract -notmatch [regex]::Escape($phrase)) {
     throw "Crash-safe recovery contract is missing boundary: $phrase"
@@ -246,7 +266,8 @@ foreach ($phrase in @(
   '窗口关闭绕过最终保存',
   '旧 backup 误报恢复',
   '单一退出协调器',
-  '模拟重启'
+  '模拟重启',
+  '稳定入口'
 )) {
   if ($text.Audit -notmatch [regex]::Escape($phrase)) {
     throw "Iteration 51 audit is missing finding or decision: $phrase"
@@ -259,4 +280,4 @@ if ($text.Roadmap -notmatch '异常会话恢复') {
   throw 'Product roadmap must record crash-safe session recovery'
 }
 
-Write-Host 'PASS crash_safe_session_recovery marker=strict-primary-only world_state=authoritative quit=single-coordinator wm_close=final-save failure=blocked restart=real compact=1024x576 desktop=three-screen release=windows'
+Write-Host 'PASS crash_safe_session_recovery marker=strict-primary-only world_state=authoritative stable_entries=4 quit=single-coordinator wm_close=final-save failure=blocked restart=real compact=1024x576 desktop=three-screen release=windows'
