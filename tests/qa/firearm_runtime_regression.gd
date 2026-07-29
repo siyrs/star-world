@@ -93,7 +93,7 @@ func _test_pistol_transaction(
 	inventory.add_item("star_pistol", 1, {"durability":420,"magazine_rounds":2})
 	inventory.add_item("light_round", 10)
 	_check(equipment.equip_from_inventory(inventory, _find_item_slot(inventory, "star_pistol")), "real equipment transaction equips a loaded pistol")
-	var reserve_before := inventory.count_item("light_round")
+	var reserve_before: int = int(inventory.count_item("light_round"))
 	var durability_before := _durability(equipment)
 	var health_before := target.health
 	var fired: Dictionary = ranged.begin_primary(Vector3.ZERO, Vector3.FORWARD, attacker)
@@ -118,7 +118,7 @@ func _test_pistol_transaction(
 
 
 func _test_reload_transaction(inventory: Node, equipment: Node, ranged: Node) -> void:
-	var reserve_before := inventory.count_item("light_round")
+	var reserve_before: int = int(inventory.count_item("light_round"))
 	var started: Dictionary = ranged.request_reload()
 	_check(bool(started.get("accepted", false)) and str(started.get("status", "")) == "reloading", "reload starts one bounded transient timer")
 	_check(inventory.count_item("light_round") == reserve_before, "reload start does not pre-deduct reserve ammunition")
