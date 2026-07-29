@@ -7,8 +7,12 @@ const RuntimeHealthReportServiceScript = preload(
 const SaveTimelinePolicyScript = preload(
 	"res://src/save/save_checkpoint_timeline_policy.gd"
 )
+const WorldSessionRecoveryServiceScript = preload(
+	"res://src/save/world_session_recovery_service.gd"
+)
 
 var runtime_health_report_service: Node
+var world_session_recovery_service: Node
 var _save_reason_context: StringName = SaveTimelinePolicyScript.REASON_MANUAL
 
 
@@ -19,9 +23,18 @@ func _ready() -> void:
 	)
 	if runtime_health_report_service != null:
 		runtime_health_report_service.call("setup", self)
+	world_session_recovery_service = _add_service(
+		WorldSessionRecoveryServiceScript.new(), "WorldSessionRecovery"
+	)
+	if world_session_recovery_service != null:
+		world_session_recovery_service.call("setup", save_service)
+	if main_menu != null and main_menu.has_method("setup_session_recovery"):
+		main_menu.call("setup_session_recovery", world_session_recovery_service)
 
 
 func _begin_world(state: Dictionary) -> void:
+	if world_session_recovery_service != null:
+		world_session_recovery_service.call("begin_world", state)
 	if runtime_health_report_service != null:
 		var metadata: Dictionary = state.get("metadata", {})
 		runtime_health_report_service.call("begin_world", str(metadata.get("id", "")))
@@ -38,6 +51,12 @@ func attach_game(
 	super.attach_game(world, player, sun, environment, ground_resolver)
 	if runtime_health_report_service != null:
 		runtime_health_report_service.call("attach_runtime", world)
+
+
+func activate_gameplay() -> void:
+	super.activate_gameplay()
+	if world_session_recovery_service != null:
+		world_session_recovery_service.call("mark_active", current_world_id)
 
 
 func save_current(world_state: Dictionary = {}, player_state: Dictionary = {}) -> bool:
@@ -70,22 +89,32 @@ func save_current_with_reason(
 
 
 func handle_world_start_failed(reason: String) -> void:
+	var failed_world_id := current_world_id
 	super.handle_world_start_failed(reason)
 	if runtime_health_report_service != null:
 		runtime_health_report_service.call("detach_runtime")
 		runtime_health_report_service.call("end_world")
+	if world_session_recovery_service != null and not failed_world_id.is_empty():
+		world_session_recovery_service.call("abort_world", failed_world_id)
 
 
 func return_to_menu() -> void:
 	# The authoritative return path may refuse to leave gameplay when its final
-	# save fails. Preserve both the world identity and diagnostics in that case.
+	# save fails. Preserve world identity, diagnostics and recovery evidence then.
+	var released_world_id := current_world_id
 	var previous_reason := _save_reason_context
 	_save_reason_context = SaveTimelinePolicyScript.REASON_RETURN_TO_MENU
 	super.return_to_menu()
 	_save_reason_context = previous_reason
-	if current_world_id.is_empty() and runtime_health_report_service != null:
-		runtime_health_report_service.call("detach_runtime")
-		runtime_health_report_service.call("end_world")
+	if current_world_id.is_empty():
+		if runtime_health_report_service != null:
+			runtime_health_report_service.call("detach_runtime")
+			runtime_health_report_service.call("end_world")
+		if (
+			world_session_recovery_service != null
+			and not released_world_id.is_empty()
+		):
+			world_session_recovery_service.call("end_world", released_world_id)
 
 
 func get_runtime_health_snapshot() -> Dictionary:
@@ -104,6 +133,15 @@ func get_save_checkpoint_timeline_snapshot() -> Dictionary:
 	):
 		return {}
 	return runtime_health_report_service.call("get_save_timeline_snapshot")
+
+
+func get_session_recovery_snapshot() -> Dictionary:
+	if (
+		world_session_recovery_service == null
+		or not world_session_recovery_service.has_method("get_snapshot")
+	):
+		return {}
+	return world_session_recovery_service.call("get_snapshot")
 
 
 func _resolve_save_reason() -> StringName:
@@ -128,6 +166,11 @@ func _property_node(property_name: StringName) -> Node:
 
 
 func _exit_tree() -> void:
+	if (
+		world_session_recovery_service != null
+		and world_session_recovery_service.has_method("shutdown")
+	):
+		world_session_recovery_service.call("shutdown")
 	if (
 		runtime_health_report_service != null
 		and runtime_health_report_service.has_method("shutdown")

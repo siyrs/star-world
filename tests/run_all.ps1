@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_reusable_ci_workflows.ps1"
 & "$PSScriptRoot\developer_b\validate_world_catalog.ps1"
 & "$PSScriptRoot\developer_b\validate_save_recovery.ps1"
+& "$PSScriptRoot\developer_b\validate_crash_safe_session_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_catalog_rebuild.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_authoritative_reads.ps1"
@@ -121,6 +122,9 @@ Invoke-GodotTest 'res://tests/qa/autosave_deferred_pause_race_regression.gd'
 Invoke-GodotTest 'res://tests/qa/autosave_long_session_endurance_regression.gd'
 Invoke-GodotTest 'res://tests/qa/save_checkpoint_timeline_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_scoped_save_checkpoint_session_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_session_recovery_regression.gd'
+Invoke-GodotTest 'res://tests/qa/graceful_application_quit_regression.gd'
+Invoke-GodotTest 'res://tests/qa/session_recovery_ui_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_scale_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/husbandry_runtime_lifecycle_regression.gd'
@@ -185,4 +189,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: fixed-point long-session autosave + deferred pause-race safety + world-scoped checkpoint sessions + data-driven controller gameplay + cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'
+Write-Host 'PASS: crash-safe session recovery + compact recovery UI + final-save application quit + fixed-point long-session autosave + deferred pause-race safety + world-scoped checkpoint sessions + data-driven controller gameplay + cached data-driven POI + high-DPI UI scale + controller focus + professional celestial UI + keyboard-first menu navigation + bounded checkpoint timeline + bounded autosave + failed-return health retention + bounded trash manager + protected save deletion + indexed save browser + virtualized save browser + transient catalog staging + bounded authoritative reads + bounded catalog rebuild + self-healing authoritative save recovery + lightweight runtime health sources + unified runtime/save health + reusable Godot CI + structural integrity + world catalog + machine/agriculture scale + seven-participant lifecycle + Windows release checks'

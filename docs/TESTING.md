@@ -215,6 +215,55 @@ build/autosave-long-session-backoff.stderr.log
 
 第一张截图必须显示连续三次失败和 300 秒退避；第二张必须显示恢复成功、当前世界本次进入 12 条检查点和精确 dropped 计数。JSON 必须包含运行时计数、时间线、F3 文本、面板矩形和最终持久化物品数。
 
+## 异常会话恢复与安全退出
+
+### 静态合同
+
+```powershell
+powershell -ExecutionPolicy Bypass -File `
+  .\tests\developer_b\validate_crash_safe_session_recovery.ps1
+```
+
+验证严格 marker schema、primary-only fail-closed、UI 只发退出意图、单一退出协调器、生产场景挂载、模拟重启、真实桌面与 CI Artifact。
+
+### 模拟重启与安全退出
+
+```powershell
+godot --headless --path . `
+  --script res://tests/qa/world_session_recovery_regression.gd `
+  -- --disable-update-check
+
+godot --headless --path . `
+  --script res://tests/qa/graceful_application_quit_regression.gd `
+  -- --disable-update-check
+```
+
+两个脚本覆盖服务销毁与重建、权威检查点、损坏主 marker、旧 backup 拒绝、主菜单退出、暂停菜单退出、Windows close notification、最终保存失败取消退出和成功重试。
+
+### 真实桌面模拟重启
+
+```powershell
+.\tests\ci\run_godot_desktop_test.ps1 `
+  -Godot C:\path\to\Godot_v4.7-stable_win64_console.exe `
+  -ProjectRoot . `
+  -ScriptPath res://tests/qa/world_session_recovery_desktop_acceptance.gd `
+  -OutputPath build\session-recovery-candidate.png `
+  -TimeoutMilliseconds 1200000
+```
+
+输出：
+
+```text
+build/session-recovery-candidate.png
+build/session-recovery-safe-quit.png
+build/session-recovery-clean-exit.png
+build/session-recovery-report.json
+build/session-recovery-candidate.stdout.log
+build/session-recovery-candidate.stderr.log
+```
+
+正式旅程创建第一份 Game、保存真实背包变化后直接销毁实例模拟异常退出，再创建第二份 Game 模拟应用重启。随后真实鼠标恢复世界，真实 Escape 打开 Pause，并真实鼠标执行“保存并退出游戏”。三张截图必须证明恢复入口、安全退出命令和干净退出后的 marker 清除。
+
 ## 保存检查点时间线
 
 ### 静态合同
@@ -293,7 +342,7 @@ godot --headless --path . --script res://tests/qa/trash_manager_service_regressi
 - 存档浏览器索引、虚拟化、回收站管理；
 - 1024×576 与 1280×720 UI 安全区域；
 - F3 运行与保存健康、保存来源和检查点时间线；
-- 多轮进入/退出与 ObjectDB 资源释放。
+- 多轮进入/退出、异常会话恢复与 ObjectDB 资源释放。
 
 ## 合入门禁
 
