@@ -6,6 +6,10 @@ signal combat_result_reported(result: Dictionary)
 const WORLD_ENTRY_DAMAGE_GRACE_SECONDS := 90.0
 const RESPAWN_DAMAGE_GRACE_SECONDS := 30.0
 const REPEATED_HOSTILE_DAMAGE_COOLDOWN := 4.5
+const MAX_HOSTILE_DAMAGE_COOLDOWN_SOURCES := 32
+const LEGACY_HOSTILE_SOURCES: Array[String] = [
+	"zombie", "abyss_brute", "abyss_marksman",
+]
 
 var equipment_service: Node
 var attribute_service: Node
@@ -14,7 +18,13 @@ var ranged_combat_service: Node
 var _base_walk_speed := 0.0
 var _base_sprint_speed := 0.0
 var _hostile_damage_grace_remaining := 0.0
+# Compatibility projection retained for existing diagnostics. The authoritative
+# state is the bounded per-attacker dictionary below.
 var _hostile_damage_cooldown_remaining := 0.0
+var _hostile_damage_cooldowns: Dictionary = {}
+var _hostile_damage_accept_count := 0
+var _hostile_damage_rejection_count := 0
+var _hostile_damage_eviction_count := 0
 var _ranged_recoil_count := 0
 
 
@@ -26,24 +36,23 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	var safe_delta := maxf(0.0, delta)
 	_hostile_damage_grace_remaining = maxf(
-		0.0, _hostile_damage_grace_remaining - maxf(0.0, delta)
+		0.0, _hostile_damage_grace_remaining - safe_delta
 	)
-	_hostile_damage_cooldown_remaining = maxf(
-		0.0, _hostile_damage_cooldown_remaining - maxf(0.0, delta)
-	)
+	_advance_hostile_damage_cooldowns(safe_delta)
 
 
 func bind_world(p_world: Node) -> void:
 	super.bind_world(p_world)
 	_hostile_damage_grace_remaining = WORLD_ENTRY_DAMAGE_GRACE_SECONDS
-	_hostile_damage_cooldown_remaining = 0.0
+	_clear_hostile_damage_cooldowns()
 
 
 func respawn() -> void:
 	super.respawn()
 	_hostile_damage_grace_remaining = RESPAWN_DAMAGE_GRACE_SECONDS
-	_hostile_damage_cooldown_remaining = 0.0
+	_clear_hostile_damage_cooldowns()
 
 
 func setup_gameplay_services(services: Dictionary) -> void:
@@ -102,6 +111,24 @@ func get_ranged_combat_snapshot() -> Dictionary:
 	return snapshot
 
 
+func get_hostile_damage_snapshot() -> Dictionary:
+	var active_sources: Dictionary = {}
+	for raw_key: Variant in _hostile_damage_cooldowns.keys():
+		active_sources[str(raw_key)] = maxf(
+			0.0, float(_hostile_damage_cooldowns.get(raw_key, 0.0))
+		)
+	return {
+		"grace_remaining_seconds": _hostile_damage_grace_remaining,
+		"maximum_cooldown_seconds": _hostile_damage_cooldown_remaining,
+		"active_source_count": active_sources.size(),
+		"source_capacity": MAX_HOSTILE_DAMAGE_COOLDOWN_SOURCES,
+		"active_sources": active_sources,
+		"accepted_count": _hostile_damage_accept_count,
+		"rejection_count": _hostile_damage_rejection_count,
+		"eviction_count": _hostile_damage_eviction_count,
+	}
+
+
 func request_ranged_reload() -> Dictionary:
 	if ranged_combat_service == null or not ranged_combat_service.has_method("request_reload"):
 		return {"handled": false, "accepted": false, "reason": "service_unavailable"}
@@ -113,30 +140,98 @@ func request_ranged_reload() -> Dictionary:
 func take_damage(amount: float, source: String = "world") -> void:
 	if amount <= 0.0:
 		return
-	var hostile_damage := source == "zombie"
-	if (
-		hostile_damage
-		and (
-			_hostile_damage_grace_remaining > 0.0
-			or _hostile_damage_cooldown_remaining > 0.0
-		)
-	):
+	if source in LEGACY_HOSTILE_SOURCES:
+		take_hostile_damage(amount, source, 0)
 		return
+	_apply_incoming_damage(amount, source)
+
+
+func take_hostile_damage(
+	amount: float,
+	source: String = "hostile",
+	attacker_id: int = 0
+) -> Dictionary:
+	var normalized_source := source.strip_edges()
+	if normalized_source.is_empty():
+		normalized_source = "hostile"
+	var cooldown_key := _hostile_cooldown_key(normalized_source, attacker_id)
+	var result := {
+		"handled": amount > 0.0,
+		"accepted": false,
+		"applied": false,
+		"reason": "invalid_damage" if amount <= 0.0 else "rejected",
+		"status": "rejected",
+		"source": normalized_source,
+		"attacker_id": attacker_id,
+		"cooldown_key": cooldown_key,
+		"raw_damage": maxf(0.0, amount),
+	}
+	if amount <= 0.0:
+		return result
+	if _hostile_damage_grace_remaining > 0.0:
+		_hostile_damage_rejection_count += 1
+		result["reason"] = "damage_grace"
+		result["grace_remaining_seconds"] = _hostile_damage_grace_remaining
+		return result
+	var cooldown_remaining := maxf(
+		0.0, float(_hostile_damage_cooldowns.get(cooldown_key, 0.0))
+	)
+	if cooldown_remaining > 0.0:
+		_hostile_damage_rejection_count += 1
+		result["reason"] = "attacker_cooldown"
+		result["cooldown_remaining_seconds"] = cooldown_remaining
+		return result
+	var incoming := _apply_incoming_damage(amount, normalized_source)
+	result.merge(incoming, true)
+	var applied := bool(incoming.get("applied", false))
+	result["handled"] = true
+	result["accepted"] = applied
+	result["applied"] = applied
+	result["status"] = "hit" if applied else "rejected"
+	result["reason"] = "ok" if applied else str(incoming.get("reason", "no_damage"))
+	if not applied:
+		_hostile_damage_rejection_count += 1
+		return result
+	_install_hostile_damage_cooldown(cooldown_key)
+	_hostile_damage_accept_count += 1
+	result["cooldown_seconds"] = REPEATED_HOSTILE_DAMAGE_COOLDOWN
+	result["cooldown_remaining_seconds"] = REPEATED_HOSTILE_DAMAGE_COOLDOWN
+	return result
+
+
+func _apply_incoming_damage(amount: float, source: String) -> Dictionary:
+	if amount <= 0.0:
+		return {"handled": false, "accepted": false, "applied": false, "reason": "invalid_damage"}
+	var result: Dictionary = {}
 	if combat_service == null or not combat_service.has_method("resolve_incoming_damage"):
 		super.take_damage(amount, source)
-		if hostile_damage:
-			_hostile_damage_cooldown_remaining = REPEATED_HOSTILE_DAMAGE_COOLDOWN
-		return
-	var result: Dictionary = combat_service.call("resolve_incoming_damage", amount, source, true)
+		result = {
+			"handled": true,
+			"accepted": true,
+			"applied": true,
+			"reason": "ok",
+			"status": "hit",
+			"raw_damage": amount,
+			"final_damage": amount,
+			"source": source,
+		}
+		combat_result_reported.emit(result.duplicate(true))
+		return result
+	result = combat_service.call("resolve_incoming_damage", amount, source, true)
 	var final_damage := maxf(0.0, float(result.get("final_damage", amount)))
+	result["handled"] = true
+	result["accepted"] = final_damage > 0.0
+	result["applied"] = final_damage > 0.0
+	result["status"] = "hit" if final_damage > 0.0 else "rejected"
+	result["reason"] = "ok" if final_damage > 0.0 else "no_damage"
+	result["source"] = source
 	if final_damage <= 0.0:
-		return
+		return result
 	damage_requested.emit(final_damage, source)
 	if survival != null and survival.has_method("take_damage"):
 		survival.call("take_damage", final_damage, source)
-	if hostile_damage:
-		_hostile_damage_cooldown_remaining = REPEATED_HOSTILE_DAMAGE_COOLDOWN
 	combat_result_reported.emit(result.duplicate(true))
+	return result
 
 
 func _start_primary_action() -> void:
@@ -323,6 +418,58 @@ func _ranged_origin_and_direction() -> Dictionary:
 		"origin": origin + direction * 0.35,
 		"direction": direction,
 	}
+
+
+func _advance_hostile_damage_cooldowns(delta: float) -> void:
+	var stale: Array[String] = []
+	var maximum_remaining := 0.0
+	for raw_key: Variant in _hostile_damage_cooldowns.keys():
+		var key := str(raw_key)
+		var remaining := maxf(
+			0.0, float(_hostile_damage_cooldowns.get(raw_key, 0.0)) - delta
+		)
+		if remaining <= 0.0:
+			stale.append(key)
+		else:
+			_hostile_damage_cooldowns[key] = remaining
+			maximum_remaining = maxf(maximum_remaining, remaining)
+	for key: String in stale:
+		_hostile_damage_cooldowns.erase(key)
+	_hostile_damage_cooldown_remaining = maximum_remaining
+
+
+func _install_hostile_damage_cooldown(key: String) -> void:
+	if (
+		not _hostile_damage_cooldowns.has(key)
+		and _hostile_damage_cooldowns.size() >= MAX_HOSTILE_DAMAGE_COOLDOWN_SOURCES
+	):
+		var eviction_key := ""
+		var smallest_remaining := INF
+		for raw_key: Variant in _hostile_damage_cooldowns.keys():
+			var remaining := float(_hostile_damage_cooldowns.get(raw_key, 0.0))
+			if remaining < smallest_remaining:
+				smallest_remaining = remaining
+				eviction_key = str(raw_key)
+		if not eviction_key.is_empty():
+			_hostile_damage_cooldowns.erase(eviction_key)
+			_hostile_damage_eviction_count += 1
+	_hostile_damage_cooldowns[key] = REPEATED_HOSTILE_DAMAGE_COOLDOWN
+	_hostile_damage_cooldown_remaining = maxf(
+		_hostile_damage_cooldown_remaining, REPEATED_HOSTILE_DAMAGE_COOLDOWN
+	)
+
+
+func _hostile_cooldown_key(source: String, attacker_id: int) -> String:
+	return (
+		"attacker:%d" % attacker_id
+		if attacker_id > 0
+		else "source:%s" % source
+	)
+
+
+func _clear_hostile_damage_cooldowns() -> void:
+	_hostile_damage_cooldowns.clear()
+	_hostile_damage_cooldown_remaining = 0.0
 
 
 func _on_attributes_changed(_snapshot: Dictionary) -> void:
