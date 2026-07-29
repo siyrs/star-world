@@ -206,11 +206,14 @@ func _test_save_and_runtime_composition() -> void:
 		_check(str(loaded.get("equipment", {}).get("slots", {}).get("helmet", {}).get("item_id", "")) == "iron_helmet", "equipped armor survives the real save service")
 		_check(loaded.get("attributes", null) is Dictionary, "attribute base state is included in the save transaction")
 		hub.save_service.delete_world(str(state.get("metadata", {}).get("id", "")))
-	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
-		hub.audio_service.shutdown()
+	var audio: Node = hub.get("audio_service") as Node
+	if audio != null and audio.has_method("dispose"):
+		audio.call("dispose")
+	elif audio != null and audio.has_method("shutdown"):
+		audio.call("shutdown")
 	hub.queue_free()
-	await process_frame
-	await process_frame
+	for _frame in 5:
+		await process_frame
 
 
 func _find_item_slot(inventory: Node, item_id: String) -> int:
