@@ -100,10 +100,12 @@ func begin_charge() -> Dictionary:
 	return _last_result.duplicate(true)
 
 
-func advance_charge(delta: float) -> Dictionary:
+func advance_charge(_delta: float) -> Dictionary:
+	# RangedCombatService._process() is the single pause-aware charge clock.
+	# Player input only declares that the button remains held; it must never
+	# accumulate the same frame delta a second time.
 	if not _charging:
 		return {"handled": has_ranged_weapon(), "accepted": false, "reason": "not_charging"}
-	_charge_seconds += maxf(0.0, delta)
 	_emit_status()
 	return get_snapshot()
 
