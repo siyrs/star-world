@@ -165,6 +165,9 @@ func _connect_ranged_feedback() -> void:
 		return
 	ranged_combat_service.connect("shot_fired", Callable(self, "_on_ranged_shot_fired"))
 	ranged_combat_service.connect("shot_rejected", Callable(self, "_on_ranged_shot_rejected"))
+	ranged_combat_service.connect("reload_started", Callable(self, "_on_ranged_reload_started"))
+	ranged_combat_service.connect("reload_completed", Callable(self, "_on_ranged_reload_completed"))
+	ranged_combat_service.connect("reload_cancelled", Callable(self, "_on_ranged_reload_cancelled"))
 
 
 func _connect_rest_feedback() -> void:
@@ -201,6 +204,18 @@ func _on_equipped_item_broken(
 
 
 func _on_ranged_shot_fired(result: Dictionary) -> void:
+	var attack_kind := str(result.get("attack_kind", "ranged"))
+	if attack_kind == "firearm":
+		var weapon_name := str(result.get("weapon_display_name", "枪械"))
+		var loaded := int(result.get("magazine_after", 0))
+		var capacity := int(result.get("magazine_capacity", 0))
+		_publish_character_message(
+			"%s 开火 · 弹匣 %d/%d" % [weapon_name, loaded, capacity],
+			"info",
+			"firearm:fired:%s" % str(result.get("weapon_item_id", "")),
+			0.75
+		)
+		return
 	_publish_character_message(
 		"箭矢已发射 · 蓄力 %d%%" % int(round(float(result.get("charge_ratio", 0.0)) * 100.0)),
 		"info",
@@ -214,12 +229,47 @@ func _on_ranged_shot_rejected(result: Dictionary) -> void:
 	var message: String = str({
 		"no_ammo": "没有箭矢",
 		"undercharged": "蓄力不足，未消耗箭矢",
-		"cooldown": "猎弓尚未准备好",
+		"cooldown": "武器尚未准备好",
 		"projectile_capacity": "场景中的飞行箭矢已达到上限",
-		"weapon_changed": "蓄力期间武器已改变",
+		"weapon_changed": "操作期间武器已改变",
+		"empty_magazine": "弹匣已空，按 R 或左肩键换弹",
+		"reloading": "正在换弹",
+		"already_reloading": "已经在换弹",
+		"no_reserve_ammo": "没有备用弹药",
+		"magazine_full": "弹匣已满",
 	}.get(reason, "本次远程攻击未生效"))
 	_publish_character_message(
 		message, "warning", "ranged:rejected:%s" % reason, 2.2
+	)
+
+
+func _on_ranged_reload_started(result: Dictionary) -> void:
+	_publish_character_message(
+		"%s 开始换弹" % str(result.get("weapon_display_name", "枪械")),
+		"info",
+		"firearm:reload:start",
+		1.2
+	)
+
+
+func _on_ranged_reload_completed(result: Dictionary) -> void:
+	_publish_character_message(
+		"换弹完成 · 弹匣 %d/%d" % [
+			int(result.get("magazine_after", 0)),
+			int(result.get("magazine_capacity", 0)),
+		],
+		"success",
+		"firearm:reload:complete",
+		1.4
+	)
+
+
+func _on_ranged_reload_cancelled(result: Dictionary) -> void:
+	_publish_character_message(
+		"换弹已取消 · %s" % str(result.get("reason", "cancelled")),
+		"warning",
+		"firearm:reload:cancel",
+		1.4
 	)
 
 

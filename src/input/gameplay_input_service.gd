@@ -149,6 +149,10 @@ func is_secondary_action_just_pressed() -> bool:
 	return _active and Input.is_action_just_pressed(Actions.SECONDARY_ACTION)
 
 
+func is_reload_just_pressed() -> bool:
+	return _active and Input.is_action_just_pressed(Actions.RELOAD)
+
+
 func is_quick_save_just_pressed() -> bool:
 	return _active and Input.is_action_just_pressed(Actions.QUICK_SAVE)
 
@@ -211,6 +215,7 @@ func get_binding_status() -> Dictionary:
 		"controller_event_count": _controller_event_count,
 		"controller_profile": get_controller_profile_snapshot(),
 		"forward_action_pressed": Input.is_action_pressed(Actions.MOVE_FORWARD),
+		"reload_action_pressed": Input.is_action_pressed(Actions.RELOAD),
 		"w_key_pressed": _key_pressed(KEY_W),
 		"actions": DEFAULT_ACTION_NAMES(),
 	}

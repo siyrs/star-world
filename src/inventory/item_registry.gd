@@ -4,6 +4,7 @@ extends RefCounted
 const DEFAULT_DATA_PATH := "res://data/items.json"
 const DEFAULT_EXTENSION_PATHS: Array[String] = [
 	"res://data/ranged_combat.json",
+	"res://data/firearms.json",
 ]
 
 var _items: Dictionary = {}

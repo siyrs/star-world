@@ -8,6 +8,7 @@ signal craft_failed(recipe_id: String, reason: String)
 const DEFAULT_DATA_PATH := "res://data/recipes.json"
 const DEFAULT_EXTENSION_PATHS: Array[String] = [
 	"res://data/ranged_combat.json",
+	"res://data/firearms.json",
 ]
 const VALID_STATIONS := ["hand", "workbench"]
 

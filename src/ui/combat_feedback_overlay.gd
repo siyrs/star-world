@@ -62,6 +62,18 @@ func setup(p_combat_service: Node, p_ranged_combat_service: Node = null) -> void
 			ranged_combat_service.connect(
 				"shot_fired", Callable(self, "_on_ranged_shot_fired")
 			)
+		if ranged_combat_service.has_signal("reload_started"):
+			ranged_combat_service.connect(
+				"reload_started", Callable(self, "_on_reload_event")
+			)
+		if ranged_combat_service.has_signal("reload_completed"):
+			ranged_combat_service.connect(
+				"reload_completed", Callable(self, "_on_reload_event")
+			)
+		if ranged_combat_service.has_signal("reload_cancelled"):
+			ranged_combat_service.connect(
+				"reload_cancelled", Callable(self, "_on_reload_event")
+			)
 		if ranged_combat_service.has_method("get_snapshot"):
 			_on_ranged_status_changed(ranged_combat_service.call("get_snapshot"))
 	_refresh_visibility()
@@ -87,6 +99,7 @@ func get_snapshot() -> Dictionary:
 		"cooldown_visible": _cooldown_panel.visible if _cooldown_panel != null else false,
 		"ranged_visible": _ranged_panel.visible if _ranged_panel != null else false,
 		"hit_visible": _hit_panel.visible if _hit_panel != null else false,
+		"ranged_text": _ranged_label.text if _ranged_label != null else "",
 		"ranged_rect": _ranged_panel.get_global_rect() if _ranged_panel != null else Rect2(),
 	}
 
@@ -112,10 +125,14 @@ func _on_attack_resolved(result: Dictionary) -> void:
 	_last_result = result.duplicate(true)
 	var target_name := str(result.get("target_name", "目标"))
 	var damage := float(result.get("final_damage", result.get("damage", 0.0)))
+	var pellet_hits := int(result.get("pellet_hits", 0))
+	var suffix := ""
+	if pellet_hits > 1:
+		suffix = "  ·  %d 弹丸" % pellet_hits
 	_hit_label.text = (
-		"击败 %s" % target_name
+		"击败 %s%s" % [target_name, suffix]
 		if bool(result.get("defeated", false))
-		else "命中 %s  ·  %.1f" % [target_name, damage]
+		else "命中 %s  ·  %.1f%s" % [target_name, damage, suffix]
 	)
 	_hit_label.modulate = Tokens.color(Tokens.COLOR_SUCCESS)
 	_hit_remaining = 0.55
@@ -147,6 +164,15 @@ func _on_ranged_status_changed(snapshot: Dictionary) -> void:
 	_last_ranged = snapshot.duplicate(true)
 	if _ranged_bar == null:
 		return
+	var action_kind := str(snapshot.get("action_kind", "charge"))
+	if action_kind == "firearm":
+		_update_firearm_status(snapshot)
+	else:
+		_update_charge_status(snapshot)
+	_refresh_visibility()
+
+
+func _update_charge_status(snapshot: Dictionary) -> void:
 	var ratio := 1.0
 	var label := "猎弓已准备"
 	if bool(snapshot.get("charging", false)):
@@ -157,7 +183,25 @@ func _on_ranged_status_changed(snapshot: Dictionary) -> void:
 		label = "猎弓恢复  %d%%" % int(round(ratio * 100.0))
 	_ranged_bar.value = ratio
 	_ranged_label.text = "%s  ·  箭矢 %d" % [label, int(snapshot.get("ammo_count", 0))]
-	_refresh_visibility()
+
+
+func _update_firearm_status(snapshot: Dictionary) -> void:
+	var weapon_name := str(snapshot.get("weapon_display_name", "枪械"))
+	var loaded := int(snapshot.get("magazine_rounds", 0))
+	var capacity := int(snapshot.get("magazine_capacity", 0))
+	var reserve := int(snapshot.get("reserve_ammo_count", 0))
+	var ratio := 1.0
+	var label := weapon_name
+	if bool(snapshot.get("reloading", false)):
+		ratio = clampf(float(snapshot.get("reload_ratio", 0.0)), 0.0, 1.0)
+		label = "%s 换弹  %d%%" % [weapon_name, int(round(ratio * 100.0))]
+	elif not bool(snapshot.get("cooldown_ready", true)):
+		ratio = clampf(float(snapshot.get("cooldown_ready_ratio", 0.0)), 0.0, 1.0)
+		label = "%s 射击恢复  %d%%" % [weapon_name, int(round(ratio * 100.0))]
+	_ranged_bar.value = ratio
+	_ranged_label.text = "%s  ·  弹匣 %d/%d  ·  备用 %d" % [
+		label, loaded, capacity, reserve,
+	]
 
 
 func _on_ranged_shot_rejected(result: Dictionary) -> void:
@@ -166,13 +210,23 @@ func _on_ranged_shot_rejected(result: Dictionary) -> void:
 	var text: String = str({
 		"no_ammo": "没有箭矢",
 		"undercharged": "蓄力不足",
-		"cooldown": "猎弓冷却中",
+		"cooldown": "武器尚未准备好",
 		"projectile_capacity": "飞行箭矢已达上限",
+		"empty_magazine": "弹匣已空，按 R 或左肩键换弹",
+		"reloading": "正在换弹",
+		"already_reloading": "已经在换弹",
+		"no_reserve_ammo": "没有备用弹药",
+		"magazine_full": "弹匣已满",
 	}.get(reason, "远程攻击未生效"))
 	_show_transient_feedback(text, Tokens.color(Tokens.COLOR_WARNING), 0.65)
 
 
 func _on_ranged_shot_fired(result: Dictionary) -> void:
+	_last_result = result.duplicate(true)
+	_refresh_visibility()
+
+
+func _on_reload_event(result: Dictionary) -> void:
 	_last_result = result.duplicate(true)
 	_refresh_visibility()
 
@@ -228,8 +282,8 @@ func _build_status_panel(node_name: String) -> PanelContainer:
 	panel.anchor_right = 0.5
 	panel.anchor_top = 0.5
 	panel.anchor_bottom = 0.5
-	panel.offset_left = -104.0
-	panel.offset_right = 104.0
+	panel.offset_left = -145.0
+	panel.offset_right = 145.0
 	panel.offset_top = 38.0
 	panel.offset_bottom = 78.0
 	panel.add_theme_stylebox_override(
@@ -248,7 +302,7 @@ func _build_progress_bar() -> ProgressBar:
 	bar.min_value = 0.0
 	bar.max_value = 1.0
 	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(190.0, 8.0)
+	bar.custom_minimum_size = Vector2(260.0, 8.0)
 	bar.add_theme_stylebox_override(
 		"fill",
 		Tokens.bevel_style(Tokens.COLOR_ACCENT_WARM, Tokens.COLOR_ACCENT_WARM, 0, 1.0)
@@ -262,8 +316,8 @@ func _build_hit_panel() -> void:
 	_hit_panel.anchor_right = 0.5
 	_hit_panel.anchor_top = 0.5
 	_hit_panel.anchor_bottom = 0.5
-	_hit_panel.offset_left = -130.0
-	_hit_panel.offset_right = 130.0
+	_hit_panel.offset_left = -160.0
+	_hit_panel.offset_right = 160.0
 	_hit_panel.offset_top = -70.0
 	_hit_panel.offset_bottom = -34.0
 	_hit_panel.add_theme_stylebox_override(
@@ -295,6 +349,9 @@ func _disconnect_services() -> void:
 			["charge_changed", "_on_ranged_status_changed"],
 			["shot_rejected", "_on_ranged_shot_rejected"],
 			["shot_fired", "_on_ranged_shot_fired"],
+			["reload_started", "_on_reload_event"],
+			["reload_completed", "_on_reload_event"],
+			["reload_cancelled", "_on_reload_event"],
 		]:
 			var signal_name := str(binding[0])
 			var callback := Callable(self, str(binding[1]))

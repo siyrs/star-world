@@ -7,7 +7,7 @@ const MAX_BINDINGS := 32
 const REQUIRED_ACTIONS: Array[String] = [
 	"move_left", "move_right", "move_forward", "move_backward",
 	"look_left", "look_right", "look_up", "look_down",
-	"jump", "sprint", "primary_action", "secondary_action",
+	"jump", "sprint", "primary_action", "secondary_action", "reload",
 	"hotbar_previous", "hotbar_next", "toggle_inventory", "toggle_crafting",
 	"toggle_exploration_journal", "toggle_guidance", "toggle_diagnostics",
 	"quick_save", "ui_cancel",
@@ -195,9 +195,10 @@ func _install_builtin_fallback() -> void:
 		_axis("secondary_action", 4, 1.0), _axis("primary_action", 5, 1.0),
 		_button("jump", 0), _button("toggle_crafting", 2),
 		_button("toggle_inventory", 3), _button("toggle_exploration_journal", 4),
-		_button("ui_cancel", 6), _button("sprint", 7), _button("quick_save", 10),
-		_button("toggle_guidance", 11), _button("toggle_diagnostics", 12),
-		_button("hotbar_previous", 13), _button("hotbar_next", 14),
+		_button("ui_cancel", 6), _button("sprint", 7), _button("reload", 9),
+		_button("quick_save", 10), _button("toggle_guidance", 11),
+		_button("toggle_diagnostics", 12), _button("hotbar_previous", 13),
+		_button("hotbar_next", 14),
 	]
 
 

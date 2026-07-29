@@ -24,6 +24,7 @@
     {"action": "toggle_exploration_journal", "kind": "button", "button": 4},
     {"action": "ui_cancel", "kind": "button", "button": 6},
     {"action": "sprint", "kind": "button", "button": 7},
+    {"action": "reload", "kind": "button", "button": 9},
     {"action": "quick_save", "kind": "button", "button": 10},
     {"action": "toggle_guidance", "kind": "button", "button": 11},
     {"action": "toggle_diagnostics", "kind": "button", "button": 12},
