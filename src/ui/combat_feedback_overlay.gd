@@ -163,13 +163,13 @@ func _on_ranged_status_changed(snapshot: Dictionary) -> void:
 func _on_ranged_shot_rejected(result: Dictionary) -> void:
 	_last_result = result.duplicate(true)
 	var reason := str(result.get("reason", "rejected"))
-	var text := {
+	var text: String = str({
 		"no_ammo": "没有箭矢",
 		"undercharged": "蓄力不足",
 		"cooldown": "猎弓冷却中",
 		"projectile_capacity": "飞行箭矢已达上限",
-	}.get(reason, "远程攻击未生效")
-	_show_transient_feedback(str(text), Tokens.color(Tokens.COLOR_WARNING), 0.65)
+	}.get(reason, "远程攻击未生效"))
+	_show_transient_feedback(text, Tokens.color(Tokens.COLOR_WARNING), 0.65)
 
 
 func _on_ranged_shot_fired(result: Dictionary) -> void:
