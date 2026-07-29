@@ -76,8 +76,10 @@ func _test_equipment_and_policy() -> void:
 	_check(str(equipment.get_slot("main_hand").get("item_id", "")) == "bow", "existing main-hand state owns the bow")
 	var registry = RangedRegistryScript.new()
 	_check(registry.load_from_file(), "strict ranged profile registry loads dedicated data")
-	_check(registry.profile_count() == 1, "first ranged release exposes one explicit profile")
+	_check(registry.profile_count() == 4, "ranged registry composes bow and three firearm profiles atomically")
 	var profile := registry.get_profile("bow")
+	_check(str(profile.get("action_kind", "")) == "charge", "bow remains the explicit charge profile")
+	_check(str(profile.get("delivery_kind", "")) == "projectile", "bow remains a physical projectile profile")
 	_check(str(profile.get("ammo_item_id", "")) == "arrow", "bow profile declares its ammunition contract")
 	_check(float(profile.get("maximum_speed", 0.0)) <= 96.0, "projectile speed remains inside the hard registry budget")
 	var policy = ShotPolicyScript.new()
@@ -120,8 +122,6 @@ func _test_atomic_duplicate_rejection() -> void:
 	var crafting = CraftingScript.new()
 	_check(not crafting.load_recipes(recipe_path), "duplicate recipe IDs reject the entire staged registry")
 	_check(crafting.recipe_count() == 0, "failed recipe staging never commits a partial registry")
-	# This fixture is intentionally never parented, so queue_free() cannot own its
-	# lifetime. Free it synchronously to keep the ObjectDB/resource gate exact.
 	crafting.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(item_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(recipe_path))
