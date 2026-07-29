@@ -10,11 +10,13 @@ var _recovery_summary: Label
 var _recovery_detail: Label
 var _recovery_button: Button
 var _dismiss_recovery_button: Button
+var _regular_primary_button: Button
 var _recovery_candidate: Dictionary = {}
 
 
 func _ready() -> void:
 	super._ready()
+	_regular_primary_button = _menu_buttons[0] if not _menu_buttons.is_empty() else null
 	_build_recovery_card()
 	_rewire_quit_command()
 	call_deferred("_refresh_recovery_candidate")
@@ -45,6 +47,10 @@ func show_shutdown_ready() -> void:
 
 
 func get_recovery_visual_snapshot() -> Dictionary:
+	var visible_regular_commands := 0
+	for button: Button in _menu_buttons:
+		if button.visible:
+			visible_regular_commands += 1
 	return {
 		"visible": _recovery_card != null and _recovery_card.visible,
 		"card_rect": _recovery_card.get_global_rect() if _recovery_card != null else Rect2(),
@@ -56,6 +62,10 @@ func get_recovery_visual_snapshot() -> Dictionary:
 			if _dismiss_recovery_button != null
 			else Rect2()
 		),
+		"regular_primary_visible": (
+			_regular_primary_button.visible if _regular_primary_button != null else false
+		),
+		"visible_regular_command_count": visible_regular_commands,
 		"summary": _recovery_summary.text if _recovery_summary != null else "",
 		"detail": _recovery_detail.text if _recovery_detail != null else "",
 		"candidate": _recovery_candidate.duplicate(true),
@@ -102,7 +112,7 @@ func _build_recovery_card() -> void:
 	_recovery_card = PanelContainer.new()
 	_recovery_card.name = "SessionRecoveryCard"
 	_recovery_card.theme_type_variation = "ModalPanel"
-	_recovery_card.custom_minimum_size = Vector2(338, 132)
+	_recovery_card.custom_minimum_size = Vector2(338, 120)
 	content.add_child(_recovery_card)
 	content.move_child(_recovery_card, 0)
 	var card_content := VBoxContainer.new()
@@ -118,7 +128,7 @@ func _build_recovery_card() -> void:
 	_recovery_detail.name = "SessionRecoveryDetail"
 	_recovery_detail.theme_type_variation = "MutedLabel"
 	_recovery_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_recovery_detail.custom_minimum_size.y = 38
+	_recovery_detail.custom_minimum_size.y = 32
 	card_content.add_child(_recovery_detail)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", RecoveryTokens.SPACE_SM)
@@ -167,20 +177,26 @@ func _refresh_recovery_candidate() -> void:
 			_recovery_candidate = raw_candidate.duplicate(true)
 	var visible := not _recovery_candidate.is_empty()
 	_recovery_card.visible = visible
-	if not visible:
-		return
-	var world_name := str(
-		_recovery_candidate.get("world_name", _recovery_candidate.get("world_id", "未知世界"))
-	)
-	var map_id := str(_recovery_candidate.get("map_id", "unknown"))
-	var checkpoint_count := maxi(
-		0, int(_recovery_candidate.get("checkpoint_count", 0))
-	)
-	_recovery_summary.text = "上次会话未正常结束 · %s" % world_name
-	_recovery_detail.text = (
-		"地图 %s · 本次会话已完成 %d 个检查点\n将从最近一次权威存档继续，不会读取临时调度状态。"
-		% [map_id, checkpoint_count]
-	)
+	# The recovery action replaces the duplicate generic "Start Game" CTA while
+	# active. Map selection and save browsing remain available, and the command
+	# deck stays inside the 1024x576 product viewport.
+	if _regular_primary_button != null:
+		_regular_primary_button.visible = not visible
+	if visible:
+		var world_name := str(
+			_recovery_candidate.get(
+				"world_name", _recovery_candidate.get("world_id", "未知世界")
+			)
+		)
+		var map_id := str(_recovery_candidate.get("map_id", "unknown"))
+		var checkpoint_count := maxi(
+			0, int(_recovery_candidate.get("checkpoint_count", 0))
+		)
+		_recovery_summary.text = "上次会话未正常结束 · %s" % world_name
+		_recovery_detail.text = (
+			"地图 %s · 已完成 %d 个检查点 · 从最近权威存档继续"
+			% [map_id, checkpoint_count]
+		)
 	_apply_responsive_layout()
 	if _main_panel != null and _main_panel.visible:
 		call_deferred("_focus_primary_action")
