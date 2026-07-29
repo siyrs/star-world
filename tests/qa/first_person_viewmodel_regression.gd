@@ -2,6 +2,7 @@ extends SceneTree
 
 const PlayerScene = preload("res://scenes/game/player.tscn")
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
+const EquipmentScript = preload("res://src/equipment/equipment_service.gd")
 const PolicyScript = preload("res://src/player/held_item_visual_policy.gd")
 const FactoryScript = preload("res://src/player/held_item_mesh_factory.gd")
 const AtlasScript = preload("res://src/block/block_texture_atlas.gd")
@@ -43,13 +44,17 @@ func _test_config_and_policy() -> void:
 	var config: Dictionary = parsed if parsed is Dictionary else {}
 	_check(int(config.get("schema_version", 0)) == 1, "viewmodel schema version is explicit")
 	_check(float(config.get("swing_seconds", 0.0)) > 0.0, "swing duration is positive")
+	_check(float(config.get("firearm_scale", 0.0)) > 0.0, "firearm scale is explicit and positive")
 	_check(float(config.get("walk_bob_amplitude", -1.0)) >= 0.0, "walk bob amplitude is bounded")
 	var policy = PolicyScript.new()
 	_check(policy.classify({"category":"block"}, "grass") == "block", "block items use textured cube models")
 	_check(policy.classify({"category":"tool","tool_type":"pickaxe"}, "") == "tool", "tools use procedural tool models")
+	_check(policy.classify({"category":"weapon","tool_type":"pistol"}, "") == "firearm", "pistols use the dedicated firearm model family")
 	_check(policy.classify({"category":"food"}, "") == "food", "food uses the food model family")
 	_check(policy.action_kind(&"attack") == PolicyScript.ACTION_SWING, "attacks map to swing animation")
 	_check(policy.action_kind(&"place") == PolicyScript.ACTION_USE, "placement maps to use animation")
+	_check(policy.action_kind(&"ranged_fire") == PolicyScript.ACTION_USE, "firearm shots map to the compact use/recoil animation")
+	_check(policy.action_kind(&"ranged_reload") == PolicyScript.ACTION_USE, "reload maps to a readable use animation")
 	var idle: Dictionary = policy.sample_transform(config, 0.0, 0.0, true)
 	var walking: Dictionary = policy.sample_transform(config, 0.25, 5.4, true)
 	_check(Vector3(walking.get("position_offset", Vector3.ZERO)).length() > Vector3(idle.get("position_offset", Vector3.ZERO)).length(), "walking creates visible bob offset")
@@ -85,6 +90,18 @@ func _test_mesh_factory() -> void:
 		_check(int(tool.get_meta("part_count", 0)) >= 3, "%s has multiple readable low-poly parts" % tool_type)
 		_check(not _tree_has_collision(tool), "%s viewmodel has no collision" % tool_type)
 		tool.queue_free()
+	var firearm_part_counts: Dictionary = {}
+	for firearm_type in ["pistol", "carbine", "shotgun"]:
+		var firearm := factory.build_model("test_%s" % firearm_type, {"category":"weapon","tool_type":firearm_type,"color":"#6F747A"})
+		root.add_child(firearm)
+		await process_frame
+		var part_count := int(firearm.get_meta("part_count", 0))
+		firearm_part_counts[firearm_type] = part_count
+		_check(str(firearm.get_meta("model_kind", "")) == "firearm", "%s uses firearm model kind" % firearm_type)
+		_check(part_count >= 5, "%s has a readable multi-part pixel model" % firearm_type)
+		_check(not _tree_has_collision(firearm), "%s viewmodel has no collision" % firearm_type)
+		firearm.queue_free()
+	_check(int(firearm_part_counts.get("pistol", 0)) != int(firearm_part_counts.get("carbine", 0)), "pistol and carbine models remain structurally distinct")
 	var food := factory.build_model("apple", {"category":"food","color":"#D93D38"})
 	root.add_child(food)
 	await process_frame
@@ -97,13 +114,17 @@ func _test_mesh_factory() -> void:
 func _test_production_player_view() -> void:
 	var player = PlayerScene.instantiate()
 	var inventory = InventoryScript.new()
+	var equipment = EquipmentScript.new()
 	var harvest = FakeHarvestService.new()
 	root.add_child(inventory)
+	root.add_child(equipment)
 	root.add_child(harvest)
 	root.add_child(player)
 	await process_frame
+	equipment.setup(inventory.registry)
 	player.visible = true
 	player.call("bind_inventory", inventory)
+	player.call("bind_equipment_service", equipment)
 	player.call("bind_harvest_service", harvest)
 	player.call("set_input_enabled", true)
 	var view := player.get_node_or_null("CameraPivot/Camera3D/HeldItemView")
@@ -111,18 +132,39 @@ func _test_production_player_view() -> void:
 	if view == null:
 		player.queue_free()
 		inventory.queue_free()
+		equipment.queue_free()
 		harvest.queue_free()
 		return
-	view.call("setup", player, inventory, harvest)
+	view.call("setup", player, inventory, harvest, equipment)
 	inventory.add_item("wooden_pickaxe", 1)
 	inventory.add_item("grass_block", 4)
+	inventory.add_item("star_pistol", 1, {"durability":420,"magazine_rounds":3})
 	inventory.select_slot(0)
 	await process_frame
 	view.call("refresh_for_test")
 	var snapshot: Dictionary = view.call("get_snapshot")
 	_check(str(snapshot.get("item_id", "")) == "wooden_pickaxe", "selected pickaxe appears in first person")
+	_check(str(snapshot.get("item_source", "")) == "inventory", "unarmed player view falls back to selected inventory")
 	_check(str(snapshot.get("model_kind", "")) == "tool", "selected pickaxe resolves tool model")
 	_check(bool(snapshot.get("visible", false)), "held item is visible during gameplay")
+	var pistol_index := _find_item_slot(inventory, "star_pistol")
+	_check(pistol_index >= 0 and equipment.equip_from_inventory(inventory, pistol_index), "production equipment transaction equips the pistol")
+	await process_frame
+	view.call("refresh_for_test")
+	snapshot = view.call("get_snapshot")
+	_check(str(snapshot.get("item_id", "")) == "star_pistol", "equipped pistol overrides the selected inventory slot")
+	_check(str(snapshot.get("item_source", "")) == "equipment", "viewmodel reports main-hand equipment as its authoritative source")
+	_check(str(snapshot.get("model_kind", "")) == "firearm", "equipped pistol resolves the firearm model")
+	_check(int(snapshot.get("part_count", 0)) >= 5, "equipped pistol exposes its multi-part model")
+	player.gameplay_action_reported.emit(&"ranged_fire", {})
+	await process_frame
+	_check(float(view.call("get_snapshot").get("use_remaining", 0.0)) > 0.0, "real firearm action starts the viewmodel recoil animation")
+	var returned := equipment.unequip("main_hand")
+	_check(str(returned.get("item_id", "")) == "star_pistol", "test removes the equipped pistol without losing its metadata")
+	await process_frame
+	view.call("refresh_for_test")
+	snapshot = view.call("get_snapshot")
+	_check(str(snapshot.get("item_id", "")) == "wooden_pickaxe", "unequipping restores selected inventory fallback")
 	player.gameplay_action_reported.emit(&"attack", {})
 	await process_frame
 	snapshot = view.call("get_snapshot")
@@ -154,9 +196,17 @@ func _test_production_player_view() -> void:
 	_check(not _tree_has_collision(view), "entire first-person view tree contains no collision")
 	player.queue_free()
 	inventory.queue_free()
+	equipment.queue_free()
 	harvest.queue_free()
 	for _frame in 3:
 		await process_frame
+
+
+func _find_item_slot(inventory: Node, item_id: String) -> int:
+	for index in int(inventory.get("slot_count")):
+		if str(inventory.call("get_slot", index).get("item_id", "")) == item_id:
+			return index
+	return -1
 
 
 func _first_mesh(node: Node) -> MeshInstance3D:
