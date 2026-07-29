@@ -90,7 +90,7 @@ func _test_equipment_metadata_persistence() -> void:
 	_check(restored_equipment.deserialize(saved_equipment), "firearm equipment survives existing version-two schema")
 	var restored: Dictionary = restored_equipment.get_slot("main_hand")
 	_check(str(restored.get("item_id", "")) == "star_pistol", "restored main hand retains the pistol")
-	_check(int(restored.get("metadata", {}).get("magazine_rounds", -1)) == 7, "restored pistol retains exact magazine rounds")
+	_check(int(restored.get("metadata", {}).get("magazine_rounds", -1)) == 7, "magazine rounds survive save and reload")
 	for node: Node in [inventory, equipment, restored_inventory, restored_equipment]:
 		node.queue_free()
 	await process_frame
