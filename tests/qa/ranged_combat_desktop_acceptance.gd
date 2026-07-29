@@ -258,9 +258,12 @@ func _push_mouse_button(pressed: bool) -> void:
 func _push_trigger_axis(value: float) -> void:
 	var event := InputEventJoypadMotion.new()
 	event.device = 0
-	event.axis = 5
+	event.axis = JOY_AXIS_TRIGGER_RIGHT
 	event.axis_value = value
-	root.push_input(event, true)
+	# Continuous controller gameplay is owned by Input's parsed state and polled by
+	# GameplayInputService/ControllerExplorationPlayer. Viewport push_input only
+	# dispatches an event and does not update that authoritative axis state.
+	Input.parse_input_event(event)
 
 
 func _wait_until(predicate: Callable, timeout_ms: int) -> bool:
