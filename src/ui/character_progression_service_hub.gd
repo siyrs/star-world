@@ -211,15 +211,15 @@ func _on_ranged_shot_fired(result: Dictionary) -> void:
 
 func _on_ranged_shot_rejected(result: Dictionary) -> void:
 	var reason := str(result.get("reason", "rejected"))
-	var message := {
+	var message: String = str({
 		"no_ammo": "没有箭矢",
 		"undercharged": "蓄力不足，未消耗箭矢",
 		"cooldown": "猎弓尚未准备好",
 		"projectile_capacity": "场景中的飞行箭矢已达到上限",
 		"weapon_changed": "蓄力期间武器已改变",
-	}.get(reason, "本次远程攻击未生效")
+	}.get(reason, "本次远程攻击未生效"))
 	_publish_character_message(
-		str(message), "warning", "ranged:rejected:%s" % reason, 2.2
+		message, "warning", "ranged:rejected:%s" % reason, 2.2
 	)
 
 
