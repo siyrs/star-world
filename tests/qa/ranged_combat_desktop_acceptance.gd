@@ -125,7 +125,9 @@ func _run() -> void:
 	)
 	_check(mouse_hit, "mouse release fires a real projectile and reaches CombatService")
 	var first_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
-	_check(float(target.get("health")) < health_before, "mouse projectile changes target health exactly once")
+	var first_projectile_id := int(first_result.get("projectile_id", 0))
+	var health_after_mouse := float(target.get("health"))
+	_check(health_after_mouse < health_before, "mouse projectile changes target health exactly once")
 	_check(hub.inventory.count_item("arrow") == arrows_before - 1, "mouse shot consumes exactly one arrow")
 	_check(_main_hand_durability(hub) == durability_before - 1, "mouse shot consumes exactly one durability")
 	_check(int(ranged.call("get_snapshot").get("projectiles", {}).get("active_count", -1)) == 0, "hit projectile is removed from the bounded runtime")
@@ -158,16 +160,22 @@ func _run() -> void:
 	_push_trigger_axis(0.0)
 	var controller_hit := await _wait_until(
 		func() -> bool:
-			var snapshot: Dictionary = ranged.call("get_snapshot")
-			return int(snapshot.get("shot_count", 0)) >= 2 and not bool(snapshot.get("charging", true)),
+			var result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+			return (
+				str(result.get("attack_kind", "")) == "ranged"
+				and str(result.get("status", "")) == "hit"
+				and int(result.get("projectile_id", 0)) != first_projectile_id
+			),
 		ACTION_TIMEOUT_MS
 	)
-	_check(controller_hit, "controller release commits the second projectile")
+	_check(controller_hit, "controller release fires a real projectile and reaches CombatService")
+	var controller_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
 	var controller_after: Dictionary = player.call("get_controller_gameplay_snapshot")
 	_check(int(controller_after.get("primary_press_count", 0)) == int(controller_before.get("primary_press_count", 0)) + 1, "controller press counter records the physical trigger")
 	_check(int(controller_after.get("primary_release_count", 0)) == int(controller_before.get("primary_release_count", 0)) + 1, "controller release counter records the physical trigger")
 	_check(hub.inventory.count_item("arrow") == arrows_before - 2, "mouse and controller consume two arrows total")
 	_check(_main_hand_durability(hub) == durability_before - 2, "mouse and controller consume two durability total")
+	_check(bool(controller_result.get("accepted", false)), "controller projectile is accepted by the authoritative combat path")
 
 	var arrows_after := hub.inventory.count_item("arrow")
 	var durability_after := _main_hand_durability(hub)
@@ -197,6 +205,7 @@ func _run() -> void:
 		"viewport": [root.size.x, root.size.y],
 		"world_id": _created_world_id,
 		"first_result": first_result.duplicate(true),
+		"controller_result": controller_result.duplicate(true),
 		"ranged_snapshot": ranged.call("get_snapshot"),
 		"controller_before": controller_before,
 		"controller_after": controller_after,
