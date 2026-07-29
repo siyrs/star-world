@@ -106,6 +106,8 @@ GameplayServiceHub.save_current()
 
 自动保存自己成功时也会收到同一 signal，但 `_saving` 标记避免把它误计为手动保存，并允许纯策略消费帧越界 carry。
 
+暂停发生在 pending 与 flush 之间时，运行时不得先消费 pending。它必须保留同一个到期事实，等待 Resume 后重新 deferred flush；如果暂停菜单中的手动保存先成功，则由同一 `world_save_completed` 清除 pending，恢复后不得重复保存。
+
 任何时刻都不允许并发保存或排队多个自动保存任务。
 
 ## 失败与分级退避
@@ -203,6 +205,14 @@ autosave_completed(success, snapshot)
 - 自动保存不写入 payload；
 - 正式 ServiceHub 的第七参与者、真实保存和玩家反馈。
 
+`tests/qa/autosave_deferred_pause_race_regression.gd` 覆盖：
+
+- 到期后、deferred flush 前进入 Pause；
+- 暂停期间 pending 保留且不写盘；
+- Resume 只提交一次保存并保持完整下一周期；
+- 暂停菜单手动保存取消 pending；
+- Resume 不产生重复自动保存。
+
 `tests/qa/runtime_health_failed_return_regression.gd` 覆盖：
 
 - 最终保存失败后世界身份不清空；
@@ -250,6 +260,7 @@ autosave_completed(success, snapshot)
 
 - 固定点策略静态合同；
 - 8 小时纯策略回归；
+- deferred Pause 竞态；
 - 生产多次保存、失败和恢复；
 - 原自动保存、时间线、世界会话、失败返回、运行健康和 Runtime Soak；
 - 真实桌面双截图和 JSON Artifact。
