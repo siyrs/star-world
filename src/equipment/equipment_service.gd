@@ -5,11 +5,13 @@ signal equipment_changed(snapshot: Dictionary)
 signal item_equipped(slot_id: String, item: Dictionary, previous: Dictionary)
 signal item_unequipped(slot_id: String, item: Dictionary)
 signal item_broken(slot_id: String, item_id: String, display_name: String, reason: String)
+signal item_metadata_changed(slot_id: String, item: Dictionary, changed_keys: Array[String])
 signal transaction_rejected(reason: String, context: Dictionary)
 
 const RegistryScript = preload("res://src/equipment/equipment_registry.gd")
 const SERIAL_VERSION := 2
 const MAIN_HAND_SLOT := "main_hand"
+const MAX_METADATA_KEYS_PER_UPDATE := 16
 
 var item_registry
 var registry = RegistryScript.new()
@@ -244,6 +246,33 @@ func consume_durability(slot_id: String, amount: int = 1, reason: String = "use"
 		"before": before,
 		"after": after,
 	}
+
+
+func update_slot_metadata(slot_id: String, updates: Dictionary) -> bool:
+	_ensure_ready()
+	if not registry.has_slot(slot_id) or updates.is_empty() or updates.size() > MAX_METADATA_KEYS_PER_UPDATE:
+		return false
+	var item := get_slot(slot_id)
+	if item.is_empty():
+		return false
+	var metadata: Dictionary = item.get("metadata", {}).duplicate(true)
+	var changed_keys: Array[String] = []
+	for raw_key: Variant in updates.keys():
+		var key := str(raw_key).strip_edges()
+		if key.is_empty():
+			return false
+		var next_value: Variant = updates[raw_key]
+		if metadata.get(key) == next_value:
+			continue
+		metadata[key] = next_value.duplicate(true) if next_value is Array or next_value is Dictionary else next_value
+		changed_keys.append(key)
+	if changed_keys.is_empty():
+		return true
+	item["metadata"] = metadata
+	slots[slot_id] = _normalize_item(item)
+	item_metadata_changed.emit(slot_id, get_slot(slot_id), changed_keys.duplicate())
+	_emit_changed()
+	return true
 
 
 func consume_armor_durability(amount: int = 1, reason: String = "damage") -> Array:
