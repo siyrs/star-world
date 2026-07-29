@@ -85,7 +85,7 @@ func _run() -> void:
 	var bow_index := _find_item_slot(hub.inventory, "bow")
 	_check(bow_index >= 0 and hub.equipment_service.equip_from_inventory(hub.inventory, bow_index), "real inventory equips the bow")
 	_check(str(hub.equipment_service.get_slot("main_hand").get("item_id", "")) == "bow", "main hand owns the ranged weapon")
-	var arrows_before := hub.inventory.count_item("arrow")
+	var arrows_before: int = int(hub.inventory.count_item("arrow"))
 	var durability_before := _main_hand_durability(hub)
 
 	var target_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 5.0)
@@ -177,7 +177,7 @@ func _run() -> void:
 	_check(_main_hand_durability(hub) == durability_before - 2, "mouse and controller consume two durability total")
 	_check(bool(controller_result.get("accepted", false)), "controller projectile is accepted by the authoritative combat path")
 
-	var arrows_after := hub.inventory.count_item("arrow")
+	var arrows_after: int = int(hub.inventory.count_item("arrow"))
 	var durability_after := _main_hand_durability(hub)
 	_check(bool(hub.save_current()), "ranged inventory and equipment coexist with the authoritative save")
 	hub.return_to_menu()
