@@ -31,6 +31,7 @@ jobs:
       primary_headless_verbose: true
       domain_scripts: |
         res://tests/qa/graceful_application_quit_regression.gd
+        res://tests/qa/session_recovery_ui_regression.gd
         res://tests/qa/bounded_autosave_runtime_regression.gd
         res://tests/qa/autosave_deferred_pause_race_regression.gd
         res://tests/qa/save_checkpoint_timeline_regression.gd
