@@ -192,9 +192,11 @@ func _process(delta: float) -> void:
 func _flush_autosave() -> void:
 	if not SchedulePolicyScript.is_pending(_schedule_state):
 		return
-	_schedule_state = SchedulePolicyScript.consume_pending(_schedule_state)
+	# Preserve the pending boundary while paused. Consuming before this guard
+	# would lose the first resumed frame and silently reintroduce schedule drift.
 	if not _should_advance():
 		return
+	_schedule_state = SchedulePolicyScript.consume_pending(_schedule_state)
 	_saving = true
 	var world_id := _current_world_id
 	var started_at := Time.get_ticks_usec()
@@ -262,6 +264,16 @@ func _on_settings_applied(settings: Dictionary) -> void:
 
 func _on_pause_changed(paused: bool) -> void:
 	_paused = paused
+	if (
+		not paused
+		and _installed
+		and not _shutdown
+		and _active
+		and SchedulePolicyScript.is_pending(_schedule_state)
+	):
+		# Multiple deferred calls are safe: the first successful flush consumes
+		# pending and every later call becomes a no-op.
+		call_deferred("_flush_autosave")
 
 
 func _read_paused() -> bool:
