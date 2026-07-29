@@ -120,6 +120,9 @@ func _test_atomic_duplicate_rejection() -> void:
 	var crafting = CraftingScript.new()
 	_check(not crafting.load_recipes(recipe_path), "duplicate recipe IDs reject the entire staged registry")
 	_check(crafting.recipe_count() == 0, "failed recipe staging never commits a partial registry")
+	# This fixture is intentionally never parented, so queue_free() cannot own its
+	# lifetime. Free it synchronously to keep the ObjectDB/resource gate exact.
+	crafting.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(item_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(recipe_path))
 
