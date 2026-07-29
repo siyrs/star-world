@@ -191,6 +191,7 @@ func _test_auto_cadence(
 		_check(bool(next.get("accepted", false)), "automatic carbine emits shot %d only after cadence interval" % expected_shots)
 	_check(target.hit_count == 4, "four-round automatic hold applies exactly four target transactions")
 	_check(int(ranged.get_snapshot().get("magazine_rounds", -1)) == 0, "automatic hold cannot fire beyond available magazine rounds")
+	ranged.call("_process", 0.10)
 	var after_empty: Dictionary = ranged.advance_primary(0.10, Vector3.ZERO, Vector3.FORWARD, attacker)
 	_check(str(after_empty.get("reason", "")) in ["empty_magazine", "not_active"], "automatic trigger stops deterministically on empty magazine")
 	ranged.release_primary(Vector3.ZERO, Vector3.FORWARD, attacker)
