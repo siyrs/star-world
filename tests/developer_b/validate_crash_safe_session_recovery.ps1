@@ -7,7 +7,8 @@ $paths = [ordered]@{
   Service = Join-Path $root 'src\save\world_session_recovery_service.gd'
   MainMenu = Join-Path $root 'src\ui\accessibility_protected_main_menu.gd'
   GameUi = Join-Path $root 'src\ui\accessibility_machine_game_ui.gd'
-  Hub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
+  RuntimeHub = Join-Path $root 'src\ui\runtime_health_service_hub.gd'
+  ExplorationHub = Join-Path $root 'src\ui\exploration_progression_service_hub.gd'
   Game = Join-Path $root 'src\core\batched_game.gd'
   GameScene = Join-Path $root 'scenes\game\game.tscn'
   HubScene = Join-Path $root 'scenes\ui\service_hub.tscn'
@@ -127,24 +128,53 @@ foreach ($token in @(
 }
 
 foreach ($token in @(
+  'class_name\s+RuntimeHealthServiceHub',
+  'extends\s+"res://src/ui/ranch_progression_service_hub\.gd"',
+  'WorldSessionRecoveryServiceScript',
+  'world_session_recovery_service',
+  'setup_session_recovery',
+  'func\s+_begin_world\s*\(',
+  'func\s+activate_gameplay\s*\(',
+  'func\s+handle_world_start_failed\s*\(',
+  'func\s+return_to_menu\s*\(',
+  'world_session_recovery_service\.call\("begin_world"',
+  'world_session_recovery_service\.call\("mark_active"',
+  'world_session_recovery_service\.call\("end_world"',
+  'world_session_recovery_service\.call\("abort_world"',
+  'func\s+get_session_recovery_snapshot\s*\(',
+  'world_session_recovery_service\.call\("shutdown"'
+)) {
+  if ($text.RuntimeHub -notmatch $token) {
+    throw "Runtime-health layer is missing session recovery lifecycle ownership: $token"
+  }
+}
+if ($text.RuntimeHub -match 'save_service\.save_world|FileAccess|DirAccess|Timer\.new\(') {
+  throw 'Runtime-health recovery composition must reuse authoritative hub/save signals'
+}
+
+foreach ($token in @(
   'class_name\s+ExplorationProgressionServiceHub',
   'extends\s+"res://src/ui/runtime_health_service_hub\.gd"',
-  'WorldSessionRecoveryServiceScript',
-  'application_quit_requested',
+  'signal\s+application_quit_requested',
   'func\s+prepare_application_quit\s*\(',
   'return_to_menu\(\)',
   'current_world_id\.is_empty\(\)',
-  'world_session_recovery_service\.call\("end_world"',
-  'world_session_recovery_service\.call\("abort_world"',
   'snapshot\["session_recovery"\]',
-  'snapshot\["application_quit"\]'
+  'snapshot\["application_quit"\]',
+  'application_quit_requested\.emit\(&"main_menu"\)',
+  'application_quit_requested\.emit\(&"pause_menu"\)'
 )) {
-  if ($text.Hub -notmatch $token) {
-    throw "Stable exploration hub is missing authoritative recovery coordination: $token"
+  if ($text.ExplorationHub -notmatch $token) {
+    throw "Thin exploration hub is missing application quit coordination: $token"
   }
 }
-if ($text.Hub -match 'save_service\.save_world|FileAccess|DirAccess|Timer\.new\(') {
-  throw 'Crash-safe composition must reuse return_to_menu/save_current instead of creating persistence I/O'
+foreach ($forbiddenLifecycle in @('_begin_world', 'activate_gameplay', 'handle_world_start_failed', 'return_to_menu', '_exit_tree')) {
+  if ($text.ExplorationHub -match ("func\s+" + [regex]::Escape($forbiddenLifecycle) + "\s*\(")) {
+    throw "Exploration hub must remain a thin registration layer: $forbiddenLifecycle"
+  }
+}
+if ($text.ExplorationHub -match 'WorldSessionRecoveryServiceScript|save_service\.save_world|FileAccess|DirAccess|Timer\.new\(') {
+  throw 'Exploration hub must not own marker persistence or duplicate recovery lifecycle'
 }
 
 foreach ($token in @(
@@ -255,7 +285,8 @@ foreach ($phrase in @(
   '不进入 world.json',
   '真实桌面',
   'Windows Release',
-  '稳定入口'
+  '稳定入口',
+  'RuntimeHealthServiceHub'
 )) {
   if ($text.Contract -notmatch [regex]::Escape($phrase)) {
     throw "Crash-safe recovery contract is missing boundary: $phrase"
@@ -267,7 +298,8 @@ foreach ($phrase in @(
   '旧 backup 误报恢复',
   '单一退出协调器',
   '模拟重启',
-  '稳定入口'
+  '稳定入口',
+  'RuntimeHealthServiceHub'
 )) {
   if ($text.Audit -notmatch [regex]::Escape($phrase)) {
     throw "Iteration 51 audit is missing finding or decision: $phrase"
@@ -280,4 +312,4 @@ if ($text.Roadmap -notmatch '异常会话恢复') {
   throw 'Product roadmap must record crash-safe session recovery'
 }
 
-Write-Host 'PASS crash_safe_session_recovery marker=strict-primary-only world_state=authoritative stable_entries=4 quit=single-coordinator wm_close=final-save failure=blocked restart=real compact=1024x576 desktop=three-screen release=windows'
+Write-Host 'PASS crash_safe_session_recovery marker=strict-primary-only owner=runtime-health exploration=thin world_state=authoritative stable_entries=4 quit=single-coordinator wm_close=final-save failure=blocked restart=real compact=1024x576 desktop=three-screen release=windows'
