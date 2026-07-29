@@ -5,6 +5,7 @@ var _controller_primary_active := false
 var _controller_primary_press_count := 0
 var _controller_primary_release_count := 0
 var _controller_secondary_count := 0
+var _controller_reload_count := 0
 var _controller_hotbar_cycle_count := 0
 var _controller_look_frame_count := 0
 var _last_controller_look := Vector2.ZERO
@@ -37,6 +38,7 @@ func get_controller_gameplay_snapshot() -> Dictionary:
 		"primary_press_count": _controller_primary_press_count,
 		"primary_release_count": _controller_primary_release_count,
 		"secondary_count": _controller_secondary_count,
+		"reload_count": _controller_reload_count,
 		"hotbar_cycle_count": _controller_hotbar_cycle_count,
 		"look_frame_count": _controller_look_frame_count,
 		"last_look": _last_controller_look,
@@ -102,6 +104,13 @@ func _handle_controller_commands() -> void:
 	):
 		_controller_secondary_count += 1
 		interact_or_use_selected_item()
+	if (
+		input_service.has_method("is_reload_just_pressed")
+		and bool(input_service.call("is_reload_just_pressed"))
+	):
+		_controller_reload_count += 1
+		if has_method("request_ranged_reload"):
+			call("request_ranged_reload")
 	if input_service.has_method("get_hotbar_cycle_just_pressed"):
 		var direction := int(input_service.call("get_hotbar_cycle_just_pressed"))
 		if direction != 0:
