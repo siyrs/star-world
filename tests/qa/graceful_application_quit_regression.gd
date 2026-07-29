@@ -170,7 +170,7 @@ func _run() -> void:
 		and _prepared_sources.has("main_menu"),
 		"main-menu quit is an intent routed through the game composition root"
 	)
-	game.notification(NOTIFICATION_WM_CLOSE_REQUEST)
+	game.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	for _frame in 4:
 		await process_frame
 	var wm_quit: Dictionary = game.call("get_application_quit_snapshot")
