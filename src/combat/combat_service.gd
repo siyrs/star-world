@@ -123,12 +123,15 @@ func resolve_projectile_hit(
 	shot: Dictionary
 ) -> Dictionary:
 	var target_available := _target_available(target)
+	var attack_kind := str(shot.get("attack_kind", "ranged")).strip_edges()
+	if attack_kind.is_empty():
+		attack_kind = "ranged"
 	var result := {
 		"handled": target_available,
 		"accepted": false,
 		"status": "rejected",
 		"reason": "invalid_target" if not target_available else "target_rejected",
-		"attack_kind": "ranged",
+		"attack_kind": attack_kind,
 		"weapon_item_id": str(shot.get("weapon_item_id", "")),
 		"ammo_item_id": str(shot.get("ammo_item_id", "")),
 		"charge_ratio": clampf(float(shot.get("charge_ratio", 0.0)), 0.0, 1.0),
@@ -140,7 +143,7 @@ func resolve_projectile_hit(
 	var damage_result := calculator.calculate_raw(
 		maxf(0.0, float(shot.get("raw_damage", 0.0))),
 		_target_attributes(target),
-		"player_ranged_attack"
+		"player_%s_attack" % attack_kind
 	)
 	result.merge(damage_result, true)
 	var direction := _vector3_from_array(shot.get("shot_direction", []), Vector3.FORWARD)
@@ -153,7 +156,15 @@ func resolve_projectile_hit(
 	)
 	result["knockback"] = [knockback.x, knockback.y, knockback.z]
 	result["hit_stun_seconds"] = maxf(0.0, float(shot.get("hit_stun_seconds", 0.0)))
-	for key: Variant in ["projectile_id", "impact_position", "impact_normal", "impact_velocity"]:
+	for key: Variant in [
+		"projectile_id",
+		"hitscan_id",
+		"pellet_hits",
+		"pellet_count",
+		"impact_position",
+		"impact_normal",
+		"impact_velocity",
+	]:
 		if shot.has(key):
 			result[key] = shot[key]
 	var applied := _apply_hit(target, attacker, result)
