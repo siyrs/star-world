@@ -4,6 +4,7 @@ extends RefCounted
 const ACTION_SWING := &"swing"
 const ACTION_USE := &"use"
 const ACTION_NONE := &"none"
+const FIREARM_TOOL_TYPES: Array[String] = ["pistol", "carbine", "shotgun"]
 
 
 func classify(item_definition: Dictionary, block_id: String = "") -> String:
@@ -11,7 +12,10 @@ func classify(item_definition: Dictionary, block_id: String = "") -> String:
 		return "empty"
 	if block_id not in ["", "air"] or str(item_definition.get("category", "")) == "block":
 		return "block"
-	if not str(item_definition.get("tool_type", "")).is_empty():
+	var tool_type := str(item_definition.get("tool_type", ""))
+	if tool_type in FIREARM_TOOL_TYPES:
+		return "firearm"
+	if not tool_type.is_empty():
 		return "tool"
 	match str(item_definition.get("category", "")):
 		"food":
@@ -28,7 +32,7 @@ func action_kind(action: StringName) -> StringName:
 	match action:
 		&"attack", &"mine", &"harvest_no_drop":
 			return ACTION_SWING
-		&"place", &"eat", &"interact", &"interact_entity", &"till", &"plant", &"harvest", &"prospect":
+		&"place", &"eat", &"interact", &"interact_entity", &"till", &"plant", &"harvest", &"prospect", &"ranged_fire", &"ranged_reload":
 			return ACTION_USE
 		_:
 			return ACTION_NONE
