@@ -68,6 +68,14 @@ func _run() -> void:
 	var runtime := ranged.get("projectile_runtime") as Node
 	_check(runtime != null and runtime.process_mode == Node.PROCESS_MODE_PAUSABLE, "all projectiles share one pausable runtime")
 	_check(ProjectileRuntimeScript.MAX_ACTIVE_PROJECTILES == 64, "projectile runtime exposes a hard active-node budget")
+	var first_snapshot: Dictionary = ranged.get_snapshot()
+	var refresh_count := int(first_snapshot.get("profile_refresh_count", 0))
+	for _sample in 4096:
+		ranged.get_snapshot()
+	_check(
+		int(ranged.get_snapshot().get("profile_refresh_count", -1)) == refresh_count,
+		"frame hot path reuses one cached ranged profile"
+	)
 
 	var target := RangedTarget.new()
 	target.name = "RangedTarget"
