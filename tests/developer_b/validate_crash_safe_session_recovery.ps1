@@ -20,8 +20,8 @@ $paths = [ordered]@{
   RunAll = Join-Path $root 'tests\run_all.ps1'
   Contract = Join-Path $root 'docs\CRASH_SAFE_SESSION_RECOVERY.md'
   Audit = Join-Path $root 'docs\ARCHITECTURE_AUDIT_2026-07-29_ITERATION_51.md'
-  Testing = Join-Path $root 'docs\TESTING.md'
-  Roadmap = Join-Path $root 'docs\PRODUCT_ROADMAP.md'
+  Testing = Join-Path $root 'docs\CRASH_SAFE_SESSION_RECOVERY_TESTING.md'
+  Roadmap = Join-Path $root 'docs\PRODUCT_ROADMAP_ITERATION_51.md'
 }
 
 foreach ($entry in $paths.GetEnumerator()) {
