@@ -36,7 +36,7 @@ func _test_profile_contract() -> void:
 	_check(profile.get_validation_errors().is_empty(), "production controller profile has no validation errors")
 	_check(bool(snapshot.get("loaded_from_file", false)), "production controller profile is loaded from data")
 	_check(int(snapshot.get("schema_version", 0)) == 1, "controller schema version remains stable")
-	_check(int(snapshot.get("binding_count", 0)) == 21, "controller profile owns exactly twenty-one logical bindings")
+	_check(int(snapshot.get("binding_count", 0)) == 22, "controller profile owns exactly twenty-two logical bindings")
 	_check(int(snapshot.get("binding_budget", 0)) == 32, "controller binding budget remains bounded at thirty-two")
 	_check(is_equal_approx(float(snapshot.get("movement_deadzone", 0.0)), 0.22), "movement deadzone is explicit")
 	_check(is_equal_approx(float(snapshot.get("look_deadzone", 0.0)), 0.18), "look deadzone is explicit")
@@ -50,8 +50,9 @@ func _test_profile_contract() -> void:
 		actions[action] = int(actions.get(action, 0)) + 1
 		var key := _physical_key(binding)
 		physical[key] = int(physical.get(key, 0)) + 1
-	_check(actions.size() == 21, "every controller command has one logical action owner")
-	_check(physical.size() == 21, "every controller command has one unique physical control")
+	_check(actions.size() == 22, "every controller command has one logical action owner")
+	_check(physical.size() == 22, "every controller command has one unique physical control")
+	_check(actions.has("reload"), "controller profile includes a device-independent reload command")
 	for action_count: Variant in actions.values():
 		_check(int(action_count) == 1, "controller actions cannot have duplicate profile entries")
 	for physical_count: Variant in physical.values():
@@ -119,6 +120,10 @@ func _test_input_service() -> void:
 	_check(service.is_secondary_action_just_pressed(), "left trigger exposes a just-pressed secondary action")
 	Input.action_release(Actions.SECONDARY_ACTION)
 	await process_frame
+	Input.action_press(Actions.RELOAD)
+	_check(service.is_reload_just_pressed(), "left shoulder and R share one just-pressed reload intent")
+	Input.action_release(Actions.RELOAD)
+	await process_frame
 	Input.action_press(Actions.HOTBAR_NEXT)
 	_check(service.get_hotbar_cycle_just_pressed() == 1, "D-Pad right cycles the hotbar forward")
 	Input.action_release(Actions.HOTBAR_NEXT)
@@ -128,7 +133,7 @@ func _test_input_service() -> void:
 	Input.action_release(Actions.HOTBAR_PREVIOUS)
 	var status: Dictionary = service.get_binding_status()
 	_check(bool(status.get("valid", false)), "input service reports the combined binding contract as valid")
-	_check(int(status.get("controller_profile", {}).get("binding_count", 0)) == 21, "input diagnostics expose the bounded controller profile")
+	_check(int(status.get("controller_profile", {}).get("binding_count", 0)) == 22, "input diagnostics expose the bounded controller profile")
 	service.set_active(false)
 	_check(service.get_movement_vector() == Vector2.ZERO and service.get_look_vector() == Vector2.ZERO, "inactive gameplay releases continuous controller state")
 	service.queue_free()
@@ -166,6 +171,12 @@ func _test_production_player_composition() -> void:
 	await process_frame
 	snapshot = player.call("get_controller_gameplay_snapshot")
 	_check(int(snapshot.get("secondary_count", 0)) == 1, "production player routes secondary action through interact/use")
+	Input.action_press(Actions.RELOAD)
+	player.call("_process", 0.016)
+	Input.action_release(Actions.RELOAD)
+	await process_frame
+	snapshot = player.call("get_controller_gameplay_snapshot")
+	_check(int(snapshot.get("reload_count", 0)) == 1, "production player routes one logical reload command")
 	var hotbar_before := int(snapshot.get("selected_hotbar_index", 0))
 	Input.action_press(Actions.HOTBAR_NEXT)
 	player.call("_process", 0.016)
@@ -203,7 +214,7 @@ func _physical_key(binding: Dictionary) -> String:
 func _release_actions() -> void:
 	for action: StringName in [
 		Actions.MOVE_RIGHT, Actions.MOVE_FORWARD, Actions.LOOK_RIGHT, Actions.LOOK_DOWN,
-		Actions.PRIMARY_ACTION, Actions.SECONDARY_ACTION, Actions.HOTBAR_NEXT,
+		Actions.PRIMARY_ACTION, Actions.SECONDARY_ACTION, Actions.RELOAD, Actions.HOTBAR_NEXT,
 		Actions.HOTBAR_PREVIOUS,
 	]:
 		Input.action_release(action)
