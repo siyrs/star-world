@@ -15,6 +15,7 @@ var _base_walk_speed := 0.0
 var _base_sprint_speed := 0.0
 var _hostile_damage_grace_remaining := 0.0
 var _hostile_damage_cooldown_remaining := 0.0
+var _ranged_recoil_count := 0
 
 
 func _ready() -> void:
@@ -96,7 +97,17 @@ func get_respawn_position() -> Vector3:
 func get_ranged_combat_snapshot() -> Dictionary:
 	if ranged_combat_service == null or not ranged_combat_service.has_method("get_snapshot"):
 		return {}
-	return ranged_combat_service.call("get_snapshot")
+	var snapshot: Dictionary = ranged_combat_service.call("get_snapshot")
+	snapshot["player_recoil_count"] = _ranged_recoil_count
+	return snapshot
+
+
+func request_ranged_reload() -> Dictionary:
+	if ranged_combat_service == null or not ranged_combat_service.has_method("request_reload"):
+		return {"handled": false, "accepted": false, "reason": "service_unavailable"}
+	var result: Dictionary = ranged_combat_service.call("request_reload")
+	_handle_ranged_result(result)
+	return result
 
 
 func take_damage(amount: float, source: String = "world") -> void:
@@ -129,56 +140,78 @@ func take_damage(amount: float, source: String = "world") -> void:
 
 
 func _start_primary_action() -> void:
-	if ranged_combat_service != null and ranged_combat_service.has_method("begin_charge"):
-		var raw_result: Variant = ranged_combat_service.call("begin_charge")
+	if ranged_combat_service != null and ranged_combat_service.has_method("begin_primary"):
+		var firing := _ranged_origin_and_direction()
+		var raw_result: Variant = ranged_combat_service.call(
+			"begin_primary",
+			firing.get("origin", global_position),
+			firing.get("direction", -global_transform.basis.z),
+			self
+		)
 		if raw_result is Dictionary:
 			var result: Dictionary = raw_result
 			if bool(result.get("handled", false)):
 				if not bool(result.get("accepted", false)):
 					_primary_action_held = false
-				combat_result_reported.emit(result.duplicate(true))
+				_handle_ranged_result(result)
 				return
+	elif ranged_combat_service != null and ranged_combat_service.has_method("begin_charge"):
+		var legacy_result: Variant = ranged_combat_service.call("begin_charge")
+		if legacy_result is Dictionary and bool(legacy_result.get("handled", false)):
+			if not bool(legacy_result.get("accepted", false)):
+				_primary_action_held = false
+			_handle_ranged_result(legacy_result)
+			return
 	super._start_primary_action()
 
 
 func _advance_harvest(delta: float) -> void:
-	if (
-		ranged_combat_service != null
-		and ranged_combat_service.has_method("get_snapshot")
-		and bool(ranged_combat_service.call("get_snapshot").get("charging", false))
-	):
-		if ranged_combat_service.has_method("advance_charge"):
-			ranged_combat_service.call("advance_charge", delta)
-		return
+	if ranged_combat_service != null and ranged_combat_service.has_method("get_snapshot"):
+		var snapshot: Dictionary = ranged_combat_service.call("get_snapshot")
+		if bool(snapshot.get("charging", false)) or bool(snapshot.get("trigger_active", false)):
+			if ranged_combat_service.has_method("advance_primary"):
+				var firing := _ranged_origin_and_direction()
+				var result: Dictionary = ranged_combat_service.call(
+					"advance_primary",
+					delta,
+					firing.get("origin", global_position),
+					firing.get("direction", -global_transform.basis.z),
+					self
+				)
+				if bool(result.get("accepted", false)) or str(result.get("status", "")) == "rejected":
+					_handle_ranged_result(result)
+			elif ranged_combat_service.has_method("advance_charge"):
+				ranged_combat_service.call("advance_charge", delta)
+			return
 	super._advance_harvest(delta)
 
 
 func _cancel_harvest(reason: String) -> void:
 	if ranged_combat_service != null and ranged_combat_service.has_method("get_snapshot"):
 		var snapshot: Dictionary = ranged_combat_service.call("get_snapshot")
-		if bool(snapshot.get("charging", false)):
+		if bool(snapshot.get("charging", false)) or bool(snapshot.get("trigger_active", false)):
 			var result: Dictionary = {}
 			if reason in ["released", "controller_released"]:
 				var firing := _ranged_origin_and_direction()
-				result = ranged_combat_service.call(
-					"release_charge",
-					firing.get("origin", global_position),
-					firing.get("direction", -global_transform.basis.z),
-					self
-				)
+				if ranged_combat_service.has_method("release_primary"):
+					result = ranged_combat_service.call(
+						"release_primary",
+						firing.get("origin", global_position),
+						firing.get("direction", -global_transform.basis.z),
+						self
+					)
+				else:
+					result = ranged_combat_service.call(
+						"release_charge",
+						firing.get("origin", global_position),
+						firing.get("direction", -global_transform.basis.z),
+						self
+					)
+			elif ranged_combat_service.has_method("cancel_primary"):
+				result = ranged_combat_service.call("cancel_primary", reason)
 			else:
 				result = ranged_combat_service.call("cancel_charge", reason)
-			combat_result_reported.emit(result.duplicate(true))
-			if bool(result.get("accepted", false)):
-				_report_player_action(
-					&"ranged_fire",
-					{
-						"weapon_item_id": str(result.get("weapon_item_id", "")),
-						"ammo_item_id": str(result.get("ammo_item_id", "")),
-						"charge_ratio": float(result.get("charge_ratio", 0.0)),
-						"damage": float(result.get("damage", 0.0)),
-					}
-				)
+			_handle_ranged_result(result)
 			return
 	super._cancel_harvest(reason)
 
@@ -227,6 +260,56 @@ func _consume_selected_durability(reason: String) -> void:
 		combat_service.call("consume_attack_durability", 1)
 		return
 	super._consume_selected_durability(reason)
+
+
+func _handle_ranged_result(result: Dictionary) -> void:
+	if result.is_empty():
+		return
+	var status := str(result.get("status", ""))
+	var reason := str(result.get("reason", ""))
+	if status not in ["holding", "released"] and reason != "not_active":
+		combat_result_reported.emit(result.duplicate(true))
+	if not bool(result.get("accepted", false)):
+		return
+	if status == "fired":
+		_report_player_action(
+			&"ranged_fire",
+			{
+				"attack_kind": str(result.get("attack_kind", "ranged")),
+				"weapon_item_id": str(result.get("weapon_item_id", "")),
+				"ammo_item_id": str(result.get("ammo_item_id", "")),
+				"charge_ratio": float(result.get("charge_ratio", 0.0)),
+				"damage": float(result.get("damage", 0.0)),
+				"pellet_count": int(result.get("pellet_count", 1)),
+			}
+		)
+		_apply_ranged_recoil(result)
+	elif status in ["reloading", "reloaded"]:
+		_report_player_action(
+			&"ranged_reload",
+			{
+				"weapon_item_id": str(result.get("weapon_item_id", "")),
+				"status": status,
+			}
+		)
+
+
+func _apply_ranged_recoil(result: Dictionary) -> void:
+	var pitch := maxf(0.0, float(result.get("recoil_pitch_degrees", 0.0)))
+	var yaw := maxf(0.0, float(result.get("recoil_yaw_degrees", 0.0)))
+	if pitch <= 0.0 and yaw <= 0.0:
+		return
+	_ranged_recoil_count += 1
+	if camera_pivot != null and is_instance_valid(camera_pivot):
+		camera_pivot.rotate_x(-deg_to_rad(pitch))
+		camera_pivot.rotation.x = clampf(
+			camera_pivot.rotation.x,
+			deg_to_rad(-89.0),
+			deg_to_rad(89.0)
+		)
+	var sequence := int(result.get("hitscan_id", _ranged_recoil_count))
+	var yaw_sign := -1.0 if sequence % 2 == 0 else 1.0
+	rotate_y(deg_to_rad(yaw * yaw_sign))
 
 
 func _ranged_origin_and_direction() -> Dictionary:
