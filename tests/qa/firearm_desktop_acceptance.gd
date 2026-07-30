@@ -102,6 +102,10 @@ func _run() -> void:
 		await _finish(game, hub)
 		return
 	var target: Node3D = target_variant
+	var target_id := int(target.get_instance_id())
+	var target_ref := weakref(target)
+	target.set("max_health", 40.0)
+	target.set("health", 40.0)
 	_freeze_target(target)
 	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
 	var health_before := float(target.get("health"))
@@ -112,11 +116,22 @@ func _run() -> void:
 	var mouse_hit := await _wait_until(
 		func() -> bool:
 			var result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
-			return str(result.get("attack_kind", "")) == "firearm" and str(result.get("status", "")) == "hit",
+			return (
+				str(result.get("attack_kind", "")) == "firearm"
+				and str(result.get("status", "")) == "hit"
+				and int(result.get("target_id", 0)) == target_id
+			),
 		ACTION_TIMEOUT_MS
 	)
 	_check(mouse_hit, "real left-mouse click fires a hitscan pistol shot through CombatService")
-	_check(float(target.get("health")) < health_before, "mouse firearm shot changes target health exactly once")
+	var mouse_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+	var live_target: Variant = target_ref.get_ref()
+	var target_changed := bool(mouse_result.get("accepted", false))
+	if live_target is Node and is_instance_valid(live_target):
+		target_changed = float(live_target.get("health")) < health_before
+	else:
+		target_changed = bool(mouse_result.get("defeated", false))
+	_check(target_changed, "mouse firearm shot changes or defeats the target exactly once")
 	var after_mouse: Dictionary = ranged.call("get_snapshot")
 	_check(int(after_mouse.get("magazine_rounds", -1)) == 1, "mouse shot consumes one magazine round")
 	_check(hub.inventory.count_item("light_round") == reserve_before, "mouse shot does not consume reserve ammunition")
@@ -149,11 +164,12 @@ func _run() -> void:
 	_check(keyboard_reload_complete, "keyboard reload atomically fills the pistol magazine")
 	_check(hub.inventory.count_item("light_round") == reserve_before - 7, "keyboard reload consumes exactly seven reserve rounds")
 
-	if target != null and is_instance_valid(target):
-		if target.has_method("clear_combat_motion"):
-			target.call("clear_combat_motion")
-		target.global_position = target_position
-		_freeze_target(target)
+	live_target = target_ref.get_ref()
+	if live_target is Node3D and is_instance_valid(live_target):
+		if live_target.has_method("clear_combat_motion"):
+			live_target.call("clear_combat_motion")
+		live_target.global_position = target_position
+		_freeze_target(live_target)
 	await _aim_at(player, target_position + Vector3(0.0, 0.65, 0.0))
 	var controller_before: Dictionary = player.call("get_controller_gameplay_snapshot")
 	_parse_axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
@@ -218,6 +234,9 @@ func _run() -> void:
 		"failures": failures.duplicate(),
 		"viewport": [root.size.x, root.size.y],
 		"world_id": _created_world_id,
+		"target_id": target_id,
+		"target_alive_after_mouse": target_ref.get_ref() != null,
+		"mouse_result": mouse_result.duplicate(true),
 		"reserve_before": reserve_before,
 		"reserve_after": reserve_after,
 		"durability_before": durability_before,
