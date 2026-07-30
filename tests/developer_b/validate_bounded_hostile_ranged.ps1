@@ -95,9 +95,10 @@ foreach ($token in @('MAX_HOSTILE_DAMAGE_COOLDOWN_SOURCES := 32','_hostile_damag
 }
 if ($text.Player -match '_hostile_damage_cooldowns\.size\(\)\s*>\s*MAX_HOSTILE') { throw 'Hostile cooldown capacity must be enforced before insertion' }
 
-foreach ($token in @('HOSTILE_PROJECTILE_CAPACITY := 24','HostileProjectileRuntime','setup", combat_service, HOSTILE_PROJECTILE_CAPACITY','creature_spawned','bind_projectile_runtime','hostile_projectiles','clear", reason')) {
+foreach ($token in @('HOSTILE_PROJECTILE_CAPACITY := 24','HostileProjectileRuntime','creature_spawned','bind_projectile_runtime','hostile_projectiles','clear", reason')) {
   if ($text.Hub -notmatch [regex]::Escape($token)) { throw "Character hub hostile projectile composition is missing: $token" }
 }
+if ($text.Hub -notmatch '"setup"\s*,\s*combat_service\s*,\s*HOSTILE_PROJECTILE_CAPACITY') { throw 'Hostile projectile runtime must be configured with the exact bounded capacity' }
 if ($text.Hub -match 'current_state\["hostile_projectiles"\]') { throw 'Hostile projectile state must not enter persistence' }
 
 foreach ($token in @('weakref\(target\)','target_id','target_ref\.get_ref','mouse_result')) {
