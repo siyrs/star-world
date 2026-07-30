@@ -7,6 +7,12 @@ $ecologyData = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\creature_e
 $itemData = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\items.json') | ConvertFrom-Json
 $recipeData = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\recipes.json') | ConvertFrom-Json
 $factorySource = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'src\entity\creature_factory.gd')
+$bruteAdapterPath = Join-Path $root 'src\entity\cover_aware_abyss_brute.gd'
+$bruteAdapterSource = if (Test-Path -LiteralPath $bruteAdapterPath) {
+  Get-Content -Raw -Encoding UTF8 $bruteAdapterPath
+} else {
+  ''
+}
 $spawnerSource = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'src\entity\creature_spawner.gd')
 $dangerSource = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'src\exploration\exploration_danger_service.gd')
 $focusSource = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'src\interaction\player_focus_resolver.gd')
@@ -53,7 +59,15 @@ foreach ($profile in @($ecologyData.profiles | Where-Object { $_.id -ne 'abyss_w
   if ('abyss_brute' -in @($profile.hostile_species.id)) { throw "Abyss elite leaked into $($profile.id) ecology" }
 }
 
-if ($factorySource -notmatch '"abyss_brute"\s*:\s*preload\("res://src/entity/abyss_brute\.gd"\)') { throw 'CreatureFactory is missing the abyss brute production script' }
+$directProduction = $factorySource -match '"abyss_brute"\s*:\s*preload\("res://src/entity/abyss_brute\.gd"\)'
+$coverAwareProduction = (
+  $factorySource -match '"abyss_brute"\s*:\s*preload\("res://src/entity/cover_aware_abyss_brute\.gd"\)'
+  -and $bruteAdapterSource -match 'extends\s+"res://src/entity/abyss_brute\.gd"'
+  -and $bruteAdapterSource -match 'super\._commit_attack\(\)'
+)
+if (-not $directProduction -and -not $coverAwareProduction) {
+  throw 'CreatureFactory must compose either the direct abyss brute or a thin production subclass that preserves the original heavy attack'
+}
 if ($factorySource -notmatch 'func is_hostile_species') { throw 'CreatureFactory must expose generic hostile capability lookup' }
 if ($spawnerSource -match 'species_id\s*==\s*"zombie"') { throw 'Spawner must not special-case zombie targeting for hostile species' }
 if ($spawnerSource -notmatch '_count_group\(&"hostile"\)') { throw 'Spawner hostile caps must use the generic hostile group' }
@@ -64,4 +78,4 @@ if ($promptSource -notmatch '精英重击蓄力') { throw 'Player prompt must ex
 if ($runAllSource -notmatch 'validate_abyss_elite\.ps1') { throw 'Full test entry must run the abyss elite validator' }
 if ($runAllSource -notmatch 'abyss_elite_regression\.gd') { throw 'Full test entry must run the abyss elite regression' }
 
-Write-Host "PASS abyss_elite health=$($brute.max_health) damage=$($brute.damage) windup=$($bruteAttack.windup_seconds) drop=abyss_cinder ecology_cap=$($bruteEntry.cap)"
+Write-Host "PASS abyss_elite health=$($brute.max_health) damage=$($brute.damage) windup=$($bruteAttack.windup_seconds) drop=abyss_cinder ecology_cap=$($bruteEntry.cap) coverAware=$coverAwareProduction"
