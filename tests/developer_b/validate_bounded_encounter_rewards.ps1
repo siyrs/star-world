@@ -10,6 +10,7 @@ $paths = [ordered]@{
   Firearms = Join-Path $root 'data\firearms.json'
   Registry = Join-Path $root 'src\entity\encounter_reward_registry.gd'
   Service = Join-Path $root 'src\entity\encounter_reward_service.gd'
+  Lifecycle = Join-Path $root 'src\entity\lifecycle_bound_encounter_reward_service.gd'
   Overlay = Join-Path $root 'src\ui\encounter_reward_overlay.gd'
   Scene = Join-Path $root 'scenes\ui\service_hub.tscn'
   Headless = Join-Path $root 'tests\qa\encounter_reward_economy_regression.gd'
@@ -93,15 +94,29 @@ foreach ($token in @(
   'MAX_PENDING_REWARDS\s*:=\s*8','MAX_CLAIM_HISTORY\s*:=\s*256',
   'encounter_started','encounter_completed','shot_fired','inventory_changed',
   '_on_member_died','_accepted_target_ids','transact_items','_pending_rewards',
-  'duplicate_completion','unattributed_shot_count','EncounterRewardOverlay'
+  '_schedule_reward_flush','duplicate_completion','unattributed_shot_count','EncounterRewardOverlay'
 )) {
   if ($text.Service -notmatch $token) { throw "Bounded reward service is missing: $token" }
 }
 if ($text.Service -match 'Timer\.new|Thread\.new|get_nodes_in_group|save_world|serialize\s*\(|current_state\s*\[') {
   throw 'Reward service must use existing signals and inventory authority without scans or a parallel save domain'
 }
+foreach ($token in @(
+  'class_name\s+LifecycleBoundEncounterRewardService',
+  'start_world_requested','return_to_menu_requested',
+  'clear\("start_world_signal"\)','clear\("return_to_menu_signal"\)',
+  '_bound_world_id\s*=\s*""'
+)) {
+  if ($text.Lifecycle -notmatch $token) { throw "Reward lifecycle adapter is missing: $token" }
+}
+if ($text.Lifecycle -match 'Timer\.new|Thread\.new|get_nodes_in_group|transact_items|save_world') {
+  throw 'Reward lifecycle adapter must only translate explicit world signals into clear boundaries'
+}
 if (($text.Scene | Select-String -Pattern 'EncounterRewardService' -AllMatches).Matches.Count -ne 1) {
   throw 'Service composition must install exactly one EncounterRewardService'
+}
+if ($text.Scene -notmatch 'lifecycle_bound_encounter_reward_service\.gd') {
+  throw 'Production composition must use the explicit lifecycle-bound reward adapter'
 }
 if ($text.Scene.IndexOf('HostileEncounterDirector') -gt $text.Scene.IndexOf('EncounterRewardService')) {
   throw 'Reward service must be composed after the encounter director for deterministic lifecycle ordering'
@@ -126,7 +141,8 @@ foreach ($phrase in @(
   'full production inventory keeps the complete reward in one pending record',
   'inventory change automatically retries and grants the pending reward',
   'member unload cannot masquerade as a rewarded squad defeat',
-  'reward ledgers claims and pending records do not enter world.json'
+  'reward ledgers claims and pending records do not enter world.json',
+  'reloaded world begins with an empty runtime claim history'
 )) {
   if ($text.Desktop -notmatch [regex]::Escape($phrase)) { throw "Encounter reward desktop acceptance is missing: $phrase" }
 }
@@ -146,4 +162,4 @@ foreach ($concept in @('原子','最后一击','待领取','重复 completion','
     throw "Encounter reward documentation is missing concept: $concept"
   }
 }
-Write-Host "PASS bounded encounter rewards profiles=$($profiles.Count) rewardTypes<=4 total<=16 ledgers<=2 pending<=8 claims<=256"
+Write-Host "PASS bounded encounter rewards profiles=$($profiles.Count) rewardTypes<=4 total<=16 ledgers<=2 pending<=8 claims<=256 lifecycle=signals"
