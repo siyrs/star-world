@@ -4,6 +4,7 @@ extends "res://src/entity/abyss_brute.gd"
 var cover_counter_service: Node
 var _cover_break_attack_count := 0
 var _cover_break_block_count := 0
+var _cover_blocked_attack_count := 0
 var _last_cover_break_result: Dictionary = {}
 
 
@@ -24,6 +25,7 @@ func get_hostile_attack_snapshot() -> Dictionary:
 		),
 		"cover_break_attack_count": _cover_break_attack_count,
 		"cover_break_block_count": _cover_break_block_count,
+		"cover_blocked_attack_count": _cover_blocked_attack_count,
 		"last_cover_break_result": _last_cover_break_result.duplicate(true),
 	}, true)
 	return snapshot
@@ -41,13 +43,16 @@ func _commit_attack() -> void:
 		var result: Dictionary = cover_counter_service.call(
 			"resolve_brute_attack", self, attack_target
 		)
-		if bool(result.get("handled", false)):
+		if bool(result.get("handled", false)) or bool(result.get("blocks_damage", false)):
 			_attack_windup_remaining = 0.0
 			_attack_timer = maxf(0.1, attack_cooldown_seconds)
 			_last_attack_cancel_reason = ""
 			_set_attack_state(HostileAttackPolicyScript.STATE_COOLDOWN)
-			_cover_break_attack_count += 1
-			_cover_break_block_count += int(result.get("changed_blocks", 0))
+			if bool(result.get("handled", false)):
+				_cover_break_attack_count += 1
+				_cover_break_block_count += int(result.get("changed_blocks", 0))
+			else:
+				_cover_blocked_attack_count += 1
 			_last_cover_break_result = result.duplicate(true)
 			return
 	super._commit_attack()
