@@ -34,6 +34,7 @@ var _ledgers: Dictionary = {}
 var _pending_rewards: Dictionary = {}
 var _claimed_ids: Dictionary = {}
 var _claim_order: Array[String] = []
+var _deferred_reward_ids: Dictionary = {}
 var _encounter_start_count := 0
 var _encounter_completion_count := 0
 var _reward_grant_count := 0
@@ -71,11 +72,12 @@ func bind_parent_hub(p_parent_hub: Node) -> void:
 
 
 func clear(reason: String = "clear") -> void:
-	var pending_forfeit := _pending_rewards.size()
+	var pending_forfeit: int = _pending_rewards.size()
 	_ledgers.clear()
 	_pending_rewards.clear()
 	_claimed_ids.clear()
 	_claim_order.clear()
+	_deferred_reward_ids.clear()
 	_encounter_start_count = 0
 	_encounter_completion_count = 0
 	_reward_grant_count = 0
@@ -124,6 +126,7 @@ func get_snapshot() -> Dictionary:
 		"maximum_pending_rewards":MAX_PENDING_REWARDS,
 		"claim_history_count":_claim_order.size(),
 		"maximum_claim_history":MAX_CLAIM_HISTORY,
+		"deferred_reward_count":_deferred_reward_ids.size(),
 		"encounter_start_count":_encounter_start_count,
 		"encounter_completion_count":_encounter_completion_count,
 		"reward_grant_count":_reward_grant_count,
@@ -183,7 +186,7 @@ func _refresh_parent_bindings(delta: float = 0.0, force: bool = false) -> void:
 		_parent_hub = get_parent()
 	if _parent_hub == null or not is_instance_valid(_parent_hub):
 		return
-	var next_director := _parent_hub.get_node_or_null("HostileEncounterDirector")
+	var next_director: Node = _parent_hub.get_node_or_null("HostileEncounterDirector")
 	var next_inventory: Node = _parent_hub.get("inventory") as Node
 	var next_ranged: Node = _parent_hub.get("ranged_combat_service") as Node
 	var next_spawner: Node = _parent_hub.get("creature_spawner") as Node
@@ -220,14 +223,12 @@ func _bind_services(
 func _connect_director() -> void:
 	if director == null or not is_instance_valid(director):
 		return
-	if director.has_signal("encounter_started"):
-		var started := Callable(self, "_on_encounter_started")
-		if not director.is_connected("encounter_started", started):
-			director.connect("encounter_started", started)
-	if director.has_signal("encounter_completed"):
-		var completed := Callable(self, "_on_encounter_completed")
-		if not director.is_connected("encounter_completed", completed):
-			director.connect("encounter_completed", completed)
+	var started := Callable(self, "_on_encounter_started")
+	if director.has_signal("encounter_started") and not director.is_connected("encounter_started", started):
+		director.connect("encounter_started", started)
+	var completed := Callable(self, "_on_encounter_completed")
+	if director.has_signal("encounter_completed") and not director.is_connected("encounter_completed", completed):
+		director.connect("encounter_completed", completed)
 
 
 func _disconnect_director() -> void:
@@ -244,10 +245,9 @@ func _disconnect_director() -> void:
 func _connect_ranged() -> void:
 	if ranged_combat_service == null or not is_instance_valid(ranged_combat_service):
 		return
-	if ranged_combat_service.has_signal("shot_fired"):
-		var callback := Callable(self, "_on_shot_fired")
-		if not ranged_combat_service.is_connected("shot_fired", callback):
-			ranged_combat_service.connect("shot_fired", callback)
+	var callback := Callable(self, "_on_shot_fired")
+	if ranged_combat_service.has_signal("shot_fired") and not ranged_combat_service.is_connected("shot_fired", callback):
+		ranged_combat_service.connect("shot_fired", callback)
 
 
 func _disconnect_ranged() -> void:
@@ -261,10 +261,9 @@ func _disconnect_ranged() -> void:
 func _connect_inventory() -> void:
 	if inventory == null or not is_instance_valid(inventory):
 		return
-	if inventory.has_signal("inventory_changed"):
-		var callback := Callable(self, "_on_inventory_changed")
-		if not inventory.is_connected("inventory_changed", callback):
-			inventory.connect("inventory_changed", callback)
+	var callback := Callable(self, "_on_inventory_changed")
+	if inventory.has_signal("inventory_changed") and not inventory.is_connected("inventory_changed", callback):
+		inventory.connect("inventory_changed", callback)
 
 
 func _disconnect_inventory() -> void:
@@ -280,13 +279,15 @@ func _on_encounter_started(snapshot: Dictionary) -> void:
 	if encounter_id.is_empty():
 		_reject("invalid_encounter_id", snapshot)
 		return
-	if _ledgers.has(encounter_id) or _claimed_ids.has(encounter_id):
+	if _ledgers.has(encounter_id) or _pending_rewards.has(encounter_id) or _claimed_ids.has(encounter_id):
 		_reject("duplicate_encounter_start", snapshot)
 		return
 	if _ledgers.size() >= MAX_ACTIVE_LEDGERS:
 		_reject("ledger_capacity", snapshot)
 		return
-	var member_ids := _normalized_member_ids(snapshot.get("living_member_ids", []))
+	var member_ids: Array[int] = _normalized_member_ids(
+		snapshot.get("living_member_ids", [])
+	)
 	if member_ids.is_empty():
 		_reject("encounter_has_no_members", snapshot)
 		return
@@ -300,6 +301,7 @@ func _on_encounter_started(snapshot: Dictionary) -> void:
 		"shot_count":0,
 		"hit_shot_count":0,
 		"started_at_msec":int(snapshot.get("started_at_msec", Time.get_ticks_msec())),
+		"completion_seen":false,
 		"status":"active",
 	}
 	_ledgers[encounter_id] = ledger
@@ -339,8 +341,22 @@ func _on_member_died(
 	ledger["defeated_ids"] = defeated
 	_ledgers[encounter_id] = ledger
 	if defeated.size() >= (ledger.get("member_ids", []) as Array).size():
-		_attempt_reward(encounter_id)
+		_schedule_reward_flush(encounter_id)
 	_emit_economy_changed()
+
+
+func _schedule_reward_flush(encounter_id: String) -> void:
+	if encounter_id.is_empty() or _deferred_reward_ids.has(encounter_id):
+		return
+	_deferred_reward_ids[encounter_id] = true
+	call_deferred("_flush_deferred_reward", encounter_id)
+
+
+func _flush_deferred_reward(encounter_id: String) -> void:
+	_deferred_reward_ids.erase(encounter_id)
+	if not _ledgers.has(encounter_id) or _claimed_ids.has(encounter_id):
+		return
+	_attempt_reward(encounter_id)
 
 
 func _on_shot_fired(result: Dictionary) -> void:
@@ -366,19 +382,16 @@ func _on_shot_fired(result: Dictionary) -> void:
 
 
 func _resolve_shot_encounter(result: Dictionary) -> String:
-	var target_ids := _accepted_target_ids(result)
+	var target_ids: Array[int] = _accepted_target_ids(result)
 	var matches: Array[String] = []
 	for raw_id: Variant in _ledgers.keys():
 		var encounter_id := str(raw_id)
 		var ledger: Dictionary = _ledgers.get(encounter_id, {})
 		var member_ids: Array[int] = ledger.get("member_ids", [])
-		var matched := false
 		for target_id: int in target_ids:
 			if target_id in member_ids:
-				matched = true
+				matches.append(encounter_id)
 				break
-		if matched:
-			matches.append(encounter_id)
 	if matches.size() == 1:
 		return matches[0]
 	if target_ids.is_empty() and _ledgers.size() == 1:
@@ -391,26 +404,47 @@ func _on_encounter_completed(snapshot: Dictionary) -> void:
 	if encounter_id.is_empty():
 		return
 	_encounter_completion_count += 1
-	if not _ledgers.has(encounter_id):
-		if _claimed_ids.has(encounter_id):
+	if _claimed_ids.has(encounter_id):
+		if bool(_claimed_ids.get(encounter_id, false)):
 			_duplicate_completion_count += 1
 			_reject("duplicate_completion", snapshot)
+		else:
+			_claimed_ids[encounter_id] = true
+		return
+	if _pending_rewards.has(encounter_id):
+		var pending: Dictionary = _pending_rewards.get(encounter_id, {})
+		if bool(pending.get("completion_seen", false)):
+			_duplicate_completion_count += 1
+			_reject("duplicate_completion", snapshot)
+		else:
+			pending["completion_seen"] = true
+			_pending_rewards[encounter_id] = pending
+		return
+	if not _ledgers.has(encounter_id):
 		return
 	var ledger: Dictionary = _ledgers.get(encounter_id, {})
+	if bool(ledger.get("completion_seen", false)):
+		_duplicate_completion_count += 1
+		_reject("duplicate_completion", snapshot)
+		return
+	ledger["completion_seen"] = true
+	ledger["completion_reason"] = str(snapshot.get("completion_reason", ""))
+	_ledgers[encounter_id] = ledger
 	var member_count := (ledger.get("member_ids", []) as Array).size()
 	var defeated_count := (ledger.get("defeated_ids", {}) as Dictionary).size()
-	if defeated_count >= member_count and not _claimed_ids.has(encounter_id):
-		_attempt_reward(encounter_id)
-	if not _claimed_ids.has(encounter_id) and not _pending_rewards.has(encounter_id):
-		_abandoned_encounter_count += 1
-		_last_result = {
-			"status":"no_reward",
-			"reason":"members_not_defeated",
-			"encounter_id":encounter_id,
-			"completion_reason":str(snapshot.get("completion_reason", "")),
-			"defeated_member_count":defeated_count,
-			"initial_member_count":member_count,
-		}
+	if defeated_count >= member_count and member_count > 0:
+		_schedule_reward_flush(encounter_id)
+		return
+	_abandoned_encounter_count += 1
+	_record_claim(encounter_id, true)
+	_last_result = {
+		"status":"no_reward",
+		"reason":"members_not_defeated",
+		"encounter_id":encounter_id,
+		"completion_reason":str(snapshot.get("completion_reason", "")),
+		"defeated_member_count":defeated_count,
+		"initial_member_count":member_count,
+	}
 	_ledgers.erase(encounter_id)
 	_emit_economy_changed()
 
@@ -418,6 +452,12 @@ func _on_encounter_completed(snapshot: Dictionary) -> void:
 func _attempt_reward(encounter_id: String) -> Dictionary:
 	if _claimed_ids.has(encounter_id):
 		return {"success":false, "reason":"already_claimed"}
+	if _pending_rewards.has(encounter_id):
+		return {
+			"success":false,
+			"reason":str(_pending_rewards.get(encounter_id, {}).get("reason", "pending")),
+			"pending":true,
+		}
 	if not _ledgers.has(encounter_id):
 		return {"success":false, "reason":"ledger_missing"}
 	var ledger: Dictionary = _ledgers.get(encounter_id, {})
@@ -429,8 +469,8 @@ func _attempt_reward(encounter_id: String) -> Dictionary:
 		str(ledger.get("profile_id", "")), int(ledger.get("shot_count", 0))
 	)
 	if reward.is_empty():
-		_record_claim(encounter_id)
-		_reward_rejection_count += 1
+		_record_claim(encounter_id, bool(ledger.get("completion_seen", false)))
+		_ledgers.erase(encounter_id)
 		return _reject("reward_profile_missing", ledger)
 	var pending := {
 		"encounter_id":encounter_id,
@@ -443,6 +483,7 @@ func _attempt_reward(encounter_id: String) -> Dictionary:
 		"hit_shot_count":int(ledger.get("hit_shot_count", 0)),
 		"ammo_spent":ledger.get("ammo_spent", {}).duplicate(true),
 		"member_count":member_count,
+		"completion_seen":bool(ledger.get("completion_seen", false)),
 		"reason":"inventory_full",
 	}
 	if inventory == null or not inventory.has_method("transact_items"):
@@ -454,22 +495,21 @@ func _attempt_reward(encounter_id: String) -> Dictionary:
 		return _commit_grant(encounter_id, pending, transaction, false)
 	if str(transaction.get("reason", "")) == "inventory_full":
 		return _queue_pending(encounter_id, pending, "inventory_full")
-	_record_claim(encounter_id)
-	_reward_rejection_count += 1
+	_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+	_ledgers.erase(encounter_id)
 	return _reject(str(transaction.get("reason", "reward_transaction_failed")), pending)
 
 
 func _queue_pending(encounter_id: String, pending: Dictionary, reason: String) -> Dictionary:
-	if not _pending_rewards.has(encounter_id) and _pending_rewards.size() >= MAX_PENDING_REWARDS:
-		_record_claim(encounter_id)
-		_reward_rejection_count += 1
+	if _pending_rewards.has(encounter_id):
+		return {"success":false, "reason":reason, "pending":true}
+	if _pending_rewards.size() >= MAX_PENDING_REWARDS:
+		_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+		_ledgers.erase(encounter_id)
 		return _reject("pending_capacity", pending)
 	pending["reason"] = reason
 	_pending_rewards[encounter_id] = pending.duplicate(true)
-	if _ledgers.has(encounter_id):
-		var ledger: Dictionary = _ledgers.get(encounter_id, {})
-		ledger["status"] = "pending_reward"
-		_ledgers[encounter_id] = ledger
+	_ledgers.erase(encounter_id)
 	_reward_pending_count += 1
 	_last_result = pending.duplicate(true)
 	_last_result["status"] = "pending"
@@ -485,15 +525,17 @@ func _commit_grant(
 	transaction: Dictionary,
 	from_pending: bool
 ) -> Dictionary:
-	_record_claim(encounter_id)
+	_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+	_pending_rewards.erase(encounter_id)
+	_ledgers.erase(encounter_id)
 	_reward_grant_count += 1
 	var rewards: Dictionary = pending.get("rewards", {})
 	for raw_item_id: Variant in rewards.keys():
-		_add_total(_rewards_granted_total, str(raw_item_id), int(rewards.get(raw_item_id, 0)))
-	if _ledgers.has(encounter_id):
-		var ledger: Dictionary = _ledgers.get(encounter_id, {})
-		ledger["status"] = "reward_granted"
-		_ledgers[encounter_id] = ledger
+		_add_total(
+			_rewards_granted_total,
+			str(raw_item_id),
+			int(rewards.get(raw_item_id, 0))
+		)
 	var result := pending.duplicate(true)
 	result.merge({
 		"success":true,
@@ -510,13 +552,14 @@ func _commit_grant(
 	return result
 
 
-func _record_claim(encounter_id: String) -> void:
+func _record_claim(encounter_id: String, completion_seen: bool = false) -> void:
 	if _claimed_ids.has(encounter_id):
+		_claimed_ids[encounter_id] = bool(_claimed_ids.get(encounter_id, false)) or completion_seen
 		return
-	_claimed_ids[encounter_id] = true
+	_claimed_ids[encounter_id] = completion_seen
 	_claim_order.append(encounter_id)
 	while _claim_order.size() > MAX_CLAIM_HISTORY:
-		var expired := _claim_order.pop_front()
+		var expired: String = str(_claim_order.pop_front())
 		_claimed_ids.erase(expired)
 
 
@@ -550,7 +593,10 @@ func _accepted_target_ids(result: Dictionary) -> Array[int]:
 
 
 func _shot_hit_any_target(result: Dictionary) -> bool:
-	return int(result.get("accepted_target_count", 0)) > 0 or not _accepted_target_ids(result).is_empty()
+	return (
+		int(result.get("accepted_target_count", 0)) > 0
+		or not _accepted_target_ids(result).is_empty()
+	)
 
 
 func _normalized_member_ids(raw_ids: Variant) -> Array[int]:
@@ -585,9 +631,9 @@ func _reward_labels(rewards: Dictionary) -> Array[String]:
 	for raw_item_id: Variant in ids:
 		var item_id := str(raw_item_id)
 		var display_name := item_id
-		if inventory != null and inventory.get("registry") != null:
+		if inventory != null:
 			var item_registry: Variant = inventory.get("registry")
-			if item_registry.has_method("get_display_name"):
+			if item_registry != null and item_registry.has_method("get_display_name"):
 				display_name = str(item_registry.call("get_display_name", item_id))
 		labels.append("%s +%d" % [display_name, int(rewards.get(raw_item_id, 0))])
 	return labels
@@ -618,6 +664,7 @@ func _public_ledger(ledger: Dictionary) -> Dictionary:
 		"shot_count":int(ledger.get("shot_count", 0)),
 		"hit_shot_count":int(ledger.get("hit_shot_count", 0)),
 		"ammo_spent":ledger.get("ammo_spent", {}).duplicate(true),
+		"completion_seen":bool(ledger.get("completion_seen", false)),
 		"status":str(ledger.get("status", "active")),
 	}
 
