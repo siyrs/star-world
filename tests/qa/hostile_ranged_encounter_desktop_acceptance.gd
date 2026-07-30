@@ -117,6 +117,7 @@ func _run() -> void:
 		ACTION_TIMEOUT_MS
 	)
 	_check(mounted, "spawn signal binds the marksman to the shared hostile projectile runtime")
+	hub.creature_spawner.call("set_active", false)
 	var aim_visible := await _wait_until(
 		func() -> bool:
 			var value: Variant = marksman_ref.get_ref()
@@ -163,12 +164,23 @@ func _run() -> void:
 		ACTION_TIMEOUT_MS
 	)
 	_check(cover_blocks_los, "solid cover blocks hostile projectiles")
+	var committed_projectiles_settled := await _wait_until(
+		func() -> bool:
+			return int(hostile_runtime.call("get_snapshot").get("active_count", -1)) == 0,
+		ACTION_TIMEOUT_MS
+	)
+	_check(committed_projectiles_settled, "projectiles committed before cover settle inside a bounded deadline")
+	live_marksman = marksman_ref.get_ref()
+	if live_marksman is Node and is_instance_valid(live_marksman):
+		live_marksman.set("_attack_timer", 0.0)
+		live_marksman.call("_refresh_line_of_sight", true)
 	var spawn_count_before_cover := int(hostile_runtime.call("get_snapshot").get("spawn_count", 0))
 	var health_before_cover := float(survival.get("health")) if survival != null else 0.0
 	for _frame in 180:
 		await process_frame
+	var health_after_cover := float(survival.get("health")) if survival != null else health_before_cover
 	_check(int(hostile_runtime.call("get_snapshot").get("spawn_count", 0)) == spawn_count_before_cover, "blocked line of sight prevents hidden projectile spawning")
-	_check(survival == null or is_equal_approx(float(survival.get("health")), health_before_cover), "solid cover prevents additional player damage")
+	_check(health_after_cover + 0.0001 >= health_before_cover, "solid cover prevents additional player damage after committed projectiles settle")
 	await RenderingServer.frame_post_draw
 	_save_viewport(_cover_path, "hostile ranged cover screenshot")
 
@@ -235,6 +247,7 @@ func _run() -> void:
 		"health_before": health_before,
 		"health_after_hit": health_after_hit,
 		"health_before_cover": health_before_cover,
+		"health_after_cover": health_after_cover,
 		"player_damage": player_damage,
 		"hostile_runtime": hostile_runtime.call("get_snapshot"),
 		"defeat_result": defeat_result,
