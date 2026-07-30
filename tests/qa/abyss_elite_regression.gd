@@ -57,7 +57,7 @@ func _test_catalog_and_conditions() -> void:
 	var factory = FactoryScript.new()
 	_check(factory.get_validation_errors().is_empty(), "production creature script/profile catalog has no drift")
 	_check(factory.get_hostile_attack_validation_errors().is_empty(), "elite hostile attack data is valid")
-	_check(factory.get_species_ids() == ["abyss_brute", "chicken", "cow", "pig", "zombie"], "factory exposes the fifth production species")
+	_check(factory.get_species_ids() == ["abyss_brute", "abyss_marksman", "chicken", "cow", "pig", "zombie"], "factory exposes all six production species")
 	var brute_profile: Dictionary = factory.get_profile("abyss_brute")
 	var zombie_profile: Dictionary = factory.get_profile("zombie")
 	_check(bool(brute_profile.get("elite", false)), "abyss brute is explicitly elite")
