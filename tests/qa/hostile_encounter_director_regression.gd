@@ -188,7 +188,7 @@ func _test_real_director_and_spawner() -> void:
 
 func _test_sixty_minute_planner() -> void:
 	var registry = RegistryScript.new()
-	var profiles := registry.get_profiles()
+	var profiles: Array[Dictionary] = registry.get_profiles()
 	var active_duration := 0
 	var cooldown := 0.0
 	var active_encounters := 0
@@ -198,6 +198,9 @@ func _test_sixty_minute_planner() -> void:
 	var maximum_active := 0
 	var maximum_tracked := 0
 	var maximum_pressure := 0.0
+	var active_bound_violations := 0
+	var member_bound_violations := 0
+	var pressure_bound_violations := 0
 	for second in 3600:
 		if active_duration > 0:
 			active_duration -= 1
@@ -212,7 +215,9 @@ func _test_sixty_minute_planner() -> void:
 			"hostile_cap":5, "active_encounters":active_encounters,
 			"tracked_members":tracked_members, "cooldown_remaining":cooldown,
 		}
-		var selected: Dictionary = PolicyScript.select_profile(profiles, context, float(second % 100) / 100.0)
+		var selected: Dictionary = PolicyScript.select_profile(
+			profiles, context, float(second % 100) / 100.0
+		)
 		if not selected.is_empty():
 			active_encounters = 1
 			tracked_members = int(selected.get("member_count", 0))
@@ -223,10 +228,16 @@ func _test_sixty_minute_planner() -> void:
 		maximum_active = maxi(maximum_active, active_encounters)
 		maximum_tracked = maxi(maximum_tracked, tracked_members)
 		maximum_pressure = maxf(maximum_pressure, active_pressure)
-		_check(active_encounters <= PolicyScript.MAX_ACTIVE_ENCOUNTERS, "planner active encounter count remains bounded at second %d" % second)
-		_check(tracked_members <= PolicyScript.MAX_TRACKED_MEMBERS, "planner tracked members remain bounded at second %d" % second)
-		_check(active_pressure <= 8.0, "planner pressure remains bounded at second %d" % second)
+		if active_encounters > PolicyScript.MAX_ACTIVE_ENCOUNTERS:
+			active_bound_violations += 1
+		if tracked_members > PolicyScript.MAX_TRACKED_MEMBERS:
+			member_bound_violations += 1
+		if active_pressure > 8.0:
+			pressure_bound_violations += 1
 	_check(starts > 20, "sixty minute planner simulation starts repeated encounters")
+	_check(active_bound_violations == 0, "sixty minute planner never exceeds the active encounter limit")
+	_check(member_bound_violations == 0, "sixty minute planner never exceeds the tracked member limit")
+	_check(pressure_bound_violations == 0, "sixty minute planner never exceeds the pressure hard limit")
 	_check(maximum_active <= 1 and maximum_tracked <= 4 and maximum_pressure <= 5.6, "sixty minute planner simulation never exceeds encounter budgets")
 
 
