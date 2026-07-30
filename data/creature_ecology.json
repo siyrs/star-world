@@ -80,7 +80,6 @@
         {"id": "chicken", "weight": 1}
       ],
       "hostile_species": [
-        {"id": "zombie", "weight": 7},
         {
           "id": "abyss_marksman",
           "weight": 2,
@@ -89,6 +88,7 @@
           "phase_ids": ["dusk", "night"],
           "max_player_y": 27
         },
+        {"id": "zombie", "weight": 7},
         {
           "id": "abyss_brute",
           "weight": 1,
