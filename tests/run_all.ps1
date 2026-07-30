@@ -66,6 +66,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_bounded_hostile_ranged.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_hostile_encounters.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_encounter_rewards.ps1"
+& "$PSScriptRoot\developer_b\validate_bounded_hostile_cover_counter.ps1"
 & "$PSScriptRoot\developer_b\validate_abyss_elite.ps1"
 & "$PSScriptRoot\developer_b\validate_exploration_journal.ps1"
 & "$PSScriptRoot\developer_b\validate_exploration_rewards.ps1"
@@ -173,6 +174,7 @@ Invoke-GodotTest 'res://tests/qa/hostile_attack_windup_regression.gd'
 Invoke-GodotTest 'res://tests/qa/hostile_ranged_encounter_regression.gd'
 Invoke-GodotTest 'res://tests/qa/hostile_encounter_director_regression.gd'
 Invoke-GodotTest 'res://tests/qa/encounter_reward_economy_regression.gd'
+Invoke-GodotTest 'res://tests/qa/hostile_cover_counter_regression.gd'
 Invoke-GodotTest 'res://tests/qa/abyss_elite_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/irrigation_multicrop_regression.gd'
@@ -201,4 +203,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: full Star World regression suite including bounded encounter reward economy, hostile encounter director, hostile ranged encounters, and lifecycle-safe firearm acceptance'
+Write-Host 'PASS: full Star World regression suite including bounded hostile cover counter, encounter reward economy, hostile encounter director, hostile ranged encounters, and lifecycle-safe firearm acceptance'
