@@ -136,10 +136,13 @@ func _run() -> void:
 		await process_frame
 	var rebuild_after_break: Dictionary = world.call("get_chunk_rebuild_stats")
 	var brute_after_break: Dictionary = brute.call("get_hostile_attack_snapshot")
+	var break_result: Dictionary = brute_after_break.get("last_cover_break_result", {})
+	var break_apply: Dictionary = break_result.get("apply", {})
+	var authoritative_break_rebuild: Dictionary = break_apply.get("rebuild", {})
 	_check(str(world.call("get_block", cover_a)) == "air" and str(world.call("get_block", cover_b)) == "air", "one real brute attack destroys both temporary cover cells")
 	_check(int(brute_after_break.get("cover_break_block_count", 0)) == 2, "brute combat snapshot records exactly two destroyed cover cells")
 	_check(int(rebuild_after_break.get("flush_count", 0)) == 1, "two cover cells share exactly one production world rebuild flush")
-	_check(str(rebuild_after_break.get("last_reason", "")) == "batch_complete", "cover destruction closes through the existing batch-complete flush boundary")
+	_check(str(authoritative_break_rebuild.get("last_reason", "")) == "batch_complete", "cover destruction closes through the existing batch-complete flush boundary")
 	_check(float(survival.get("health")) + 0.0001 >= health_before_cover, "cover-breaking attack cannot damage the player through the wall")
 	var broken_overlay_ready := await _wait_until(
 		func() -> bool:
@@ -278,6 +281,7 @@ func _run() -> void:
 		"after_return": after_return,
 		"reload_snapshot": reload_snapshot,
 		"rebuild_after_break": rebuild_after_break,
+		"authoritative_break_rebuild": authoritative_break_rebuild,
 		"brute_after_break": brute_after_break,
 		"brute_after_stone": brute_after_stone,
 		"marksman_reposition": reposition_snapshot,
