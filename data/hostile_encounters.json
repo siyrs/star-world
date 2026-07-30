@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "id": "abyss_skirmish",
+      "display_name": "深渊游猎队",
+      "map_ids": ["abyss_world"],
+      "phase_ids": ["dusk", "night"],
+      "weight": 5,
+      "minimum_player_y": -64,
+      "maximum_player_y": 32,
+      "minimum_health_ratio": 0.45,
+      "cooldown_seconds": 24.0,
+      "minimum_existing_pressure": 0.0,
+      "maximum_existing_pressure": 1.6,
+      "maximum_total_pressure": 5.0,
+      "minimum_spawn_radius": 22.0,
+      "maximum_spawn_radius": 28.0,
+      "members": [
+        {"species_id": "zombie", "role": "vanguard", "count": 2},
+        {"species_id": "abyss_marksman", "role": "support", "count": 1}
+      ]
+    },
+    {
+      "id": "abyss_assault",
+      "display_name": "深渊突袭队",
+      "map_ids": ["abyss_world"],
+      "phase_ids": ["night"],
+      "weight": 2,
+      "minimum_player_y": -64,
+      "maximum_player_y": 20,
+      "minimum_health_ratio": 0.58,
+      "cooldown_seconds": 42.0,
+      "minimum_existing_pressure": 0.0,
+      "maximum_existing_pressure": 0.5,
+      "maximum_total_pressure": 6.5,
+      "minimum_spawn_radius": 24.0,
+      "maximum_spawn_radius": 31.0,
+      "members": [
+        {"species_id": "zombie", "role": "vanguard", "count": 2},
+        {"species_id": "abyss_marksman", "role": "support", "count": 1},
+        {"species_id": "abyss_brute", "role": "finisher", "count": 1}
+      ]
+    },
+    {
+      "id": "continent_night_patrol",
+      "display_name": "夜行巡猎队",
+      "map_ids": ["star_continent", "frozen_wastes", "desert_ruins"],
+      "phase_ids": ["night"],
+      "weight": 3,
+      "minimum_player_y": -64,
+      "maximum_player_y": 96,
+      "minimum_health_ratio": 0.5,
+      "cooldown_seconds": 34.0,
+      "minimum_existing_pressure": 0.0,
+      "maximum_existing_pressure": 0.0,
+      "maximum_total_pressure": 2.5,
+      "minimum_spawn_radius": 22.0,
+      "maximum_spawn_radius": 27.0,
+      "members": [
+        {"species_id": "zombie", "role": "vanguard", "count": 2}
+      ]
+    }
+  ]
+}

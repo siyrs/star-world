@@ -1,6 +1,13 @@
 class_name ZombieCreature
 extends "res://src/entity/hostile_melee_creature.gd"
 
+var danger_weight: float = 1.0
+
+
+func apply_profile(profile: Dictionary) -> void:
+	danger_weight = clampf(float(profile.get("danger_weight", 1.0)), 0.5, 6.0)
+	super.apply_profile(profile)
+
 
 func _ready() -> void:
 	species_id = "zombie"
@@ -13,6 +20,7 @@ func _ready() -> void:
 			"max_health":20,
 			"speed":2.1,
 			"damage":1,
+			"danger_weight":1.0,
 			"drops":{"rotten_flesh":[0,2]},
 			"hostile_attack":{
 				"species_id":"zombie",

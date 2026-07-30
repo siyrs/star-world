@@ -1,0 +1,65 @@
+name: Bounded hostile encounter director quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-hostile-encounter-director-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Atomic encounter profiles, danger budgets, role formations, low-health relief and lifecycle bounds
+      domain_timeout_minutes: 90
+      static_validators: |
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_ecology_danger.ps1
+        tests/developer_b/validate_hostile_attacks.ps1
+        tests/developer_b/validate_bounded_hostile_ranged.ps1
+        tests/developer_b/validate_bounded_hostile_encounters.ps1
+        tests/developer_b/validate_bounded_firearms.ps1
+      primary_headless_script: res://tests/qa/hostile_encounter_director_regression.gd
+      primary_headless_output_base: build\hostile-encounter-director
+      primary_headless_timeout_milliseconds: 900000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/hostile_ranged_encounter_regression.gd
+        res://tests/qa/hostile_attack_windup_regression.gd
+        res://tests/qa/ecology_danger_regression.gd
+        res://tests/qa/abyss_elite_regression.gd
+        res://tests/qa/multi_hostile_danger_batch_regression.gd
+        res://tests/qa/multi_hostile_arena_batch_regression.gd
+        res://tests/qa/firearm_runtime_regression.gd
+        res://tests/qa/ranged_combat_runtime_regression.gd
+        res://tests/qa/runtime_soak_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: bounded-hostile-encounter-director-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/hostile-encounter-director.stdout.log
+        build/hostile-encounter-director.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real mixed-role encounter HUD firearm completion low-health relief and save reload
+      desktop_timeout_minutes: 120
+      desktop_script: res://tests/qa/hostile_encounter_director_desktop_acceptance.gd
+      desktop_output_path: build\hostile-encounter-active.png
+      desktop_timeout_milliseconds: 1200000
+      desktop_artifact_name: bounded-hostile-encounter-director-evidence
+      desktop_artifact_paths: |
+        build/hostile-encounter-active.png
+        build/hostile-encounter-complete.png
+        build/hostile-encounter-report.json
+        build/hostile-encounter-active.stdout.log
+        build/hostile-encounter-active.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
