@@ -7,6 +7,8 @@ const OUTPUT_PATH := "user://hostile-ranged-aim.png"
 const WORLD_READY_TIMEOUT_MS := 120000
 const ACTION_TIMEOUT_MS := 25000
 const CLEANUP_FRAMES := 56
+const OPEN_LANE_DISTANCE := 7.5
+const IMMEDIATE_COVER_FRAMES := 45
 
 var checks := 0
 var failures: Array[String] = []
@@ -93,7 +95,11 @@ func _run() -> void:
 	var pistol_index := _find_item_slot(hub.inventory, "star_pistol")
 	_check(pistol_index >= 0 and hub.equipment_service.equip_from_inventory(hub.inventory, pistol_index), "real inventory equips the counterattack pistol")
 
-	var marksman_position := Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 12.0)
+	var marksman_position := Vector3(
+		player_block.x + 0.5,
+		floor_y + 1.05,
+		player_block.z - OPEN_LANE_DISTANCE
+	)
 	var raw_marksman: Variant = hub.creature_spawner.call(
 		"spawn_creature", "abyss_marksman", marksman_position
 	)
@@ -111,15 +117,33 @@ func _run() -> void:
 	var mounted := await _wait_until(
 		func() -> bool:
 			var value: Variant = marksman_ref.get_ref()
+			if value is not Node or not is_instance_valid(value):
+				return false
+			var snapshot: Dictionary = value.call("get_hostile_attack_snapshot")
 			return (
-				value is Node
-				and is_instance_valid(value)
-				and bool(value.call("get_hostile_attack_snapshot").get("projectile_runtime_available", false))
+				bool(snapshot.get("projectile_runtime_available", false))
+				and bool(snapshot.get("cover_counter_available", false))
 			),
 		ACTION_TIMEOUT_MS
 	)
-	_check(mounted, "spawn signal binds the marksman to the shared hostile projectile runtime")
+	_check(mounted, "spawn signal binds the marksman to shared projectile and cover runtimes")
 	hub.creature_spawner.call("set_active", false)
+	marksman.set_physics_process(false)
+	marksman.call("clear_combat_motion")
+	marksman.set("target", player)
+	marksman.global_position = marksman_position
+	marksman.set("_decision_timer", 999.0)
+	marksman.set("_wander_direction", Vector3.ZERO)
+	hostile_runtime.call("clear", "desktop_open_lane_setup")
+	for _frame in 3:
+		await physics_frame
+	marksman.call("_refresh_line_of_sight", true)
+	var open_lane_snapshot: Dictionary = marksman.call("get_hostile_attack_snapshot")
+	_check(bool(open_lane_snapshot.get("line_of_sight", false)), "fixed production marksman owns a clear open firing lane")
+	player.set("_hostile_damage_grace_remaining", 0.0)
+	marksman.set("_attack_timer", 0.0)
+	var open_windup_started := bool(marksman.call("_begin_attack_windup"))
+	_check(open_windup_started, "fixed production marksman begins one deterministic projectile windup")
 	var aim_visible := await _wait_until(
 		func() -> bool:
 			var value: Variant = marksman_ref.get_ref()
@@ -136,6 +160,7 @@ func _run() -> void:
 	var survival: Node = player.get("survival") as Node
 	_check(survival != null, "production player exposes the survival service")
 	var health_before := float(survival.get("health")) if survival != null else 0.0
+	marksman.call("_advance_attack_windup", 2.0)
 	var hostile_hit := await _wait_until(
 		func() -> bool:
 			return survival != null and float(survival.get("health")) < health_before,
@@ -144,52 +169,45 @@ func _run() -> void:
 	_check(hostile_hit, "dodgeable hostile projectile reaches the production player through CombatService")
 	var health_after_hit := float(survival.get("health")) if survival != null else health_before
 	var player_damage: Dictionary = player.call("get_hostile_damage_snapshot")
+	var runtime_after_open_hit: Dictionary = hostile_runtime.call("get_snapshot")
 	_check(int(player_damage.get("accepted_count", 0)) >= 1, "player source-scoped damage authority records the marksman hit")
-	_check(int(hostile_runtime.call("get_snapshot").get("hit_count", 0)) >= 1, "shared hostile runtime records the authoritative player impact")
-
-	var wall_z := player_block.z - 6
-	_set_cover_wall(world, player_block.x, wall_z, floor_y, true)
-	for _frame in 36:
-		await physics_frame
-	var live_marksman: Variant = marksman_ref.get_ref()
-	if live_marksman is Node and is_instance_valid(live_marksman):
-		live_marksman.set("_attack_timer", 0.0)
-		live_marksman.call("_refresh_line_of_sight", true)
-	var cover_blocks_los := await _wait_until(
-		func() -> bool:
-			var value: Variant = marksman_ref.get_ref()
-			return (
-				value is Node
-				and is_instance_valid(value)
-				and not bool(value.call("get_hostile_attack_snapshot").get("line_of_sight", true))
-			),
-		ACTION_TIMEOUT_MS
-	)
-	_check(cover_blocks_los, "solid cover blocks hostile projectiles")
-	var committed_projectiles_settled := await _wait_until(
+	_check(int(runtime_after_open_hit.get("hit_count", 0)) >= 1, "shared hostile runtime records the authoritative player impact")
+	var open_projectiles_settled := await _wait_until(
 		func() -> bool:
 			return int(hostile_runtime.call("get_snapshot").get("active_count", -1)) == 0,
 		ACTION_TIMEOUT_MS
 	)
-	_check(committed_projectiles_settled, "projectiles committed before cover settle inside a bounded deadline")
-	live_marksman = marksman_ref.get_ref()
-	if live_marksman is Node and is_instance_valid(live_marksman):
-		live_marksman.set("_attack_timer", 0.0)
-		live_marksman.call("_refresh_line_of_sight", true)
+	_check(open_projectiles_settled, "open-lane projectile settles before the cover isolation phase")
+
+	var wall_z := player_block.z - 4
+	_set_cover_wall(world, player_block.x, wall_z, floor_y, true)
+	for _frame in 4:
+		await physics_frame
+	marksman.call("clear_combat_motion")
+	marksman.set("target", player)
+	marksman.set("_attack_timer", 0.0)
+	marksman.call("_refresh_line_of_sight", true)
+	var cover_snapshot: Dictionary = marksman.call("get_hostile_attack_snapshot")
+	var cover_blocks_los := not bool(cover_snapshot.get("line_of_sight", true))
+	_check(cover_blocks_los, "solid cover blocks hostile projectiles")
 	var spawn_count_before_cover := int(hostile_runtime.call("get_snapshot").get("spawn_count", 0))
 	var health_before_cover := float(survival.get("health")) if survival != null else 0.0
-	for _frame in 180:
+	player.set("_hostile_damage_grace_remaining", 0.0)
+	var hidden_windup_started := bool(marksman.call("_begin_attack_windup"))
+	_check(not hidden_windup_started, "immediate blocked line of sight rejects a hidden projectile windup")
+	for _frame in IMMEDIATE_COVER_FRAMES:
 		await process_frame
 	var health_after_cover := float(survival.get("health")) if survival != null else health_before_cover
 	_check(int(hostile_runtime.call("get_snapshot").get("spawn_count", 0)) == spawn_count_before_cover, "blocked line of sight prevents hidden projectile spawning")
-	_check(health_after_cover + 0.0001 >= health_before_cover, "solid cover prevents additional player damage after committed projectiles settle")
+	_check(health_after_cover + 0.0001 >= health_before_cover, "solid cover prevents additional player damage before bounded reposition")
+	_check(int(marksman.call("get_hostile_attack_snapshot").get("reposition_attempt_count", 0)) == 0, "immediate cover window does not consume the long-blocked reposition budget")
 	await RenderingServer.frame_post_draw
 	_save_viewport(_cover_path, "hostile ranged cover screenshot")
 
 	_set_cover_wall(world, player_block.x, wall_z, floor_y, false)
-	for _frame in 36:
+	for _frame in 4:
 		await physics_frame
-	live_marksman = marksman_ref.get_ref()
+	var live_marksman: Variant = marksman_ref.get_ref()
 	if live_marksman is Node3D and is_instance_valid(live_marksman):
 		live_marksman.set_physics_process(false)
 		live_marksman.call("clear_combat_motion")
@@ -247,11 +265,14 @@ func _run() -> void:
 		"viewport": [root.size.x, root.size.y],
 		"world_id": _created_world_id,
 		"marksman_id": marksman_id,
+		"open_lane_snapshot": open_lane_snapshot,
+		"cover_snapshot": cover_snapshot,
 		"health_before": health_before,
 		"health_after_hit": health_after_hit,
 		"health_before_cover": health_before_cover,
 		"health_after_cover": health_after_cover,
 		"player_damage": player_damage,
+		"runtime_after_open_hit": runtime_after_open_hit,
 		"hostile_runtime": hostile_runtime.call("get_snapshot"),
 		"defeat_result": defeat_result,
 		"aim_screenshot": _aim_path,
