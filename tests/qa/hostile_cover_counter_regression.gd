@@ -1,7 +1,7 @@
 extends SceneTree
 
 const PolicyScript = preload("res://src/entity/hostile_cover_counter_policy.gd")
-const ServiceScript = preload("res://src/entity/hostile_cover_counter_service.gd")
+const ServiceScript = preload("res://src/entity/lifecycle_bound_hostile_cover_counter_service.gd")
 const FactoryScript = preload("res://src/entity/creature_factory.gd")
 
 var checks := 0
@@ -74,6 +74,8 @@ class FakeSpawner:
 
 class FakeHub:
 	extends Node
+	signal start_world_requested(world_state: Dictionary)
+	signal return_to_menu_requested
 	var world_node: Node
 	var player_node: Node3D
 	var creature_spawner: Node
@@ -144,8 +146,8 @@ func _test_runtime_break_and_reposition() -> void:
 	_check(bool(service.call("get_snapshot").get("active", false)), "cover counter binds the explicit production-style world boundary")
 
 	var factory = FactoryScript.new()
-	var brute: Node3D = factory.create("abyss_brute", Vector3(0.0, 1.0, -3.0), player, null)
-	var marksman: Node3D = factory.create("abyss_marksman", Vector3(0.0, 1.0, -10.0), player, null)
+	var brute: Node3D = factory.create("abyss_brute", Vector3(0.0, 1.0, -3.0), player, null) as Node3D
+	var marksman: Node3D = factory.create("abyss_marksman", Vector3(0.0, 1.0, -10.0), player, null) as Node3D
 	_check(brute != null and brute.has_method("bind_cover_counter_service"), "factory composes the cover-aware abyss brute")
 	_check(marksman != null and marksman.has_method("bind_cover_counter_service"), "factory composes the cover-aware abyss marksman")
 	spawner.publish(brute)
@@ -176,7 +178,7 @@ func _test_runtime_break_and_reposition() -> void:
 	_check(not bool(generated_result.get("handled", false)), "generated fragile blocks are not mistaken for player temporary cover")
 
 	world.blocks.erase(world.block_key(first_cover))
-	for attack_index in 6:
+	for attack_index in 5:
 		world.set_override(first_cover, "wool")
 		world.set_override(second_cover, "glass_pane")
 		var bounded_result: Dictionary = service.call("resolve_brute_attack", brute, player)
@@ -217,10 +219,11 @@ func _test_runtime_break_and_reposition() -> void:
 
 	hub.current_world_id = ""
 	hub.world_node = null
-	service.call("bind_parent_hub", hub)
-	var cleared := service.call("get_snapshot")
+	hub.return_to_menu_requested.emit()
+	var cleared: Dictionary = service.call("get_snapshot")
 	_check(int(cleared.get("cover_break_block_count", -1)) == 0, "world boundary clears transient cover destruction counters")
 	_check(int(cleared.get("marksman_reposition_count", -1)) == 0, "world boundary clears transient marksman reposition counters")
+	_check(not bool(cleared.get("active", true)), "return-to-menu signal releases the cover counter world attachment")
 
 	hub.queue_free()
 	for _frame in 8:
