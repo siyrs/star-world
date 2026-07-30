@@ -5,7 +5,7 @@
 [ext_resource path="res://scenes/ui/game_ui.tscn" type="PackedScene" id="3"]
 [ext_resource path="res://src/entity/hostile_encounter_director.gd" type="Script" id="4_encounter"]
 [ext_resource path="res://src/entity/lifecycle_bound_encounter_reward_service.gd" type="Script" id="5_reward"]
-[ext_resource path="res://src/entity/hostile_cover_counter_service.gd" type="Script" id="6_cover"]
+[ext_resource path="res://src/entity/lifecycle_bound_hostile_cover_counter_service.gd" type="Script" id="6_cover"]
 
 [node name="Services" type="Node"]
 script = ExtResource("1")
