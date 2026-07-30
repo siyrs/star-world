@@ -12,6 +12,7 @@ const SCRIPTS := {
 	"pig": preload("res://src/entity/pig.gd"),
 	"zombie": preload("res://src/entity/zombie.gd"),
 	"abyss_brute": preload("res://src/entity/abyss_brute.gd"),
+	"abyss_marksman": preload("res://src/entity/abyss_marksman.gd"),
 }
 
 var profiles: Dictionary = {}
@@ -34,6 +35,7 @@ func load_profiles(path: String = DATA_PATH) -> bool:
 		_validation_errors.append("Unable to open creature data: %s" % path)
 		return false
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
 	if parsed is Dictionary:
 		var raw_profiles: Variant = parsed.get("creatures", {})
 		if raw_profiles is Dictionary:
@@ -46,6 +48,11 @@ func load_profiles(path: String = DATA_PATH) -> bool:
 		var species_id := str(raw_species_id)
 		if not profiles.has(species_id):
 			_validation_errors.append("Production creature script has no profile: %s" % species_id)
+	for hostile_species_id: String in hostile_attack_registry.get_profile_ids():
+		if not profiles.has(hostile_species_id):
+			_validation_errors.append(
+				"Hostile attack profile has no creature profile: %s" % hostile_species_id
+			)
 	return not profiles.is_empty() and _validation_errors.is_empty()
 
 
@@ -63,7 +70,9 @@ func get_species_ids() -> Array[String]:
 
 
 func get_validation_errors() -> Array[String]:
-	return _validation_errors.duplicate()
+	var result := _validation_errors.duplicate()
+	result.append_array(hostile_attack_registry.get_validation_errors())
+	return result
 
 
 func get_hostile_attack_profile(species_id: String) -> Dictionary:

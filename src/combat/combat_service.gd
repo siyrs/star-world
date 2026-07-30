@@ -80,7 +80,6 @@ func try_attack_target(target: Node, attacker: Node3D) -> Dictionary:
 		if bool(result.get("handled", false)):
 			attack_rejected.emit(result.duplicate(true))
 		return result
-
 	var damage_result: Dictionary = calculator.calculate(
 		_attribute_snapshot(), _target_attributes(target), "player_attack"
 	)
@@ -122,6 +121,8 @@ func resolve_projectile_hit(
 	attacker: Node3D,
 	shot: Dictionary
 ) -> Dictionary:
+	if str(shot.get("damage_flow", "player")) == "hostile":
+		return _resolve_hostile_projectile_hit(target, attacker, shot)
 	var target_available := _target_available(target)
 	var attack_kind := str(shot.get("attack_kind", "ranged")).strip_edges()
 	if attack_kind.is_empty():
@@ -156,17 +157,7 @@ func resolve_projectile_hit(
 	)
 	result["knockback"] = [knockback.x, knockback.y, knockback.z]
 	result["hit_stun_seconds"] = maxf(0.0, float(shot.get("hit_stun_seconds", 0.0)))
-	for key: Variant in [
-		"projectile_id",
-		"hitscan_id",
-		"pellet_hits",
-		"pellet_count",
-		"impact_position",
-		"impact_normal",
-		"impact_velocity",
-	]:
-		if shot.has(key):
-			result[key] = shot[key]
+	_copy_projectile_facts(shot, result)
 	var applied := _apply_hit(target, attacker, result)
 	if not bool(applied.get("applied", false)):
 		attack_rejected.emit(result.duplicate(true))
@@ -236,6 +227,74 @@ func get_snapshot() -> Dictionary:
 	}
 
 
+func _resolve_hostile_projectile_hit(
+	target: Node,
+	attacker: Node3D,
+	shot: Dictionary
+) -> Dictionary:
+	var target_available := _target_available(target)
+	var source_id := str(shot.get("damage_source", "hostile_projectile")).strip_edges()
+	if source_id.is_empty():
+		source_id = "hostile_projectile"
+	var attacker_id := int(shot.get("attacker_id", 0))
+	if attacker_id <= 0 and attacker != null and is_instance_valid(attacker):
+		attacker_id = int(attacker.get_instance_id())
+	var result := {
+		"handled": target_available,
+		"accepted": false,
+		"applied": false,
+		"status": "rejected",
+		"reason": "invalid_target" if not target_available else "target_rejected",
+		"attack_kind": str(shot.get("attack_kind", "hostile_ranged")),
+		"damage_source": source_id,
+		"attacker_id": attacker_id,
+		"raw_damage": maxf(0.0, float(shot.get("raw_damage", 0.0))),
+		"target_id": target.get_instance_id() if target_available else 0,
+		"target_name": _target_name(target) if target_available else "",
+	}
+	_copy_projectile_facts(shot, result)
+	if not target_available or not target.has_method("take_hostile_damage"):
+		attack_rejected.emit(result.duplicate(true))
+		return result
+	var raw_applied: Variant = target.call(
+		"take_hostile_damage",
+		float(result.get("raw_damage", 0.0)),
+		source_id,
+		attacker_id
+	)
+	if raw_applied is Dictionary:
+		result.merge(raw_applied, true)
+	else:
+		result["applied"] = bool(raw_applied)
+	var applied := bool(result.get("applied", result.get("accepted", false)))
+	result["handled"] = true
+	result["accepted"] = applied
+	result["applied"] = applied
+	result["status"] = "hit" if applied else "rejected"
+	result["reason"] = "ok" if applied else str(result.get("reason", "target_rejected"))
+	if not applied:
+		attack_rejected.emit(result.duplicate(true))
+	return result
+
+
+func _copy_projectile_facts(shot: Dictionary, result: Dictionary) -> void:
+	for key: Variant in [
+		"projectile_id",
+		"projectile_owner_kind",
+		"projectile_visual_kind",
+		"hitscan_id",
+		"pellet_hits",
+		"pellet_count",
+		"impact_position",
+		"impact_normal",
+		"impact_velocity",
+		"attacker_id",
+		"damage_source",
+	]:
+		if shot.has(key):
+			result[key] = shot[key]
+
+
 func _apply_hit(target: Node, attacker: Node3D, hit: Dictionary) -> Dictionary:
 	if target.has_method("apply_combat_hit"):
 		var raw_result: Variant = target.call("apply_combat_hit", hit.duplicate(true), attacker)
@@ -243,7 +302,11 @@ func _apply_hit(target: Node, attacker: Node3D, hit: Dictionary) -> Dictionary:
 			return raw_result.duplicate(true)
 		return {"applied": true}
 	if target.has_method("take_damage"):
-		target.call("take_damage", float(hit.get("final_damage", 0.0)), attacker)
+		var damage_source := str(hit.get("damage_source", ""))
+		if not damage_source.is_empty():
+			target.call("take_damage", float(hit.get("final_damage", 0.0)), damage_source)
+		else:
+			target.call("take_damage", float(hit.get("final_damage", 0.0)), attacker)
 		return {"applied": true}
 	return {"applied": false}
 
@@ -253,7 +316,11 @@ func _target_available(target: Node) -> bool:
 		return false
 	if target.has_method("is_combat_target_available"):
 		return bool(target.call("is_combat_target_available"))
-	return target.has_method("apply_combat_hit") or target.has_method("take_damage")
+	return (
+		target.has_method("apply_combat_hit")
+		or target.has_method("take_damage")
+		or target.has_method("take_hostile_damage")
+	)
 
 
 func _target_attributes(target: Node) -> Dictionary:

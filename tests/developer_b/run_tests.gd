@@ -113,8 +113,8 @@ func _test_survival_and_time() -> void:
 
 func _test_entities() -> void:
 	var factory = CreatureFactoryScript.new()
-	_expect(factory.profiles.size() == 5, "five creature profiles load")
-	for species in ["abyss_brute", "chicken", "cow", "pig", "zombie"]:
+	_expect(factory.profiles.size() == 6, "six creature profiles load")
+	for species in ["abyss_brute", "abyss_marksman", "chicken", "cow", "pig", "zombie"]:
 		var creature = factory.create(species, Vector3.ZERO)
 		_expect(creature != null, "%s can be created" % species)
 		if creature != null:
@@ -122,6 +122,9 @@ func _test_entities() -> void:
 			await process_frame
 			_expect(creature.get_child_count() >= 4, "%s has procedural model and collision" % species)
 			_expect(creature.max_health > 0.0 and not creature.drops.is_empty(), "%s has health and drops" % species)
+			if species == "abyss_marksman":
+				var attack: Dictionary = creature.call("get_hostile_attack_snapshot")
+				_expect(str(attack.get("attack_kind", "")) == "ranged", "abyss marksman exposes ranged hostile behavior")
 			creature.queue_free()
 	await process_frame
 
@@ -141,6 +144,7 @@ func _test_service_hub() -> void:
 	_expect(hub.get_node_or_null("Survival") != null and hub.get_node_or_null("DayNight") != null, "service hub instantiates survival and time")
 	_expect(hub.get_node_or_null("AudioService") != null, "service hub instantiates audio")
 	_expect(hub.get_node_or_null("CreatureSpawner") != null, "service hub instantiates creature spawner")
+	_expect(hub.get_node_or_null("HostileProjectileRuntime") != null, "service hub instantiates the bounded hostile projectile runtime")
 	_expect(hub.get_node_or_null("MainMenu") != null and hub.get_node_or_null("GameUI") != null, "service hub instantiates menu and HUD layer")
 	var original_settings: Dictionary = hub.current_settings.duplicate(true)
 	_expect(is_equal_approx(hub.day_night.cycle_duration_seconds, float(original_settings.get("cycle_minutes", 10)) * 60.0), "saved cycle setting applies during service hub startup")

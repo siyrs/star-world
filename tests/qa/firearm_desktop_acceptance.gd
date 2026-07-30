@@ -102,6 +102,10 @@ func _run() -> void:
 		await _finish(game, hub)
 		return
 	var target: Node3D = target_variant
+	var target_id := int(target.get_instance_id())
+	var target_ref: WeakRef = weakref(target)
+	target.set("max_health", 40.0)
+	target.set("health", 40.0)
 	_freeze_target(target)
 	await _aim_at(player, target.global_position + Vector3(0.0, 0.65, 0.0))
 	var health_before := float(target.get("health"))
@@ -112,11 +116,32 @@ func _run() -> void:
 	var mouse_hit := await _wait_until(
 		func() -> bool:
 			var result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
-			return str(result.get("attack_kind", "")) == "firearm" and str(result.get("status", "")) == "hit",
+			return not _find_target_result(result, target_id).is_empty(),
 		ACTION_TIMEOUT_MS
 	)
-	_check(mouse_hit, "real left-mouse click fires a hitscan pistol shot through CombatService")
-	_check(float(target.get("health")) < health_before, "mouse firearm shot changes target health exactly once")
+	_check(mouse_hit, "real left-mouse click fires a hitscan pistol shot through CombatService with one authoritative target transaction")
+	var mouse_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+	var mouse_target_result := _find_target_result(mouse_result, target_id)
+	var target_changed := (
+		bool(mouse_target_result.get("accepted", false))
+		and bool(mouse_target_result.get("applied", false))
+		and (
+			float(mouse_target_result.get("health_after", health_before)) < health_before
+			or bool(mouse_target_result.get("defeated", false))
+		)
+	)
+	_check(target_changed, "mouse firearm target transaction changes or defeats the target exactly once")
+	var live_target: Variant = target_ref.get_ref()
+	if live_target is Node and is_instance_valid(live_target):
+		_check(
+			is_equal_approx(
+				float(live_target.get("health")),
+				float(mouse_target_result.get("health_after", float(live_target.get("health"))))
+			),
+			"live target health matches the authoritative firearm result"
+		)
+	else:
+		_check(bool(mouse_target_result.get("defeated", false)), "released target has a stable defeated firearm result")
 	var after_mouse: Dictionary = ranged.call("get_snapshot")
 	_check(int(after_mouse.get("magazine_rounds", -1)) == 1, "mouse shot consumes one magazine round")
 	_check(hub.inventory.count_item("light_round") == reserve_before, "mouse shot does not consume reserve ammunition")
@@ -149,11 +174,12 @@ func _run() -> void:
 	_check(keyboard_reload_complete, "keyboard reload atomically fills the pistol magazine")
 	_check(hub.inventory.count_item("light_round") == reserve_before - 7, "keyboard reload consumes exactly seven reserve rounds")
 
-	if target != null and is_instance_valid(target):
-		if target.has_method("clear_combat_motion"):
-			target.call("clear_combat_motion")
-		target.global_position = target_position
-		_freeze_target(target)
+	live_target = target_ref.get_ref()
+	if live_target is Node3D and is_instance_valid(live_target):
+		if live_target.has_method("clear_combat_motion"):
+			live_target.call("clear_combat_motion")
+		live_target.global_position = target_position
+		_freeze_target(live_target)
 	await _aim_at(player, target_position + Vector3(0.0, 0.65, 0.0))
 	var controller_before: Dictionary = player.call("get_controller_gameplay_snapshot")
 	_parse_axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
@@ -165,9 +191,15 @@ func _run() -> void:
 	)
 	_parse_axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
 	_check(controller_hit, "real controller right trigger fires the same pistol path")
+	var controller_release_recorded := await _wait_until(
+		func() -> bool:
+			var snapshot: Dictionary = player.call("get_controller_gameplay_snapshot")
+			return int(snapshot.get("primary_release_count", 0)) == int(controller_before.get("primary_release_count", 0)) + 1,
+		ACTION_TIMEOUT_MS
+	)
 	var controller_after: Dictionary = player.call("get_controller_gameplay_snapshot")
 	_check(int(controller_after.get("primary_press_count", 0)) == int(controller_before.get("primary_press_count", 0)) + 1, "controller trigger records one physical press")
-	_check(int(controller_after.get("primary_release_count", 0)) == int(controller_before.get("primary_release_count", 0)) + 1, "controller trigger records one physical release")
+	_check(controller_release_recorded, "controller trigger records one physical release after the input frame is processed")
 	_parse_button(JOY_BUTTON_LEFT_SHOULDER, true)
 	await process_frame
 	_parse_button(JOY_BUTTON_LEFT_SHOULDER, false)
@@ -218,6 +250,10 @@ func _run() -> void:
 		"failures": failures.duplicate(),
 		"viewport": [root.size.x, root.size.y],
 		"world_id": _created_world_id,
+		"target_id": target_id,
+		"target_alive_after_mouse": target_ref.get_ref() != null,
+		"mouse_result": mouse_result.duplicate(true),
+		"mouse_target_result": mouse_target_result.duplicate(true),
 		"reserve_before": reserve_before,
 		"reserve_after": reserve_after,
 		"durability_before": durability_before,
@@ -297,6 +333,16 @@ func _parse_button(button: JoyButton, pressed: bool) -> void:
 	event.pressed = pressed
 	event.pressure = 1.0 if pressed else 0.0
 	Input.parse_input_event(event)
+
+
+func _find_target_result(batch: Dictionary, target_id: int) -> Dictionary:
+	var raw_results: Variant = batch.get("target_results", [])
+	if raw_results is not Array:
+		return {}
+	for raw_result: Variant in raw_results:
+		if raw_result is Dictionary and int(raw_result.get("target_id", 0)) == target_id:
+			return raw_result.duplicate(true)
+	return {}
 
 
 func _wait_until(predicate: Callable, timeout_ms: int) -> bool:

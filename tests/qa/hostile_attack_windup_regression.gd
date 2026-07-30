@@ -13,6 +13,7 @@ class FakeTarget:
 	extends Node3D
 	var health := 20.0
 	var last_source := ""
+	var last_attacker_id := 0
 	var damage_events := 0
 
 	func _ready() -> void:
@@ -21,12 +22,28 @@ class FakeTarget:
 	func is_combat_target_available() -> bool:
 		return health > 0.0
 
-	func take_damage(amount: float, source: String = "world") -> void:
+	func take_hostile_damage(
+		amount: float,
+		source: String = "hostile",
+		attacker_id: int = 0
+	) -> Dictionary:
 		if amount <= 0.0:
-			return
+			return {"handled": false, "accepted": false, "applied": false}
+		var before := health
 		health = maxf(0.0, health - amount)
 		last_source = source
+		last_attacker_id = attacker_id
 		damage_events += 1
+		return {
+			"handled": true,
+			"accepted": true,
+			"applied": true,
+			"health_before": before,
+			"health_after": health,
+		}
+
+	func take_damage(amount: float, source: String = "world") -> void:
+		take_hostile_damage(amount, source, 0)
 
 
 func _initialize() -> void:
@@ -49,20 +66,23 @@ func _run() -> void:
 
 func _test_registry_and_policy() -> void:
 	var registry = AttackRegistryScript.new()
-	_check(registry.schema_version == 1, "hostile attack schema version is stable")
+	_check(registry.schema_version == 2, "hostile attack schema version advances to ranged-capable version two")
 	_check(registry.get_validation_errors().is_empty(), "production hostile attack data has no validation errors")
 	_check(
-		registry.get_profile_ids() == ["abyss_brute", "zombie"],
-		"both production hostile species own explicit attack profiles"
+		registry.get_profile_ids() == ["abyss_brute", "abyss_marksman", "zombie"],
+		"all three production hostile species own explicit attack profiles"
 	)
 	var zombie: Dictionary = registry.get_profile("zombie")
 	var brute: Dictionary = registry.get_profile("abyss_brute")
+	var marksman: Dictionary = registry.get_profile("abyss_marksman")
+	_check(str(zombie.get("attack_kind", "")) == "melee", "zombie remains an explicit melee profile")
 	_check(is_equal_approx(float(zombie.get("windup_seconds", 0.0)), 0.8), "zombie exposes a readable windup")
 	_check(float(zombie.get("cooldown_seconds", 0.0)) >= 4.5, "zombie cadence does not outrun the player hostile-damage cooldown")
 	_check(float(zombie.get("detection_range", 0.0)) > float(zombie.get("attack_range", 99.0)), "detection range exceeds the committed attack range")
 	_check(float(brute.get("windup_seconds", 0.0)) > float(zombie.get("windup_seconds", 0.0)), "abyss elite heavy attack has a longer readable windup")
 	_check(float(brute.get("cooldown_seconds", 0.0)) > float(zombie.get("cooldown_seconds", 0.0)), "abyss elite recovers more slowly after its heavy strike")
 	_check(float(brute.get("attack_range", 0.0)) > float(zombie.get("attack_range", 0.0)), "abyss elite owns a larger visible warning zone")
+	_check(str(marksman.get("attack_kind", "")) == "ranged" and str(marksman.get("delivery_kind", "")) == "projectile", "marksman adds ranged projectiles without changing melee policy")
 	_check(
 		AttackPolicyScript.can_begin(1.65, 1.65, 0.0, 0.0),
 		"windup can begin at the inclusive attack boundary"
@@ -102,7 +122,7 @@ func _test_factory_and_state_machine() -> void:
 	var factory = CreatureFactoryScript.new()
 	_check(factory.get_validation_errors().is_empty(), "CreatureFactory script/profile catalog has no drift")
 	_check(factory.get_hostile_attack_validation_errors().is_empty(), "CreatureFactory composes valid hostile attack data")
-	_check(factory.get_species_ids() == ["abyss_brute", "chicken", "cow", "pig", "zombie"], "factory exposes all five production species")
+	_check(factory.get_species_ids() == ["abyss_brute", "abyss_marksman", "chicken", "cow", "pig", "zombie"], "factory exposes all six production species")
 	var creature_variant: Variant = factory.create("zombie", Vector3(0.0, 2.0, 0.0), target, null)
 	_check(creature_variant is Node3D, "factory creates the production zombie")
 	if creature_variant is not Node3D:
@@ -111,8 +131,6 @@ func _test_factory_and_state_machine() -> void:
 		return
 	var zombie = creature_variant
 	host.add_child(zombie)
-	# Disable the AI tick before the first frame so the zombie cannot start a
-	# windup on its own; this test drives every attack transition manually.
 	zombie.set_physics_process(false)
 	await process_frame
 	zombie.set("move_speed", 0.0)
@@ -125,28 +143,13 @@ func _test_factory_and_state_machine() -> void:
 	_check(telegraph is MeshInstance3D, "hostile creature creates a non-colliding visual telegraph")
 	_check(not _tree_has_collision_object(telegraph), "attack telegraph cannot affect physics or ray targeting")
 
-	var events := {
-		"started": 0,
-		"cancelled": 0,
-		"landed": 0,
-		"cancel_reason": "",
-	}
-	zombie.connect(
-		"attack_windup_started",
-		func(_target: Node, _snapshot: Dictionary) -> void:
-			events["started"] = int(events["started"]) + 1
+	var events := {"started": 0, "cancelled": 0, "landed": 0, "cancel_reason": ""}
+	zombie.connect("attack_windup_started", func(_target: Node, _snapshot: Dictionary) -> void: events["started"] = int(events["started"]) + 1)
+	zombie.connect("attack_windup_cancelled", func(reason: String, _snapshot: Dictionary) -> void:
+		events["cancelled"] = int(events["cancelled"]) + 1
+		events["cancel_reason"] = reason
 	)
-	zombie.connect(
-		"attack_windup_cancelled",
-		func(reason: String, _snapshot: Dictionary) -> void:
-			events["cancelled"] = int(events["cancelled"]) + 1
-			events["cancel_reason"] = reason
-	)
-	zombie.connect(
-		"attack_landed",
-		func(_target: Node, _damage: float) -> void:
-			events["landed"] = int(events["landed"]) + 1
-	)
+	zombie.connect("attack_landed", func(_target: Node, _damage: float) -> void: events["landed"] = int(events["landed"]) + 1)
 
 	_check(bool(zombie.call("_begin_attack_windup")), "hostile begins a windup instead of dealing instant damage")
 	var snapshot: Dictionary = zombie.call("get_hostile_attack_snapshot")
@@ -172,6 +175,7 @@ func _test_factory_and_state_machine() -> void:
 	_check(int(events["landed"]) == 1 and target.damage_events == 1, "completed windup commits exactly one damage event")
 	_check(is_equal_approx(target.health, 19.0), "committed attack uses the production zombie damage")
 	_check(target.last_source == "zombie", "committed attack preserves the stable damage source")
+	_check(target.last_attacker_id == zombie.get_instance_id(), "committed attack preserves the exact attacker identity")
 	_check(str(snapshot.get("state", "")) == "cooldown", "successful attack enters data-driven cooldown")
 	_check(not bool(zombie.call("_begin_attack_windup")), "cooldown rejects immediate repeat attacks")
 
@@ -179,15 +183,7 @@ func _test_factory_and_state_machine() -> void:
 	zombie.call("_set_attack_state", AttackPolicyScript.STATE_IDLE)
 	_check(bool(zombie.call("_begin_attack_windup")), "third windup begins for interruption coverage")
 	var creature_health_before := float(zombie.get("health"))
-	var hit_result: Dictionary = zombie.call(
-		"apply_combat_hit",
-		{
-			"final_damage": 2.0,
-			"knockback": [0.0, 0.2, -1.0],
-			"hit_stun_seconds": 0.25,
-		},
-		null
-	)
+	var hit_result: Dictionary = zombie.call("apply_combat_hit", {"final_damage": 2.0, "knockback": [0.0, 0.2, -1.0], "hit_stun_seconds": 0.25}, null)
 	snapshot = zombie.call("get_hostile_attack_snapshot")
 	_check(bool(hit_result.get("applied", false)), "player combat hit reaches the production creature capability")
 	_check(is_equal_approx(float(zombie.get("health")), creature_health_before - 2.0), "interrupting hit still applies its own damage")
@@ -202,22 +198,7 @@ func _test_factory_and_state_machine() -> void:
 
 func _test_prompt_contract() -> void:
 	var resolver = PromptResolverScript.new()
-	var prompt: Dictionary = resolver.resolve(
-		{
-			"type": "entity",
-			"display_name": "僵尸",
-			"health": 20.0,
-			"max_health": 20.0,
-			"hostile_attack": {
-				"enabled": true,
-				"state": "windup",
-				"windup_remaining": 0.4,
-			},
-		},
-		null,
-		null,
-		null
-	)
+	var prompt: Dictionary = resolver.resolve({"type": "entity", "display_name": "僵尸", "health": 20.0, "max_health": 20.0, "hostile_attack": {"enabled": true, "state": "windup", "windup_remaining": 0.4}}, null, null, null)
 	_check(str(prompt.get("subtitle", "")).contains("正在蓄力"), "focus prompt explains the incoming attack")
 	_check(str(prompt.get("primary", "")).contains("打断"), "focus prompt explains the interruption response")
 	_check(str(prompt.get("secondary", "")).contains("离开红色预警圈"), "focus prompt explains the dodge response")

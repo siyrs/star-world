@@ -7,9 +7,15 @@ signal projectile_removed(projectile_id: int, reason: String)
 signal spawn_rejected(reason: String, snapshot: Dictionary)
 
 const MAX_ACTIVE_PROJECTILES := 64
+const MAX_PROJECTILE_SPEED := 96.0
+const MAX_PROJECTILE_DISTANCE := 256.0
+const MAX_PROJECTILE_LIFETIME := 12.0
+const MAX_PROJECTILE_GRAVITY := 64.0
 const MIN_SEGMENT_LENGTH := 0.0001
+const ALLOWED_VISUAL_KINDS: Array[String] = ["arrow", "bolt", "orb"]
 
 var combat_service: Node
+var capacity := MAX_ACTIVE_PROJECTILES
 var _projectiles: Dictionary = {}
 var _next_projectile_id := 1
 var _spawn_count := 0
@@ -17,8 +23,10 @@ var _hit_count := 0
 var _world_impact_count := 0
 var _expired_count := 0
 var _capacity_rejection_count := 0
+var _invalid_rejection_count := 0
 var _peak_active_count := 0
 var _raycast_count := 0
+var _spawn_owner_counts: Dictionary = {}
 
 
 func _ready() -> void:
@@ -26,12 +34,13 @@ func _ready() -> void:
 	set_physics_process(true)
 
 
-func setup(p_combat_service: Node) -> void:
+func setup(p_combat_service: Node, p_capacity: int = MAX_ACTIVE_PROJECTILES) -> void:
 	combat_service = p_combat_service
+	capacity = clampi(p_capacity, 1, MAX_ACTIVE_PROJECTILES)
 
 
 func can_spawn() -> bool:
-	return _projectiles.size() < MAX_ACTIVE_PROJECTILES
+	return _projectiles.size() < capacity
 
 
 func spawn_projectile(request: Dictionary) -> Dictionary:
@@ -41,19 +50,44 @@ func spawn_projectile(request: Dictionary) -> Dictionary:
 			"success": false,
 			"reason": "projectile_capacity",
 			"active_count": _projectiles.size(),
-			"capacity": MAX_ACTIVE_PROJECTILES,
+			"capacity": capacity,
 		}
 		spawn_rejected.emit("projectile_capacity", capacity_result.duplicate(true))
 		return capacity_result
 	var origin: Variant = request.get("origin", Vector3.ZERO)
 	var velocity: Variant = request.get("velocity", Vector3.ZERO)
-	if origin is not Vector3 or velocity is not Vector3 or velocity.length_squared() <= 0.0001:
+	var gravity := float(request.get("gravity", 0.0))
+	var max_distance := float(request.get("max_distance", 64.0))
+	var max_lifetime := float(request.get("max_lifetime_seconds", 5.0))
+	var collision_mask := int(request.get("collision_mask", 0))
+	if (
+		origin is not Vector3
+		or velocity is not Vector3
+		or not _finite_vector(origin)
+		or not _finite_vector(velocity)
+		or velocity.length_squared() <= 0.0001
+		or velocity.length() > MAX_PROJECTILE_SPEED
+		or gravity < 0.0
+		or gravity > MAX_PROJECTILE_GRAVITY
+		or max_distance <= 0.0
+		or max_distance > MAX_PROJECTILE_DISTANCE
+		or max_lifetime <= 0.0
+		or max_lifetime > MAX_PROJECTILE_LIFETIME
+		or collision_mask <= 0
+	):
+		_invalid_rejection_count += 1
 		var invalid_result := {"success": false, "reason": "invalid_projectile_request"}
 		spawn_rejected.emit("invalid_projectile_request", invalid_result.duplicate(true))
 		return invalid_result
+	var visual_kind := str(request.get("visual_kind", "arrow")).strip_edges()
+	if visual_kind not in ALLOWED_VISUAL_KINDS:
+		visual_kind = "arrow"
+	var owner_kind := str(request.get("owner_kind", "player")).strip_edges()
+	if owner_kind.is_empty() or owner_kind.length() > 32:
+		owner_kind = "unknown"
 	var projectile_id := _next_projectile_id
 	_next_projectile_id += 1
-	var visual := _build_visual()
+	var visual := _build_visual(request, visual_kind)
 	visual.name = "Projectile_%d" % projectile_id
 	add_child(visual)
 	visual.global_position = origin
@@ -66,16 +100,16 @@ func spawn_projectile(request: Dictionary) -> Dictionary:
 		"id": projectile_id,
 		"position": origin,
 		"velocity": velocity,
-		"gravity": maxf(0.0, float(request.get("gravity", 0.0))),
-		"max_distance": maxf(0.1, float(request.get("max_distance", 64.0))),
-		"max_lifetime_seconds": maxf(
-			0.1, float(request.get("max_lifetime_seconds", 5.0))
-		),
+		"gravity": gravity,
+		"max_distance": max_distance,
+		"max_lifetime_seconds": max_lifetime,
 		"lifetime_seconds": 0.0,
 		"travel_distance": 0.0,
-		"collision_mask": maxi(1, int(request.get("collision_mask", 5))),
+		"collision_mask": collision_mask,
 		"attacker": weakref(attacker) if attacker is Object else null,
 		"excluded_rids": excluded_rids,
+		"owner_kind": owner_kind,
+		"visual_kind": visual_kind,
 		"shot": (
 			request.get("shot", {}).duplicate(true)
 			if request.get("shot", {}) is Dictionary
@@ -84,11 +118,15 @@ func spawn_projectile(request: Dictionary) -> Dictionary:
 		"visual": visual,
 	}
 	_spawn_count += 1
+	_spawn_owner_counts[owner_kind] = int(_spawn_owner_counts.get(owner_kind, 0)) + 1
 	_peak_active_count = maxi(_peak_active_count, _projectiles.size())
 	var result := {
 		"success": true,
 		"projectile_id": projectile_id,
 		"active_count": _projectiles.size(),
+		"capacity": capacity,
+		"owner_kind": owner_kind,
+		"visual_kind": visual_kind,
 	}
 	projectile_spawned.emit(projectile_id, result.duplicate(true))
 	return result
@@ -103,14 +141,21 @@ func clear(reason: String = "clear") -> void:
 func get_snapshot() -> Dictionary:
 	return {
 		"active_count": _projectiles.size(),
-		"capacity": MAX_ACTIVE_PROJECTILES,
+		"capacity": capacity,
+		"maximum_capacity": MAX_ACTIVE_PROJECTILES,
 		"spawn_count": _spawn_count,
 		"hit_count": _hit_count,
 		"world_impact_count": _world_impact_count,
 		"expired_count": _expired_count,
 		"capacity_rejection_count": _capacity_rejection_count,
+		"invalid_rejection_count": _invalid_rejection_count,
 		"peak_active_count": _peak_active_count,
 		"raycast_count": _raycast_count,
+		"spawn_owner_counts": _spawn_owner_counts.duplicate(true),
+		"active_owner_counts": _active_owner_counts(),
+		"max_speed": MAX_PROJECTILE_SPEED,
+		"max_distance": MAX_PROJECTILE_DISTANCE,
+		"max_lifetime_seconds": MAX_PROJECTILE_LIFETIME,
 	}
 
 
@@ -182,6 +227,8 @@ func _resolve_impact(
 	shot["impact_normal"] = [impact_normal.x, impact_normal.y, impact_normal.z]
 	shot["impact_velocity"] = [velocity.x, velocity.y, velocity.z]
 	shot["projectile_id"] = projectile_id
+	shot["projectile_owner_kind"] = str(record.get("owner_kind", "unknown"))
+	shot["projectile_visual_kind"] = str(record.get("visual_kind", "arrow"))
 	var attacker := _attacker_from(record)
 	var result := {"handled": false, "accepted": false, "reason": "world_impact"}
 	if (
@@ -199,7 +246,10 @@ func _resolve_impact(
 		projectile_hit.emit(projectile_id, result.duplicate(true))
 	else:
 		_world_impact_count += 1
-	_remove_projectile(projectile_id, "hit" if bool(result.get("accepted", false)) else "world_impact")
+	_remove_projectile(
+		projectile_id,
+		"hit" if bool(result.get("accepted", false)) else "world_impact"
+	)
 
 
 func _attacker_from(record: Dictionary) -> Node3D:
@@ -222,16 +272,40 @@ func _remove_projectile(projectile_id: int, reason: String) -> void:
 	projectile_removed.emit(projectile_id, reason)
 
 
-func _build_visual() -> Node3D:
+func _build_visual(request: Dictionary, visual_kind: String) -> Node3D:
 	var root := Node3D.new()
+	root.set_meta("visual_kind", visual_kind)
 	var mesh_instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.05, 0.05, 0.62)
+	var width := clampf(float(request.get("visual_width", 0.05)), 0.03, 0.5)
+	var length := clampf(float(request.get("visual_length", 0.62)), 0.05, 1.5)
+	match visual_kind:
+		"orb":
+			var sphere := SphereMesh.new()
+			sphere.radius = width * 0.5
+			sphere.height = width
+			sphere.radial_segments = 12
+			sphere.rings = 6
+			mesh_instance.mesh = sphere
+		"bolt":
+			var bolt := BoxMesh.new()
+			bolt.size = Vector3(width, width, length)
+			mesh_instance.mesh = bolt
+		_:
+			var arrow := BoxMesh.new()
+			arrow.size = Vector3(width, width, length)
+			mesh_instance.mesh = arrow
+	var fallback_color := Color("#C8A46A") if visual_kind == "arrow" else Color("#D75BFF")
+	var visual_color := Color.from_string(
+		str(request.get("visual_color", fallback_color.to_html())), fallback_color
+	)
 	var material := StandardMaterial3D.new()
-	material.albedo_color = Color("#C8A46A")
-	material.roughness = 0.82
-	mesh.material = material
-	mesh_instance.mesh = mesh
+	material.albedo_color = visual_color
+	material.roughness = 0.72
+	if visual_kind != "arrow":
+		material.emission_enabled = true
+		material.emission = visual_color
+		material.emission_energy_multiplier = 1.8
+	mesh_instance.material_override = material
 	root.add_child(mesh_instance)
 	return root
 
@@ -240,3 +314,17 @@ func _orient_visual(visual: Node3D, velocity: Vector3) -> void:
 	if velocity.length_squared() <= 0.0001:
 		return
 	visual.look_at(visual.global_position + velocity.normalized(), Vector3.UP, true)
+
+
+func _active_owner_counts() -> Dictionary:
+	var result: Dictionary = {}
+	for raw_record: Variant in _projectiles.values():
+		if raw_record is not Dictionary:
+			continue
+		var owner_kind := str(raw_record.get("owner_kind", "unknown"))
+		result[owner_kind] = int(result.get(owner_kind, 0)) + 1
+	return result
+
+
+func _finite_vector(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
