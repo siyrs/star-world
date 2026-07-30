@@ -25,10 +25,12 @@ func clear_combat_motion() -> void:
 
 func get_hostile_attack_snapshot() -> Dictionary:
 	var snapshot := super.get_hostile_attack_snapshot()
+	var cover_available := (
+		cover_counter_service != null and is_instance_valid(cover_counter_service)
+	)
 	snapshot.merge({
-		"cover_counter_available": (
-			cover_counter_service != null and is_instance_valid(cover_counter_service)
-		),
+		"cover_counter_available": cover_available,
+		"cover_counter_active": _cover_counter_active() if cover_available else false,
 		"blocked_lane_seconds": _blocked_lane_seconds,
 		"reposition_cooldown_remaining": _reposition_cooldown_remaining,
 		"reposition_attempt_count": _reposition_attempt_count,
@@ -83,8 +85,7 @@ func _choose_direction() -> Vector3:
 				_reposition_cooldown_remaining,
 				_reposition_attempt_count
 			)
-			and cover_counter_service != null
-			and is_instance_valid(cover_counter_service)
+			and _cover_counter_active()
 			and cover_counter_service.has_method("find_marksman_reposition_destination")
 		):
 			_reposition_attempt_count += 1
@@ -116,13 +117,23 @@ func _choose_direction() -> Vector3:
 
 func _compute_line_of_sight() -> bool:
 	if (
-		cover_counter_service != null
-		and is_instance_valid(cover_counter_service)
+		_cover_counter_active()
 		and cover_counter_service.has_method("has_projectile_lane")
 		and _is_attack_target_valid()
 	):
 		return bool(cover_counter_service.call("has_projectile_lane", self, target))
 	return super._compute_line_of_sight()
+
+
+func _cover_counter_active() -> bool:
+	if (
+		cover_counter_service == null
+		or not is_instance_valid(cover_counter_service)
+		or not cover_counter_service.has_method("get_snapshot")
+	):
+		return false
+	var raw_snapshot: Variant = cover_counter_service.call("get_snapshot")
+	return raw_snapshot is Dictionary and bool(raw_snapshot.get("active", false))
 
 
 func _reset_reposition_state(reset_target: bool) -> void:
