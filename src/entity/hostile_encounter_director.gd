@@ -8,9 +8,13 @@ signal snapshot_changed(snapshot: Dictionary)
 
 const RegistryScript = preload("res://src/entity/hostile_encounter_registry.gd")
 const PolicyScript = preload("res://src/entity/hostile_encounter_policy.gd")
+const OverlayScript = preload("res://src/ui/hostile_encounter_overlay.gd")
 const DECISION_INTERVAL_SECONDS := 1.0
 const INITIAL_DELAY_SECONDS := 6.0
+const BINDING_REFRESH_SECONDS := 0.25
 const MAX_SPAWN_ATTEMPTS_PER_DECISION := 1
+
+@export var auto_bind_parent := true
 
 var creature_spawner: Node
 var player: Node3D
@@ -22,6 +26,7 @@ var _registry = RegistryScript.new()
 var _rng := RandomNumberGenerator.new()
 var _decision_remaining := INITIAL_DELAY_SECONDS
 var _cooldown_remaining := 0.0
+var _binding_refresh_remaining := 0.0
 var _active_encounters: Dictionary = {}
 var _next_encounter_sequence := 1
 var _start_count := 0
@@ -31,12 +36,18 @@ var _rejection_count := 0
 var _last_rejection_reason := ""
 var _last_profile_id := ""
 var _last_snapshot: Dictionary = {}
+var _parent_hub: Node
+var _bound_world_id := ""
+var _overlay: Control
+var _explicit_setup := false
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_rng.randomize()
-	set_process(false)
+	set_process(true)
+	if auto_bind_parent:
+		call_deferred("_refresh_parent_bindings", 0.0, true)
 
 
 func setup(
@@ -45,6 +56,7 @@ func setup(
 	p_day_night_service: Node,
 	p_map_id: String
 ) -> void:
+	_explicit_setup = true
 	creature_spawner = p_creature_spawner
 	player = p_player
 	day_night_service = p_day_night_service
@@ -52,16 +64,28 @@ func setup(
 	_publish_if_changed(true)
 
 
+func bind_parent_hub(p_parent_hub: Node) -> void:
+	_parent_hub = p_parent_hub
+	_explicit_setup = false
+	_refresh_parent_bindings(0.0, true)
+
+
 func set_active(value: bool) -> void:
+	if active == value:
+		return
 	active = value
-	set_process(active)
 	if active:
 		_decision_remaining = minf(_decision_remaining, INITIAL_DELAY_SECONDS)
+	if _overlay != null:
+		_overlay.call("set_active", active)
 	_publish_if_changed(true)
 
 
 func set_map_profile(p_map_id: String) -> void:
-	map_id = p_map_id if not p_map_id.is_empty() else "star_continent"
+	var next_map_id := p_map_id if not p_map_id.is_empty() else "star_continent"
+	if map_id == next_map_id:
+		return
+	map_id = next_map_id
 	_decision_remaining = minf(_decision_remaining, INITIAL_DELAY_SECONDS)
 	_publish_if_changed(true)
 
@@ -105,6 +129,8 @@ func get_snapshot() -> Dictionary:
 		encounters.append(snapshot)
 	return {
 		"active": active,
+		"auto_bound": _parent_hub != null,
+		"world_id": _bound_world_id,
 		"map_id": map_id,
 		"phase_id": _current_phase(),
 		"decision_remaining_seconds": _decision_remaining,
@@ -124,11 +150,65 @@ func get_snapshot() -> Dictionary:
 		"encounters": encounters,
 		"registry_schema_version": _registry.schema_version,
 		"registry_profile_count": _registry.get_profile_ids().size(),
+		"overlay_available": _overlay != null,
 	}
 
 
 func _process(delta: float) -> void:
-	_advance(maxf(0.0, delta), _rng.randf())
+	var safe_delta := maxf(0.0, delta)
+	if auto_bind_parent and not _explicit_setup:
+		_refresh_parent_bindings(safe_delta, false)
+	_advance(safe_delta, _rng.randf())
+
+
+func _refresh_parent_bindings(delta: float = 0.0, force: bool = false) -> void:
+	_binding_refresh_remaining = maxf(0.0, _binding_refresh_remaining - maxf(0.0, delta))
+	if not force and _binding_refresh_remaining > 0.0:
+		return
+	_binding_refresh_remaining = BINDING_REFRESH_SECONDS
+	if _parent_hub == null or not is_instance_valid(_parent_hub):
+		_parent_hub = get_parent()
+	if _parent_hub == null or not is_instance_valid(_parent_hub):
+		return
+	var next_spawner: Node = _parent_hub.get("creature_spawner") as Node
+	var next_player: Node3D = _parent_hub.get("player_node") as Node3D
+	var next_day_night: Node = _parent_hub.get("day_night") as Node
+	if next_spawner != null:
+		creature_spawner = next_spawner
+	if next_player != null:
+		player = next_player
+	if next_day_night != null:
+		day_night_service = next_day_night
+	var current_state: Variant = _parent_hub.get("current_state")
+	var metadata: Dictionary = (
+		current_state.get("metadata", {})
+		if current_state is Dictionary
+		else {}
+	)
+	set_map_profile(str(metadata.get("map_id", map_id)))
+	var next_world_id := str(_parent_hub.get("current_world_id"))
+	if next_world_id != _bound_world_id:
+		if not _bound_world_id.is_empty() or not _active_encounters.is_empty():
+			clear("world_changed")
+		_bound_world_id = next_world_id
+	var spawner_active := bool(creature_spawner.get("active")) if creature_spawner != null else false
+	set_active(not _bound_world_id.is_empty() and spawner_active and player != null)
+	_ensure_overlay()
+
+
+func _ensure_overlay() -> void:
+	if _overlay != null and is_instance_valid(_overlay):
+		return
+	if _parent_hub == null or not is_instance_valid(_parent_hub):
+		return
+	var game_ui: Node = _parent_hub.get("game_ui") as Node
+	if game_ui == null:
+		return
+	_overlay = OverlayScript.new()
+	_overlay.name = "HostileEncounterOverlay"
+	game_ui.add_child(_overlay)
+	_overlay.call("setup", self)
+	_overlay.call("set_active", active)
 
 
 func _advance(delta: float, roll: float) -> void:
@@ -168,22 +248,12 @@ func _attempt_start(profile_id: String, roll: float) -> Dictionary:
 	var spawned: Array[Node3D] = []
 	for request: Dictionary in requests:
 		var requested_position: Vector3 = request.get("requested_position", player.global_position)
-		var resolved_position: Vector3 = creature_spawner.call(
-			"resolve_spawn_candidate", requested_position
-		)
-		var raw_creature: Variant = creature_spawner.call(
-			"spawn_encounter_member",
-			str(request.get("species_id", "")),
-			resolved_position,
-			encounter_id,
-			str(request.get("role", "vanguard")),
-			player,
-			int(request.get("member_index", spawned.size()))
-		)
-		if raw_creature is not Node3D:
+		var resolved_position := _resolve_spawn_candidate(requested_position)
+		var creature := _spawn_encounter_member(request, resolved_position, encounter_id, spawned.size())
+		if creature == null:
 			_rollback_spawned(spawned)
 			return _reject("spawn_transaction_failed")
-		spawned.append(raw_creature)
+		spawned.append(creature)
 	var refs: Array[WeakRef] = []
 	var member_ids: Array[int] = []
 	for member: Node3D in spawned:
@@ -213,13 +283,79 @@ func _attempt_start(profile_id: String, roll: float) -> Dictionary:
 	return {"success": true, "reason": "ok", "encounter": snapshot}
 
 
-func _build_context() -> Dictionary:
-	var population: Dictionary = (
-		creature_spawner.call("get_hostile_population_snapshot")
-		if creature_spawner != null
-		and creature_spawner.has_method("get_hostile_population_snapshot")
+func _spawn_encounter_member(
+	request: Dictionary,
+	spawn_position: Vector3,
+	encounter_id: String,
+	fallback_index: int
+) -> Node3D:
+	var species_id := str(request.get("species_id", ""))
+	var role := str(request.get("role", "vanguard"))
+	var member_index := int(request.get("member_index", fallback_index))
+	if creature_spawner.has_method("spawn_encounter_member"):
+		var raw_creature: Variant = creature_spawner.call(
+			"spawn_encounter_member",
+			species_id,
+			spawn_position,
+			encounter_id,
+			role,
+			player,
+			member_index
+		)
+		return raw_creature as Node3D
+	if not _can_spawn_species(species_id):
+		return null
+	var raw_spawned: Variant = creature_spawner.call("spawn_creature", species_id, spawn_position)
+	if raw_spawned is not Node3D:
+		return null
+	var creature: Node3D = raw_spawned
+	creature.add_to_group("encounter_hostile")
+	creature.set_meta("encounter_id", encounter_id)
+	creature.set_meta("encounter_role", role)
+	creature.set_meta("encounter_member_index", clampi(member_index, 0, 7))
+	creature.set_meta("encounter_spawned", true)
+	creature.set("target", player)
+	return creature
+
+
+func _resolve_spawn_candidate(candidate: Vector3) -> Vector3:
+	if creature_spawner.has_method("resolve_spawn_candidate"):
+		return creature_spawner.call("resolve_spawn_candidate", candidate)
+	var resolver: Variant = creature_spawner.get("ground_resolver")
+	if resolver is Callable and resolver.is_valid():
+		var raw_result: Variant = resolver.call(candidate)
+		if raw_result is Vector3:
+			return raw_result
+		if raw_result is float or raw_result is int:
+			candidate.y = float(raw_result) + 1.0
+	return candidate
+
+
+func _can_spawn_species(species_id: String) -> bool:
+	var population := _population_snapshot()
+	if int(population.get("count", 0)) >= int(population.get("cap", 0)):
+		return false
+	var ecology_profile: Dictionary = (
+		creature_spawner.call("get_ecology_profile")
+		if creature_spawner.has_method("get_ecology_profile")
 		else {}
 	)
+	var raw_species: Variant = ecology_profile.get("hostile_species", [])
+	if raw_species is Array:
+		for raw_entry: Variant in raw_species:
+			if raw_entry is not Dictionary:
+				continue
+			var entry: Dictionary = raw_entry
+			if str(entry.get("id", "")) != species_id:
+				continue
+			var cap := int(entry.get("cap", -1))
+			if cap > 0 and creature_spawner.has_method("get_species_count"):
+				return int(creature_spawner.call("get_species_count", species_id)) < cap
+	return true
+
+
+func _build_context() -> Dictionary:
+	var population := _population_snapshot()
 	return {
 		"map_id": map_id,
 		"phase_id": _current_phase(),
@@ -231,6 +367,31 @@ func _build_context() -> Dictionary:
 		"active_encounters": _active_encounters.size(),
 		"tracked_members": _tracked_member_count(),
 		"cooldown_remaining": _cooldown_remaining,
+	}
+
+
+func _population_snapshot() -> Dictionary:
+	if creature_spawner == null:
+		return {}
+	if creature_spawner.has_method("get_hostile_population_snapshot"):
+		return creature_spawner.call("get_hostile_population_snapshot")
+	var ecology: Dictionary = (
+		creature_spawner.call("get_ecology_snapshot")
+		if creature_spawner.has_method("get_ecology_snapshot")
+		else {}
+	)
+	var pressure := 0.0
+	if player != null and creature_spawner.has_method("get_nearby_hostile_pressure"):
+		pressure = float(creature_spawner.call(
+			"get_nearby_hostile_pressure", player.global_position, 64.0
+		))
+	return {
+		"count": int(ecology.get("hostile_count", 0)),
+		"cap": int(ecology.get("hostile_cap", 0)),
+		"pressure": pressure,
+		"species_counts": ecology.get("species_counts", {}).duplicate(true),
+		"phase_id": str(ecology.get("phase", _current_phase())),
+		"map_id": str(ecology.get("profile_id", map_id)),
 	}
 
 
@@ -313,6 +474,8 @@ func _rollback_spawned(spawned: Array[Node3D]) -> void:
 	for creature: Node3D in spawned:
 		if creature_spawner != null and creature_spawner.has_method("remove_creature"):
 			creature_spawner.call("remove_creature", creature, false)
+		elif creature_spawner != null and creature_spawner.has_method("_dispose_child"):
+			creature_spawner.call("_dispose_child", creature, false)
 		elif is_instance_valid(creature):
 			creature.queue_free()
 	_rollback_count += 1
@@ -348,10 +511,9 @@ func _attachments_ready() -> bool:
 	return (
 		creature_spawner != null
 		and is_instance_valid(creature_spawner)
+		and creature_spawner.has_method("spawn_creature")
 		and player != null
 		and is_instance_valid(player)
-		and creature_spawner.has_method("spawn_encounter_member")
-		and creature_spawner.has_method("resolve_spawn_candidate")
 	)
 
 
