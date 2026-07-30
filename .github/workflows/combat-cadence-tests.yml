@@ -63,7 +63,8 @@ jobs:
             -Godot $godotPath `
             -ProjectRoot . `
             -ScriptPath 'res://tests/qa/combat_cadence_desktop_acceptance.gd' `
-            -OutputPath 'build\combat-cadence-desktop-acceptance.png'
+            -OutputPath 'build\combat-cadence-desktop-acceptance.png' `
+            -TimeoutMilliseconds 180000
 
       - name: Upload combat cadence evidence
         if: always()
