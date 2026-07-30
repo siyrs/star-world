@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "encounter_profile_id": "continent_night_patrol",
+      "display_name": "夜行巡猎补给",
+      "base_rewards": {
+        "light_round": 1
+      },
+      "efficient_shot_limit": 3,
+      "efficient_bonus": {
+        "light_round": 1
+      }
+    },
+    {
+      "encounter_profile_id": "abyss_skirmish",
+      "display_name": "深渊游猎补给",
+      "base_rewards": {
+        "gunpowder": 1,
+        "light_round": 3
+      },
+      "efficient_shot_limit": 5,
+      "efficient_bonus": {
+        "light_round": 2
+      }
+    },
+    {
+      "encounter_profile_id": "abyss_assault",
+      "display_name": "深渊突袭补给",
+      "base_rewards": {
+        "gunpowder": 2,
+        "light_round": 4,
+        "shotgun_shell": 1
+      },
+      "efficient_shot_limit": 7,
+      "efficient_bonus": {
+        "light_round": 2
+      }
+    }
+  ]
+}
