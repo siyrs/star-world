@@ -211,8 +211,14 @@ func _test_save_and_runtime_composition() -> void:
 		audio.call("dispose")
 	elif audio != null and audio.has_method("shutdown"):
 		audio.call("shutdown")
+	# AudioStreamPlayer frees its Godot nodes synchronously, but playback voices are
+	# released by AudioServer on subsequent process ticks. Keep the service alive
+	# long enough for the terminal dispose to cross that server boundary before the
+	# containing hub is removed.
+	for _frame in 24:
+		await process_frame
 	hub.queue_free()
-	for _frame in 5:
+	for _frame in 32:
 		await process_frame
 
 
