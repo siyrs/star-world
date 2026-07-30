@@ -63,11 +63,13 @@ func _run() -> void:
 	var player: Node3D = game.player
 	var world: Node = game.world
 	var hostile_runtime: Node = hub.get("hostile_projectile_runtime") as Node
+	var combat: Node = hub.get("combat_service") as Node
 	var overlay: Node = hub.game_ui.call("get_combat_feedback_overlay")
 	_check(hostile_runtime != null, "production hub mounts one shared hostile projectile runtime")
 	_check(int(hostile_runtime.call("get_snapshot").get("capacity", 0)) == 24, "hostile projectile runtime owns the exact twenty-four shot capacity")
+	_check(combat != null, "production hub exposes CombatService for stable target-resolution evidence")
 	_check(overlay != null, "production UI exposes combat results for lifecycle-safe defeat checks")
-	if hostile_runtime == null or overlay == null:
+	if hostile_runtime == null or combat == null or overlay == null:
 		await _finish(game, hub)
 		return
 
@@ -194,28 +196,29 @@ func _run() -> void:
 		live_marksman.set("health", 6.0)
 		live_marksman.global_position = Vector3(player_block.x + 0.5, floor_y + 1.05, player_block.z - 4.5)
 		marksman_position = live_marksman.global_position
+	var defeat_capture := {"result": {}}
+	var defeat_callback: Callable = func(result: Dictionary) -> void:
+		if int(result.get("target_id", 0)) == marksman_id:
+			defeat_capture["result"] = result.duplicate(true)
+	combat.connect("outgoing_attack_resolved", defeat_callback)
 	await _aim_at(player, marksman_position + Vector3(0.0, 0.9, 0.0))
 	_push_mouse_button(true)
 	await process_frame
 	_push_mouse_button(false)
 	var defeated := await _wait_until(
 		func() -> bool:
-			var result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
-			return (
-				marksman_ref.get_ref() == null
-				or (
-					int(result.get("target_id", 0)) == marksman_id
-					and bool(result.get("defeated", false))
-				)
-			),
+			var captured: Dictionary = defeat_capture.get("result", {})
+			return bool(captured.get("defeated", false)) and marksman_ref.get_ref() == null,
 		ACTION_TIMEOUT_MS
 	)
 	_check(defeated, "player firearm defeat releases the marksman safely")
 	for _frame in 12:
 		await process_frame
 	_check(marksman_ref.get_ref() == null, "defeated marksman is unloaded without stale instance access")
-	var defeat_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
+	var defeat_result: Dictionary = defeat_capture.get("result", {}).duplicate(true)
 	_check(int(defeat_result.get("target_id", 0)) == marksman_id and bool(defeat_result.get("defeated", false)), "CombatService publishes a stable defeated result after target release")
+	if combat.is_connected("outgoing_attack_resolved", defeat_callback):
+		combat.disconnect("outgoing_attack_resolved", defeat_callback)
 
 	var runtime_after_defeat: Dictionary = hostile_runtime.call("get_snapshot")
 	_check(int(runtime_after_defeat.get("active_count", -1)) == 0, "encounter ends with zero active hostile projectiles")
