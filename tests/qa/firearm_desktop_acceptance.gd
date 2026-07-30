@@ -103,7 +103,7 @@ func _run() -> void:
 		return
 	var target: Node3D = target_variant
 	var target_id := int(target.get_instance_id())
-	var target_ref := weakref(target)
+	var target_ref: WeakRef = weakref(target)
 	target.set("max_health", 40.0)
 	target.set("health", 40.0)
 	_freeze_target(target)
