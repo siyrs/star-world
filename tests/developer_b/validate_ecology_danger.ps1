@@ -1,6 +1,18 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Get-OptionalProperty {
+  param(
+    [Parameter(Mandatory = $true)]$Object,
+    [Parameter(Mandatory = $true)][string]$Name,
+    $Default = $null
+  )
+  if ($null -eq $Object) { return $Default }
+  $property = $Object.PSObject.Properties[$Name]
+  if ($null -eq $property) { return $Default }
+  return $property.Value
+}
+
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $ecology = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\creature_ecology.json') | ConvertFrom-Json
 $danger = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\exploration_danger.json') | ConvertFrom-Json
@@ -36,15 +48,18 @@ foreach ($profile in $profiles) {
       if ($speciesId -notin $knownSpecies) { throw "Unknown species $speciesId in ${id}:$category" }
       if ($seen.ContainsKey($speciesId)) { throw "Duplicate species $speciesId in ${id}:$category" }
       if ([int]$entry.weight -le 0) { throw "Invalid species weight $speciesId in $id" }
-      if ($null -ne $entry.cap -and ([int]$entry.cap -lt 0 -or [int]$entry.cap -gt 32)) { throw "Invalid species cap $speciesId in $id" }
-      $mode = [string]$entry.condition_mode
+      $cap = Get-OptionalProperty -Object $entry -Name 'cap'
+      if ($null -ne $cap -and ([int]$cap -lt 0 -or [int]$cap -gt 32)) { throw "Invalid species cap $speciesId in $id" }
+      $mode = [string](Get-OptionalProperty -Object $entry -Name 'condition_mode' -Default '')
       if (-not [string]::IsNullOrWhiteSpace($mode) -and $mode -notin @('all','any')) { throw "Invalid condition mode $mode for $speciesId in $id" }
-      foreach ($phaseId in @($entry.phase_ids)) {
+      foreach ($phaseId in @(Get-OptionalProperty -Object $entry -Name 'phase_ids' -Default @())) {
         $phaseIdValue = [string]$phaseId
         if ([string]::IsNullOrWhiteSpace($phaseIdValue)) { continue }
         if ($phaseIdValue -notin $knownPhases) { throw "Invalid condition phase $phaseIdValue for $speciesId in $id" }
       }
-      if ($null -ne $entry.min_player_y -and $null -ne $entry.max_player_y -and [int]$entry.max_player_y -lt [int]$entry.min_player_y) { throw "Invalid height condition for $speciesId in $id" }
+      $minimumY = Get-OptionalProperty -Object $entry -Name 'min_player_y'
+      $maximumY = Get-OptionalProperty -Object $entry -Name 'max_player_y'
+      if ($null -ne $minimumY -and $null -ne $maximumY -and [int]$maximumY -lt [int]$minimumY) { throw "Invalid height condition for $speciesId in $id" }
       $seen[$speciesId] = $true
       if (-not $speciesProfiles.ContainsKey($speciesId)) { $speciesProfiles[$speciesId] = @() }
       $speciesProfiles[$speciesId] += $id
@@ -74,7 +89,7 @@ if ([int]$skyChicken.weight -lt 4) { throw 'Sky islands must strongly prefer chi
 
 if ([int]$danger.schema_version -ne 1) { throw 'Exploration danger schema_version must be 1' }
 foreach ($field in @('assessment_interval_seconds','horizontal_radius','vertical_radius','horizontal_step','vertical_step','max_samples','hostile_radius')) {
-  if ($null -eq $danger.$field) { throw "Missing danger field: $field" }
+  if ($null -eq $danger.PSObject.Properties[$field]) { throw "Missing danger field: $field" }
 }
 $horizontalCount = [math]::Ceiling((([int]$danger.horizontal_radius * 2) + 1) / [double][int]$danger.horizontal_step)
 $verticalCount = [math]::Ceiling((([int]$danger.vertical_radius * 2) + 1) / [double][int]$danger.vertical_step)
