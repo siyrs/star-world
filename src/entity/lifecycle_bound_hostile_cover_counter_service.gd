@@ -46,6 +46,37 @@ func get_snapshot() -> Dictionary:
 	return snapshot
 
 
+func _breakable_cover_positions(
+	brute: Node3D,
+	attack_target: Node3D,
+	remaining_budget: int
+) -> Array[Vector3i]:
+	var result: Array[Vector3i] = []
+	var limit := mini(
+		PolicyScript.MAX_BREAK_BLOCKS_PER_ATTACK,
+		maxi(0, remaining_budget)
+	)
+	if limit <= 0:
+		return result
+	var start := brute.global_position + Vector3.UP * 1.05
+	var finish := attack_target.global_position + Vector3.UP * 1.0
+	for sample: Dictionary in PolicyScript.line_samples(start, finish):
+		if result.size() >= limit:
+			break
+		if float(sample.get("distance_from_start", INF)) > MAX_BREAK_DISTANCE:
+			break
+		var position: Vector3i = sample.get("position", Vector3i.ZERO)
+		var block_id := str(world.call("get_block", position))
+		var local_height := float(sample.get("local_height", 0.5))
+		if not PolicyScript.blocks_walk_lane(block_id, local_height):
+			continue
+		if PolicyScript.is_breakable_cover(block_id) and _is_player_override(position, block_id):
+			result.append(position)
+			continue
+		break
+	return result
+
+
 func _permanent_cover_blocks_lane(brute: Node3D, attack_target: Node3D) -> bool:
 	if not _runtime_ready() or brute == null or attack_target == null:
 		return false
