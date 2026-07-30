@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource path="res://src/ui/exploration_progression_service_hub.gd" type="Script" id="1"]
 [ext_resource path="res://scenes/ui/main_menu.tscn" type="PackedScene" id="2"]
 [ext_resource path="res://scenes/ui/game_ui.tscn" type="PackedScene" id="3"]
 [ext_resource path="res://src/entity/hostile_encounter_director.gd" type="Script" id="4_encounter"]
 [ext_resource path="res://src/entity/lifecycle_bound_encounter_reward_service.gd" type="Script" id="5_reward"]
+[ext_resource path="res://src/entity/hostile_cover_counter_service.gd" type="Script" id="6_cover"]
 
 [node name="Services" type="Node"]
 script = ExtResource("1")
@@ -14,6 +15,9 @@ script = ExtResource("4_encounter")
 
 [node name="EncounterRewardService" type="Node" parent="."]
 script = ExtResource("5_reward")
+
+[node name="HostileCoverCounterService" type="Node" parent="."]
+script = ExtResource("6_cover")
 
 [node name="MainMenu" parent="." instance=ExtResource("2")]
 
