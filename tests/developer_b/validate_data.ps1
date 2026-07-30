@@ -60,7 +60,7 @@ if ($maps.Count -ne 5) { throw "Expected 5 map profiles, got $($maps.Count)" }
 $creatureProperties = @($creatures.PSObject.Properties)
 $creatureCount = $creatureProperties.Count
 if ($creatureCount -ne 6) { throw "Expected 6 creatures, got $creatureCount" }
-$creatureIds = @($creatureProperties.Name)
+$creatureIds = @($creatureProperties | ForEach-Object { [string]$_.Name })
 
 $slotAllowed = @{}
 $slotOrders = @{}
@@ -77,7 +77,7 @@ foreach ($slot in $equipmentSlots) {
 foreach ($requiredSlot in @('main_hand','helmet','chestplate','leggings','boots')) {
   if (-not $slotAllowed.ContainsKey($requiredSlot)) { throw "Missing equipment slot: $requiredSlot" }
 }
-$knownAttributes = @($equipmentData.attributes.PSObject.Properties.Name)
+$knownAttributes = @($equipmentData.attributes.PSObject.Properties | ForEach-Object { [string]$_.Name })
 foreach ($requiredAttribute in @('max_health','attack_damage','defense','movement_speed','mining_speed')) {
   if ($requiredAttribute -notin $knownAttributes) { throw "Missing character attribute: $requiredAttribute" }
 }
@@ -114,9 +114,10 @@ foreach ($item in $items) {
     if ($item.category -notin @($slotAllowed[$slotId])) { throw "Category $($item.category) is not allowed in $slotId for $itemId" }
     if ([int]$item.max_stack -ne 1) { throw "Equippable item must not stack: $itemId" }
     $attributes = Get-OptionalProperty -Object $equipment -Name 'attributes' -Default ([pscustomobject]@{})
-    foreach ($attributeId in @($attributes.PSObject.Properties.Name)) {
+    foreach ($attributeProperty in @($attributes.PSObject.Properties)) {
+      $attributeId = [string]$attributeProperty.Name
       if ($attributeId -notin $knownAttributes) { throw "Unknown equipment attribute $attributeId for $itemId" }
-      if ([double]$attributes.$attributeId -eq 0) { throw "Zero equipment attribute $attributeId for $itemId" }
+      if ([double]$attributeProperty.Value -eq 0) { throw "Zero equipment attribute $attributeId for $itemId" }
     }
   }
 }
