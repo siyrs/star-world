@@ -100,7 +100,7 @@ func _run() -> void:
 		await _finish(game, hub)
 		return
 	var marksman: Node3D = raw_marksman
-	var marksman_ref := weakref(marksman)
+	var marksman_ref: WeakRef = weakref(marksman)
 	var marksman_id := int(marksman.get_instance_id())
 	marksman.set("move_speed", 0.0)
 	marksman.set("target", player)
