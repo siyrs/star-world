@@ -47,8 +47,14 @@ foreach ($token in @(
 if ($text.Policy -match 'extends\s+Node|Timer\.new|Thread\.new|FileAccess|DirAccess|RandomNumberGenerator') {
   throw 'Hostile cover policy must remain pure and deterministic'
 }
+$breakableMatch = [regex]::Match(
+  $text.Policy,
+  'const\s+BREAKABLE_COVER_IDS\s*:\s*Array\[String\]\s*=\s*\[(?<body>[\s\S]*?)\]'
+)
+if (-not $breakableMatch.Success) { throw 'Unable to isolate BREAKABLE_COVER_IDS whitelist' }
+$breakableSection = $breakableMatch.Groups['body'].Value
 foreach ($safeBlock in @('stone','planks','oak_door','oak_fence','stone_slab','chest','furnace','stonecutter')) {
-  if ($text.Policy -match ('BREAKABLE_COVER_IDS[\s\S]*?"' + [regex]::Escape($safeBlock) + '"')) {
+  if ($breakableSection -match ('"' + [regex]::Escape($safeBlock) + '"')) {
     throw "Permanent block entered the hostile destruction whitelist: $safeBlock"
   }
 }
@@ -75,7 +81,7 @@ foreach ($token in @(
   'class_name\s+LifecycleBoundHostileCoverCounterService',
   'start_world_requested', 'return_to_menu_requested',
   'blocks_damage', 'permanent_cover_blocked',
-  '_permanent_cover_blocks_lane'
+  '_permanent_cover_blocks_lane', '_breakable_cover_positions'
 )) {
   if ($text.Lifecycle -notmatch $token) { throw "Cover lifecycle or permanent-wall protection is missing: $token" }
 }
@@ -111,7 +117,7 @@ if ($text.Scene -notmatch 'lifecycle_bound_hostile_cover_counter_service\.gd') {
 if ($text.World -notmatch 'func\s+apply_block_mutations' -or $text.World -notmatch 'MAX_BLOCK_MUTATIONS_PER_BATCH\s*:=\s*4096') {
   throw 'Cover destruction must retain the shared bounded mutation batch authority'
 }
-foreach ($token in @('HostileCoverCounterPanel','临时掩体被突破','深渊射手正在换位','补给等待领取|掩体')) {
+foreach ($token in @('HostileCoverCounterPanel','临时掩体被突破','深渊射手正在换位','掩体')) {
   if ($text.Overlay -notmatch $token) { throw "Cover counter HUD is missing: $token" }
 }
 
