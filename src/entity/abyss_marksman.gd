@@ -57,7 +57,9 @@ func apply_profile(profile: Dictionary) -> void:
 	var attack: Dictionary = raw_attack
 	attack_kind = str(attack.get("attack_kind", attack_kind))
 	delivery_kind = str(attack.get("delivery_kind", delivery_kind))
-	minimum_attack_range = maxf(0.0, float(attack.get("minimum_range", minimum_attack_range)))
+	minimum_attack_range = maxf(
+		0.0, float(attack.get("minimum_range", minimum_attack_range))
+	)
 	preferred_attack_range = clampf(
 		float(attack.get("preferred_range", preferred_attack_range)),
 		minimum_attack_range,
@@ -66,8 +68,12 @@ func apply_profile(profile: Dictionary) -> void:
 	requires_line_of_sight = bool(
 		attack.get("requires_line_of_sight", requires_line_of_sight)
 	)
-	projectile_speed = clampf(float(attack.get("projectile_speed", projectile_speed)), 0.1, 64.0)
-	projectile_gravity = clampf(float(attack.get("projectile_gravity", projectile_gravity)), 0.0, 32.0)
+	projectile_speed = clampf(
+		float(attack.get("projectile_speed", projectile_speed)), 0.1, 64.0
+	)
+	projectile_gravity = clampf(
+		float(attack.get("projectile_gravity", projectile_gravity)), 0.0, 32.0
+	)
 	projectile_max_distance = clampf(
 		float(attack.get("projectile_max_distance", projectile_max_distance)),
 		attack_range,
@@ -78,7 +84,9 @@ func apply_profile(profile: Dictionary) -> void:
 		0.2,
 		8.0
 	)
-	projectile_collision_mask = maxi(1, int(attack.get("projectile_collision_mask", projectile_collision_mask)))
+	projectile_collision_mask = maxi(
+		1, int(attack.get("projectile_collision_mask", projectile_collision_mask))
+	)
 	projectile_knockback_horizontal = clampf(
 		float(attack.get("projectile_knockback_horizontal", projectile_knockback_horizontal)),
 		0.0,
@@ -94,14 +102,24 @@ func apply_profile(profile: Dictionary) -> void:
 		0.0,
 		2.0
 	)
-	projectile_visual_kind = str(attack.get("projectile_visual_kind", projectile_visual_kind))
-	projectile_visual_color = str(attack.get("projectile_visual_color", projectile_visual_color))
-	cover_probe_count = clampi(int(attack.get("cover_probe_count", cover_probe_count)), 0, 8)
-	cover_probe_radius = clampf(float(attack.get("cover_probe_radius", cover_probe_radius)), 0.5, 6.0)
+	projectile_visual_kind = str(
+		attack.get("projectile_visual_kind", projectile_visual_kind)
+	)
+	projectile_visual_color = str(
+		attack.get("projectile_visual_color", projectile_visual_color)
+	)
+	cover_probe_count = clampi(
+		int(attack.get("cover_probe_count", cover_probe_count)), 0, 8
+	)
+	cover_probe_radius = clampf(
+		float(attack.get("cover_probe_radius", cover_probe_radius)), 0.5, 6.0
+	)
 	cover_refresh_seconds = clampf(
 		float(attack.get("cover_refresh_seconds", cover_refresh_seconds)), 0.25, 3.0
 	)
-	strafe_seconds = clampf(float(attack.get("strafe_seconds", strafe_seconds)), 0.2, 3.0)
+	strafe_seconds = clampf(
+		float(attack.get("strafe_seconds", strafe_seconds)), 0.2, 3.0
+	)
 
 
 func _ready() -> void:
@@ -216,8 +234,10 @@ func _choose_direction() -> Vector3:
 		_cover_refresh_remaining = cover_refresh_seconds
 		_select_cover_destination()
 		if _cover_destination_active:
+			var next_cover_offset := _cover_destination - global_position
+			next_cover_offset.y = 0.0
 			_current_motion_kind = RangedTacticsPolicyScript.MOTION_COVER
-			return (_cover_destination - global_position).normalized()
+			return next_cover_offset.normalized()
 	_current_motion_kind = RangedTacticsPolicyScript.motion_kind(
 		distance,
 		minimum_attack_range,
@@ -286,7 +306,9 @@ func _advance_attack_windup(delta: float) -> void:
 		_cancel_attack_windup(cancel_reason)
 		return
 	_face_attack_target(delta)
-	_attack_windup_remaining = maxf(0.0, _attack_windup_remaining - maxf(0.0, delta))
+	_attack_windup_remaining = maxf(
+		0.0, _attack_windup_remaining - maxf(0.0, delta)
+	)
 	if _attack_windup_remaining <= 0.0:
 		_commit_attack()
 
@@ -436,10 +458,11 @@ func _compute_line_of_sight() -> bool:
 	if impact.is_empty():
 		return true
 	var collider: Variant = impact.get("collider")
-	return (
-		collider == target
-		or (collider is Node and target.is_ancestor_of(collider as Node))
-	)
+	if collider == target:
+		return true
+	if collider is Node:
+		return target.is_ancestor_of(collider as Node)
+	return false
 
 
 func _select_cover_destination() -> void:
@@ -450,7 +473,7 @@ func _select_cover_destination() -> void:
 	if world_3d == null:
 		return
 	var to_target := target.global_position - global_position
-	var directions := RangedTacticsPolicyScript.cover_probe_directions(
+	var directions: Array[Vector3] = RangedTacticsPolicyScript.cover_probe_directions(
 		to_target, cover_probe_count
 	)
 	var target_eye := target.global_position + Vector3.UP * 1.05
@@ -462,11 +485,14 @@ func _select_cover_destination() -> void:
 			WORLD_COLLISION_MASK,
 			[get_rid()]
 		)
-		var ground_hit: Dictionary = world_3d.direct_space_state.intersect_ray(ground_query)
+		var ground_hit: Dictionary = world_3d.direct_space_state.intersect_ray(
+			ground_query
+		)
 		_cover_probe_ray_count += 1
 		if ground_hit.is_empty():
 			continue
-		candidate.y = float((ground_hit.get("position", candidate) as Vector3).y) + 0.05
+		var ground_position: Vector3 = ground_hit.get("position", candidate)
+		candidate.y = ground_position.y + 0.05
 		var path_query := PhysicsRayQueryParameters3D.create(
 			global_position + Vector3.UP * 0.8,
 			candidate + Vector3.UP * 0.8,
