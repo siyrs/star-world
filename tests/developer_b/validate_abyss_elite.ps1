@@ -60,11 +60,10 @@ foreach ($profile in @($ecologyData.profiles | Where-Object { $_.id -ne 'abyss_w
 }
 
 $directProduction = $factorySource -match '"abyss_brute"\s*:\s*preload\("res://src/entity/abyss_brute\.gd"\)'
-$coverAwareProduction = (
-  $factorySource -match '"abyss_brute"\s*:\s*preload\("res://src/entity/cover_aware_abyss_brute\.gd"\)'
-  -and $bruteAdapterSource -match 'extends\s+"res://src/entity/abyss_brute\.gd"'
-  -and $bruteAdapterSource -match 'super\._commit_attack\(\)'
-)
+$factoryUsesCoverAware = $factorySource -match '"abyss_brute"\s*:\s*preload\("res://src/entity/cover_aware_abyss_brute\.gd"\)'
+$adapterExtendsBrute = $bruteAdapterSource -match 'extends\s+"res://src/entity/abyss_brute\.gd"'
+$adapterPreservesCommit = $bruteAdapterSource -match 'super\._commit_attack\(\)'
+$coverAwareProduction = $factoryUsesCoverAware -and $adapterExtendsBrute -and $adapterPreservesCommit
 if (-not $directProduction -and -not $coverAwareProduction) {
   throw 'CreatureFactory must compose either the direct abyss brute or a thin production subclass that preserves the original heavy attack'
 }
