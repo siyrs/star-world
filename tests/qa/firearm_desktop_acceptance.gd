@@ -119,7 +119,7 @@ func _run() -> void:
 			return not _find_target_result(result, target_id).is_empty(),
 		ACTION_TIMEOUT_MS
 	)
-	_check(mouse_hit, "real left-mouse click resolves one authoritative hitscan target transaction")
+	_check(mouse_hit, "real left-mouse click fires a hitscan pistol shot through CombatService with one authoritative target transaction")
 	var mouse_result: Dictionary = overlay.call("get_snapshot").get("last_result", {})
 	var mouse_target_result := _find_target_result(mouse_result, target_id)
 	var target_changed := (
