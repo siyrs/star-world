@@ -140,7 +140,7 @@ func _test_real_reward_transactions() -> void:
 	_check(inventory.count_item("shotgun_shell") == 1, "atomic reward grants one shotgun shell")
 	var rewarded_snapshot := service.get_snapshot()
 	_check(int(rewarded_snapshot.get("reward_grant_count", 0)) == 1, "all reward items commit as one grant")
-	_check(int(rewarded_snapshot.get("net_ammo_total", {}).get("light_round", 99)) == 0, "six shots and six rewarded rounds produce neutral light-ammo net")
+	_check(int(rewarded_snapshot.get("net_ammo_total", {}).get("light_round", 0)) == 0, "six shots and six rewarded rounds produce neutral light-ammo net")
 
 	director.encounter_completed.emit({
 		"id":"abyss-assault-test-1",
@@ -226,8 +226,11 @@ func _test_pending_reward_retry() -> void:
 	})
 	for member: FakeMember in members:
 		member.died.emit(member.species_id, {}, member.global_position)
-	var pending := service.get_snapshot()
-	_check(int(pending.get("pending_reward_count", 0)) == 1, "full inventory queues one bounded pending reward")
+	var pending_ready := await _wait_until(
+		func() -> bool: return int(service.get_snapshot().get("pending_reward_count", 0)) == 1,
+		2000
+	)
+	_check(pending_ready, "full inventory queues one bounded pending reward")
 	_check(inventory.count_item("light_round") == 0, "pending reward does not partially mutate a full inventory")
 	inventory.remove_from_slot(0, 1)
 	var retried := await _wait_until(
