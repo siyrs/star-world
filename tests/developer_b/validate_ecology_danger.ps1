@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $ecology = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'data\creature_ecology.json') | ConvertFrom-Json
@@ -43,9 +44,7 @@ foreach ($profile in $profiles) {
         if ([string]::IsNullOrWhiteSpace($phaseIdValue)) { continue }
         if ($phaseIdValue -notin $knownPhases) { throw "Invalid condition phase $phaseIdValue for $speciesId in $id" }
       }
-      if ($null -ne $entry.min_player_y -and $null -ne $entry.max_player_y -and [int]$entry.max_player_y -lt [int]$entry.min_player_y) {
-        throw "Invalid height condition for $speciesId in $id"
-      }
+      if ($null -ne $entry.min_player_y -and $null -ne $entry.max_player_y -and [int]$entry.max_player_y -lt [int]$entry.min_player_y) { throw "Invalid height condition for $speciesId in $id" }
       $seen[$speciesId] = $true
       if (-not $speciesProfiles.ContainsKey($speciesId)) { $speciesProfiles[$speciesId] = @() }
       $speciesProfiles[$speciesId] += $id
@@ -54,17 +53,22 @@ foreach ($profile in $profiles) {
 }
 foreach ($mapId in $mapIds.Keys) { if (-not $profileIds.ContainsKey($mapId)) { throw "Map has no ecology profile: $mapId" } }
 if (-not $profileIds.ContainsKey([string]$ecology.default_profile)) { throw 'Unknown default ecology profile' }
-$abyss = $profiles | Where-Object { $_.id -eq 'abyss_world' }
+$abyss = @($profiles | Where-Object { $_.id -eq 'abyss_world' })[0]
 if ([int]$abyss.hostile_cap_day -lt 1) { throw 'Abyss must keep daytime hostile pressure' }
+$zombie = @($abyss.hostile_species | Where-Object { $_.id -eq 'zombie' })[0]
+$marksman = @($abyss.hostile_species | Where-Object { $_.id -eq 'abyss_marksman' })[0]
 $brute = @($abyss.hostile_species | Where-Object { $_.id -eq 'abyss_brute' })[0]
 if ($null -eq $brute) { throw 'Abyss ecology must include the abyss brute' }
+if ($null -eq $marksman) { throw 'Abyss ecology must include the abyss marksman' }
 if ([int]$brute.cap -ne 1) { throw 'Abyss brute cap must remain exactly one' }
-if ([int]$brute.weight -ge [int](@($abyss.hostile_species | Where-Object { $_.id -eq 'zombie' })[0].weight)) { throw 'Abyss brute must remain rarer than normal zombies' }
-if ([string]$brute.condition_mode -ne 'any' -or 'night' -notin @($brute.phase_ids) -or [int]$brute.max_player_y -gt 19) {
-  throw 'Abyss brute must require night or deep-layer eligibility'
+if ([int]$marksman.cap -ne 2) { throw 'Abyss marksman cap must remain exactly two' }
+if ([int]$brute.weight -ge [int]$marksman.weight -or [int]$marksman.weight -ge [int]$zombie.weight) { throw 'Abyss hostile rarity must remain brute < marksman < zombie' }
+if ([string]$brute.condition_mode -ne 'any' -or 'night' -notin @($brute.phase_ids) -or [int]$brute.max_player_y -gt 19) { throw 'Abyss brute must require night or deep-layer eligibility' }
+if ([string]$marksman.condition_mode -ne 'all' -or 'night' -notin @($marksman.phase_ids) -or 'dusk' -notin @($marksman.phase_ids) -or [int]$marksman.max_player_y -gt 27) { throw 'Abyss marksman must require a dark phase and bounded depth' }
+foreach ($abyssOnlySpecies in @('abyss_brute','abyss_marksman')) {
+  if (@($speciesProfiles[$abyssOnlySpecies]).Count -ne 1 -or @($speciesProfiles[$abyssOnlySpecies])[0] -ne 'abyss_world') { throw "$abyssOnlySpecies must not leak into other map ecology profiles" }
 }
-if (@($speciesProfiles['abyss_brute']).Count -ne 1 -or @($speciesProfiles['abyss_brute'])[0] -ne 'abyss_world') { throw 'Abyss brute must not leak into other map ecology profiles' }
-$sky = $profiles | Where-Object { $_.id -eq 'sky_islands' }
+$sky = @($profiles | Where-Object { $_.id -eq 'sky_islands' })[0]
 $skyChicken = @($sky.passive_species | Where-Object { $_.id -eq 'chicken' })[0]
 if ([int]$skyChicken.weight -lt 4) { throw 'Sky islands must strongly prefer chickens' }
 
@@ -95,4 +99,4 @@ foreach ($tier in @($danger.tiers)) {
 if ($previousScore -lt 100) { throw 'Danger tiers do not cover score 100' }
 foreach ($required in @('safe','guarded','dangerous','severe')) { if (-not $tierIds.ContainsKey($required)) { throw "Missing danger tier: $required" } }
 
-Write-Host "PASS ecology_profiles=$($profiles.Count) species=$($knownSpecies.Count) abyss_elite=1 danger_samples=$theoretical tiers=$($tierIds.Count)"
+Write-Host "PASS ecology_profiles=$($profiles.Count) species=$($knownSpecies.Count) abyss_brute=1 abyss_marksman=2 danger_samples=$theoretical tiers=$($tierIds.Count)"
