@@ -209,6 +209,8 @@ func _test_runtime_break_and_reposition() -> void:
 		"selected marksman destination owns a clear projectile lane"
 	)
 
+	marksman.call("_refresh_line_of_sight", true)
+	_check(not bool(marksman.call("get_hostile_attack_snapshot").get("line_of_sight", true)), "cover-aware marksman refreshes the blocked lane before reposition")
 	marksman.set("_blocked_lane_seconds", PolicyScript.REPOSITION_DELAY_SECONDS)
 	marksman.set("_reposition_cooldown_remaining", 0.0)
 	marksman.call("_choose_direction")
