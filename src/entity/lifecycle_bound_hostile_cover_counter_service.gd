@@ -26,7 +26,8 @@ func resolve_brute_attack(brute: Node3D, attack_target: Node3D) -> Dictionary:
 	if _permanent_cover_blocks_lane(brute, attack_target):
 		_permanent_cover_block_count += 1
 		var result := {
-			"handled": true,
+			"handled": false,
+			"blocks_damage": true,
 			"reason": "permanent_cover_blocked",
 			"brute_id": int(brute.get_instance_id()) if brute != null else 0,
 			"target_id": int(attack_target.get_instance_id()) if attack_target != null else 0,
