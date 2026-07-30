@@ -113,7 +113,7 @@ if ($baseSource -match 'HOSTILE_ATTACK_INTERVAL') { throw 'Hostile attack timing
 $meleeSource = Get-Content -Raw -Encoding UTF8 $meleeCreaturePath
 if ($meleeSource -notmatch 'take_hostile_damage' -or $meleeSource -notmatch 'get_instance_id') { throw 'Shared melee adapter must submit source-scoped hostile damage' }
 $marksmanSource = Get-Content -Raw -Encoding UTF8 $marksmanPath
-foreach ($required in @('HostileRangedTacticsPolicy','bind_projectile_runtime','requires_line_of_sight','cover_probe_count','spawn_projectile','AimTelegraph','damage_flow')) {
+foreach ($required in @('hostile_ranged_tactics_policy.gd','RangedTacticsPolicyScript','bind_projectile_runtime','requires_line_of_sight','cover_probe_count','spawn_projectile','AimTelegraph','damage_flow')) {
   if ($marksmanSource -notmatch [regex]::Escape($required)) { throw "Abyss marksman is missing ranged encounter contract: $required" }
 }
 if ($marksmanSource -match 'Timer\.new|Thread\.new|get_nodes_in_group|take_damage\(') { throw 'Marksman must not create per-shot schedulers, world scans or bypass CombatService' }
