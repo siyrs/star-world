@@ -135,7 +135,7 @@ func _test_player_source_scoped_cooldowns() -> void:
 	_check(int(snapshot.get("active_source_count", 0)) == 32, "hostile attacker cooldown registry remains bounded at thirty-two")
 	_check(int(snapshot.get("source_capacity", 0)) == 32, "hostile cooldown diagnostics expose the exact capacity")
 	_check(int(snapshot.get("eviction_count", 0)) > 0, "new attackers deterministically evict the shortest remaining cooldown")
-	player.call("_process", 4.6)
+	player.call("_advance_hostile_damage_cooldowns", 4.6)
 	snapshot = player.call("get_hostile_damage_snapshot")
 	_check(int(snapshot.get("active_source_count", -1)) == 0, "expired hostile cooldown entries are removed deterministically")
 	player.queue_free()
@@ -163,7 +163,7 @@ func _test_real_projectile_and_line_of_sight() -> void:
 	target_shape.shape = target_sphere
 	target_shape.position = Vector3.UP * 1.0
 	target.add_child(target_shape)
-	target.global_position = Vector3(0.0, 0.0, -9.0)
+	target.position = Vector3(0.0, 0.0, -9.0)
 	host.add_child(target)
 
 	var factory = FactoryScript.new()
@@ -259,7 +259,7 @@ func _create_wall(position: Vector3, size: Vector3) -> StaticBody3D:
 	var wall := StaticBody3D.new()
 	wall.collision_layer = 1
 	wall.collision_mask = 0
-	wall.global_position = position
+	wall.position = position
 	var shape_node := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = size
