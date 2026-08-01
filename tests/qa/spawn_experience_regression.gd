@@ -108,6 +108,10 @@ func _run() -> void:
 		canopy_resolved.y >= 1.0,
 		"canopy fixture resolved position is grounded"
 	)
+	# Drop references so RefCounted internals (FastNoiseLite, registries)
+	# can be cleaned up before the engine exits.
+	canopy_gen = null
+	canopy_resolver = null
 
 	for profile_id: String in profile_ids:
 		var policy: Dictionary = registry.get_profile(profile_id)
@@ -193,6 +197,12 @@ func _run() -> void:
 					str(first_snapshot.get("termination_condition", "")),
 				]
 			)
+			# Drop per-iteration RefCounted references so internal FastNoiseLite
+			# and registry objects are released before the next seed cycle.
+			first = null
+			second = null
+			resolver = null
+	registry = null
 	if failures.is_empty():
 		print("QA SPAWN EXPERIENCE PASS | checks=%d | profiles=%d | seeds=%d" % [
 			checks,

@@ -171,13 +171,43 @@ try {
     $reportArgumentPath = ([System.IO.Path]::GetFullPath($reportPath)).Replace('\', '/')
     Write-DriverLog "runner=$runnerPath"
     Write-DriverLog "report_argument=$reportArgumentPath"
-    $runnerResult = Invoke-WaitedProcess `
-        -FilePath $runnerPath `
-        -Arguments @('--verbose', '--', '--release-smoke', '--smoke-soak-frames=180', "--smoke-output=$reportArgumentPath") `
-        -WorkingDirectory $OutputDirectory `
-        -StandardOutputPath $stdoutPath `
-        -StandardErrorPath $stderrPath `
-        -TimeoutMilliseconds 60000
+    # Launch with inline memory sampling so the report includes external
+    # Working Set evidence even when the engine Performance.MEMORY_STATIC
+    # counter is unavailable in release builds.
+    $memArgs = @('--verbose', '--', '--release-smoke', '--smoke-soak-frames=180', "--smoke-output=$reportArgumentPath")
+    $memStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $memStartInfo.FileName = $runnerPath
+    $memStartInfo.WorkingDirectory = $OutputDirectory
+    $memStartInfo.UseShellExecute = $false
+    $memStartInfo.CreateNoWindow = $false
+    $memStartInfo.RedirectStandardOutput = $true
+    $memStartInfo.RedirectStandardError = $true
+    foreach ($a in $memArgs) { [void]$memStartInfo.ArgumentList.Add($a) }
+    $memProc = [System.Diagnostics.Process]::new()
+    $memProc.StartInfo = $memStartInfo
+    if (-not $memProc.Start()) { throw "Unable to start exported game: $runnerPath" }
+    $memOutTask = $memProc.StandardOutput.ReadToEndAsync()
+    $memErrTask = $memProc.StandardError.ReadToEndAsync()
+    $memSamples = [System.Collections.Generic.List[long]]::new()
+    $memWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $memProc.WaitForExit(1000)) { $memSamples.Add($memProc.WorkingSet64) }
+    $memProc.WaitForExit()
+    $memWatch.Stop()
+    Set-Content -LiteralPath $stdoutPath -Value $memOutTask.GetAwaiter().GetResult() -Encoding utf8
+    Set-Content -LiteralPath $stderrPath -Value $memErrTask.GetAwaiter().GetResult() -Encoding utf8
+    $runnerResult = [pscustomobject]@{ ExitCode = $memProc.ExitCode; ProcessId = $memProc.Id }
+    if ($memSamples.Count -gt 0) {
+        $memSamples.Sort()
+        $memMiB = [PSCustomObject]@{
+            samples = $memSamples.Count
+            duration_s = [math]::Round($memWatch.Elapsed.TotalSeconds, 1)
+            min_mib = [math]::Round($memSamples[0] / 1MB, 1)
+            p50_mib = [math]::Round($memSamples[[int]($memSamples.Count * 0.5)] / 1MB, 1)
+            p95_mib = [math]::Round($memSamples[[int]($memSamples.Count * 0.95)] / 1MB, 1)
+            max_mib = [math]::Round($memSamples[-1] / 1MB, 1)
+        }
+        Write-DriverLog "external_memory_mib=$($memMiB | ConvertTo-Json -Compress)"
+    }
     Write-DriverLog "runner_process_id=$($runnerResult.ProcessId)"
     Write-DriverLog "runner_exit_code=$($runnerResult.ExitCode)"
     Show-ReleaseSmokeLogs
