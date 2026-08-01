@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ScriptPath,
     [Parameter(Mandatory = $true)][string]$OutputBasePath,
     [int]$TimeoutMilliseconds = 600000,
-    [switch]$VerboseGodot
+    [switch]$VerboseGodot,
+    [string]$UserArgumentsJson = '[]'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,6 +62,17 @@ $arguments += @(
     '--',
     '--disable-update-check'
 )
+try {
+    $decodedUserArguments = ConvertFrom-Json -InputObject $UserArgumentsJson -ErrorAction Stop
+} catch {
+    throw "UserArgumentsJson must be a JSON array of strings: $($_.Exception.Message)"
+}
+foreach ($userArgument in @($decodedUserArguments)) {
+    if ($userArgument -isnot [string]) {
+        throw 'UserArgumentsJson must contain strings only.'
+    }
+    $arguments += [string]$userArgument
+}
 
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $Godot
@@ -75,6 +87,7 @@ foreach ($argument in $arguments) {
 
 $process = [System.Diagnostics.Process]::new()
 $process.StartInfo = $startInfo
+$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 if (-not $process.Start()) {
     throw "Unable to start Godot headless test: $ScriptPath"
 }
@@ -86,6 +99,7 @@ if ($timedOut) {
     $process.Kill($true)
 }
 $process.WaitForExit()
+$stopwatch.Stop()
 
 $stdout = $stdoutTask.GetAwaiter().GetResult()
 $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -109,4 +123,4 @@ if ($process.ExitCode -ne 0) {
     throw "Godot headless test failed: $ScriptPath (exit $($process.ExitCode)); logs=$stdoutPath,$stderrPath"
 }
 
-Write-Host "PASS headless evidence | script=$ScriptPath | verbose=$VerboseGodot | stdout=$stdoutPath | stderr=$stderrPath"
+Write-Host "PASS headless evidence | script=$ScriptPath | verbose=$VerboseGodot | elapsed_ms=$($stopwatch.ElapsedMilliseconds) | stdout=$stdoutPath | stderr=$stderrPath"

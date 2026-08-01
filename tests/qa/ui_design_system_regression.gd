@@ -32,6 +32,7 @@ func _run() -> void:
 
 func _test_theme_contract() -> void:
 	var theme := ThemeFactory.create_theme()
+	var panel_theme := ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	for variation: String in [
 		"PrimaryButton",
 		"SecondaryButton",
@@ -88,6 +89,36 @@ func _test_theme_contract() -> void:
 	_check(
 		_contrast_ratio(Tokens.color(Tokens.COLOR_TEXT), Tokens.color(Tokens.COLOR_SURFACE)) >= 7.0,
 		"primary text and glass surface exceed the high-contrast readability target"
+	)
+	var panel_card := panel_theme.get_stylebox("normal", "CardButton") as StyleBoxFlat
+	var panel_selected_card := panel_theme.get_stylebox("normal", "SelectedCardButton") as StyleBoxFlat
+	_check(
+		panel_card != null
+		and _contrast_ratio(
+			panel_theme.get_color("font_color", "CardButton"),
+			panel_card.bg_color
+		) >= 4.5,
+		"panel card text meets the normal-text contrast target"
+	)
+	_check(
+		panel_selected_card != null
+		and _contrast_ratio(
+			panel_theme.get_color("font_color", "SelectedCardButton"),
+			panel_selected_card.bg_color
+		) >= 4.5,
+		"selected panel card text meets the normal-text contrast target"
+	)
+	_check(
+		_contrast_ratio(
+			panel_theme.get_color("font_color", "GhostButton"),
+			Tokens.color(Tokens.MC_PANEL)
+		) >= 4.5,
+		"panel ghost actions remain readable on the panel surface"
+	)
+	_check(
+		panel_theme.get_constant("shadow_outline_size", "PageTitle") == 0
+		and panel_theme.get_constant("shadow_outline_size", "SectionTitle") == 0,
+		"panel headings do not inherit dark pixel shadows"
 	)
 	_check(
 		Tokens.SPACE_SM == 8 and Tokens.SPACE_LG == 16 and Tokens.SPACE_XL == 24,
@@ -279,9 +310,23 @@ func _rect_inside(container_rect: Rect2, candidate: Rect2) -> bool:
 
 
 func _contrast_ratio(first: Color, second: Color) -> float:
-	var lighter := maxf(first.get_luminance(), second.get_luminance())
-	var darker := minf(first.get_luminance(), second.get_luminance())
+	var lighter := maxf(_relative_luminance(first), _relative_luminance(second))
+	var darker := minf(_relative_luminance(first), _relative_luminance(second))
 	return (lighter + 0.05) / (darker + 0.05)
+
+
+func _relative_luminance(color: Color) -> float:
+	return (
+		0.2126 * _linear_channel(color.r)
+		+ 0.7152 * _linear_channel(color.g)
+		+ 0.0722 * _linear_channel(color.b)
+	)
+
+
+func _linear_channel(channel: float) -> float:
+	if channel <= 0.04045:
+		return channel / 12.92
+	return pow((channel + 0.055) / 1.055, 2.4)
 
 
 func _check(condition: bool, description: String) -> void:

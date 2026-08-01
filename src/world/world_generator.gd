@@ -5,9 +5,26 @@ const BlockRegistryScript = preload("res://src/block/block_registry.gd")
 const ResourceDistributionRegistryScript = preload("res://src/world/resource_distribution_registry.gd")
 const WorldDecorationRegistryScript = preload("res://src/world/world_decoration_registry.gd")
 const WorldDecorationPolicyScript = preload("res://src/world/world_decoration_policy.gd")
+const SpawnQualityRegistryScript = preload("res://src/world/spawn_quality_registry.gd")
 const WORLD_HEIGHT := 64
 const SEA_LEVEL := 18
 const RESOURCE_ROLL_SALT := 211
+const SPAWN_DIRECTIONS := [
+	Vector2i(0, -1),
+	Vector2i(1, 0),
+	Vector2i(0, 1),
+	Vector2i(-1, 0),
+]
+const SPAWN_NEIGHBOR_DIRECTIONS := [
+	Vector2i(-1, -1),
+	Vector2i(0, -1),
+	Vector2i(1, -1),
+	Vector2i(-1, 0),
+	Vector2i(1, 0),
+	Vector2i(-1, 1),
+	Vector2i(0, 1),
+	Vector2i(1, 1),
+]
 
 var profile_id := "star_continent"
 var seed_value := 734521
@@ -16,18 +33,23 @@ var detail_noise := FastNoiseLite.new()
 var cave_noise := FastNoiseLite.new()
 var resource_distribution = ResourceDistributionRegistryScript.new()
 var world_decorations = WorldDecorationRegistryScript.new()
+var spawn_quality = SpawnQualityRegistryScript.new()
 var _decoration_profile: Dictionary = {}
+var _spawn_quality_profile: Dictionary = {}
 var _decoration_tree_exclusion_density := 0
 var _decoration_profile_refresh_count := 0
+var _last_spawn_quality_snapshot: Dictionary = {}
 
 
 func _init() -> void:
 	_refresh_decoration_profile()
+	_refresh_spawn_quality_profile()
 
 
 func configure(p_profile_id: String, p_seed: int) -> void:
 	profile_id = normalize_profile_id(p_profile_id)
 	_refresh_decoration_profile()
+	_refresh_spawn_quality_profile()
 	seed_value = p_seed
 	height_noise.seed = seed_value
 	height_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -74,6 +96,14 @@ func get_decoration_profile_snapshot() -> Dictionary:
 
 func get_decoration_summary() -> String:
 	return world_decorations.get_summary(profile_id)
+
+
+func get_spawn_quality_profile_snapshot() -> Dictionary:
+	return spawn_quality.get_snapshot(profile_id)
+
+
+func get_last_spawn_quality_snapshot() -> Dictionary:
+	return _last_spawn_quality_snapshot.duplicate(true)
 
 
 func get_poi_snapshot(x: int, z: int) -> Dictionary:
@@ -143,14 +173,116 @@ func get_surface_height(x: int, z: int) -> int:
 
 
 func find_spawn_position() -> Vector3:
-	for radius in range(0, 65):
+	var started_at := Time.get_ticks_usec()
+	var search_radius := int(_spawn_quality_profile.get("search_radius", 64))
+	var candidate_budget := int(_spawn_quality_profile.get("candidate_budget", 192))
+	var wall_time_budget_usec := int(_spawn_quality_profile.get("wall_time_budget_ms", 30000)) * 1000
+	var scanned_columns := 0
+	var evaluated_candidates := 0
+	var first_safe_candidate := Vector3(INF, INF, INF)
+	var first_safe_snapshot: Dictionary = {}
+	var best_candidate := Vector3(INF, INF, INF)
+	var best_snapshot: Dictionary = {}
+	var highest_scoring_candidate := Vector3(INF, INF, INF)
+	var highest_scoring_snapshot: Dictionary = {}
+	var termination_condition := "search_radius_exhausted"
+	for radius in range(0, search_radius + 1):
 		for x in range(-radius, radius + 1):
 			for z in range(-radius, radius + 1):
 				if radius > 0 and absi(x) != radius and absi(z) != radius:
 					continue
+				scanned_columns += 1
 				var top := find_walkable_surface(x, z)
-				if top >= 1:
-					return Vector3(x + 0.5, top + 2.05, z + 0.5)
+				if top < 1:
+					continue
+				var candidate := Vector3(x + 0.5, top + 1.05, z + 0.5)
+				var snapshot := _evaluate_spawn_candidate(x, z, top, radius)
+				evaluated_candidates += 1
+				if bool(snapshot.get("hard_safe", false)) and not _is_valid_spawn_found(first_safe_candidate):
+					first_safe_candidate = candidate
+					first_safe_snapshot = snapshot
+				if bool(snapshot.get("hard_safe", false)) and (
+					highest_scoring_snapshot.is_empty()
+					or float(snapshot.get("score", 0.0))
+					> float(highest_scoring_snapshot.get("score", 0.0))
+				):
+					highest_scoring_candidate = candidate
+					highest_scoring_snapshot = snapshot
+				if bool(snapshot.get("meets_thresholds", false)) and (
+					best_snapshot.is_empty()
+					or float(snapshot.get("score", 0.0)) > float(best_snapshot.get("score", 0.0))
+				):
+					best_candidate = candidate
+					best_snapshot = snapshot
+				if evaluated_candidates >= candidate_budget:
+					termination_condition = "candidate_budget_reached"
+					break
+				if Time.get_ticks_usec() - started_at >= wall_time_budget_usec:
+					termination_condition = "wall_time_budget_exhausted"
+					break
+			if evaluated_candidates >= candidate_budget:
+				break
+			if termination_condition == "wall_time_budget_exhausted":
+				break
+		if evaluated_candidates >= candidate_budget:
+			break
+		if termination_condition == "wall_time_budget_exhausted":
+			break
+	if _is_valid_spawn_found(best_candidate):
+		_finalize_spawn_snapshot(
+			best_snapshot,
+			highest_scoring_snapshot,
+			scanned_columns,
+			evaluated_candidates,
+			termination_condition,
+			started_at,
+			false
+		)
+		_last_spawn_quality_snapshot = best_snapshot
+		return best_candidate
+	if _is_valid_spawn_found(highest_scoring_candidate):
+		_finalize_spawn_snapshot(
+			highest_scoring_snapshot,
+			highest_scoring_snapshot,
+			scanned_columns,
+			evaluated_candidates,
+			termination_condition,
+			started_at,
+			true
+		)
+		_last_spawn_quality_snapshot = highest_scoring_snapshot
+		push_warning(
+			"Spawn quality thresholds were not met for profile=%s seed=%d; using highest-scoring hard-safe candidate."
+			% [profile_id, seed_value]
+		)
+		return highest_scoring_candidate
+	if _is_valid_spawn_found(first_safe_candidate):
+		_finalize_spawn_snapshot(
+			first_safe_snapshot,
+			highest_scoring_snapshot,
+			scanned_columns,
+			evaluated_candidates,
+			termination_condition,
+			started_at,
+			true
+		)
+		_last_spawn_quality_snapshot = first_safe_snapshot
+		push_warning(
+			"Spawn quality thresholds were not met for profile=%s seed=%d; using first safe candidate."
+			% [profile_id, seed_value]
+		)
+		return first_safe_candidate
+	_last_spawn_quality_snapshot = {
+		"profile_id": profile_id,
+		"seed": seed_value,
+		"meets_thresholds": false,
+		"fallback_used": true,
+		"scanned_columns": scanned_columns,
+		"evaluated_candidates": evaluated_candidates,
+		"highest_score": 0.0,
+		"termination_condition": termination_condition,
+		"elapsed_usec": Time.get_ticks_usec() - started_at,
+	}
 	return Vector3(0.5, 50.0, 0.5)
 
 
@@ -169,6 +301,176 @@ func find_walkable_surface(x: int, z: int) -> int:
 		):
 			return y
 	return -1
+
+
+func _refresh_spawn_quality_profile() -> void:
+	_spawn_quality_profile = spawn_quality.get_profile(profile_id)
+
+
+func _evaluate_spawn_candidate(x: int, z: int, top: int, radius: int) -> Dictionary:
+	var surface_block := get_block(Vector3i(x, top, z))
+	var snapshot := _evaluate_spawn_clearance(x, z, top, surface_block)
+	var walkable_neighbors := _evaluate_spawn_walkability(x, z, top, snapshot.get("rejected_surfaces", []))
+	var view_data := _evaluate_spawn_visibility(x, z, top)
+	snapshot.merge(view_data)
+	var weights: Dictionary = _spawn_quality_profile.get("weights", {})
+	var clearance_ratio := float(snapshot.get("clearance_ratio", 0.0))
+	var walkability_ratio := float(walkable_neighbors) / float(SPAWN_NEIGHBOR_DIRECTIONS.size())
+	var visibility_ratio := float(snapshot.get("visibility_ratio", 0.0))
+	var proximity_ratio := 1.0 - clampf(
+		float(radius) / float(maxi(1, int(_spawn_quality_profile.get("search_radius", 64)))),
+		0.0,
+		1.0
+	)
+	var score := (
+		clearance_ratio * float(weights.get("clearance", 0.35))
+		+ walkability_ratio * float(weights.get("walkability", 0.25))
+		+ visibility_ratio * float(weights.get("visibility", 0.30))
+		+ proximity_ratio * float(weights.get("proximity", 0.10))
+	)
+	var obstacle_distance := _evaluate_spawn_obstacle_proximity(x, z, top)
+	var meets_thresholds := (
+		surface_block not in snapshot.get("rejected_surfaces", [])
+		and clearance_ratio >= float(_spawn_quality_profile.get("minimum_clearance_ratio", 0.84))
+		and walkable_neighbors >= int(_spawn_quality_profile.get("minimum_walkable_neighbors", 6))
+		and int(snapshot.get("open_view_directions", 0)) >= int(
+			_spawn_quality_profile.get("minimum_open_view_directions", 3)
+		)
+		and int(snapshot.get("forward_clear_distance", 0)) >= int(
+			_spawn_quality_profile.get("minimum_forward_view_distance", 4)
+		)
+		and obstacle_distance >= float(
+			_spawn_quality_profile.get("minimum_obstacle_distance", 3.0)
+		)
+	)
+	return {
+		"profile_id": profile_id,
+		"seed": seed_value,
+		"position": [x + 0.5, top + 1.05, z + 0.5],
+		"surface_block": surface_block,
+		"score": snappedf(score, 0.0001),
+		"clearance_ratio": snappedf(clearance_ratio, 0.0001),
+		"walkable_neighbors": walkable_neighbors,
+		"open_view_directions": int(snapshot.get("open_view_directions", 0)),
+		"forward_clear_distance": int(snapshot.get("forward_clear_distance", 0)),
+		"nearest_obstacle_distance": snappedf(obstacle_distance, 0.001),
+		"hard_safe": surface_block not in snapshot.get("rejected_surfaces", []),
+		"meets_thresholds": meets_thresholds,
+	}
+
+
+func _evaluate_spawn_clearance(x: int, z: int, top: int, surface_block: String) -> Dictionary:
+	var rejected_surfaces: Array = _spawn_quality_profile.get("rejected_surface_blocks", [])
+	var hazard_blocks: Array = _spawn_quality_profile.get("hazard_blocks", [])
+	var clearance_radius := int(_spawn_quality_profile.get("clearance_radius", 2))
+	var clear_columns := 0
+	var total_columns := 0
+	for offset_x in range(-clearance_radius, clearance_radius + 1):
+		for offset_z in range(-clearance_radius, clearance_radius + 1):
+			total_columns += 1
+			var column_clear := true
+			for offset_y in range(1, 4):
+				var block_id := get_block(Vector3i(x + offset_x, top + offset_y, z + offset_z))
+				if BlockRegistryScript.is_solid(block_id) or block_id in hazard_blocks:
+					column_clear = false
+					break
+			if column_clear:
+				clear_columns += 1
+	return {
+		"clearance_ratio": snappedf(float(clear_columns) / float(maxi(1, total_columns)), 0.0001),
+		"rejected_surfaces": rejected_surfaces,
+	}
+
+
+func _evaluate_spawn_walkability(x: int, z: int, top: int, rejected_surfaces: Array) -> int:
+	var walkable_neighbors := 0
+	var maximum_step_height := int(_spawn_quality_profile.get("maximum_step_height", 1))
+	for direction: Vector2i in SPAWN_NEIGHBOR_DIRECTIONS:
+		var neighbor_top := find_walkable_surface(x + direction.x, z + direction.y)
+		if neighbor_top >= 1 and absi(neighbor_top - top) <= maximum_step_height:
+			var neighbor_surface := get_block(Vector3i(x + direction.x, neighbor_top, z + direction.y))
+			if neighbor_surface not in rejected_surfaces:
+				walkable_neighbors += 1
+	return walkable_neighbors
+
+
+func _evaluate_spawn_visibility(x: int, z: int, top: int) -> Dictionary:
+	var view_distance := int(_spawn_quality_profile.get("view_distance", 6))
+	var view_clear_distances: Array[int] = []
+	var total_clear_view_cells := 0
+	var open_view_directions := 0
+	for direction: Vector2i in SPAWN_DIRECTIONS:
+		var clear_distance := 0
+		for distance in range(1, view_distance + 1):
+			var block_id := get_block(
+				Vector3i(x + direction.x * distance, top + 2, z + direction.y * distance)
+			)
+			if BlockRegistryScript.is_solid(block_id):
+				break
+			clear_distance = distance
+		view_clear_distances.append(clear_distance)
+		total_clear_view_cells += clear_distance
+		if clear_distance >= view_distance:
+			open_view_directions += 1
+	var forward_direction := _spawn_forward_direction()
+	var forward_index := SPAWN_DIRECTIONS.find(forward_direction)
+	return {
+		"open_view_directions": open_view_directions,
+		"forward_clear_distance": view_clear_distances[forward_index] if forward_index >= 0 else 0,
+		"visibility_ratio": snappedf(float(total_clear_view_cells) / float(SPAWN_DIRECTIONS.size() * view_distance), 0.0001),
+	}
+
+
+func _evaluate_spawn_obstacle_proximity(x: int, z: int, top: int) -> float:
+	var nearby_obstacles: Array = _spawn_quality_profile.get("nearby_obstacle_blocks", [])
+	var obstacle_scan_radius := int(_spawn_quality_profile.get("obstacle_scan_radius", 5))
+	var nearest_obstacle_distance := float(obstacle_scan_radius + 1)
+	for offset_x in range(-obstacle_scan_radius, obstacle_scan_radius + 1):
+		for offset_z in range(-obstacle_scan_radius, obstacle_scan_radius + 1):
+			if offset_x == 0 and offset_z == 0:
+				continue
+			var horizontal_distance := Vector2(offset_x, offset_z).length()
+			if horizontal_distance >= nearest_obstacle_distance:
+				continue
+			for offset_y in range(1, 5):
+				var block_id := get_block(Vector3i(x + offset_x, top + offset_y, z + offset_z))
+				if block_id in nearby_obstacles:
+					nearest_obstacle_distance = horizontal_distance
+					break
+	return snappedf(nearest_obstacle_distance, 0.001)
+
+
+func _finalize_spawn_snapshot(
+	selected_snapshot: Dictionary,
+	highest_snapshot: Dictionary,
+	scanned_columns: int,
+	evaluated_candidates: int,
+	termination_condition: String,
+	started_at: int,
+	degraded: bool
+) -> void:
+	selected_snapshot["scanned_columns"] = scanned_columns
+	selected_snapshot["evaluated_candidates"] = evaluated_candidates
+	selected_snapshot["highest_score"] = float(
+		highest_snapshot.get("score", selected_snapshot.get("score", 0.0))
+	)
+	selected_snapshot["fallback_used"] = degraded
+	selected_snapshot["degraded"] = degraded
+	selected_snapshot["termination_condition"] = termination_condition
+	selected_snapshot["elapsed_usec"] = Time.get_ticks_usec() - started_at
+
+
+func _spawn_forward_direction() -> Vector2i:
+	var raw_direction: Variant = _spawn_quality_profile.get("forward_direction", [0, -1])
+	if raw_direction is Array and (raw_direction as Array).size() >= 2:
+		var direction := Vector2i(int(raw_direction[0]), int(raw_direction[1]))
+		if direction in SPAWN_DIRECTIONS:
+			return direction
+	return Vector2i(0, -1)
+
+
+func _is_valid_spawn_found(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
 
 
 func _layer_block(position: Vector3i, terrain_height: int) -> String:

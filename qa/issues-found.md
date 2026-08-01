@@ -1,0 +1,26 @@
+# 问题记录
+
+| 问题 ID | 优先级 | 地图/模块 | 状态 | 复现步骤 | 复现证据 | 根因 | 修改文件 | 修复方案 | 自动化回归 | 独立 QA 结果 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| BUG-REL-001 | P1 | Windows 发布自动化 | open | 在 Windows PowerShell 5.1 执行 `powershell -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 -Godot <Godot4.7> -OutputDirectory .\build\release-readiness-fresh` | `build/release-readiness-fresh/release-smoke.driver.log`；10:13:45，导出前失败 | `System.Diagnostics.ProcessStartInfo.ArgumentList` 在 Windows PowerShell 5.1/.NET Framework 不可用，脚本对其直接 `.Add()` | 待 Developer | 让 BUILD.md 声明的调用方式可用，或做明确版本前置检查并统一到 `pwsh`；保留安全参数传递和 timeout | 待新增：PS5.1 失败复现 + 修复后 documented command smoke | pending |
+| BUG-UI-001 | P2 | UI 主题/Windows 导出 | open | 用 PowerShell 7 运行 fresh release smoke | `build/release-readiness-fresh-pwsh7/release-smoke.stderr.log:1`：像素字体缺失并回退；源码字体文件实际存在且被 Git 跟踪 | 动态字符串加载的字体未被当前 Windows export 资源依赖收集或 include filter 覆盖（待 Developer 确认） | 待 Developer | 确保字体随导出包纳入并可加载，不通过吞掉 warning 处理 | fresh export stderr 无字体缺失；截图/UI 字体回归 | pending |
+| BUG-PERF-001 | P1 | 初始世界流式加载 | open | fresh release smoke 运行 180 soak 帧并读取 JSON 终态 | `build/release-readiness-fresh-pwsh7/release-smoke.json`：pending=62、warning threshold=48、`sustained_runtime_status=warning`；FPS 50、avg 20.016ms、peak 29.109ms | 待基于更长固定场景采样定位；不得直接放宽阈值 | 待 Developer | 先确认队列是否在合理时间收敛和是否影响帧时，再优化调度/预热或修正 smoke 等待条件 | 固定 Seed 的启动时间序列、收敛时间、FPS/1% low/帧时对比 | pending |
+| BUG-OBS-001 | P2 | 运行时性能遥测 | open | 检查 fresh smoke JSON 的 `telemetry.memory_mib` | `build/release-readiness-fresh-pwsh7/release-smoke.json` 为 `0.0`，不满足内存基线可观测性 | 当前 `Performance.MEMORY_STATIC` 在导出的 Windows/当前采样点返回 0 或指标选择不适用（待确认） | 待 Developer | 保留内部指标并用可靠 Windows 进程计数器补证，必要时调整采样实现 | 内部或外部内存指标为非零且有已知单位；与进程采样交叉验证 | pending |
+| BUG-QA-002 | P1 | Desktop acceptance runner | qa-passed | 用 `run_godot_desktop_test.ps1` 执行 `ui_visual_refresh_desktop_acceptance.gd`，OutputPath=`...ui-visual-refresh-main.png` | 原始失败：内层 `QA ... PASS checks=32 captures=10`，外层因精确主输出缺失 exit 1。Developer 证据 `build/developer-selftest-qa002`：内层 32/10 且外层 exit 0 | 测试脚本只写命名截图，未同时兑现调用方/runner 要求的精确主截图路径 | `tests/qa/ui_visual_refresh_desktop_acceptance.gd` | 同时写调用方 primary OutputPath 与 10 个命名 captures；未放宽 runner 门禁 | Developer focused desktop exit 0；精确主输出、命名截图、JSON/日志已生成 | QA-002 PASS：`build/qa-independent-qa002-20260731-1057`；exit 0，32/10，primary SHA-256 `F9CCAD6ED9408CB6979490E39CC24E6F3009C6C8E4BA034BDABEBECC252ABCD5`，无 fatal/error/leak |
+| BUG-UI-002 | P1 | 地图选择/设置 UI | fixing | 运行 UI desktop journey 并查看 1280×720 地图选择与设置截图 | 原始低对比/拥挤已改善；QA-002 仍测得 Button normal/hover/focus 3.843/2.605/3.672，Primary 4.097/2.907/3.914，Card pressed 3.247，Selected pressed 4.333，Ghost hover/pressed 2.352/1.155，均低于 4.5 | 首轮仅修 panel-context Card/Ghost normal 等局部状态；64-check 没覆盖真实交互 variation 的 hover/pressed/focus，实际纹理背景与文字 token 组合仍不合格 | `src/ui/design_tokens.gd`; `src/ui/theme_factory.gd`; `src/ui/pixel_ui_textures.gd`（待 Developer 最小调整）; map/settings 使用点；`tests/qa/ui_design_system_regression.gd` | 保持视觉层级，修 Button/Secondary/Primary/MenuPrimary/Card/Selected/Ghost/Danger 的 normal/hover/pressed/focus 有效组合至 ≥4.5；disabled 单列可辨识性，不通过改阈值伪造 | 扩展 variation×state 自动化；重跑 64-check、1280 32/10、1024 map/settings，并用真实 pointer hover/mouse-down/focus 截图 | QA-002 FAIL；返回 Developer，待 QA-003 同一 QA 重测 |
+| BUG-SPAWN-001 | P1 | 星辰大陆出生体验 | fixing | fresh release smoke 与 production-scene UI journey 分别创建世界并查看首帧 | 两轮截图均在树干/低矮树冠紧邻处出生；固定复现 `star_continent/24681357`。Developer 第一轮 5×3 seeds=108 checks 通过，但未包含关键 Seed；扩为 5×6 后某组合在预算内不达阈值且整轮 >210s；`desktop-input-contract` 另有 1 项红灯 | 生成器原逻辑首个合格即返回且只检查单列 headroom，未评分近邻实体/默认朝向视野/连通可走；原返回高度还会被 resolver 下调 1 m。当前修复最坏组合/复杂度仍需收敛 | `data/spawn_quality_profiles.json`; `src/world/spawn_quality_registry.gd`; `src/world/world_generator.gd`; `tests/qa/spawn_experience_regression.gd`; `tests/run_all.ps1`（working tree，未接受） | 数据驱动、有候选预算的确定性评分；不得只扩大预算。必须补 5×6、合成树叶夹具、地形/旧档/解析器、隔离无存档 input contract 和 leak 三轮 | 当前包未通过 entry gate；按 profile/seed 单组合有界定位并记录候选数/得分/耗时 | not-ready |
+| BUG-VERSION-001 | P1 | 发布版本身份 | open | 查看 `project.godot`、`export_presets.cfg` 和 fresh 菜单截图 | 项目/Windows 文件/菜单仍显示 `1.1.0`，历史已发布 `v1.2.0`，当前 PM 任务工作区目标 `v1.3.0` | 版本元数据未随后续功能提交同步 | 待 PM/Developer | 在发布版本策略确定后统一项目、Windows 文件和 UI 显示；不自动发 tag/release | fresh EXE 属性、菜单、配置一致 | pending |
+| BUG-PACK-001 | P1 | Windows 导出内容 | open | 运行 fresh export 后检查 `export.stdout.log`，再执行 editor scan 使新 QA PNG 被导入 | `build/release-readiness-fresh-pwsh7/export.stdout.log:519-591` 明确把 `res://build/*.png.import` 历史截图保存进 PCK；preset 为 `all_resources` 且未排除 `build/*` | `export_presets.cfg` 排除规则只含 docs/tests/.godot，项目内 `build/` 证据图被 Godot 导入并进入 all-resources 导出 | 待 Developer | 精确排除构建/QA 证据目录；保留真正运行时资产；增加 PCK/导出日志内容合同 | fresh export log/PCK 不含 `res://build/` QA 截图，运行时资源和 smoke 仍通过 | pending |
+
+## 状态说明
+
+- `open`：已复现，待定位或修复。
+- `fixing`：Developer 正在修复。
+- `self-tested`：Developer 自测通过，待独立 QA。
+- `qa-passed`：独立 QA 重测通过。
+- `blocked`：经过实际尝试仍受外部条件阻塞，必须附证据。
+
+## 外部测试工具边界
+
+- `BLOCKER-GUI-001`：Computer Use 能启动并唯一识别 fresh EXE 窗口，但激活/捕获连续失败：`failed to activate captured window`，刷新后为 `GetCursorPos failed: 拒绝访问 (0x80070005)`。已停止盲输入；改用项目 production-scene desktop InputEvent 自动化。该阻塞不等同于游戏缺陷，也不把 production-scene 证据冒充 export-EXE 人工输入。
+- 编号约定：`BUG-REL-001` 仅表示 PowerShell 5.1 发布 smoke 兼容；`BUG-PACK-001` 仅表示 `build/*` QA 资源误入 PCK，二者不得合并。

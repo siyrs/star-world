@@ -69,12 +69,18 @@ static func _register_base_typography(theme: Theme, context: StringName) -> void
 	theme.set_color("font_uneditable_color", "LineEdit", _text_color(context, "muted"))
 	theme.set_color("caret_color", "LineEdit", Tokens.color(Tokens.COLOR_ACCENT))
 	theme.set_color("selection_color", "LineEdit", Color("#4E7A2866"))
-	# Buttons always read as white pixel text with a dark drop shadow.
+	# Dark overlay buttons use the classic pixel shadow. Panel-context flat
+	# buttons inherit a shadow-free base so dark text stays crisp on light gray.
 	for button_type: String in ["Button", "OptionButton"]:
-		theme.set_color("font_shadow_color", button_type, Color("#101010CC"))
-		theme.set_constant("shadow_offset_x", button_type, 1)
-		theme.set_constant("shadow_offset_y", button_type, 1)
-		theme.set_constant("shadow_outline_size", button_type, 2)
+		var shadow_enabled := context != CONTEXT_PANEL
+		theme.set_color(
+			"font_shadow_color",
+			button_type,
+			Color("#101010CC") if shadow_enabled else Color.TRANSPARENT
+		)
+		theme.set_constant("shadow_offset_x", button_type, 1 if shadow_enabled else 0)
+		theme.set_constant("shadow_offset_y", button_type, 1 if shadow_enabled else 0)
+		theme.set_constant("shadow_outline_size", button_type, 2 if shadow_enabled else 0)
 
 
 static func _text_color(context: StringName, role: String) -> Color:
@@ -91,7 +97,7 @@ static func _text_color(context: StringName, role: String) -> Color:
 			"success":
 				return Tokens.color("#3E7A24")
 			"accent":
-				return Tokens.color("#3E5B1E")
+				return Tokens.color(Tokens.MC_PANEL_ACCENT)
 	match role:
 		"body":
 			return Tokens.color(Tokens.COLOR_TEXT)
@@ -109,9 +115,10 @@ static func _text_color(context: StringName, role: String) -> Color:
 
 
 static func _register_label_variations(theme: Theme, context: StringName) -> void:
-	_register_label(theme, context, "DisplayTitle", Tokens.FONT_DISPLAY, "body", true)
-	_register_label(theme, context, "PageTitle", Tokens.FONT_TITLE, "body", true)
-	_register_label(theme, context, "SectionTitle", Tokens.FONT_SUBTITLE, "body", true)
+	var use_pixel_shadow := context != CONTEXT_PANEL
+	_register_label(theme, context, "DisplayTitle", Tokens.FONT_DISPLAY, "body", use_pixel_shadow)
+	_register_label(theme, context, "PageTitle", Tokens.FONT_TITLE, "body", use_pixel_shadow)
+	_register_label(theme, context, "SectionTitle", Tokens.FONT_SUBTITLE, "body", use_pixel_shadow)
 	_register_label(theme, context, "EyebrowLabel", Tokens.FONT_CAPTION, "accent", context != CONTEXT_PANEL)
 	_register_label(theme, context, "MutedLabel", Tokens.FONT_SMALL, "muted", context != CONTEXT_PANEL)
 	_register_label(theme, context, "SubduedLabel", Tokens.FONT_CAPTION, "subdued", context != CONTEXT_PANEL)
@@ -196,23 +203,29 @@ static func _register_button_variations(theme: Theme, context: StringName) -> vo
 	_register_textured_button(theme, "MenuButton", "normal", "hover", "pressed", Tokens.FONT_BUTTON)
 	_register_textured_button(theme, "RecipeButton", "normal", "hover", "pressed", Tokens.FONT_BODY)
 	_register_flat_button(
-		theme, "GhostButton",
+		theme, context, "GhostButton",
 		"#00000000", "#00000066", "#00000088",
+		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER_STRONG,
+		"muted", "body", "accent",
+		Tokens.FONT_BUTTON
+	) if context != CONTEXT_PANEL else _register_flat_button(
+		theme, context, "GhostButton",
+		"#00000000", "#FFFFFF66", "#FFFFFF88",
 		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER_STRONG,
 		"muted", "body", "accent",
 		Tokens.FONT_BUTTON
 	)
 	_register_flat_button(
-		theme, "CardButton",
-		"#100C07CC" if context != CONTEXT_PANEL else "#9E9E9E",
-		"#241A10E8" if context != CONTEXT_PANEL else "#B4B4B4",
-		"#0D0905E8" if context != CONTEXT_PANEL else "#8C8C8C",
+		theme, context, "CardButton",
+		"#100C07CC" if context != CONTEXT_PANEL else "#B4B4B4",
+		"#241A10E8" if context != CONTEXT_PANEL else "#C6C6C6",
+		"#0D0905E8" if context != CONTEXT_PANEL else "#B7B7B7",
 		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER_STRONG,
 		"body", "body", "accent",
 		Tokens.FONT_BODY
 	)
 	_register_flat_button(
-		theme, "SelectedCardButton",
+		theme, context, "SelectedCardButton",
 		"#2E3410E8" if context != CONTEXT_PANEL else "#C9D89A",
 		"#3A4214F2" if context != CONTEXT_PANEL else "#D8E6AC",
 		"#2E3410F2" if context != CONTEXT_PANEL else "#B9C98A",
@@ -221,7 +234,7 @@ static func _register_button_variations(theme: Theme, context: StringName) -> vo
 		Tokens.FONT_BODY, 2
 	)
 	_register_flat_button(
-		theme, "ToolbarButton",
+		theme, context, "ToolbarButton",
 		"#00000055", "#00000088", "#000000AA",
 		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER,
 		"muted", "body", "accent",
@@ -247,6 +260,10 @@ static func _register_textured_button(
 	theme.set_color("font_pressed_color", variation, Color("#FFFFFF"))
 	theme.set_color("font_focus_color", variation, Color("#FFFFA0"))
 	theme.set_color("font_disabled_color", variation, Color("#A0A0A0"))
+	theme.set_color("font_shadow_color", variation, Color("#101010CC"))
+	theme.set_constant("shadow_offset_x", variation, 1)
+	theme.set_constant("shadow_offset_y", variation, 1)
+	theme.set_constant("shadow_outline_size", variation, 2)
 	theme.set_stylebox("normal", variation, PixelTextures.button_style(normal_state))
 	theme.set_stylebox("hover", variation, PixelTextures.button_style(hover_state))
 	theme.set_stylebox("pressed", variation, PixelTextures.button_style(pressed_state))
@@ -257,6 +274,7 @@ static func _register_textured_button(
 
 static func _register_flat_button(
 	theme: Theme,
+	context: StringName,
 	variation: String,
 	normal_fill: String,
 	hover_fill: String,
@@ -271,11 +289,11 @@ static func _register_flat_button(
 ) -> void:
 	theme.set_type_variation(variation, "Button")
 	theme.set_font_size("font_size", variation, font_size)
-	theme.set_color("font_color", variation, _text_color(CONTEXT_OVERLAY, font_role))
-	theme.set_color("font_hover_color", variation, _text_color(CONTEXT_OVERLAY, hover_font_role))
-	theme.set_color("font_pressed_color", variation, _text_color(CONTEXT_OVERLAY, pressed_font_role))
-	theme.set_color("font_focus_color", variation, _text_color(CONTEXT_OVERLAY, hover_font_role))
-	theme.set_color("font_disabled_color", variation, Tokens.color(Tokens.COLOR_TEXT_DISABLED))
+	theme.set_color("font_color", variation, _text_color(context, font_role))
+	theme.set_color("font_hover_color", variation, _text_color(context, hover_font_role))
+	theme.set_color("font_pressed_color", variation, _text_color(context, pressed_font_role))
+	theme.set_color("font_focus_color", variation, _text_color(context, hover_font_role))
+	theme.set_color("font_disabled_color", variation, _text_color(context, "subdued"))
 	theme.set_stylebox("normal", variation, Tokens.bevel_style(normal_fill, border, border_width, 9.0))
 	theme.set_stylebox("hover", variation, Tokens.bevel_style(hover_fill, hover_border, border_width, 9.0))
 	theme.set_stylebox("pressed", variation, Tokens.bevel_style(pressed_fill, hover_border, border_width, 9.0))

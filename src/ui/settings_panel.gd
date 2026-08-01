@@ -82,7 +82,7 @@ func _build_ui() -> void:
 	root.add_child(header)
 	var heading := VBoxContainer.new()
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	heading.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	header.add_child(heading)
 	heading.add_child(UiKit.make_eyebrow("游戏设置"))
 	heading.add_child(UiKit.make_title("设置与可访问性"))
@@ -227,7 +227,7 @@ func _make_setting_card(title: String, subtitle: String, index: String) -> VBoxC
 	header.add_child(number)
 	var heading := VBoxContainer.new()
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	heading.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	header.add_child(heading)
 	var title_label := Label.new()
 	title_label.text = title

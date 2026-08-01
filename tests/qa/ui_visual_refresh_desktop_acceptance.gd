@@ -9,6 +9,7 @@ const CLEANUP_FRAMES := 40
 
 var checks := 0
 var failures: Array[String] = []
+var _primary_output_path := ""
 var _output_dir := ""
 var _report_path := ""
 var _world_ids: Array[String] = []
@@ -22,6 +23,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var primary_path := CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
+	_primary_output_path = primary_path
 	_output_dir = primary_path.get_base_dir()
 	_report_path = _output_dir.path_join("ui-visual-refresh-report.json")
 	root.size = Vector2i(1280, 720)
@@ -44,7 +46,10 @@ func _run() -> void:
 		await _finish(game, hub, save)
 		return
 
-	_check(await _capture("main-menu"), "professional main menu screenshot is saved")
+	_check(
+		await _capture("main-menu", true),
+		"professional main menu primary and named screenshots are saved"
+	)
 	var menu_snapshot: Dictionary = main_menu.call("get_visual_snapshot")
 	_check(
 		str((menu_snapshot.get("button_variations", []) as Array)[0]) == "MenuPrimaryButton",
@@ -125,6 +130,7 @@ func _run() -> void:
 	_report = {
 		"schema_version": 1,
 		"viewport": {"width": root.size.x, "height": root.size.y},
+		"primary_capture": _primary_output_path,
 		"captures": _captures.duplicate(true),
 		"capture_count": _captures.size(),
 		"main_menu": menu_snapshot,
@@ -216,7 +222,7 @@ func _find_button(node: Node, text: String) -> Button:
 	return null
 
 
-func _capture(name: String) -> bool:
+func _capture(name: String, write_primary: bool = false) -> bool:
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	if image == null or image.is_empty():
@@ -227,6 +233,11 @@ func _capture(name: String) -> bool:
 	if error != OK or not FileAccess.file_exists(path):
 		return false
 	_captures[name] = path
+	if write_primary and _primary_output_path != path:
+		DirAccess.make_dir_recursive_absolute(_primary_output_path.get_base_dir())
+		var primary_error := image.save_png(_primary_output_path)
+		if primary_error != OK or not FileAccess.file_exists(_primary_output_path):
+			return false
 	return true
 
 

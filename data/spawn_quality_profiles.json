@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "default_profile": "star_continent",
+  "defaults": {
+    "search_radius": 64,
+    "candidate_budget": 192,
+    "wall_time_budget_ms": 30000,
+    "clearance_radius": 2,
+    "obstacle_scan_radius": 5,
+    "view_distance": 6,
+    "minimum_clearance_ratio": 0.84,
+    "minimum_walkable_neighbors": 6,
+    "minimum_open_view_directions": 3,
+    "minimum_forward_view_distance": 4,
+    "minimum_obstacle_distance": 3.0,
+    "maximum_step_height": 1,
+    "rejected_surface_blocks": [
+      "wood",
+      "leaves",
+      "ice",
+      "cactus",
+      "ruin_pillar",
+      "bedrock"
+    ],
+    "nearby_obstacle_blocks": [
+      "wood",
+      "leaves",
+      "cactus",
+      "ruin_pillar"
+    ],
+    "hazard_blocks": [
+      "water",
+      "lava"
+    ],
+    "forward_direction": [0, -1],
+    "weights": {
+      "clearance": 0.35,
+      "walkability": 0.25,
+      "visibility": 0.30,
+      "proximity": 0.10
+    }
+  },
+  "profiles": [
+    {
+      "id": "star_continent",
+      "summary": "出生区远离树干和低矮树冠，并保证默认朝向与四周探索视野。",
+      "minimum_obstacle_distance": 4.0
+    },
+    {
+      "id": "desert_ruins",
+      "summary": "出生区避开仙人掌、遗迹立柱和碎片，并保留可步行沙地。",
+      "minimum_obstacle_distance": 3.0
+    },
+    {
+      "id": "frozen_wastes",
+      "summary": "出生区选择稳定雪地，避开冰面和陡峭冰峰边缘。",
+      "minimum_walkable_neighbors": 5
+    },
+    {
+      "id": "sky_islands",
+      "summary": "出生区位于可活动岛面，远离树冠并保留至少两个安全观察方向。",
+      "minimum_walkable_neighbors": 4,
+      "minimum_open_view_directions": 2,
+      "maximum_step_height": 2
+    },
+    {
+      "id": "abyss_world",
+      "summary": "出生区避开熔岩和晶体拥挤点，保留洞域首帧视野与撤退空间。",
+      "minimum_walkable_neighbors": 5
+    }
+  ]
+}

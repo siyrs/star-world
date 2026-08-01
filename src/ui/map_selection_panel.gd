@@ -56,7 +56,7 @@ func _build_ui() -> void:
 	root.add_child(header)
 	var heading := VBoxContainer.new()
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	heading.add_theme_constant_override("separation", Tokens.SPACE_SM)
 	header.add_child(heading)
 	heading.add_child(UiKit.make_eyebrow("创建世界"))
 	var title := UiKit.make_title("选择远征世界")
@@ -244,14 +244,18 @@ func _select_profile(map_id: String) -> void:
 			)
 		)
 		_details.text = (
-			"[font_size=30][color=#F4F8FC]%s[/color][/font_size]\n"
-			+ "[color=#A4B7C7]%s[/color]\n\n"
-			+ "[color=#5BD7FF][b]生成规则[/b][/color]  %s\n"
-			+ "[color=#F5C760][b]生存难度[/b][/color]  %s"
+			"[font_size=30][color=%s]%s[/color][/font_size]\n"
+			+ "[color=%s]%s[/color]\n\n"
+			+ "[color=%s][b]生成规则[/b][/color]  %s\n"
+			+ "[color=%s][b]生存难度[/b][/color]  %s"
 		) % [
+			Tokens.MC_PANEL_TEXT,
 			str(profile.get("name", "")),
+			Tokens.MC_PANEL_TEXT_MUTED,
 			str(profile.get("description", "")),
+			Tokens.MC_PANEL_ACCENT,
 			str(profile.get("generator", "")),
+			Tokens.MC_PANEL_WARNING,
 			str(profile.get("difficulty", "")),
 		]
 		_resource_summary_label.text = (
