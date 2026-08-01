@@ -283,6 +283,19 @@ func find_spawn_position() -> Vector3:
 		"termination_condition": termination_condition,
 		"elapsed_usec": Time.get_ticks_usec() - started_at,
 	}
+	# Desperate fallback: scan a small radius from origin for ANY walkable
+	# surface so the player does not appear mid-air at (0.5, 50.0, 0.5).
+	var fallback_surface := _find_any_walkable_surface(16)
+	if fallback_surface >= 1:
+		push_warning(
+			"No safe spawn found for profile=%s seed=%d; falling back to origin walkable surface at y=%d."
+			% [profile_id, seed_value, fallback_surface]
+		)
+		return Vector3(0.5, fallback_surface + 1.05, 0.5)
+	push_error(
+		"No walkable surface found near origin for profile=%s seed=%d; spawning at origin."
+		% [profile_id, seed_value]
+	)
 	return Vector3(0.5, 50.0, 0.5)
 
 
@@ -303,45 +316,68 @@ func find_walkable_surface(x: int, z: int) -> int:
 	return -1
 
 
+func _find_any_walkable_surface(max_radius: int) -> int:
+	for radius in range(0, max_radius + 1):
+		for x in range(-radius, radius + 1):
+			for z in range(-radius, radius + 1):
+				if radius > 0 and absi(x) != radius and absi(z) != radius:
+					continue
+				var top := find_walkable_surface(x, z)
+				if top >= 1:
+					return top
+	return -1
+
+
 func _refresh_spawn_quality_profile() -> void:
 	_spawn_quality_profile = spawn_quality.get_profile(profile_id)
 
 
 func _evaluate_spawn_candidate(x: int, z: int, top: int, radius: int) -> Dictionary:
-	var surface_block := get_block(Vector3i(x, top, z))
-	var snapshot := _evaluate_spawn_clearance(x, z, top, surface_block)
-	var walkable_neighbors := _evaluate_spawn_walkability(x, z, top, snapshot.get("rejected_surfaces", []))
-	var view_data := _evaluate_spawn_visibility(x, z, top)
-	snapshot.merge(view_data)
-	var weights: Dictionary = _spawn_quality_profile.get("weights", {})
-	var clearance_ratio := float(snapshot.get("clearance_ratio", 0.0))
-	var walkability_ratio := float(walkable_neighbors) / float(SPAWN_NEIGHBOR_DIRECTIONS.size())
-	var visibility_ratio := float(snapshot.get("visibility_ratio", 0.0))
-	var proximity_ratio := 1.0 - clampf(
+	var surface_block: String = get_block(Vector3i(x, top, z))
+	var rejected_surfaces: Array = _spawn_quality_profile.get("rejected_surface_blocks", [])
+	var hazard_blocks: Array = _spawn_quality_profile.get("hazard_blocks", [])
+	var clearance_data: Dictionary = _evaluate_spawn_clearance(x, z, top)
+	var clearance_ratio: float = float(clearance_data.get("clearance_ratio", 0.0))
+	var body_blocked: bool = bool(clearance_data.get("body_blocked", true))
+	var hazard_in_body: bool = bool(clearance_data.get("hazard_in_body", true))
+	var walkable_neighbors: int = _evaluate_spawn_walkability(x, z, top, rejected_surfaces)
+	var view_data: Dictionary = _evaluate_spawn_visibility(x, z, top)
+	var open_view_directions: int = int(view_data.get("open_view_directions", 0))
+	var forward_clear_distance: int = int(view_data.get("forward_clear_distance", 0))
+	var visibility_ratio: float = float(view_data.get("visibility_ratio", 0.0))
+	var obstacle_distance: float = _evaluate_spawn_obstacle_proximity(x, z, top)
+	var walkability_ratio: float = float(walkable_neighbors) / float(SPAWN_NEIGHBOR_DIRECTIONS.size())
+	var proximity_ratio: float = 1.0 - clampf(
 		float(radius) / float(maxi(1, int(_spawn_quality_profile.get("search_radius", 64)))),
 		0.0,
 		1.0
 	)
-	var score := (
+	var weights: Dictionary = _spawn_quality_profile.get("weights", {})
+	var score: float = (
 		clearance_ratio * float(weights.get("clearance", 0.35))
 		+ walkability_ratio * float(weights.get("walkability", 0.25))
 		+ visibility_ratio * float(weights.get("visibility", 0.30))
 		+ proximity_ratio * float(weights.get("proximity", 0.10))
 	)
-	var obstacle_distance := _evaluate_spawn_obstacle_proximity(x, z, top)
-	var meets_thresholds := (
-		surface_block not in snapshot.get("rejected_surfaces", [])
-		and clearance_ratio >= float(_spawn_quality_profile.get("minimum_clearance_ratio", 0.84))
-		and walkable_neighbors >= int(_spawn_quality_profile.get("minimum_walkable_neighbors", 6))
-		and int(snapshot.get("open_view_directions", 0)) >= int(
-			_spawn_quality_profile.get("minimum_open_view_directions", 3)
-		)
-		and int(snapshot.get("forward_clear_distance", 0)) >= int(
-			_spawn_quality_profile.get("minimum_forward_view_distance", 4)
-		)
-		and obstacle_distance >= float(
-			_spawn_quality_profile.get("minimum_obstacle_distance", 3.0)
-		)
+	var surface_ok: bool = surface_block not in rejected_surfaces
+	var clearance_ok: bool = clearance_ratio >= float(_spawn_quality_profile.get("minimum_clearance_ratio", 0.84))
+	var walkable_ok: bool = walkable_neighbors >= int(_spawn_quality_profile.get("minimum_walkable_neighbors", 6))
+	var view_ok: bool = (
+		open_view_directions >= int(_spawn_quality_profile.get("minimum_open_view_directions", 3))
+		and forward_clear_distance >= int(_spawn_quality_profile.get("minimum_forward_view_distance", 4))
+	)
+	var obstacle_ok: bool = obstacle_distance >= float(_spawn_quality_profile.get("minimum_obstacle_distance", 3.0))
+	var meets_thresholds: bool = (
+		surface_ok and clearance_ok and walkable_ok and view_ok and obstacle_ok
+	)
+	# "Hard safe" requires the position to be immediately survivable:
+	# the surface is supported, the body column is not blocked or filled
+	# with hazards, and at least one neighbour is walkable.
+	var hard_safe: bool = (
+		not body_blocked
+		and not hazard_in_body
+		and surface_ok
+		and walkable_neighbors >= 1
 	)
 	return {
 		"profile_id": profile_id,
@@ -351,34 +387,46 @@ func _evaluate_spawn_candidate(x: int, z: int, top: int, radius: int) -> Diction
 		"score": snappedf(score, 0.0001),
 		"clearance_ratio": snappedf(clearance_ratio, 0.0001),
 		"walkable_neighbors": walkable_neighbors,
-		"open_view_directions": int(snapshot.get("open_view_directions", 0)),
-		"forward_clear_distance": int(snapshot.get("forward_clear_distance", 0)),
+		"open_view_directions": open_view_directions,
+		"forward_clear_distance": forward_clear_distance,
 		"nearest_obstacle_distance": snappedf(obstacle_distance, 0.001),
-		"hard_safe": surface_block not in snapshot.get("rejected_surfaces", []),
+		"hard_safe": hard_safe,
 		"meets_thresholds": meets_thresholds,
 	}
 
 
-func _evaluate_spawn_clearance(x: int, z: int, top: int, surface_block: String) -> Dictionary:
-	var rejected_surfaces: Array = _spawn_quality_profile.get("rejected_surface_blocks", [])
+func _evaluate_spawn_clearance(x: int, z: int, top: int) -> Dictionary:
 	var hazard_blocks: Array = _spawn_quality_profile.get("hazard_blocks", [])
 	var clearance_radius := int(_spawn_quality_profile.get("clearance_radius", 2))
 	var clear_columns := 0
 	var total_columns := 0
+	var body_blocked := true
+	var hazard_in_body := false
 	for offset_x in range(-clearance_radius, clearance_radius + 1):
 		for offset_z in range(-clearance_radius, clearance_radius + 1):
 			total_columns += 1
 			var column_clear := true
 			for offset_y in range(1, 4):
-				var block_id := get_block(Vector3i(x + offset_x, top + offset_y, z + offset_z))
-				if BlockRegistryScript.is_solid(block_id) or block_id in hazard_blocks:
+				var block_id: String = get_block(Vector3i(x + offset_x, top + offset_y, z + offset_z))
+				if BlockRegistryScript.is_solid(block_id):
 					column_clear = false
 					break
+				if block_id in hazard_blocks:
+					hazard_in_body = true
+					column_clear = false
+					break
+			# The centre column (offset 0,0) represents the player body.
+			# If any of its 3 cells is blocked the player cannot stand up.
+			if offset_x == 0 and offset_z == 0 and not column_clear:
+				body_blocked = true
+			elif offset_x == 0 and offset_z == 0:
+				body_blocked = false
 			if column_clear:
 				clear_columns += 1
 	return {
 		"clearance_ratio": snappedf(float(clear_columns) / float(maxi(1, total_columns)), 0.0001),
-		"rejected_surfaces": rejected_surfaces,
+		"body_blocked": body_blocked,
+		"hazard_in_body": hazard_in_body,
 	}
 
 

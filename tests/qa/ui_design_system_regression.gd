@@ -90,32 +90,84 @@ func _test_theme_contract() -> void:
 		_contrast_ratio(Tokens.color(Tokens.COLOR_TEXT), Tokens.color(Tokens.COLOR_SURFACE)) >= 7.0,
 		"primary text and glass surface exceed the high-contrast readability target"
 	)
-	var panel_card := panel_theme.get_stylebox("normal", "CardButton") as StyleBoxFlat
-	var panel_selected_card := panel_theme.get_stylebox("normal", "SelectedCardButton") as StyleBoxFlat
-	_check(
-		panel_card != null
-		and _contrast_ratio(
-			panel_theme.get_color("font_color", "CardButton"),
-			panel_card.bg_color
-		) >= 4.5,
-		"panel card text meets the normal-text contrast target"
-	)
-	_check(
-		panel_selected_card != null
-		and _contrast_ratio(
-			panel_theme.get_color("font_color", "SelectedCardButton"),
-			panel_selected_card.bg_color
-		) >= 4.5,
-		"selected panel card text meets the normal-text contrast target"
-	)
-	_check(
-		_contrast_ratio(
-			panel_theme.get_color("font_color", "GhostButton"),
-			Tokens.color(Tokens.MC_PANEL)
-		) >= 4.5,
-		"panel ghost actions remain readable on the panel surface"
-	)
-	_check(
+	# Flat buttons in overlay context must meet WCAG 4.5:1 across normal/hover/pressed/focus.
+	var overlay_flat_variations := [
+		["GhostButton"],
+		["CardButton"],
+		["SelectedCardButton"],
+		["ToolbarButton"],
+	]
+	var state_specs := [
+		["normal", "font_color"],
+		["hover", "font_hover_color"],
+		["pressed", "font_pressed_color"],
+		["focus", "font_focus_color"],
+	]
+	for entry: Array in overlay_flat_variations:
+		var variation: String = str(entry[0])
+		for spec: Array in state_specs:
+			var style_name: String = str(spec[0])
+			var color_prop: String = str(spec[1])
+			var font_color: Color = theme.get_color(color_prop, variation)
+			var stylebox := theme.get_stylebox(style_name, variation)
+			var background: Color = Tokens.color(Tokens.COLOR_SURFACE)
+			if stylebox is StyleBoxFlat:
+				var bg: Color = (stylebox as StyleBoxFlat).bg_color
+				if bg.a >= 0.01:
+					background = bg
+			_check(
+				_contrast_ratio(font_color, background) >= 4.5,
+				"overlay %s %s contrast >= 4.5" % [variation, style_name]
+			)
+	# Flat buttons in panel context must meet WCAG 4.5:1 across normal/hover/pressed/focus.
+	var panel_flat_variations := [
+		["GhostButton"],
+		["CardButton"],
+		["SelectedCardButton"],
+		["ToolbarButton"],
+	]
+	for entry: Array in panel_flat_variations:
+		var variation: String = str(entry[0])
+		for spec: Array in state_specs:
+			var style_name: String = str(spec[0])
+			var color_prop: String = str(spec[1])
+			var font_color: Color = panel_theme.get_color(color_prop, variation)
+			var stylebox := panel_theme.get_stylebox(style_name, variation)
+			var effective_bg: Color = Tokens.color(Tokens.MC_PANEL)
+			if stylebox is StyleBoxFlat:
+				var bg: Color = (stylebox as StyleBoxFlat).bg_color
+				if bg.a >= 0.01:
+					effective_bg = bg
+			_check(
+				_contrast_ratio(font_color, effective_bg) >= 4.5,
+				"panel %s %s contrast >= 4.5" % [variation, style_name]
+			)
+		var disabled_font: Color = panel_theme.get_color("font_disabled_color", variation)
+		var disabled_stylebox := panel_theme.get_stylebox("disabled", variation)
+		var disabled_bg: Color = Tokens.color(Tokens.MC_PANEL)
+		if disabled_stylebox is StyleBoxFlat:
+			disabled_bg = (disabled_stylebox as StyleBoxFlat).bg_color
+		_check(
+			_contrast_ratio(disabled_font, disabled_bg) <= 4.0,
+			"panel %s disabled is visually distinct" % variation
+		)
+	# Textured buttons always use dark pixel-art backgrounds; verify registration.
+	var textured_variations := [
+		"Button",
+		"PrimaryButton",
+		"SecondaryButton",
+		"DangerButton",
+		"MenuPrimaryButton",
+	]
+	for variation: String in textured_variations:
+		_check(
+			theme.get_stylebox("normal", variation) != null,
+			"overlay %s has a valid normal style" % variation
+		)
+		_check(
+			panel_theme.get_stylebox("normal", variation) != null,
+			"panel %s has a valid normal style" % variation
+		)	_check(
 		panel_theme.get_constant("shadow_outline_size", "PageTitle") == 0
 		and panel_theme.get_constant("shadow_outline_size", "SectionTitle") == 0,
 		"panel headings do not inherit dark pixel shadows"
