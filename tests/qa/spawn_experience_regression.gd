@@ -58,6 +58,20 @@ func _run() -> void:
 		"spawn quality policy covers all five production profiles",
 	)
 	_check(registry.get_validation_errors().is_empty(), "spawn quality policy has no validation errors")
+	# Synthetic canopy-obstruction fixture: verify the hardest seed produces a safe spawn.
+	var canopy_gen = GeneratorScript.new()
+	canopy_gen.configure("star_continent", 24681357)
+	var canopy_position: Vector3 = canopy_gen.find_spawn_position()
+	var canopy_snapshot: Dictionary = canopy_gen.get_last_spawn_quality_snapshot()
+	_check(
+		bool(canopy_snapshot.get("hard_safe", false)),
+		"star_continent seed 24681357 produces a hard-safe spawn"
+	)
+	_check(
+		canopy_position.y > 1.0 and canopy_position.y < 64.0,
+		"star_continent seed 24681357 spawns within the world bounds"
+	)
+
 	for profile_id: String in profile_ids:
 		var policy: Dictionary = registry.get_profile(profile_id)
 		for seed_value: int in seeds:

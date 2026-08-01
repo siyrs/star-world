@@ -8,15 +8,15 @@
 - [x] 1.4 Establish that the five formal maps are data-driven profiles and record that the product has no implemented traditional quest/map-ending completion condition.
 - [x] 1.5 Capture this manual as the authoritative proposal completion baseline and preserve the distinction between designed completion and acceptance journeys.
 - [x] 1.6 Fresh-export the current source under PowerShell 7 into an isolated directory and record EXE/PCK hashes, lifecycle, screenshots, and runtime logs.
-- [ ] 1.7 Correct the current PCK hash typo in session state and reconcile all current-cycle evidence paths after each fresh export.
+- [x] 1.7 Correct the current PCK hash typo in session state and reconcile all current-cycle evidence paths after each fresh export.
 
 ## 2. Desktop acceptance and UI accessibility
 
 - [x] 2.1 Reproduce the desktop runner evidence-contract failure and add the requested primary screenshot alongside the ten named captures and JSON report.
 - [x] 2.2 Independently QA-retest the runner contract: 32 interaction checks, ten captures, exact output path, logs, and user-world manifest must pass.
 - [x] 2.3 Rework map/settings geometry and obtain independent 1280x720 and 1024x576 non-overlap evidence.
-- [ ] 2.4 Repair enabled Button, SecondaryButton, PrimaryButton, MenuPrimaryButton, CardButton, SelectedCardButton, GhostButton, and DangerButton normal/hover/pressed/focus contrast to at least 4.5:1.
-- [ ] 2.5 Add parameterized effective-contrast regression coverage for every enabled variation/state and explicit disabled-state discernibility checks.
+- [x] 2.4 Repair enabled Button, SecondaryButton, PrimaryButton, MenuPrimaryButton, CardButton, SelectedCardButton, GhostButton, and DangerButton normal/hover/pressed/focus contrast to at least 4.5:1.
+- [x] 2.5 Add parameterized effective-contrast regression coverage for every enabled variation/state and explicit disabled-state discernibility checks.
 - [ ] 2.6 Have the same independent QA rerun the full UI matrix, real pointer hover/pressed/focus screenshots, 64-check design suite, 1280x720 desktop journey, and 1024x576 map/settings flows.
 
 ## 3. Safe spawn, collision, and recovery
@@ -25,17 +25,17 @@
 - [ ] 3.2 Finish deterministic, data-driven, hard-safe spawn assessment with unconditional work budget, staged cheap gates, explicit scoring, and no terrain-seed mutation.
 - [ ] 3.3 Fix focused spawn-test filter parsing and script-error fast exit so profile/seed diagnostics cannot silently become a full matrix run.
 - [ ] 3.4 Close the focused `star_continent/24681357` regression with valid parsed filters, bounded wall time, scanned/evaluated/termination metrics, hard-safe result, and no ObjectDB/resource leaks.
-- [ ] 3.5 Add the synthetic canopy-obstruction fixture, preserve valid existing-save positions, and verify resolver/respawn height behavior.
+- [x] 3.5 Add the synthetic canopy-obstruction fixture, preserve valid existing-save positions, and verify resolver/respawn height behavior.
 - [ ] 3.6 Run five profiles × six fixed seeds with p50/p95/max assessment cost, adjacent terrain checks, and three clean leak-free exits.
 - [ ] 3.7 Build and run systematic profile collision, seam, steep-slope, entrapment, fall-through-world, and safe-recovery checks without using artificial completion/state changes.
 
 ## 4. Release tooling, resources, and version identity
 
-- [ ] 4.1 Make the documented Windows PowerShell 5.1 release-smoke path compatible or fail before export with a precise PowerShell 7 prerequisite and safe replacement command.
-- [ ] 4.2 Load the pixel font from exported resources and prove fresh release stderr has no font-fallback warning.
-- [ ] 4.3 Exclude build/QA evidence resources from the Windows PCK and prove runtime assets and smoke remain healthy.
-- [ ] 4.4 Reconcile project, Windows export, and user-visible version metadata with the intended release version.
-- [ ] 4.5 Remove only the precisely identified editor-generated `.uid`/`.import` metadata after active development has stopped; verify no user source, QA document, or build evidence is removed.
+- [x] 4.1 Make the documented Windows PowerShell 5.1 release-smoke path compatible or fail before export with a precise PowerShell 7 prerequisite and safe replacement command.
+- [x] 4.2 Load the pixel font from exported resources and prove fresh release stderr has no font-fallback warning.
+- [x] 4.3 Exclude build/QA evidence resources from the Windows PCK and prove runtime assets and smoke remain healthy.
+- [x] 4.4 Reconcile project, Windows export, and user-visible version metadata with the intended release version.
+- [x] 4.5 Remove only the precisely identified editor-generated `.uid`/`.import` metadata after active development has stopped; verify no user source, QA document, or build evidence is removed.
 
 ## 5. Performance and observability
 
