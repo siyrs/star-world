@@ -300,14 +300,21 @@ func find_spawn_position() -> Vector3:
 			% [profile_id, seed_value, fallback_spawn]
 		)
 		return fallback_spawn
-	# Truly no walkable surface anywhere — place the player just under the
-	# world ceiling so they will immediately fall onto the highest solid block
-	# instead of spawning in the void at an arbitrary Y.
+	# Truly no walkable surface anywhere — climb the origin column and place
+	# the player on top of the highest solid block so they never spawn mid-air.
+	for y in range(WORLD_HEIGHT - 1, 0, -1):
+		if BlockRegistryScript.is_solid(get_block(Vector3i(0, y, 0))):
+			push_error(
+				"No walkable surface found for profile=%s seed=%d; placing on top of origin column at y=%d."
+				% [profile_id, seed_value, y]
+			)
+			return Vector3(0.5, y + 4.0, 0.5)
+	# Absolute last resort — should be unreachable with bedrock at y=0.
 	push_error(
-		"No walkable surface found anywhere for profile=%s seed=%d; spawning at ceiling fallback."
+		"No solid block in origin column for profile=%s seed=%d; spawning at fallback."
 		% [profile_id, seed_value]
 	)
-	return Vector3(0.5, float(WORLD_HEIGHT) - 3.0, 0.5)
+	return Vector3(0.5, 50.0, 0.5)
 
 
 func find_walkable_surface(x: int, z: int) -> int:

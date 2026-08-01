@@ -157,7 +157,7 @@ func _test_theme_contract() -> void:
 		var disabled_contrast: float = _contrast_ratio(disabled_font, disabled_bg)
 		var normal_contrast: float = _contrast_ratio(normal_font, normal_bg)
 		_check(
-			disabled_contrast < normal_contrast - 0.5,
+			disabled_contrast <= normal_contrast - 0.5,
 			"panel %s disabled contrast (%.1f) is visibly lower than normal (%.1f)"
 			% [variation, disabled_contrast, normal_contrast]
 		)

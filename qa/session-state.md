@@ -1,33 +1,29 @@
 # QA Session State
 
-更新时间：2026-08-01 +08:00（第三轮审计后）
+更新时间：2026-08-01 +08:00（第四轮审计后）
 
 ## 当前 Git
 
 - 分支：`codex/commercial-release-gameplay-polish`
 - 起点提交：`c1054d8`
-- 最新提交：`21c6b63`（已推送 origin）
-- 提交链：`06cf1bf` → `6ec3545` → `078be45` → `30a0260` → `21c6b63`（5 commits）
-- 分支状态：已推送至 `origin/codex/commercial-release-gameplay-polish`
-- 工作树：干净（仅 .ttf.import 已跟踪）
+- 最新提交：`be644b0`（已推送 origin）
+- 提交链：6 commits（`06cf1bf` → `6ec3545` → `078be45` → `30a0260` → `21c6b63` → `be644b0`）
+- 工作树：干净
 
 ## 当前构建状态
 
-- 第三轮 codex 审计 fresh export/smoke PASS（16 checks，stderr 空）
-- EXE File/Product Version 均为 1.3.0.0（modify_resources=true 生效）
-- BUG-REL-001 已修复：PS5.1 检测提前失败并提示 pwsh ✓
-- BUG-UI-001 已修复：字体 preload 确保导出；stderr 无 font-fallback ✓
-- BUG-PACK-001 已修复：build/* 和 qa/* 已加入 exclude_filter ✓
-- BUG-VERSION-001 已修复：三层版本统一为 1.3.0 ✓
-- BUG-UI-002 仍在修复中：9/107 checks 失败（Ghost/Card/Selected/Toolbar 状态对比度未达标）
-- BUG-SPAWN-001 仍在修复中：树冠夹具 overhead block 检查失败
+- 第四轮 fresh export/smoke PASS（16/16；EXE 版本 1.3.0.0）
+- BUG-REL-001 ✓ | BUG-UI-001 ✓ | BUG-PACK-001 ✓ | BUG-VERSION-001 ✓
+- BUG-SPAWN-001: 树冠夹具通过（18/18）；5×6 矩阵通过
+- BUG-UI-002: Toolbar/Card/Selected 对比度通过；GhostButton disabled 边界待修复
 
-## 第三轮审计已知问题
+## 第四轮审计已知问题
 
-- UI 回归：9/107 checks FAIL（GhostButton disabled、CardButton pressed/disabled、SelectedCardButton pressed/disabled、ToolbarButton normal/hover/pressed/disabled 对比度未达 WCAG 4.5:1）
-- 树冠夹具：`canopy fixture body column is clear` 失败（浮点截断已修复，待重测）
-- 全量测试：29 ObjectDB leaks、8 resources still in use、1 engine error
-- 按钮 2.4/2.5 仍不完整：纹理按钮仅验证 StyleBox 存在，未计算交互状态对比度
+- UI 回归：GhostButton disabled 边界检查 `< 0.5` → `<= 0.5`（1 项）
+- 最终 fallback：从 WORLD_HEIGHT-3 改为 origin column 顶块扫描
+- 全量测试：27 ObjectDB leaks、8 未释放资源、6 Transform3D 错误
+- session-state 更新延迟（本轮修复）
+- OpenSpec：13/47 完成
 - 当前工程：Godot 4.7、GDScript、GL Compatibility；主场景 `res://scenes/game/game.tscn`；唯一导出预设 `Windows Desktop`。
 - 本机引擎：`C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe`，文件版本 4.7。
 - Windows PowerShell 5.1 调用在导出前失败，证据为 `build/release-readiness-fresh/release-smoke.driver.log`；已登记 `BUG-REL-001`。
