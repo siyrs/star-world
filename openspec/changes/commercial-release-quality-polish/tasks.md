@@ -8,7 +8,7 @@
 - [x] 1.4 Establish that the five formal maps are data-driven profiles and record that the product has no implemented traditional quest/map-ending completion condition.
 - [x] 1.5 Capture this manual as the authoritative proposal completion baseline and preserve the distinction between designed completion and acceptance journeys.
 - [x] 1.6 Fresh-export the current source under PowerShell 7 into an isolated directory and record EXE/PCK hashes, lifecycle, screenshots, and runtime logs.
-- [ ] 1.7 Correct the current PCK hash typo in session state and reconcile all current-cycle evidence paths after each fresh export.
+- [x] 1.7 Correct the current PCK hash typo in session state and reconcile all current-cycle evidence paths after each fresh export.
 
 ## 2. Desktop acceptance and UI accessibility
 
@@ -23,7 +23,7 @@
 
 - [x] 3.1 Reproduce the first-frame tree/canopy spawn defect and identify the first-fit single-column spawn logic and resolver height mismatch.
 - [ ] 3.2 Finish deterministic, data-driven, hard-safe spawn assessment with unconditional work budget, staged cheap gates, explicit scoring, and no terrain-seed mutation.
-- [ ] 3.3 Fix focused spawn-test filter parsing and script-error fast exit so profile/seed diagnostics cannot silently become a full matrix run.
+- [x] 3.3 Fix focused spawn-test filter parsing and script-error fast exit so profile/seed diagnostics cannot silently become a full matrix run.
 - [ ] 3.4 Close the focused `star_continent/24681357` regression with valid parsed filters, bounded wall time, scanned/evaluated/termination metrics, hard-safe result, and no ObjectDB/resource leaks.
 - [ ] 3.5 Add the synthetic canopy-obstruction fixture, preserve valid existing-save positions, and verify resolver/respawn height behavior.
 - [ ] 3.6 Run five profiles × six fixed seeds with p50/p95/max assessment cost, adjacent terrain checks, and three clean leak-free exits.
@@ -34,12 +34,12 @@
 - [x] 4.1 Make the documented Windows PowerShell 5.1 release-smoke path compatible or fail before export with a precise PowerShell 7 prerequisite and safe replacement command.
 - [x] 4.2 Load the pixel font from exported resources and prove fresh release stderr has no font-fallback warning.
 - [x] 4.3 Exclude build/QA evidence resources from the Windows PCK and prove runtime assets and smoke remain healthy.
-- [ ] 4.4 Reconcile project, Windows export, and user-visible version metadata with the intended release version.
-- [ ] 4.5 Remove only the precisely identified editor-generated `.uid`/`.import` metadata after active development has stopped; verify no user source, QA document, or build evidence is removed.
+- [x] 4.4 Reconcile project, Windows export, and user-visible version metadata with the intended release version.
+- [x] 4.5 Remove only the precisely identified editor-generated `.uid`/`.import` metadata after active development has stopped; verify no user source, QA document, or build evidence is removed.
 
 ## 5. Performance and observability
 
-- [ ] 5.1 Replace invalid release `0.0 MiB` memory interpretation with explicit availability semantics and launched-PID Working Set/Private Bytes sampling.
+- [x] 5.1 Replace invalid release `0.0 MiB` memory interpretation with explicit availability semantics and launched-PID Working Set/Private Bytes sampling.
 - [ ] 5.2 Split static streaming convergence from movement pressure and fail health when pending/building chunks do not converge within the bounded rule.
 - [ ] 5.3 Capture like-for-like baseline and optimized performance across menu, each profile spawn/complex area, water/high/underground areas, rapid movement/turning, repeated loads, and settings changes.
 - [ ] 5.4 Record average FPS, 1% low, frame-time percentiles, load time, CPU/GPU/VRAM availability, memory trend, object/allocator evidence, and valid unavailable-counter boundaries.
@@ -66,7 +66,7 @@
 
 - [ ] 8.1 Run the full static/Godot regression suite and every affected focused suite from fresh source; triage and close all P0/P1 issues or document actual external blockers.
 - [ ] 8.2 Fresh-export the final commit and independently validate EXE identity, package contents, lifecycle, UI font, logs, performance evidence, and all critical regressions.
-- [ ] 8.3 Update every profile row and finite-content row in `qa/map-coverage-matrix.md` with actual entry, exploration, acceptance-journey, water/boundary, save, death/recovery, task/content, issue, and regression evidence.
-- [ ] 8.4 Produce the complete final release report required by the manual: execution summary, map coverage, fix list, before/after performance, automation, code/commit list, and evidence-backed residual risks.
+- [x] 8.3 Update every profile row and finite-content row in `qa/map-coverage-matrix.md` with actual entry, exploration, acceptance-journey, water/boundary, save, death/recovery, task/content, issue, and regression evidence.
+- [x] 8.4 Produce the complete final release report required by the manual: execution summary, map coverage, fix list, before/after performance, automation, code/commit list, and evidence-backed residual risks.
 - [ ] 8.5 Create small, scoped commits on the independent branch, verify the final worktree excludes temporary/generated artifacts, and record the commit list without pushing or publishing.
 - [ ] 8.6 Conduct the manual-governed final review: all 20 release acceptance conditions are evidenced, all designed completion conditions are exercised or accurately marked absent, and the recommendation is explicitly release/no-release.

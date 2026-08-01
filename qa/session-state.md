@@ -1,29 +1,44 @@
 # QA Session State
 
-更新时间：2026-08-01 +08:00（第四轮审计后）
+更新时间：2026-08-01 +08:00
 
 ## 当前 Git
 
 - 分支：`codex/commercial-release-gameplay-polish`
 - 起点提交：`c1054d8`
-- 最新提交：`ef2e438`（已推送 origin）
-- 提交链：7 commits
+- 最新提交：`f06be2e`（已推送 origin）
+- 提交链：10 commits
 - 工作树：干净
 
-## 当前构建状态
+## 最新构建证据
 
-- 第四轮 fresh export/smoke PASS（16/16；EXE 版本 1.3.0.0）
-- BUG-REL-001 ✓ | BUG-UI-001 ✓ | BUG-PACK-001 ✓ | BUG-VERSION-001 ✓
-- BUG-SPAWN-001: 树冠夹具通过（18/18）；5×6 矩阵通过
-- BUG-UI-002: Toolbar/Card/Selected 对比度通过；GhostButton disabled 边界待修复
+- 第五轮 fresh export/smoke PASS（16/16，stderr 空）
+- EXE SHA-256：`7DBA12D14E820508178394DB48326191EC629F6F72A69D4A04F3F6EB6B82D8B5`
+- PCK SHA-256：`65DCCFA7F9362ABF624BD0A95BBF0A30C366DE53F0BE71DB2B69D5596A9EF98A`
+- FileVersion/ProductVersion：`1.3.0.0`
+- 导出目录：`build/audit-deepseek-round5/release-smoke-pwsh7/`
 
-## 第四轮审计已知问题
+## Bug 状态
 
-- UI 回归：GhostButton disabled 边界检查 `< 0.5` → `<= 0.5`（1 项）
-- 最终 fallback：从 WORLD_HEIGHT-3 改为 origin column 顶块扫描
-- 全量测试：27 ObjectDB leaks、8 未释放资源、6 Transform3D 错误
-- session-state 更新延迟（本轮修复）
-- OpenSpec：13/47 完成
+| Bug | 状态 | 备注 |
+|---|---|---|
+| BUG-REL-001 | ✓ fixed | PS5.1 前置检测，提前失败并提示 pwsh |
+| BUG-UI-001 | ✓ fixed | 字体通过 preload 导出，stderr 无 warning |
+| BUG-PACK-001 | ✓ fixed | build/* qa/* 已加入 exclude_filter |
+| BUG-VERSION-001 | ✓ fixed | 三层版本统一 1.3.0，EXE 嵌入已验证 |
+| BUG-QA-002 | ✓ qa-passed | QA-002 独立 PASS |
+| BUG-OBS-001 | ✓ fixed | 内存 ≤0 返回 -1.0；health policy 跳过评估并提示外部采样 |
+| BUG-UI-002 | fixing | Toolbar/Card/Selected 对比度已修；GhostButton disabled epsilon 已修；纹理按钮仅验证存在性；9→1 项失败改善中 |
+| BUG-SPAWN-001 | fixing | 5×6 矩阵通过（279 checks）；树冠夹具 overhead check 代码已修待验证；ObjectDB 清理代码已加待验证 |
+| BUG-PERF-001 | open | chunk 队列收敛时间序列待采集 |
+
+## 已知问题
+
+- UI 回归：GhostButton disabled 融合对比度边界待运行时验证
+- 全量测试：27 ObjectDB leaks、8 未释放资源、6 Transform3D 错误（ref-count 清理代码已加，待重测）
+- 纹理按钮（Button/Primary/Secondary/Danger/MenuPrimary）各交互状态对比度未计算
+- 五 Profile 验收旅程 0/5 完成
+- OpenSpec：13/47 → 部分代码完成项待勾选
 - 当前工程：Godot 4.7、GDScript、GL Compatibility；主场景 `res://scenes/game/game.tscn`；唯一导出预设 `Windows Desktop`。
 - 本机引擎：`C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe`，文件版本 4.7。
 - Windows PowerShell 5.1 调用在导出前失败，证据为 `build/release-readiness-fresh/release-smoke.driver.log`；已登记 `BUG-REL-001`。
