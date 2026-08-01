@@ -4,6 +4,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# This script requires PowerShell 7+ (pwsh). Windows PowerShell 5.1 is not
+# supported because its .NET Framework version lacks ProcessStartInfo.ArgumentList.
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw @'
+PowerShell 7 (pwsh) or later is required to run this script.
+Windows PowerShell 5.1 detected — it lacks .NET APIs used for safe argument
+passing and process termination.
+
+Install pwsh from https://github.com/PowerShell/PowerShell and run:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 -Godot <path> -OutputDirectory <path>
+'@
+}
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
 if ([string]::IsNullOrWhiteSpace($Godot)) {

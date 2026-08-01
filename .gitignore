@@ -3,6 +3,7 @@
 .mono/
 build/
 
+*.uid
 *.tmp
 *.temp
 *.log

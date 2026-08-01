@@ -4,6 +4,11 @@ extends RefCounted
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const PixelTextures = preload("res://src/ui/pixel_ui_textures.gd")
 
+# Preloaded pixel font forces Godot to include the imported resource in exports.
+# Without this, FileAccess-based loading may succeed in the editor but miss the
+# dependency at export time, producing a font-fallback warning (BUG-UI-001).
+const PIXEL_FONT_IMPORT = preload("res://assets/fonts/fusion_pixel_12px_mono.ttf")
+
 # Theme contexts: "overlay" floats over the 3D world or the menu dirt
 # background (light text with pixel shadow, dark translucent panels), while
 # "panel" renders classic light-gray Minecraft GUI surfaces (dark text).
@@ -31,7 +36,16 @@ static func get_ui_font() -> Font:
 		return _pixel_font
 	_font_loaded = true
 	_pixel_font = null
-	if FileAccess.file_exists(Tokens.PIXEL_FONT_PATH):
+	# Primary path: use the preloaded resource so Godot includes the font in
+	# exports. Fall back to raw FileAccess loading for editor hot-reload edge cases.
+	if PIXEL_FONT_IMPORT is FontFile:
+		_pixel_font = (PIXEL_FONT_IMPORT as FontFile).duplicate()
+		_pixel_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+		_pixel_font.hinting = TextServer.HINTING_NONE
+		_pixel_font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+		_pixel_font.oversampling = 1.0
+		_pixel_font.multichannel_signed_distance_field = false
+	elif FileAccess.file_exists(Tokens.PIXEL_FONT_PATH):
 		var bytes := FileAccess.get_file_as_bytes(Tokens.PIXEL_FONT_PATH)
 		if bytes.size() > 1024:
 			var font := FontFile.new()
