@@ -129,7 +129,7 @@ func sample_now() -> Dictionary:
 		"frame_ms_avg": frame_average,
 		"frame_ms_peak": _frame_peak_ms,
 		"stutter_count": _stutter_count,
-		"memory_mib": float(Performance.get_monitor(Performance.MEMORY_STATIC)) / 1048576.0,
+		"memory_mib": _collect_memory_mib(),
 		"node_count": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"draw_calls": int(
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
@@ -277,6 +277,13 @@ func _emit_health_if_changed(health: Dictionary) -> void:
 	for raw_issue in health.get("issues", []):
 		issues.append(str(raw_issue))
 	health_changed.emit(status, issues)
+
+
+func _collect_memory_mib() -> float:
+	var raw := Performance.get_monitor(Performance.MEMORY_STATIC)
+	if raw <= 0.0:
+		return -1.0
+	return raw / 1048576.0
 
 
 func _reset_frame_window() -> void:
