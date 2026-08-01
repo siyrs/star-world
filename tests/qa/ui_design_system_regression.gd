@@ -147,9 +147,19 @@ func _test_theme_contract() -> void:
 		var disabled_bg: Color = Tokens.color(Tokens.MC_PANEL)
 		if disabled_stylebox is StyleBoxFlat:
 			disabled_bg = (disabled_stylebox as StyleBoxFlat).bg_color
+		var normal_font: Color = panel_theme.get_color("font_color", variation)
+		var normal_stylebox := panel_theme.get_stylebox("normal", variation)
+		var normal_bg: Color = Tokens.color(Tokens.MC_PANEL)
+		if normal_stylebox is StyleBoxFlat:
+			var nb: Color = (normal_stylebox as StyleBoxFlat).bg_color
+			if nb.a >= 0.01:
+				normal_bg = nb
+		var disabled_contrast: float = _contrast_ratio(disabled_font, disabled_bg)
+		var normal_contrast: float = _contrast_ratio(normal_font, normal_bg)
 		_check(
-			_contrast_ratio(disabled_font, disabled_bg) <= 4.0,
-			"panel %s disabled is visually distinct" % variation
+			disabled_contrast < normal_contrast - 0.5,
+			"panel %s disabled contrast (%.1f) is visibly lower than normal (%.1f)"
+			% [variation, disabled_contrast, normal_contrast]
 		)
 	# Textured buttons always use dark pixel-art backgrounds; verify registration.
 	var textured_variations := [

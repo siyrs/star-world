@@ -283,8 +283,8 @@ func find_spawn_position() -> Vector3:
 		"termination_condition": termination_condition,
 		"elapsed_usec": Time.get_ticks_usec() - started_at,
 	}
-	# Desperate fallback: scan near origin for any walkable surface so the
-	# player does not appear mid-air inside a mountain or at (0.5, 50, 0.5).
+	# Desperate fallback: scan for any walkable surface near origin, then
+	# expand search radius before the last-resort position.
 	var fallback_spawn := _find_any_walkable_surface(16)
 	if _is_valid_spawn_found(fallback_spawn):
 		push_warning(
@@ -292,11 +292,22 @@ func find_spawn_position() -> Vector3:
 			% [profile_id, seed_value, fallback_spawn]
 		)
 		return fallback_spawn
+	# Second pass with a wider radius before the last resort.
+	fallback_spawn = _find_any_walkable_surface(search_radius)
+	if _is_valid_spawn_found(fallback_spawn):
+		push_warning(
+			"No safe spawn near origin for profile=%s seed=%d; falling back to distant walkable surface at %s."
+			% [profile_id, seed_value, fallback_spawn]
+		)
+		return fallback_spawn
+	# Truly no walkable surface anywhere — place the player just under the
+	# world ceiling so they will immediately fall onto the highest solid block
+	# instead of spawning in the void at an arbitrary Y.
 	push_error(
-		"No walkable surface found near origin for profile=%s seed=%d; spawning at default height."
+		"No walkable surface found anywhere for profile=%s seed=%d; spawning at ceiling fallback."
 		% [profile_id, seed_value]
 	)
-	return Vector3(0.5, float(WORLD_HEIGHT) * 0.5, 0.5)
+	return Vector3(0.5, float(WORLD_HEIGHT) - 3.0, 0.5)
 
 
 func find_walkable_surface(x: int, z: int) -> int:

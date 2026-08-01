@@ -1,25 +1,33 @@
 # QA Session State
 
-更新时间：2026-08-01 +08:00
+更新时间：2026-08-01 +08:00（第三轮审计后）
 
 ## 当前 Git
 
 - 分支：`codex/commercial-release-gameplay-polish`
 - 起点提交：`c1054d8`
-- 最新提交：`30a0260`（已推送 origin）
-- 提交链：`06cf1bf` → `6ec3545` → `078be45` → `30a0260`（4 commits）
+- 最新提交：`21c6b63`（已推送 origin）
+- 提交链：`06cf1bf` → `6ec3545` → `078be45` → `30a0260` → `21c6b63`（5 commits）
 - 分支状态：已推送至 `origin/codex/commercial-release-gameplay-polish`
+- 工作树：干净（仅 .ttf.import 已跟踪）
 
 ## 当前构建状态
 
-- 第二轮 codex 审计 fresh export/smoke PASS（16 checks）：`build/audit-deepseek-round2/release-smoke-pwsh7/`
-- BUG-REL-001 已修复：PS5.1 检测提前失败并提示 pwsh
-- BUG-UI-001 已修复：字体通过 preload 确保导���包含；fresh stderr 无 font-fallback warning
-- BUG-PACK-001 已修复：build/* 和 qa/* 已加入 exclude_filter
-- BUG-VERSION-001 已修复：project.godot 1.3.0、export_presets.cfg 1.3.0.0、app_version.gd 1.3.0
-- application/modify_resources 已设为 true 以将版本嵌入 EXE
-- BUG-UI-002 二轮修复后 UI 回归有语法错误（待修复）
-- BUG-SPAWN-001 出生测试通过：star/24681357 14 checks；5×6=275 checks，一轮无 leak；p50 0.809s/p95 2.766s
+- 第三轮 codex 审计 fresh export/smoke PASS（16 checks，stderr 空）
+- EXE File/Product Version 均为 1.3.0.0（modify_resources=true 生效）
+- BUG-REL-001 已修复：PS5.1 检测提前失败并提示 pwsh ✓
+- BUG-UI-001 已修复：字体 preload 确保导出；stderr 无 font-fallback ✓
+- BUG-PACK-001 已修复：build/* 和 qa/* 已加入 exclude_filter ✓
+- BUG-VERSION-001 已修复：三层版本统一为 1.3.0 ✓
+- BUG-UI-002 仍在修复中：9/107 checks 失败（Ghost/Card/Selected/Toolbar 状态对比度未达标）
+- BUG-SPAWN-001 仍在修复中：树冠夹具 overhead block 检查失败
+
+## 第三轮审计已知问题
+
+- UI 回归：9/107 checks FAIL（GhostButton disabled、CardButton pressed/disabled、SelectedCardButton pressed/disabled、ToolbarButton normal/hover/pressed/disabled 对比度未达 WCAG 4.5:1）
+- 树冠夹具：`canopy fixture body column is clear` 失败（浮点截断已修复，待重测）
+- 全量测试：29 ObjectDB leaks、8 resources still in use、1 engine error
+- 按钮 2.4/2.5 仍不完整：纹理按钮仅验证 StyleBox 存在，未计算交互状态对比度
 - 当前工程：Godot 4.7、GDScript、GL Compatibility；主场景 `res://scenes/game/game.tscn`；唯一导出预设 `Windows Desktop`。
 - 本机引擎：`C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe`，文件版本 4.7。
 - Windows PowerShell 5.1 调用在导出前失败，证据为 `build/release-readiness-fresh/release-smoke.driver.log`；已登记 `BUG-REL-001`。

@@ -59,15 +59,16 @@ func _run() -> void:
 	)
 	_check(registry.get_validation_errors().is_empty(), "spawn quality policy has no validation errors")
 	# Synthetic canopy-obstruction fixture: verify that the spawn evaluator
-	# rejects positions where tree leaves or wood block the body column.
-	# Use the densest-canopy seed and check the overhead cells directly.
+	# avoids positions where tree leaves or wood block the body column.
+	# Use the densest-canopy seed and check overhead cells via the generator's
+	# surface-height query to avoid floating-point truncation of the spawn Y.
 	var canopy_gen = GeneratorScript.new()
 	canopy_gen.configure("star_continent", 24681357)
 	var canopy_position: Vector3 = canopy_gen.find_spawn_position()
 	var canopy_snapshot: Dictionary = canopy_gen.get_last_spawn_quality_snapshot()
 	var bx := int(canopy_position.x - 0.5)
 	var bz := int(canopy_position.z - 0.5)
-	var by := int(canopy_position.y - 1.05)
+	var by := canopy_gen.get_surface_height(bx, bz)
 	_check(
 		bool(canopy_snapshot.get("hard_safe", false)),
 		"canopy fixture seed 24681357 produces a hard-safe spawn"
@@ -76,8 +77,12 @@ func _run() -> void:
 		canopy_position.y > 1.0 and canopy_position.y < 64.0,
 		"canopy fixture spawns within world bounds"
 	)
-	# Verify the three body cells above the spawn surface are air — no tree
-	# canopy or solid decoration blocking first-frame view.
+	_check(
+		by >= 1,
+		"canopy fixture surface height is above bedrock at spawn x=%d z=%d" % [bx, bz]
+	)
+	# Verify the three body cells above the surface are air — no tree canopy
+	# or solid decoration blocking first-frame view.
 	var canopy_body_clear := true
 	for offset_y in range(1, 4):
 		var overhead_block: String = canopy_gen.get_block(Vector3i(bx, by + offset_y, bz))

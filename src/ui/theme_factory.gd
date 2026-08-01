@@ -235,7 +235,7 @@ static func _register_button_variations(theme: Theme, context: StringName) -> vo
 		"#241A10E8" if context != CONTEXT_PANEL else "#C6C6C6",
 		"#0D0905E8" if context != CONTEXT_PANEL else "#B7B7B7",
 		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER_STRONG,
-		"body", "body", "accent",
+		"body", "body", "body" if context == CONTEXT_PANEL else "accent",
 		Tokens.FONT_BODY
 	)
 	_register_flat_button(
@@ -244,12 +244,18 @@ static func _register_button_variations(theme: Theme, context: StringName) -> vo
 		"#3A4214F2" if context != CONTEXT_PANEL else "#D8E6AC",
 		"#2E3410F2" if context != CONTEXT_PANEL else "#B9C98A",
 		Tokens.COLOR_ACCENT, Tokens.COLOR_BORDER_FOCUS,
-		"body", "body", "accent",
+		"body", "body", "body" if context == CONTEXT_PANEL else "accent",
 		Tokens.FONT_BODY, 2
 	)
 	_register_flat_button(
 		theme, context, "ToolbarButton",
 		"#00000055", "#00000088", "#000000AA",
+		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER,
+		"muted", "body", "accent",
+		Tokens.FONT_CAPTION, 1
+	) if context != CONTEXT_PANEL else _register_flat_button(
+		theme, context, "ToolbarButton",
+		"#D0D0D0", "#E0E0E0", "#C8C8C8",
 		Tokens.COLOR_BORDER_SUBTLE, Tokens.COLOR_BORDER,
 		"muted", "body", "accent",
 		Tokens.FONT_CAPTION, 1
