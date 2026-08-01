@@ -110,11 +110,7 @@ func _test_theme_contract() -> void:
 			var color_prop: String = str(spec[1])
 			var font_color: Color = theme.get_color(color_prop, variation)
 			var stylebox := theme.get_stylebox(style_name, variation)
-			var background: Color = Tokens.color(Tokens.COLOR_SURFACE)
-			if stylebox is StyleBoxFlat:
-				var bg: Color = (stylebox as StyleBoxFlat).bg_color
-				if bg.a >= 0.01:
-					background = bg
+			var background: Color = _effective_background(stylebox, Tokens.color(Tokens.COLOR_SURFACE))
 			_check(
 				_contrast_ratio(font_color, background) >= 4.5,
 				"overlay %s %s contrast >= 4.5" % [variation, style_name]
@@ -133,27 +129,18 @@ func _test_theme_contract() -> void:
 			var color_prop: String = str(spec[1])
 			var font_color: Color = panel_theme.get_color(color_prop, variation)
 			var stylebox := panel_theme.get_stylebox(style_name, variation)
-			var effective_bg: Color = Tokens.color(Tokens.MC_PANEL)
-			if stylebox is StyleBoxFlat:
-				var bg: Color = (stylebox as StyleBoxFlat).bg_color
-				if bg.a >= 0.01:
-					effective_bg = bg
+			var effective_bg: Color = _effective_background(stylebox, Tokens.color(Tokens.MC_PANEL))
 			_check(
 				_contrast_ratio(font_color, effective_bg) >= 4.5,
 				"panel %s %s contrast >= 4.5" % [variation, style_name]
 			)
+		var panel_surface: Color = Tokens.color(Tokens.MC_PANEL)
 		var disabled_font: Color = panel_theme.get_color("font_disabled_color", variation)
 		var disabled_stylebox := panel_theme.get_stylebox("disabled", variation)
-		var disabled_bg: Color = Tokens.color(Tokens.MC_PANEL)
-		if disabled_stylebox is StyleBoxFlat:
-			disabled_bg = (disabled_stylebox as StyleBoxFlat).bg_color
+		var disabled_bg: Color = _effective_background(disabled_stylebox, panel_surface)
 		var normal_font: Color = panel_theme.get_color("font_color", variation)
 		var normal_stylebox := panel_theme.get_stylebox("normal", variation)
-		var normal_bg: Color = Tokens.color(Tokens.MC_PANEL)
-		if normal_stylebox is StyleBoxFlat:
-			var nb: Color = (normal_stylebox as StyleBoxFlat).bg_color
-			if nb.a >= 0.01:
-				normal_bg = nb
+		var normal_bg: Color = _effective_background(normal_stylebox, panel_surface)
 		var disabled_contrast: float = _contrast_ratio(disabled_font, disabled_bg)
 		var normal_contrast: float = _contrast_ratio(normal_font, normal_bg)
 		_check(
@@ -384,6 +371,16 @@ func _relative_luminance(color: Color) -> float:
 		+ 0.7152 * _linear_channel(color.g)
 		+ 0.0722 * _linear_channel(color.b)
 	)
+
+
+func _effective_background(stylebox: StyleBox, fallback: Color) -> Color:
+	if stylebox is StyleBoxFlat:
+		var bg: Color = (stylebox as StyleBoxFlat).bg_color
+		if bg.a >= 0.99:
+			return bg
+		if bg.a >= 0.01:
+			return fallback.lerp(Color(bg.r, bg.g, bg.b, 1.0), bg.a)
+	return fallback
 
 
 func _linear_channel(channel: float) -> float:

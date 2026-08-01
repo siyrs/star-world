@@ -6,8 +6,8 @@
 
 - 分支：`codex/commercial-release-gameplay-polish`
 - 起点提交：`c1054d8`
-- 最新提交：`be644b0`（已推送 origin）
-- 提交链：6 commits（`06cf1bf` → `6ec3545` → `078be45` → `30a0260` → `21c6b63` → `be644b0`）
+- 最新提交：`ef2e438`（已推送 origin）
+- 提交链：7 commits
 - 工作树：干净
 
 ## 当前构建状态
