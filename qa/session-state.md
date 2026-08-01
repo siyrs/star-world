@@ -1,18 +1,25 @@
 # QA Session State
 
-更新时间：2026-07-31 11:03 +08:00
+更新时间：2026-08-01 +08:00
 
 ## 当前 Git
 
 - 分支：`codex/commercial-release-gameplay-polish`
-- 起点提交：`c1054d8834bbabdf6e6035f909e66cb7c5084717`
-- 起始状态：`master...origin/master` 干净；已在独立分支创建 PM/QA 持久化文档。
-- 用户原有未提交修改：无。
+- 起点提交：`c1054d8`
+- 最新提交：`30a0260`（已推送 origin）
+- 提交链：`06cf1bf` → `6ec3545` → `078be45` → `30a0260`（4 commits）
+- 分支状态：已推送至 `origin/codex/commercial-release-gameplay-polish`
 
 ## 当前构建状态
 
-- 已从当前源码在独立目录 fresh export 并运行 smoke。
-- 历史 `build/StarWorld.exe` 与 `build/StarWorld.pck` 时间戳为 2026-07-26 23:04:58，只能视为旧构建，不代表当前 `c1054d8`。
+- 第二轮 codex 审计 fresh export/smoke PASS（16 checks）：`build/audit-deepseek-round2/release-smoke-pwsh7/`
+- BUG-REL-001 已修复：PS5.1 检测提前失败并提示 pwsh
+- BUG-UI-001 已修复：字体通过 preload 确保导���包含；fresh stderr 无 font-fallback warning
+- BUG-PACK-001 已修复：build/* 和 qa/* 已加入 exclude_filter
+- BUG-VERSION-001 已修复：project.godot 1.3.0、export_presets.cfg 1.3.0.0、app_version.gd 1.3.0
+- application/modify_resources 已设为 true 以将版本嵌入 EXE
+- BUG-UI-002 二轮修复后 UI 回归有语法错误（待修复）
+- BUG-SPAWN-001 出生测试通过：star/24681357 14 checks；5×6=275 checks，一轮无 leak；p50 0.809s/p95 2.766s
 - 当前工程：Godot 4.7、GDScript、GL Compatibility；主场景 `res://scenes/game/game.tscn`；唯一导出预设 `Windows Desktop`。
 - 本机引擎：`C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe`，文件版本 4.7。
 - Windows PowerShell 5.1 调用在导出前失败，证据为 `build/release-readiness-fresh/release-smoke.driver.log`；已登记 `BUG-REL-001`。

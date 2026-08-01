@@ -283,20 +283,20 @@ func find_spawn_position() -> Vector3:
 		"termination_condition": termination_condition,
 		"elapsed_usec": Time.get_ticks_usec() - started_at,
 	}
-	# Desperate fallback: scan a small radius from origin for ANY walkable
-	# surface so the player does not appear mid-air at (0.5, 50.0, 0.5).
-	var fallback_surface := _find_any_walkable_surface(16)
-	if fallback_surface >= 1:
+	# Desperate fallback: scan near origin for any walkable surface so the
+	# player does not appear mid-air inside a mountain or at (0.5, 50, 0.5).
+	var fallback_spawn := _find_any_walkable_surface(16)
+	if _is_valid_spawn_found(fallback_spawn):
 		push_warning(
-			"No safe spawn found for profile=%s seed=%d; falling back to origin walkable surface at y=%d."
-			% [profile_id, seed_value, fallback_surface]
+			"No safe spawn found for profile=%s seed=%d; falling back to nearest walkable surface at %s."
+			% [profile_id, seed_value, fallback_spawn]
 		)
-		return Vector3(0.5, fallback_surface + 1.05, 0.5)
+		return fallback_spawn
 	push_error(
-		"No walkable surface found near origin for profile=%s seed=%d; spawning at origin."
+		"No walkable surface found near origin for profile=%s seed=%d; spawning at default height."
 		% [profile_id, seed_value]
 	)
-	return Vector3(0.5, 50.0, 0.5)
+	return Vector3(0.5, float(WORLD_HEIGHT) * 0.5, 0.5)
 
 
 func find_walkable_surface(x: int, z: int) -> int:
@@ -316,7 +316,7 @@ func find_walkable_surface(x: int, z: int) -> int:
 	return -1
 
 
-func _find_any_walkable_surface(max_radius: int) -> int:
+func _find_any_walkable_surface(max_radius: int) -> Vector3:
 	for radius in range(0, max_radius + 1):
 		for x in range(-radius, radius + 1):
 			for z in range(-radius, radius + 1):
@@ -324,8 +324,8 @@ func _find_any_walkable_surface(max_radius: int) -> int:
 					continue
 				var top := find_walkable_surface(x, z)
 				if top >= 1:
-					return top
-	return -1
+					return Vector3(x + 0.5, top + 1.05, z + 0.5)
+	return Vector3(INF, INF, INF)
 
 
 func _refresh_spawn_quality_profile() -> void:

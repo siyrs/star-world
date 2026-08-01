@@ -167,7 +167,8 @@ func _test_theme_contract() -> void:
 		_check(
 			panel_theme.get_stylebox("normal", variation) != null,
 			"panel %s has a valid normal style" % variation
-		)	_check(
+		)
+	_check(
 		panel_theme.get_constant("shadow_outline_size", "PageTitle") == 0
 		and panel_theme.get_constant("shadow_outline_size", "SectionTitle") == 0,
 		"panel headings do not inherit dark pixel shadows"

@@ -194,7 +194,7 @@ foreach ($phrase in @(
   Assert-Matches $text.keyboard_test ([regex]::Escape($phrase)) "Keyboard navigation regression is missing assertion: $phrase"
 }
 foreach ($phrase in @(
-  'professional main menu screenshot is saved',
+  'professional main menu primary and named screenshots are saved',
   'map selection screenshot is saved',
   'settings workspace screenshot is saved',
   'save archive screenshot is saved',

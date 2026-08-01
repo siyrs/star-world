@@ -58,18 +58,50 @@ func _run() -> void:
 		"spawn quality policy covers all five production profiles",
 	)
 	_check(registry.get_validation_errors().is_empty(), "spawn quality policy has no validation errors")
-	# Synthetic canopy-obstruction fixture: verify the hardest seed produces a safe spawn.
+	# Synthetic canopy-obstruction fixture: verify that the spawn evaluator
+	# rejects positions where tree leaves or wood block the body column.
+	# Use the densest-canopy seed and check the overhead cells directly.
 	var canopy_gen = GeneratorScript.new()
 	canopy_gen.configure("star_continent", 24681357)
 	var canopy_position: Vector3 = canopy_gen.find_spawn_position()
 	var canopy_snapshot: Dictionary = canopy_gen.get_last_spawn_quality_snapshot()
+	var bx := int(canopy_position.x - 0.5)
+	var bz := int(canopy_position.z - 0.5)
+	var by := int(canopy_position.y - 1.05)
 	_check(
 		bool(canopy_snapshot.get("hard_safe", false)),
-		"star_continent seed 24681357 produces a hard-safe spawn"
+		"canopy fixture seed 24681357 produces a hard-safe spawn"
 	)
 	_check(
 		canopy_position.y > 1.0 and canopy_position.y < 64.0,
-		"star_continent seed 24681357 spawns within the world bounds"
+		"canopy fixture spawns within world bounds"
+	)
+	# Verify the three body cells above the spawn surface are air — no tree
+	# canopy or solid decoration blocking first-frame view.
+	var canopy_body_clear := true
+	for offset_y in range(1, 4):
+		var overhead_block: String = canopy_gen.get_block(Vector3i(bx, by + offset_y, bz))
+		if overhead_block != "air":
+			canopy_body_clear = false
+			break
+	_check(canopy_body_clear, "canopy fixture body column is clear of solid blocks and leaves")
+	# Verify that resolving the spawn through the player respawn system preserves
+	# the position (grounded, supported) — critical for save/load round-trips.
+	var canopy_resolver = SpawnResolverScript.new()
+	var canopy_proxy := GeneratorWorldProxy.new()
+	canopy_proxy.generator = canopy_gen
+	var canopy_resolved: Vector3 = canopy_resolver.resolve(
+		canopy_proxy, canopy_position, canopy_position
+	)
+	canopy_proxy.generator = null
+	canopy_proxy.free()
+	_check(
+		canopy_resolved.is_equal_approx(canopy_position),
+		"canopy fixture resolved spawn matches the selected position"
+	)
+	_check(
+		canopy_resolved.y >= 1.0,
+		"canopy fixture resolved position is grounded"
 	)
 
 	for profile_id: String in profile_ids:
