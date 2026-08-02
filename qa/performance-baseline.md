@@ -2,26 +2,49 @@
 
 ## 固定环境
 
-- 分支/commit：`codex/commercial-release-gameplay-polish` / `c1054d8834bbabdf6e6035f909e66cb7c5084717`
-- 构建产物：`build/release-readiness-fresh-pwsh7/StarWorld.exe`，SHA-256 `C42EB5D17F683EB8BCD52C19A9F36EBF811B1788623878D5276A7D9FFC09F95C`，2026-07-31 10:14:13 +08:00；PCK `38B6E33400D1E0A3C0E2D8BB72EE6AD664603AADD9A19B58286ADDEF9F90C305`，10:14:16（2026-07-31 10:52 +08:00 重新用 `Get-FileHash` 完整核验）。
-- 操作系统/CPU/GPU/内存：待采集
-- Godot/渲染器/窗口模式/分辨率/VSync：待采集
-- 采样工具、采样周期与场景脚本：待确定
+- 分支/commit：`master`（本轮 OpenSpec 工作），基线 commit `8ec6bb7`（deep journeys）。
+- 构建产物：`build/release-readiness-fresh-pwsh7/StarWorld.exe`，SHA-256 `C42EB5D17F683EB8BCD52C19A9F36EBF811B1788623878D5276A7D9FFC09F95C`；本轮场景采集直接跑编辑器驱动（`Godot_v4.7-stable_win64_console.exe`），fresh-EXE 证据见 `release-smoke-final/`。
+- 操作系统/CPU/GPU/内存：Windows 11 Pro 26200；NVIDIA GeForce RTX 3090（驱动 610.74，OpenGL 3.3 Compatibility）。
+- Godot/渲染器/窗口模式/分辨率/VSync：Godot 4.7-stable official；`gl_compatibility`；窗口 1280x720；设计分辨率 1280x720。
+- 采样工具、周期与场景脚本：`tests/qa/performance_scenario_capture.gd`（真实帧时逐帧采集，237 有效帧/场景，跳过 3 帧预热）；外部内存采样 `tests/ci/run_performance_capture.ps1`（1s 周期，跟踪 workload 子进程 PID——console.exe 是 launcher，见 memory `godot-console-launcher-child-process`）。
+- 原始证据：`build/claude-perf/perf-report.json`（场景指标）、`build/claude-perf/perf.memory.json`（52 个带时间戳的 WS/PB 样本）。
 
-## 指标
+## 指标（本轮采集，2026-08-02）
 
-| 场景 | 阶段 | 平均 FPS | 最低 FPS | 1% Low | 平均/峰值帧时 | CPU | GPU | 内存/峰值 | 显存 | GC 次数/峰值停顿 | 加载时间 | 运行时长 | 原始证据 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Fresh release smoke 初始世界 | baseline | 50（终态采样） | 待采集 | 待采集 | avg 20.016 ms / peak 29.109 ms | 待采集 | 待采集 | 内部 `0.0 MiB`，无效，待外部采样 | 待采集 | 未暴露 | export 7.75 s；runner 7.74 s | 180 帧/约 6.5 s | `build/release-readiness-fresh-pwsh7/release-smoke.json` |
+| 场景 | 阶段 | 平均 FPS | 1% Low FPS | 平均/峰值帧时 (ms) | p95/p99 帧时 (ms) | 节点数 | Draw Calls | 加载时间 | 运行时长 | 原始证据 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 主菜单 | baseline | 57.2 | 1.0* | 6.07 / 6.78 | 6.19 / 6.78 | 1982 | 242 | — | 240 帧 | perf-report.json |
+| 星辰大陆 | 出生 | 57.5 | 23.0 | 13.58 / 43.51 | 39.80 / 43.51 | 2114 | 212 | 1315 ms | 240 帧 | 同上 |
+| 星辰大陆 | 移动压力 | 80.9 | 79.0 | 12.35 / 32.99 | 31.21 / 32.99 | 2147 | 274 | — | 240 帧 | 同上 |
+| 荒漠遗迹 | 出生 | 61.1 | 20.0 | 12.32 / 45.01 | 40.01 / 45.01 | — | — | 1117 ms | 240 帧 | 同上 |
+| 荒漠遗迹 | 移动压力 | 90.4 | 89.0 | 10.84 / 32.32 | 30.92 / 32.32 | — | — | — | 240 帧 | 同上 |
+| 极寒冰原 | 出生 | 68.0 | 46.0 | 13.44 / 42.49 | 40.60 / 42.49 | — | — | 595 ms | 240 帧 | 同上 |
+| 极寒冰原 | 移动压力 | 83.3 | 81.0 | 12.15 / 34.20 | 32.83 / 34.20 | — | — | — | 240 帧 | 同上 |
+| 天空群岛 | 出生 | 46.8 | 16.0 | 18.72 / 37.26 | 34.19 / 37.26 | — | — | 3171 ms | 240 帧 | 同上 |
+| 天空群岛 | 移动压力 | 52.3 | 49.0 | 18.16 / 42.73 | 34.94 / 42.73 | — | — | — | 240 帧 | 同上 |
+| 深渊世界 | 出生 | 57.8 | 40.0 | 16.24 / 43.94 | 41.93 / 43.94 | — | — | 673 ms | 240 帧 | 同上 |
+| 深渊世界 | 移动压力 | 64.6 | 62.0 | 15.28 / 36.48 | 32.69 / 36.48 | — | — | — | 240 帧 | 同上 |
+| 星辰大陆 | 重复加载×3 | — | — | — | — | — | — | 1279/1270/1274 ms | 3 循环 | 同上 |
+| 主菜单 | 设置变更 | 88.6 | 61.0 | 6.07 / 6.70 | 6.18 / 6.70 | — | — | — | 120 帧 | 同上 |
+
+\* 主菜单 1% low=1.0 FPS 是首帧菜单动画单帧，非稳态（avg 57.2，p95 帧时 6.19ms）。
+
+## 外部内存（52 个时间戳样本，workload 子进程 PID）
+
+| 指标 | min | p50 | p95 | max |
+|---|---|---|---|---|
+| Working Set (MiB) | 198.7 | 370.3 | 384.8 | 386.3 |
+| Private Bytes (MiB) | 178.1 | 420.6 | 444.6 | 445.7 |
+
+内部 `memory_mib` 在编辑器驱动下有效（147.9–163.4 MiB，见各场景行）；发布 EXE 下 `MEMORY_STATIC` 返回 0，按要求标记 unavailable 并用上表外部计数。
 
 ## 长稳趋势
 
-| 时间点 | 地图/场景 | Working Set | Private Bytes | CPU | FPS/帧时 | 错误计数 | 备注 |
-|---|---|---|---|---|---|---|---|
+见 `build/claude-soak/`（OpenSpec 5.5，独立 soak 采集）。
 
 ## 初始观察
 
-- release smoke 自身 16 checks 与 visual/soak `ok=true`，无 stutter；终态 draw calls 186、nodes 2116。
-- 运行健康仍为 warning：初始世界 chunk 队列 pending=62，超过 warning=48；需更长时间序列确认是否收敛，不能只改阈值。
-- 内部 `memory_mib=0.0` 不可信；必须补 Windows 进程内存采样后才可形成发布性能结论。
-- stderr 有字体导出缺失 warning，见 `BUG-UI-001`。
+- 五图出生/移动压力平均 FPS 46.8–90.4，1% low 16–89；天空群岛出生最慢（46.8 avg，3171ms 加载），与浮岛地形复杂度一致。
+- 出生阶段 p95 帧时 ~40ms 集中在流式 chunk 构建；移动压力阶段 p95 回落到 ~31–35ms，说明初始流式收敛后压力稳定。
+- 外部 WS p95 384.8 MiB / PB p95 444.6 MiB，趋势平稳（min 198.7 为启动期，max 386.3 未随场景增长失控）。
+- 不可用计数边界：发布 EXE 内部 memory_mib 标记 unavailable；CPU/GPU/VRAM 本机无可靠计数器（见 8.6 最终报告的风险登记）。
