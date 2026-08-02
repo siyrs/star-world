@@ -65,8 +65,8 @@
 ## 8. Final quality gate and delivery
 
 - [x] 8.1 Run the full static/Godot regression suite and every affected focused suite from fresh source; triage and close all P0/P1 issues or document actual external blockers.
-- [ ] 8.2 Fresh-export the final commit and independently validate EXE identity, package contents, lifecycle, UI font, logs, performance evidence, and all critical regressions.
+- [x] 8.2 Fresh-export the final commit and independently validate EXE identity, package contents, lifecycle, UI font, logs, performance evidence, and all critical regressions.
 - [x] 8.3 Update every profile row and finite-content row in `qa/map-coverage-matrix.md` with actual entry, exploration, acceptance-journey, water/boundary, save, death/recovery, task/content, issue, and regression evidence.
 - [x] 8.4 Produce the complete final release report required by the manual: execution summary, map coverage, fix list, before/after performance, automation, code/commit list, and evidence-backed residual risks.
-- [ ] 8.5 Create small, scoped commits on the independent branch, verify the final worktree excludes temporary/generated artifacts, and record the commit list without pushing or publishing.
-- [ ] 8.6 Conduct the manual-governed final review: all 20 release acceptance conditions are evidenced, all designed completion conditions are exercised or accurately marked absent, and the recommendation is explicitly release/no-release.
+- [x] 8.5 Create small, scoped commits on the independent branch, verify the final worktree excludes temporary/generated artifacts, and record the commit list without pushing or publishing.
+- [x] 8.6 Conduct the manual-governed final review: all 20 release acceptance conditions are evidenced, all designed completion conditions are exercised or accurately marked absent, and the recommendation is explicitly release/no-release.
