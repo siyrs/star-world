@@ -20,6 +20,23 @@ class GeneratorWorldProxy:
 		return generator.get_block(position)
 
 
+class CanopyFixtureGenerator:
+	extends GeneratorScript
+
+	# A deterministic, in-memory world fixture. The origin has otherwise-valid
+	# grass but a leaves block in the player body column; adjacent columns are
+	# deliberately clear. This proves the selector rejects a concrete canopy
+	# obstruction instead of merely observing a lucky procedural-world seed.
+	func get_block(block_position: Vector3i) -> String:
+		if block_position.y == 0:
+			return "bedrock"
+		if block_position.y == 10:
+			return "grass"
+		if block_position.x == 0 and block_position.z == 0 and block_position.y == 11:
+			return "leaves"
+		return "air"
+
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -58,28 +75,27 @@ func _run() -> void:
 		"spawn quality policy covers all five production profiles",
 	)
 	_check(registry.get_validation_errors().is_empty(), "spawn quality policy has no validation errors")
-	# Synthetic canopy-obstruction fixture: verify that the spawn evaluator
-	# avoids positions where tree leaves or wood block the body column.
-	# Use the densest-canopy seed and check overhead cells via the generator's
-	# surface-height query to avoid floating-point truncation of the spawn Y.
-	var canopy_gen = GeneratorScript.new()
+	# Synthetic canopy-obstruction fixture. Unlike a seed-only observation, this
+	# injects leaves into the first candidate's body column and proves that the
+	# selector moves to a different grounded cell.
+	var canopy_gen = CanopyFixtureGenerator.new()
 	canopy_gen.configure("star_continent", 24681357)
 	var canopy_position: Vector3 = canopy_gen.find_spawn_position()
 	var canopy_snapshot: Dictionary = canopy_gen.get_last_spawn_quality_snapshot()
-	var bx := int(canopy_position.x - 0.5)
-	var bz := int(canopy_position.z - 0.5)
-	var by := canopy_gen.get_surface_height(bx, bz)
+	var bx := int(floorf(canopy_position.x))
+	var bz := int(floorf(canopy_position.z))
+	var by := 10
 	_check(
 		bool(canopy_snapshot.get("hard_safe", false)),
-		"canopy fixture seed 24681357 produces a hard-safe spawn"
+		"synthetic canopy fixture produces a hard-safe spawn"
+	)
+	_check(
+		not canopy_position.is_equal_approx(Vector3(0.5, 11.05, 0.5)),
+		"synthetic canopy fixture rejects the blocked origin candidate"
 	)
 	_check(
 		canopy_position.y > 1.0 and canopy_position.y < 64.0,
-		"canopy fixture spawns within world bounds"
-	)
-	_check(
-		by >= 1,
-		"canopy fixture surface height is above bedrock at spawn x=%d z=%d" % [bx, bz]
+		"synthetic canopy fixture spawns within world bounds"
 	)
 	# Verify the three body cells above the surface are air — no tree canopy
 	# or solid decoration blocking first-frame view.
@@ -89,20 +105,22 @@ func _run() -> void:
 		if overhead_block != "air":
 			canopy_body_clear = false
 			break
-	_check(canopy_body_clear, "canopy fixture body column is clear of solid blocks and leaves")
-	# Verify that resolving the spawn through the player respawn system preserves
-	# the position (grounded, supported) — critical for save/load round-trips.
+	_check(canopy_body_clear, "synthetic canopy fixture body column is clear of solid blocks and leaves")
+	# Verify that a valid existing save position survives the resolver unchanged;
+	# this covers save/load recovery without treating every restored player as a
+	# fresh spawn.
 	var canopy_resolver = SpawnResolverScript.new()
 	var canopy_proxy := GeneratorWorldProxy.new()
 	canopy_proxy.generator = canopy_gen
+	var existing_save_position := Vector3(8.5, 11.05, 8.5)
 	var canopy_resolved: Vector3 = canopy_resolver.resolve(
-		canopy_proxy, canopy_position, canopy_position
+		canopy_proxy, existing_save_position, canopy_position
 	)
 	canopy_proxy.generator = null
 	canopy_proxy.free()
 	_check(
-		canopy_resolved.is_equal_approx(canopy_position),
-		"canopy fixture resolved spawn matches the selected position"
+		canopy_resolved.is_equal_approx(existing_save_position),
+		"valid existing-save position remains unchanged by spawn recovery"
 	)
 	_check(
 		canopy_resolved.y >= 1.0,

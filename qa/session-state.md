@@ -1,104 +1,51 @@
 # QA Session State
 
-更新时间：2026-08-01 +08:00
+更新时间：2026-08-02 +08:00
 
 ## 当前 Git
 
 - 分支：`codex/commercial-release-gameplay-polish`
-- 起点提交：`c1054d8`
-- 最新提交：`f06be2e`（已推送 origin）
-- 提交链：10 commits
-- 工作树：干净
+- 基线 HEAD：`7dba322f9f030672acdbd3621f5e0f80d6254ec8`（13 commits，已存在远端）
+- 当前工作：本轮修复尚未提交；未推送任何本轮内容。
 
-## 最新构建证据
+## 本轮已验证证据
 
-- 第五轮 fresh export/smoke PASS（16/16，stderr 空）
-- EXE SHA-256：`7DBA12D14E820508178394DB48326191EC629F6F72A69D4A04F3F6EB6B82D8B5`
-- PCK SHA-256：`65DCCFA7F9362ABF624BD0A95BBF0A30C366DE53F0BE71DB2B69D5596A9EF98A`
-- FileVersion/ProductVersion：`1.3.0.0`
-- 导出目录：`build/audit-deepseek-round5/release-smoke-pwsh7/`
+- Godot：`build/tools/godot/Godot_v4.7-stable_win64_console.exe`（4.7）。
+- UI 设计系统：`build/codex-fix-round7/ui.stdout.log`，137/137 PASS；纹理 Button、Primary、Secondary、Danger、MenuPrimary 在 normal/hover/pressed/focus 的实际内容区最小对比度均 >= 4.5。
+- 出生：`build/codex-fix-round7/spawn.stdout.log`，5 profiles × seed `24681357` 共 54 checks PASS；新增注入式树冠阻挡夹具和有效旧档位置保留验证。
+- 五地图基础旅程：`build/codex-fix-round7/profile-journey-main.png`、`profile-journey-*.png`、`profile-release-journey-report.json`；58 checks PASS。每个 Profile 均通过真实鼠标菜单选择、固定 Seed `112358` 创建、进入可玩世界、核对持久化元数据、返回菜单、删除隔离 QA 世界及 pre/post world manifest 对比。
+- fresh Windows export/smoke：`build/codex-fix-round7/release-smoke-final/`，16/16 PASS。`release-smoke.memory.json` 含 7 个带时间戳的 Working Set/Private Bytes 样本：Working Set p95 322.4 MiB，Private Bytes p95 375.2 MiB；没有将不可用内部计数误报为 0。
+- 全量：`build/codex-fix-round7/run-all.log`，脚本 exit 0；但日志仍有 ObjectDB/Resource 泄漏，见下方，不能作为发布通过。
+- 诊断修复回归：ecology danger、ranged runtime、abyss elite、runtime diagnostics 分别 PASS；修掉了 6 个测试将 `global_position` 写入未入树 Node3D 而触发的 Transform3D 错误。
 
-## Bug 状态
+## 已完成地图与未完成范围
 
-| Bug | 状态 | 备注 |
-|---|---|---|
-| BUG-REL-001 | ✓ fixed | PS5.1 前置检测，提前失败并提示 pwsh |
-| BUG-UI-001 | ✓ fixed | 字体通过 preload 导出，stderr 无 warning |
-| BUG-PACK-001 | ✓ fixed | build/* qa/* 已加入 exclude_filter |
-| BUG-VERSION-001 | ✓ fixed | 三层版本统一 1.3.0，EXE 嵌入已验证 |
-| BUG-QA-002 | ✓ qa-passed | QA-002 独立 PASS |
-| BUG-OBS-001 | ✓ fixed | 内存 ≤0 返回 -1.0；health policy 跳过评估并提示外部采样 |
-| BUG-UI-002 | fixing | Toolbar/Card/Selected 对比度已修；GhostButton disabled epsilon 已修；纹理按钮仅验证存在性；9→1 项失败改善中 |
-| BUG-SPAWN-001 | fixing | 5×6 矩阵通过（279 checks）；树冠夹具 overhead check 代码已修待验证；ObjectDB 清理代码已加待验证 |
-| BUG-PERF-001 | open | chunk 队列收敛时间序列待采集 |
-
-## 已知问题
-
-- UI 回归：GhostButton disabled 融合对比度边界待运行时验证
-- 全量测试：27 ObjectDB leaks、8 未释放资源、6 Transform3D 错误（ref-count 清理代码已加，待重测）
-- 纹理按钮（Button/Primary/Secondary/Danger/MenuPrimary）各交互状态对比度未计算
-- 五 Profile 验收旅程 0/5 完成
-- OpenSpec：13/47 → 部分代码完成项待勾选
-- 当前工程：Godot 4.7、GDScript、GL Compatibility；主场景 `res://scenes/game/game.tscn`；唯一导出预设 `Windows Desktop`。
-- 本机引擎：`C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe`，文件版本 4.7。
-- Windows PowerShell 5.1 调用在导出前失败，证据为 `build/release-readiness-fresh/release-smoke.driver.log`；已登记 `BUG-REL-001`。
-- PowerShell 7 fresh export/smoke 通过：
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 `
-  -Godot 'C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe' `
-  -OutputDirectory .\build\release-readiness-fresh-pwsh7
-```
-
-- 结果：export exit 0；runner exit 0；checks=16；soak=180 帧；进程已退出。
-- 产物：EXE SHA-256 `C42EB5D17F683EB8BCD52C19A9F36EBF811B1788623878D5276A7D9FFC09F95C`；PCK SHA-256 `38B6E33400D1E0A3C0E2D8BB72EE6AD664603AADD9A19B58286ADDEF9F90C305`。
-- 基线未达到发布通过：字体缺失 warning、chunk 队列健康 warning、memory 指标 0.0 已登记。
-- PM readiness validator 已于 10:27 exit 0；进入实施阶段。
-- Developer 首批自测：
-  - `BUG-QA-002`：`build/developer-selftest-qa002`，production-scene desktop 内层 32 checks/10 captures、外层 exact OutputPath 均 exit 0；待独立 QA。
-  - `BUG-UI-002`：`build/developer-selftest-ui002`，headless 64 checks、desktop 32 checks/10 captures exit 0；待独立 QA。
-  - `BUG-SPAWN-001`：第一轮 5 profiles×3 seeds/108 checks 与 core smoke rerun 100 checks 通过，但 `desktop-input-contract` 仍有 1 项失败；关键复现 Seed `24681357` 未纳入且 ObjectDB leak 三轮未闭合，修复包返回 Developer，不得提交。
-
-## 覆盖状态
-
-- 已测试地图：星辰大陆仅完成 fresh smoke 直达和 production-scene 菜单创建/HUD UI 旅程；未完成地图验收旅程。
-- 已通关地图：无（本轮）。
-- 未测试地图：荒漠遗迹、极寒冰原、天空群岛、深渊世界；星辰大陆完整探索仍未完成。
+- 基础进入（五张）：星辰大陆、荒漠遗迹、极寒冰原、天空群岛、深渊世界，均已桌面实测进入/返回/保存元数据/清理。
+- 未完成：五 Profile 的水域、死亡/复活、探索边界与接缝、交互/战斗/建造、读档重入及正常内容旅程；这些仍是 OpenSpec 6.2--6.7、7.x 的发布阻塞项。
+- 传统“通关”条件：当前项目没有已实现的任务/地图结局；不得伪造通关状态，按完整验收旅程替代。
 
 ## 当前问题
 
-- 正在处理：Developer 修复 `BUG-SPAWN-001` 的 filter/有界扫描/desktop input contract/六 Seed×五 Profile/相邻地形/leak 三轮门禁，并按 QA-002 返回的完整按钮状态修复 `BUG-UI-002`。
-- 已发现：`BUG-REL-001`、`BUG-UI-001`、`BUG-PERF-001`、`BUG-OBS-001`、`BUG-QA-002`、`BUG-UI-002`、`BUG-SPAWN-001`、`BUG-VERSION-001`、`BUG-PACK-001`。
-- 已修复并独立 QA 通过：`BUG-QA-002`。
-- 已修复但 QA 失败返回：`BUG-UI-002`（布局改善，但多个实际按钮 normal/hover/pressed/focus 对比度 <4.5）。
-- 待回归：`BUG-UI-002` 待 Developer 二轮 self-test 后 QA-003；`BUG-SPAWN-001` 仍在 bugfixing。
-- QA-002 用户数据保护：12 世界、31 个 world/settings 文件前后 added/removed/changed 均 0；清单摘要 `80A239102203D05878F50ED920D0D48078D5B4CE3B03751723D4AD40EE07DCB6`。
+| ID | 等级 | 状态 | 证据 / 下一步 |
+|---|---|---|---|
+| BUG-UI-002 | P1 | fixed，待独立 QA-003 | 137/137 本轮工程回归通过；仍需独立同案例桌面复测。 |
+| BUG-SPAWN-001 | P1 | fixed，待碰撞专项 | 真实树冠夹具与 focused matrix 通过；尚未完成坡面/接缝/陷阱/掉出世界 3.7。 |
+| BUG-OBS-001 | P1 | fixed | fresh export 产出可审计的原始外部内存样本和正确 p95。 |
+| BUG-LEAK-001 | P1 | open | 全量日志仍报告 ObjectDB 2+13+8+6=29，Resource 3+3+2=8；需对 core smoke、tool harvest、agriculture、irrigation 的 verbose 泄漏明细逐项修复。 |
+| BUG-PERF-001 | P1 | open | 没有按发布手册完成跨区域 FPS/1% low/CPU/GPU/VRAM/120min 数据。 |
 
 ## 最近命令
 
 ```powershell
-& 'C:\Program Files\Git\bin\bash.exe' 'C:\Users\sirius\.codex\skills\dev-baseline\shared\scripts\validate-task-readiness.sh' 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish'
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\ci\run_godot_desktop_test.ps1 -Godot <Godot-4.7-console> -ProjectRoot . -ScriptPath res://tests/qa/ui_visual_refresh_desktop_acceptance.gd -OutputPath build/developer-selftest-ui002/ui-visual-refresh-main.png
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot .\build\tools\godot\Godot_v4.7-stable_win64_console.exe
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 -Godot .\build\tools\godot\Godot_v4.7-stable_win64_console.exe -OutputDirectory build/codex-fix-round7/release-smoke-final
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\ci\run_godot_desktop_test.ps1 -Godot .\build\tools\godot\Godot_v4.7-stable_win64_console.exe -ProjectRoot . -ScriptPath res://tests/qa/profile_release_journey_regression.gd -OutputPath build/codex-fix-round7/profile-journey-main.png
 ```
-
-## 最近有效存档
-
-- production-scene UI journey 创建并删除 4 个唯一 QA 世界；现有 12 个世界测试前后文件数和 SHA-256 全部一致。
-- 用户数据保护备份：`C:\Users\sirius\AppData\Local\Temp\starworld-qa-backups\20260731-101853`。
-- 仍未完成真实保存→退出→读档验收。
-
-## GUI/桌面证据
-
-- Computer Use fresh EXE：窗口唯一识别并运行 66.3 秒，`Responding=True`；因 `0x80070005` 无法激活/捕获，未发送盲输入；通过 `CloseMainWindow()` 正常退出。
-- export-EXE 证据：`build/release-readiness-fresh-pwsh7`，仅 16-check release smoke。
-- production-scene desktop InputEvent 证据：`build/release-readiness-ui-flow`，内层 32 checks / 10 captures 通过；外层 runner 因主截图契约不一致退出 1，见 `BUG-QA-002`。
-- 现有用户数据：12 个世界、29 个世界文件、settings 与回收站测试前后 SHA-256/路径完全一致。
 
 ## 下一步
 
-1. Developer 修复 `desktop_input_contract` 红灯并解释根因，不得只改断言。
-2. 先修 spawn 单组合 filter 的 typed-array script error；用 ≤30 秒跑 `star_continent/24681357` 并输出 wall/termination/budget/scanned/evaluated/score/hard_safe/degraded，再扩 6×5。
-3. `BUG-SPAWN-001` 完成合成遮挡/相邻地形/旧档/解析器、隔离无存档 input contract、三轮 ObjectDB leak 门禁并报告。
-4. Developer 修 `BUG-UI-002` 全交互状态对比度并扩展测试；同一 QA 执行 QA-003。
-5. 以上通过后再进入 REL/PACK/font，随后性能/遥测和五 Profile 正常入口发布旅程。
-6. 75 个本轮 editor scan 生成的未跟踪 `.uid/.import` 元数据待 Developer 退出后精确清理；不得触碰用户源码/QA 文档。
+1. 用 verbose 定位并修复 `BUG-LEAK-001` 的四个测试出口；全量 runner 需将其视为阻塞，不能仅看 exit 0。
+2. 建立/运行 3.7 碰撞、边界、接缝和恢复巡检。
+3. 完成 6.2--6.7 与 7.1--7.4 的真实玩法/水域/存读档/极端输入旅程。
+4. 采集 5.2--5.5 性能与 120 分钟长稳证据。
+5. 独立 QA-003、最终 fresh export、OpenSpec final review 后才决定发布。

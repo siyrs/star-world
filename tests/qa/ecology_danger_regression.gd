@@ -239,7 +239,6 @@ func _test_danger_service_budget() -> void:
 	world.profile_id = "abyss_world"
 	world.mode = "danger"
 	var player := Node3D.new()
-	player.global_position = Vector3(0.5, 8.0, 0.5)
 	var service = DangerServiceScript.new()
 	root.add_child(day_night)
 	root.add_child(spawner)
@@ -247,6 +246,7 @@ func _test_danger_service_budget() -> void:
 	root.add_child(player)
 	root.add_child(service)
 	await process_frame
+	player.global_position = Vector3(0.5, 8.0, 0.5)
 	_check(bool(service.setup(day_night, spawner)), "danger service accepts production data")
 	service.attach_world(world, player)
 	var snapshot: Dictionary = service.refresh_now()
@@ -280,13 +280,13 @@ func _test_prospecting_danger_persistence() -> void:
 	var world := FakeWorld.new()
 	world.profile_id = "star_continent"
 	var player := Node3D.new()
-	player.global_position = Vector3(0.5, 16.0, 0.5)
 	var service = ProspectingServiceScript.new()
 	root.add_child(danger)
 	root.add_child(world)
 	root.add_child(player)
 	root.add_child(service)
 	await process_frame
+	player.global_position = Vector3(0.5, 16.0, 0.5)
 	_check(bool(service.setup(items, danger)), "prospecting accepts the danger service")
 	service.attach_world(world, player)
 	var result: Dictionary = service.use_item("prospecting_kit", 5000)

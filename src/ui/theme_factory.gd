@@ -276,9 +276,12 @@ static func _register_textured_button(
 		theme.set_type_variation(variation, "Button")
 	theme.set_font_size("font_size", variation, font_size)
 	theme.set_color("font_color", variation, Color("#FFFFFF"))
-	theme.set_color("font_hover_color", variation, Color("#FFFFA0"))
+	# Pixel button faces are deliberately dark enough that all interactive text
+	# states retain a 4.5:1 contrast floor. Hover/focus feedback comes from the
+	# distinct face and focus ring instead of reducing text legibility.
+	theme.set_color("font_hover_color", variation, Color("#FFFFFF"))
 	theme.set_color("font_pressed_color", variation, Color("#FFFFFF"))
-	theme.set_color("font_focus_color", variation, Color("#FFFFA0"))
+	theme.set_color("font_focus_color", variation, Color("#FFFFFF"))
 	theme.set_color("font_disabled_color", variation, Color("#A0A0A0"))
 	theme.set_color("font_shadow_color", variation, Color("#101010CC"))
 	theme.set_constant("shadow_offset_x", variation, 1)

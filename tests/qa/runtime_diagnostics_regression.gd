@@ -84,7 +84,6 @@ func _test_telemetry_and_overlay() -> void:
 	root.add_child(host)
 	var world := FakeWorld.new()
 	var player := Node3D.new()
-	player.global_position = Vector3(2.5, 24.0, -6.5)
 	var context := FakeInputContext.new()
 	var spawner := Node3D.new()
 	var creature := Node3D.new()
@@ -97,6 +96,7 @@ func _test_telemetry_and_overlay() -> void:
 	for node in [world, player, context, spawner, pickup, telemetry, overlay]:
 		host.add_child(node)
 	await process_frame
+	player.global_position = Vector3(2.5, 24.0, -6.5)
 	telemetry.setup(context, spawner)
 	telemetry.attach_runtime(world, player)
 	for _index in 12:

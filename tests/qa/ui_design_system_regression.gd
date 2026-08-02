@@ -148,7 +148,9 @@ func _test_theme_contract() -> void:
 			"panel %s disabled contrast (%.1f) is visibly lower than normal (%.1f)"
 			% [variation, disabled_contrast, normal_contrast]
 		)
-	# Textured buttons always use dark pixel-art backgrounds; verify registration.
+	# Textured buttons use pixel-art faces, so contrast must be measured against
+	# the pixels underneath the text content rectangle rather than a nominal
+	# token. Focus is an overlay ring and retains the normal face underneath.
 	var textured_variations := [
 		"Button",
 		"PrimaryButton",
@@ -157,14 +159,28 @@ func _test_theme_contract() -> void:
 		"MenuPrimaryButton",
 	]
 	for variation: String in textured_variations:
-		_check(
-			theme.get_stylebox("normal", variation) != null,
-			"overlay %s has a valid normal style" % variation
-		)
-		_check(
-			panel_theme.get_stylebox("normal", variation) != null,
-			"panel %s has a valid normal style" % variation
-		)
+		for textured_theme_spec: Array in [["overlay", theme], ["panel", panel_theme]]:
+			var context_name: String = str(textured_theme_spec[0])
+			var textured_theme: Theme = textured_theme_spec[1] as Theme
+			for state_spec: Array in [
+				["normal", "font_color", "normal"],
+				["hover", "font_hover_color", "hover"],
+				["pressed", "font_pressed_color", "pressed"],
+				["focus", "font_focus_color", "normal"],
+			]:
+				var state_name: String = str(state_spec[0])
+				var font_property: String = str(state_spec[1])
+				var face_state: String = str(state_spec[2])
+				var textured_style := textured_theme.get_stylebox(face_state, variation)
+				var contrast: float = _minimum_textured_content_contrast(
+					textured_style,
+					textured_theme.get_color(font_property, variation)
+				)
+				_check(
+					contrast >= 4.5,
+					"%s %s %s effective content contrast >= 4.5 (%.2f)"
+					% [context_name, variation, state_name, contrast]
+				)
 	_check(
 		panel_theme.get_constant("shadow_outline_size", "PageTitle") == 0
 		and panel_theme.get_constant("shadow_outline_size", "SectionTitle") == 0,
@@ -381,6 +397,28 @@ func _effective_background(stylebox: StyleBox, fallback: Color) -> Color:
 		if bg.a >= 0.01:
 			return fallback.lerp(Color(bg.r, bg.g, bg.b, 1.0), bg.a)
 	return fallback
+
+
+func _minimum_textured_content_contrast(stylebox: StyleBox, font_color: Color) -> float:
+	if not stylebox is StyleBoxTexture:
+		return 0.0
+	var texture := (stylebox as StyleBoxTexture).texture
+	if texture == null:
+		return 0.0
+	var image := texture.get_image()
+	if image == null:
+		return 0.0
+	var left := int(ceilf(stylebox.content_margin_left))
+	var right := image.get_width() - int(ceilf(stylebox.content_margin_right))
+	var top := int(ceilf(stylebox.content_margin_top))
+	var bottom := image.get_height() - int(ceilf(stylebox.content_margin_bottom))
+	if left >= right or top >= bottom:
+		return 0.0
+	var minimum := INF
+	for y in range(top, bottom):
+		for x in range(left, right):
+			minimum = minf(minimum, _contrast_ratio(font_color, image.get_pixel(x, y)))
+	return minimum
 
 
 func _linear_channel(channel: float) -> float:
