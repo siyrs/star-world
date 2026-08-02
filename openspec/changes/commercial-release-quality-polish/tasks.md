@@ -64,7 +64,7 @@
 
 ## 8. Final quality gate and delivery
 
-- [ ] 8.1 Run the full static/Godot regression suite and every affected focused suite from fresh source; triage and close all P0/P1 issues or document actual external blockers.
+- [x] 8.1 Run the full static/Godot regression suite and every affected focused suite from fresh source; triage and close all P0/P1 issues or document actual external blockers.
 - [ ] 8.2 Fresh-export the final commit and independently validate EXE identity, package contents, lifecycle, UI font, logs, performance evidence, and all critical regressions.
 - [x] 8.3 Update every profile row and finite-content row in `qa/map-coverage-matrix.md` with actual entry, exploration, acceptance-journey, water/boundary, save, death/recovery, task/content, issue, and regression evidence.
 - [x] 8.4 Produce the complete final release report required by the manual: execution summary, map coverage, fix list, before/after performance, automation, code/commit list, and evidence-backed residual risks.
