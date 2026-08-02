@@ -11,8 +11,8 @@ const SCRIPTS := {
 	"cow": preload("res://src/entity/cow.gd"),
 	"pig": preload("res://src/entity/pig.gd"),
 	"zombie": preload("res://src/entity/zombie.gd"),
-	"abyss_brute": preload("res://src/entity/abyss_brute.gd"),
-	"abyss_marksman": preload("res://src/entity/abyss_marksman.gd"),
+	"abyss_brute": preload("res://src/entity/cover_aware_abyss_brute.gd"),
+	"abyss_marksman": preload("res://src/entity/cover_aware_abyss_marksman.gd"),
 }
 
 var profiles: Dictionary = {}
