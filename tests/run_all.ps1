@@ -2,7 +2,9 @@ param(
     [string]$Godot = $env:GODOT_BIN
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
+$failedTests = [System.Collections.Generic.List[string]]::new()
+$passedTests = 0
 
 if ([string]::IsNullOrWhiteSpace($Godot)) {
     foreach ($commandName in @('godot4', 'godot')) {
@@ -89,9 +91,41 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_ranch.ps1"
 & "$PSScriptRoot\developer_b\validate_ranch_lifecycle.ps1"
 
+$script:failedTests = [System.Collections.Generic.List[string]]::new()
+$script:passedCount = 0
+$script:failedCount = 0
+
 function Invoke-GodotTest {
     param([Parameter(Mandatory = $true)][string]$ScriptPath)
-    & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path . --script $ScriptPath -- --disable-update-check"
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($ScriptPath)
+    try {
+        & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path . --script $ScriptPath -- --disable-update-check"
+        $script:passedCount++
+        Write-Host "PASS $name"
+    } catch {
+        $script:failedCount++
+        $script:failedTests.Add("$name : $($_.Exception.Message)")
+        Write-Host "FAIL $name : $($_.Exception.Message)"
+    }
+}
+
+function Report-TestSummary {
+    $total = $script:passedCount + $script:failedCount
+    Write-Host ''
+    Write-Host "============================================"
+    Write-Host "RUN_ALL SUMMARY: $script:passedCount / $total passed"
+    if ($script:failedTests.Count -gt 0) {
+        Write-Host ''
+        Write-Host "FAILURES:"
+        foreach ($f in $script:failedTests) {
+            Write-Host "  - $f"
+        }
+        Write-Host ''
+        Write-Host "EXIT: 1 ($($script:failedTests.Count) test(s) failed)"
+        exit 1
+    }
+    Write-Host "EXIT: 0 (all tests passed)"
+    exit 0
 }
 
 Invoke-GodotTest 'res://tests/developer_a/core_smoke_test.gd'
@@ -203,4 +237,4 @@ Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'
 
-Write-Host 'PASS: full Star World regression suite including bounded encounter reward economy, hostile encounter director, hostile ranged encounters, and lifecycle-safe firearm acceptance'
+Report-TestSummary
