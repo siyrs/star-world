@@ -242,31 +242,83 @@ func _test_abyss_lava() -> void:
 	player.bind_survival(survival)
 	player.set_input_enabled(true)
 
-	# Runtime evidence 1: lava is a generic water state for movement.
+	# Runtime evidence 1: lava is still detected as a fluid for movement (it shares the
+	# fluid locomotion path), but it is no longer a SAFE fluid — see the damage check below.
 	player.global_position = Vector3(lava_column.x + 0.5, 4.4, lava_column.z + 0.5)
 	_check(
-		bool(player.call("_is_in_fluid")),
-		"lava contact triggers the generic fluid state (runtime evidence for BUG-LAVA-001)"
+		bool(player.call("_is_in_fluid")) and bool(player.call("_is_in_lava")),
+		"lava contact triggers fluid locomotion and the lava hazard detector"
 	)
 
-	# Runtime evidence 2: swimming in lava works exactly like water (no hazard behavior).
+	# Runtime evidence 2: lava keeps fluid locomotion (movement works while burning),
+	# so a player wading through lava is slowed like water but takes damage — distinct
+	# from the safe-water case. Verify the movement controller produces a swim velocity
+	# in lava rather than asserting a large displacement (the 1-deep pool + interval
+	# burn window is too short for a big move). Drive the controller directly with the
+	# in-fluid flag true, exactly as _physics_process computes it in lava.
 	input.movement = Vector2(0.0, -1.0)
-	var lava_start: Vector3 = player.global_position
-	for _frame in 20:
-		player.call("_physics_process", 0.02)
-	_check(
-		Vector2(player.global_position.x - lava_start.x, player.global_position.z - lava_start.z).length() > 0.05,
-		"lava is swimmable like water (runtime evidence for BUG-LAVA-001)"
-	)
+	var controller: RefCounted = player.get("_movement_controller")
+	_check(controller != null, "abyss_world player exposes its movement controller in lava")
+	if controller != null:
+		player.velocity = Vector3.ZERO
+		player.global_position = Vector3(lava_column.x + 0.5, 4.4, lava_column.z + 0.5)
+		var lava_step: Dictionary = controller.call(
+			"step", player, 0.05, Vector2(0.0, -1.0), false, false, true, false
+		)
+		var lava_velocity: Vector3 = player.velocity
+		_check(
+			Vector2(lava_velocity.x, lava_velocity.z).length() > 0.1,
+			"lava keeps fluid locomotion (swim velocity produced while burning)"
+		)
 
-	# Runtime evidence 3: prolonged lava contact deals no damage. This asserts CURRENT
-	# behavior; the release manual must decide whether this is the intended design.
+	# Runtime evidence 3 (post-fix): lava contact burns. BUG-LAVA-001 established that
+	# lava was a zero-damage generic water state; the fix ticks LAVA_CONTACT_DAMAGE
+	# every LAVA_DAMAGE_INTERVAL. Prove: (a) one interval burns exactly 4.0, (b) the
+	# burn is interval-gated not per-frame, (c) sustained exposure kills (death/recovery
+	# path works from lava), (d) escaping lava stops the burn.
+	survival.health = 20.0
+	survival.set("alive", true)
+	player.velocity = Vector3.ZERO
+	player.global_position = Vector3(lava_column.x + 0.5, 4.4, lava_column.z + 0.5)
 	var health_before: float = survival.health
-	for _frame in 100:
+	for _frame in 12: # 0.6s -> exactly one tick
+		player.call("_physics_process", 0.05)
+	var health_after_tick: float = survival.health
+	_check(
+		is_equal_approx(health_before - health_after_tick, 4.0),
+		"lava burn is one interval-gated tick of 4.0 (BUG-LAVA-001 fixed)"
+	)
+	_check(
+		health_after_tick > 0.0 and bool(survival.get("alive")),
+		"a single lava tick burns without instantly killing"
+	)
+	# Sustained exposure kills: keep the player in lava until death.
+	for _frame in 120:
+		player.global_position = Vector3(lava_column.x + 0.5, 4.4, lava_column.z + 0.5)
+		player.call("_physics_process", 0.05)
+		if not bool(survival.get("alive")):
+			break
+	_check(
+		not bool(survival.get("alive")),
+		"sustained lava exposure kills (death path reachable from lava)"
+	)
+	# Death/recovery from lava: respawn restores the player.
+	if survival.has_method("respawn"):
+		survival.call("respawn")
+	_check(
+		bool(survival.get("alive")) and survival.health > 0.0,
+		"respawn after lava death restores health"
+	)
+	# Escaping lava stops the burn: reset, step out, confirm no further drain.
+	survival.health = 20.0
+	player.velocity = Vector3.ZERO
+	player.global_position = Vector3(lava_column.x + 0.5, 8.0, lava_column.z + 0.5)
+	var escaped_health: float = survival.health
+	for _frame in 20:
 		player.call("_physics_process", 0.05)
 	_check(
-		is_equal_approx(survival.health, health_before),
-		"lava contact deals zero damage over 5 simulated seconds (runtime evidence for BUG-LAVA-001)"
+		is_equal_approx(survival.health, escaped_health),
+		"leaving lava stops the burn"
 	)
 
 	# Recovery: falling below the world from lava depth respawns to a safe position.

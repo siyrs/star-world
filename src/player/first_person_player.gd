@@ -29,6 +29,10 @@ const FOCUS_POLL_INTERVAL := 0.1
 const VOXEL_GROUND_CLEARANCE := 0.02
 const VOXEL_GROUND_TOLERANCE_ABOVE := 0.18
 const VOXEL_GROUND_RECOVERY_DEPTH := 0.4
+# Lava is a hazard, not a swimmable fluid: periodic contact damage on a short
+# cooldown so brief contact burns but does not instantly kill (BUG-LAVA-001).
+const LAVA_CONTACT_DAMAGE := 4.0
+const LAVA_DAMAGE_INTERVAL := 0.5
 
 @export var walk_speed := 5.4
 @export var sprint_speed := 8.0
@@ -58,6 +62,7 @@ var _focus_resolver = FocusResolverScript.new()
 var _focus_poll_accumulator := 0.0
 var _interaction_focus: Dictionary = {}
 var _reported_once: Dictionary = {}
+var _lava_damage_accumulator := 0.0
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -179,6 +184,32 @@ func _physics_process(delta: float) -> void:
 		_apply_voxel_ground_recovery()
 	if global_position.y < -12.0:
 		respawn()
+	_apply_lava_contact_damage(delta)
+
+
+# Lava is distinct from water: it burns on contact rather than acting as a
+# swimmable fluid. Damage is applied on an interval so stepping through lava
+# hurts but escaping quickly is survivable (BUG-LAVA-001).
+func _apply_lava_contact_damage(delta: float) -> void:
+	if not _is_in_lava():
+		_lava_damage_accumulator = 0.0
+		return
+	_lava_damage_accumulator += delta
+	if _lava_damage_accumulator >= LAVA_DAMAGE_INTERVAL:
+		_lava_damage_accumulator = 0.0
+		take_damage(LAVA_CONTACT_DAMAGE, "lava")
+
+
+func _is_in_lava() -> bool:
+	if world == null:
+		return false
+	for sample_height in [0.15, 0.8, 1.55]:
+		var block_position: Vector3i = world.call(
+			"world_to_block", global_position + Vector3.UP * sample_height
+		)
+		if str(world.call("get_block", block_position)) == "lava":
+			return true
+	return false
 
 
 func _get_nearby_voxel_ground() -> Variant:

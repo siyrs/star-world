@@ -140,6 +140,9 @@ func _physics_process(delta: float) -> void:
 		_apply_voxel_ground_recovery()
 	if global_position.y < -12.0:
 		respawn()
+	# This override replaces first_person_player._physics_process (no super call),
+	# so lava contact damage must be applied here too (BUG-LAVA-001).
+	_apply_lava_contact_damage(delta)
 
 
 func _update_interaction_focus(force: bool = false) -> void:
