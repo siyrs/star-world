@@ -6,7 +6,9 @@ const ResourceDistributionRegistryScript = preload("res://src/world/resource_dis
 const WorldDecorationRegistryScript = preload("res://src/world/world_decoration_registry.gd")
 const WorldDecorationPolicyScript = preload("res://src/world/world_decoration_policy.gd")
 const SpawnQualityRegistryScript = preload("res://src/world/spawn_quality_registry.gd")
+const ColumnCacheScript = preload("res://src/world/world_generator_column_cache.gd")
 const WORLD_HEIGHT := 64
+const MAX_COLUMN_CACHE_ENTRIES := 8192
 const SEA_LEVEL := 18
 const RESOURCE_ROLL_SALT := 211
 const SPAWN_DIRECTIONS := [
@@ -39,6 +41,9 @@ var _spawn_quality_profile: Dictionary = {}
 var _decoration_tree_exclusion_density := 0
 var _decoration_profile_refresh_count := 0
 var _last_spawn_quality_snapshot: Dictionary = {}
+var _column_cache = ColumnCacheScript.new(MAX_COLUMN_CACHE_ENTRIES)
+var _surface_height_evaluation_count := 0
+var _sky_strength_evaluation_count := 0
 
 
 func _init() -> void:
@@ -48,6 +53,9 @@ func _init() -> void:
 
 func configure(p_profile_id: String, p_seed: int) -> void:
 	profile_id = normalize_profile_id(p_profile_id)
+	_column_cache.clear(true)
+	_surface_height_evaluation_count = 0
+	_sky_strength_evaluation_count = 0
 	_refresh_decoration_profile()
 	_refresh_spawn_quality_profile()
 	seed_value = p_seed
@@ -154,6 +162,17 @@ func get_block(block_position: Vector3i) -> String:
 
 
 func get_surface_height(x: int, z: int) -> int:
+	var column := Vector2i(x, z)
+	var cached_height: Variant = _column_cache.get_height(column)
+	if cached_height != null:
+		return int(cached_height)
+	_surface_height_evaluation_count += 1
+	var height := _compute_surface_height_uncached(x, z)
+	_column_cache.store_height(column, height)
+	return height
+
+
+func _compute_surface_height_uncached(x: int, z: int) -> int:
 	var broad := height_noise.get_noise_2d(x, z)
 	var detail := detail_noise.get_noise_2d(x, z)
 	match profile_id:
@@ -170,6 +189,24 @@ func get_surface_height(x: int, z: int) -> int:
 			if river < 0.065:
 				return SEA_LEVEL - 2
 			return clampi(21 + roundi(broad * 7.0 + detail * 2.0), 12, 35)
+
+
+
+func get_column_cache_stats() -> Dictionary:
+	var stats: Dictionary = _column_cache.get_stats()
+	stats["profile_id"] = profile_id
+	stats["seed"] = seed_value
+	stats["surface_height_evaluation_count"] = _surface_height_evaluation_count
+	stats["sky_strength_evaluation_count"] = _sky_strength_evaluation_count
+	stats["maximum_column_cache_entries"] = MAX_COLUMN_CACHE_ENTRIES
+	return stats
+
+
+func set_column_cache_enabled_for_test(value: bool) -> void:
+	_column_cache.set_enabled(value)
+	_column_cache.clear(true)
+	_surface_height_evaluation_count = 0
+	_sky_strength_evaluation_count = 0
 
 
 func find_spawn_position() -> Vector3:
@@ -585,6 +622,17 @@ func _get_sky_block(position: Vector3i, terrain_height: int) -> String:
 
 
 func _sky_island_strength(x: int, z: int) -> float:
+	var column := Vector2i(x, z)
+	var cached_strength: Variant = _column_cache.get_sky_strength(column)
+	if cached_strength != null:
+		return float(cached_strength)
+	_sky_strength_evaluation_count += 1
+	var strength := _compute_sky_island_strength_uncached(x, z)
+	_column_cache.store_sky_strength(column, strength)
+	return strength
+
+
+func _compute_sky_island_strength_uncached(x: int, z: int) -> float:
 	var cell_size := 32
 	var base_cell_x := floori(float(x) / cell_size)
 	var base_cell_z := floori(float(z) / cell_size)

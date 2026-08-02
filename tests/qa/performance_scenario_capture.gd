@@ -3,8 +3,9 @@ extends SceneTree
 # OpenSpec 5.3/5.4: like-for-like performance capture across release scenarios.
 #
 # Scenarios: main menu, each profile spawn + rapid movement/turning pressure,
-# repeated load, and a settings change. Each scenario records real frame times
-# (avg / p95 / p99 / 1% low FPS), fps, streaming convergence, node count, and a
+# repeated load, and a settings change. Average FPS, 1% Low and frame-budget
+# misses derive from the same real frame-time samples; rolling engine FPS is
+# retained only as a diagnostic alongside streaming convergence and node count. A
 # timestamped JSON report at --capture-output=<dir>/perf-report.json.
 #
 # Memory is sampled externally by the PowerShell driver (Working Set / Private
@@ -15,6 +16,7 @@ extends SceneTree
 const GameScene = preload("res://scenes/game/game.tscn")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
+const FramePerformanceMetricsScript = preload("res://src/core/frame_performance_metrics.gd")
 
 const QA_PREFIX := "qa-v130-perf-"
 const JOURNEY_SEED := 112358
@@ -174,19 +176,15 @@ func _collect_frames(frames: int, apply_pressure: bool) -> Dictionary:
 func _record_scenario(profile_id: String, phase: String, samples: Dictionary, load_ms: int = 0, load_series: Array[int] = []) -> void:
 	var frame_ms: Array = samples.get("frame_ms", [])
 	var fps: Array = samples.get("fps", [])
-	var summary: Dictionary = {
+	var summary: Dictionary = FramePerformanceMetricsScript.summarize(frame_ms, fps)
+	summary.merge({
+		"metric_schema": "frame-time-tail-v2",
 		"profile": profile_id,
 		"phase": phase,
-		"sample_count": frame_ms.size(),
 		"load_ms": load_ms,
-		"avg_fps": _average(fps),
-		"one_percent_low_fps": _percentile(fps, 1.0),
-		"frame_ms_avg": _average(frame_ms),
-		"frame_ms_p95": _percentile(frame_ms, 95.0),
-		"frame_ms_p99": _percentile(frame_ms, 99.0),
 		"node_count": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"draw_calls": int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
-	}
+	}, true)
 	var diagnostics: Node = _game.get("runtime_diagnostics")
 	if diagnostics != null:
 		var snapshot: Dictionary = diagnostics.call("get_latest_snapshot")
@@ -199,11 +197,13 @@ func _record_scenario(profile_id: String, phase: String, samples: Dictionary, lo
 		summary["load_series_ms"] = load_series
 	_scenarios.append(summary)
 	print(
-		"PERF_SCENARIO profile=%s phase=%s samples=%d avg_fps=%.1f 1%%low=%.1f frame_avg=%.2f p95=%.2f p99=%.2f load=%dms"
+		"PERF_SCENARIO profile=%s phase=%s samples=%d avg_fps=%.1f 1%%low=%.1f frame_avg=%.2f p95=%.2f p99=%.2f miss60=%.1f%% engine_diag=%.1f load=%dms"
 		% [
 			profile_id, phase, summary["sample_count"],
 			summary["avg_fps"], summary["one_percent_low_fps"],
-			summary["frame_ms_avg"], summary["frame_ms_p95"], summary["frame_ms_p99"], load_ms,
+			summary["frame_ms_avg"], summary["frame_ms_p95"], summary["frame_ms_p99"],
+			summary["frame_budget_miss_60fps_percent"],
+			summary["engine_fps_avg_diagnostic"], load_ms,
 		]
 	)
 
@@ -212,7 +212,7 @@ func _write_report() -> void:
 	if _capture_path.is_empty():
 		return
 	var report := {
-		"schema_version": 1,
+		"schema_version": 2,
 		"seed": JOURNEY_SEED,
 		"generated_at": Time.get_datetime_string_from_system(),
 		"environment": {
@@ -232,24 +232,6 @@ func _write_report() -> void:
 	report_file.store_string(JSON.stringify(report, "\t"))
 	report_file.close()
 	_check(FileAccess.file_exists(report_path), "perf: JSON report is saved")
-
-
-func _average(values: Array) -> float:
-	if values.is_empty():
-		return 0.0
-	var total := 0.0
-	for value: Variant in values:
-		total += float(value)
-	return total / float(values.size())
-
-
-func _percentile(values: Array, percentile: float) -> float:
-	if values.is_empty():
-		return 0.0
-	var sorted := values.duplicate()
-	sorted.sort()
-	var rank := clampi(int(ceil(percentile / 100.0 * float(sorted.size()))) - 1, 0, sorted.size() - 1)
-	return float(sorted[rank])
 
 
 func _track(world_id: String) -> void:

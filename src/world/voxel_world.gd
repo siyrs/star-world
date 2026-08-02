@@ -263,14 +263,16 @@ func get_building_chunk_count() -> int:
 
 
 func get_streaming_stats() -> Dictionary:
-	return {
+	var result := {
 		"loaded": chunks.size(),
 		"building": _building_chunks.size(),
 		"pending": _streaming_scheduler.pending_count(),
 		"last_work_usec": _last_streaming_work_usec,
 		"focus_chunk": _focus_chunk,
 	}
-
+	if generator != null and generator.has_method("get_column_cache_stats"):
+		result["generator_column_cache"] = generator.call("get_column_cache_stats")
+	return result
 
 func force_load_chunk(chunk_coord: Vector2i) -> Node:
 	return _load_chunk_synchronously(chunk_coord)
