@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File .\tests\run_all.ps1 -Godot C:\path\to\g
 
 ```powershell
 & .\tests\run_all.ps1 `
-  -Godot 'C:\Users\sirius\.codex\toolchains\godot\4.7\Godot_v4.7-stable_win64_console.exe'
+  -Godot '.\build\tools\godot\Godot_v4.7-stable_win64_console.exe'
 ```
 
 成功标准：
@@ -150,6 +150,14 @@ Get-Item .\build\StarWorld.exe
 Get-Item .\build\StarWorld.pck
 & .\build\StarWorld.exe
 ```
+
+发布流程（打 tag 后 GitHub Actions 自动执行）：
+
+1. `git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin vX.Y.Z`
+2. 工作流 `publish-windows-release.yml` 自动：校验版本契约 → fresh export → 打包 `StarWorld-Windows-x86_64.zip` + `.sha256` → 启动真实 EXE smoke → 创建 GitHub Release。
+3. 本地验证资产：`gh release view vX.Y.Z --json assets` 的 digest 应与 `.sha256` 资产一致。
+
+注意：tag 推送会触发发布；本地 `build/` 目录不在发布包内（`export_presets.cfg` 已排除）。
 
 ## 实际发行包 Smoke
 
