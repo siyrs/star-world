@@ -46,7 +46,7 @@ Require-Contains $traversal 'MIN_REGIONS_PER_PROFILE := 6' 'Every profile must r
 Require-Contains $traversal 'visited_chunks.size() >= MIN_REGIONS_PER_PROFILE' 'Traversal must prove unique spatial coverage'
 Require-Contains $traversal 'CharacterBody3D' 'Traversal must exercise the production physics body'
 Require-NotContains $traversal 'force_decision_for_test' 'Player traversal must not substitute a forced domain decision for play'
-Require-NotContains $traversal 'complete exploration' 'A regional gate must not claim complete exploration'
+Require-NotContains $traversal 'QA PLAYER REGIONAL TRAVERSAL COMPLETE' 'A regional gate must never report complete map exploration'
 
 Require-Contains $workflow 'player_driven_regional_traversal_regression.gd' 'The regional traversal gate must be wired into GitHub Actions'
 Require-Contains $workflow 'validate_release_evidence_contract.ps1' 'The evidence validator must validate itself through CI'
