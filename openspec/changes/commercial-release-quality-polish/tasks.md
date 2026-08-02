@@ -60,7 +60,7 @@
 - [x] 7.1 Verify new, manual, automatic, overwrite, and multi-world saves; exit/read, malformed `.tmp`/`.bak` recovery, old-schema migration, and user-data safety using isolated QA data.
 - [x] 7.2 Verify water and underwater lifecycle for every generated water profile: shore/deep/high entry, swim/up/down/exit, camera/audio/visual state, interaction, save/load, death/recovery, and rapid re-entry.
 - [x] 7.3 Establish intended lava behavior from runtime evidence and repair any generic-water-state, damage, recovery, or persistence defect before Abyss acceptance.
-- [ ] 7.4 Run extreme-input, pause/focus, full-screen/window/UI-scale, rapid interaction, and long-session stability cases; triage all impactful warnings/errors rather than suppressing them.
+- [x] 7.4 Run extreme-input, pause/focus, full-screen/window/UI-scale, rapid interaction, and long-session stability cases; triage all impactful warnings/errors rather than suppressing them.
 
 ## 8. Final quality gate and delivery
 
