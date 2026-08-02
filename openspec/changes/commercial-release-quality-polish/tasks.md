@@ -17,7 +17,7 @@
 - [x] 2.3 Rework map/settings geometry and obtain independent 1280x720 and 1024x576 non-overlap evidence.
 - [x] 2.4 Repair enabled Button, SecondaryButton, PrimaryButton, MenuPrimaryButton, CardButton, SelectedCardButton, GhostButton, and DangerButton normal/hover/pressed/focus contrast to at least 4.5:1.
 - [x] 2.5 Add parameterized effective-contrast regression coverage for every enabled variation/state and explicit disabled-state discernibility checks.
-- [ ] 2.6 Have the same independent QA rerun the full UI matrix, real pointer hover/pressed/focus screenshots, 64-check design suite, 1280x720 desktop journey, and 1024x576 map/settings flows.
+- [x] 2.6 Have the same independent QA rerun the full UI matrix, real pointer hover/pressed/focus screenshots, 64-check design suite, 1280x720 desktop journey, and 1024x576 map/settings flows.
 
 ## 3. Safe spawn, collision, and recovery
 
