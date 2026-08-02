@@ -59,7 +59,7 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		issues
 	)
 	var memory_raw := float(snapshot.get("memory_mib", -1.0))
-	var memory_severity := "ok"
+	var memory_severity := 0
 	if memory_raw >= 0.0:
 		memory_severity = _evaluate_upper_bound(
 			memory_raw,
