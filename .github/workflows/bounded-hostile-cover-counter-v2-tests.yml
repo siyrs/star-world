@@ -1,0 +1,81 @@
+name: Bounded hostile cover counter v2 quality gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/bounded-hostile-cover-counter-v2-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'data/blocks.json'
+      - 'data/creatures.json'
+      - 'data/hostile_attacks.json'
+      - 'scenes/ui/service_hub.tscn'
+      - 'src/block/**'
+      - 'src/entity/**'
+      - 'src/ui/exploration_progression_service_hub.gd'
+      - 'tests/developer_b/validate_hostile_cover_counter_v2.ps1'
+      - 'tests/qa/hostile_cover_counter_v2_regression.gd'
+      - 'tests/qa/hostile_attack_windup_regression.gd'
+      - 'tests/qa/hostile_ranged_encounter_regression.gd'
+      - 'tests/qa/hostile_encounter_director_regression.gd'
+      - 'tests/qa/hostile_encounter_director_desktop_acceptance.gd'
+      - 'tests/qa/runtime_soak_regression.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-hostile-cover-counter-v2-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Safe temporary-cover destruction, permanent-wall damage blocking and bounded hazard-aware flanking
+      domain_timeout_minutes: 100
+      static_validators: |
+        tests/developer_b/validate_hostile_cover_counter_v2.ps1
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_hostile_attacks.ps1
+        tests/developer_b/validate_bounded_hostile_ranged.ps1
+        tests/developer_b/validate_bounded_hostile_encounters.ps1
+        tests/developer_b/validate_bounded_firearms.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/hostile_cover_counter_v2_regression.gd
+      primary_headless_output_base: build\hostile-cover-counter-v2
+      primary_headless_timeout_milliseconds: 1200000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/hostile_attack_windup_regression.gd
+        res://tests/qa/hostile_ranged_encounter_regression.gd
+        res://tests/qa/hostile_encounter_director_regression.gd
+        res://tests/qa/abyss_elite_regression.gd
+        res://tests/qa/multi_hostile_danger_batch_regression.gd
+        res://tests/qa/multi_hostile_arena_batch_regression.gd
+        res://tests/qa/encounter_reward_economy_regression.gd
+        res://tests/qa/ranged_combat_runtime_regression.gd
+        res://tests/qa/runtime_soak_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: bounded-hostile-cover-counter-v2-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/hostile-cover-counter-v2.stdout.log
+        build/hostile-cover-counter-v2.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real exported-style hostile encounter composition after cover counter integration
+      desktop_timeout_minutes: 120
+      desktop_script: res://tests/qa/hostile_encounter_director_desktop_acceptance.gd
+      desktop_output_path: build\hostile-cover-counter-v2-active.png
+      desktop_timeout_milliseconds: 1200000
+      desktop_artifact_name: bounded-hostile-cover-counter-v2-evidence
+      desktop_artifact_paths: |
+        build/hostile-cover-counter-v2-active.png
+        build/hostile-encounter-complete.png
+        build/hostile-encounter-report.json
+        build/hostile-cover-counter-v2-active.stdout.log
+        build/hostile-cover-counter-v2-active.stderr.log
+      desktop_artifact_if_no_files: warn
+      retention_days: 21
