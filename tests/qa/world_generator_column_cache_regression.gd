@@ -6,6 +6,7 @@ const CacheScript = preload("res://src/world/world_generator_column_cache.gd")
 const SEED := 112358
 const HOT_PATH_SIZE := 16
 const WORLD_HEIGHT := 64
+const MAX_HOT_PATH_COLUMN_FOOTPRINT := (HOT_PATH_SIZE + 4) * (HOT_PATH_SIZE + 4)
 const PROFILE_IDS: Array[String] = [
 	"star_continent",
 	"desert_ruins",
@@ -129,6 +130,7 @@ func _test_sky_island_hot_path() -> void:
 		"profile_id": "sky_islands",
 		"seed": SEED,
 		"columns": HOT_PATH_SIZE * HOT_PATH_SIZE,
+		"maximum_column_footprint": MAX_HOT_PATH_COLUMN_FOOTPRINT,
 		"cells": HOT_PATH_SIZE * HOT_PATH_SIZE * WORLD_HEIGHT,
 		"uncached_elapsed_usec": uncached_elapsed,
 		"cached_elapsed_usec": cached_elapsed,
@@ -155,12 +157,12 @@ func _test_sky_island_hot_path() -> void:
 		"uncached baseline repeats nine-island strength search for every non-bedrock cell"
 	)
 	_check(
-		cached_height_evaluations <= HOT_PATH_SIZE * HOT_PATH_SIZE,
-		"cached sky chunk evaluates surface height at most once per column"
+		cached_height_evaluations <= MAX_HOT_PATH_COLUMN_FOOTPRINT,
+		"cached sky chunk evaluates height once per direct or tree-neighbour column"
 	)
 	_check(
-		cached_sky_evaluations <= HOT_PATH_SIZE * HOT_PATH_SIZE,
-		"cached sky chunk evaluates island strength at most once per column"
+		cached_sky_evaluations <= MAX_HOT_PATH_COLUMN_FOOTPRINT,
+		"cached sky chunk evaluates island strength once per bounded neighbour column"
 	)
 	_check(
 		cached_height_evaluations * 32 <= uncached_height_evaluations,
@@ -172,9 +174,14 @@ func _test_sky_island_hot_path() -> void:
 	)
 	_check(int(cached_stats.get("height_hit_count", 0)) > 15000, "hot chunk records real height-cache reuse")
 	_check(int(cached_stats.get("sky_strength_hit_count", 0)) > 15000, "hot chunk records real island-strength reuse")
+	var retained_columns := int(cached_stats.get("entry_count", 0))
 	_check(
-		int(cached_stats.get("entry_count", 0)) == HOT_PATH_SIZE * HOT_PATH_SIZE,
-		"one hot chunk owns exactly one entry per X/Z column"
+		retained_columns >= HOT_PATH_SIZE * HOT_PATH_SIZE,
+		"one hot chunk retains at least its two hundred fifty-six direct columns"
+	)
+	_check(
+		retained_columns <= MAX_HOT_PATH_COLUMN_FOOTPRINT,
+		"tree-canopy neighbour probes stay inside the bounded two-cell footprint"
 	)
 
 
