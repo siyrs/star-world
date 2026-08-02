@@ -150,6 +150,21 @@ jobs:
         run: |
           .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/adaptive_streaming_regression.gd'
 
+      - name: Spawn experience regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/spawn_experience_regression.gd -- --seed=24681357'
+
+      - name: UI design system regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/ui_design_system_regression.gd'
+
+      - name: Profile release journey regression
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/profile_release_journey_regression.gd -- --profile=star_continent'
+
       - name: Audio lifecycle regression
         shell: pwsh
         run: |

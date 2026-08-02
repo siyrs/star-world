@@ -71,6 +71,21 @@ if (-not [string]::IsNullOrWhiteSpace($stderr)) {
     Write-Host $stderr
 }
 
+# Scan captured output for fatal engine diagnostics that a non-zero exit code
+# alone does not catch (ObjectDB leaks, resource leaks, script errors).
+$fatalPatterns = @(
+    'SCRIPT ERROR',
+    'Parse Error',
+    'ObjectDB instances were leaked',
+    'Leaked instance:',
+    'Resources still in use at exit'
+)
+$fatalMatches = @($stdout, $stderr | Select-String -Pattern $fatalPatterns -SimpleMatch)
+if ($fatalMatches.Count -gt 0) {
+    $details = ($fatalMatches | ForEach-Object { "$($_.Line)" }) -join [Environment]::NewLine
+    throw "Godot fatal diagnostics found:$([Environment]::NewLine)$details"
+}
+
 if ($timedOut) {
     throw "Godot timed out after $TimeoutMilliseconds ms: $Arguments"
 }

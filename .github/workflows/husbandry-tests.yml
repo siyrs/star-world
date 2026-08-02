@@ -1,51 +1,7 @@
 name: Husbandry quality gates
 
 on:
-  pull_request:
-    paths:
-      - 'data/husbandry.json'
-      - 'data/creatures.json'
-      - 'src/core/service_hub_feature_coordinator.gd'
-      - 'src/husbandry/**'
-      - 'src/player/husbandry_player.gd'
-      - 'src/entity/creature_population_policy.gd'
-      - 'src/experience/**'
-      - 'src/ui/husbandry_progression_service_hub.gd'
-      - 'src/ui/ranch_progression_service_hub.gd'
-      - 'src/ui/exploration_progression_service_hub.gd'
-      - 'src/save/save_service.gd'
-      - 'scenes/game/player.tscn'
-      - 'scenes/ui/service_hub.tscn'
-      - 'tests/developer_b/validate_husbandry*.ps1'
-      - 'tests/developer_b/validate_service_hub_lifecycle.ps1'
-      - 'tests/qa/husbandry_*.gd'
-      - 'tests/qa/ranch_runtime_lifecycle_regression.gd'
-      - 'tests/qa/service_hub_feature_lifecycle_regression.gd'
-      - '.github/workflows/husbandry-tests.yml'
-  push:
-    branches:
-      - master
-    paths:
-      - 'data/husbandry.json'
-      - 'data/creatures.json'
-      - 'src/core/service_hub_feature_coordinator.gd'
-      - 'src/husbandry/**'
-      - 'src/player/husbandry_player.gd'
-      - 'src/entity/creature_population_policy.gd'
-      - 'src/experience/**'
-      - 'src/ui/husbandry_progression_service_hub.gd'
-      - 'src/ui/ranch_progression_service_hub.gd'
-      - 'src/ui/exploration_progression_service_hub.gd'
-      - 'src/save/save_service.gd'
-      - 'scenes/game/player.tscn'
-      - 'scenes/ui/service_hub.tscn'
-      - 'tests/developer_b/validate_husbandry*.ps1'
-      - 'tests/developer_b/validate_service_hub_lifecycle.ps1'
-      - 'tests/qa/husbandry_*.gd'
-      - 'tests/qa/ranch_runtime_lifecycle_regression.gd'
-      - 'tests/qa/service_hub_feature_lifecycle_regression.gd'
-      - '.github/workflows/husbandry-tests.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

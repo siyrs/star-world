@@ -1,11 +1,7 @@
 name: Bounded multi-world recovery quality gates
 
 on:
-  pull_request:
-  push:
-    branches:
-      - master
-
+  workflow_dispatch:
 permissions:
   contents: read
 

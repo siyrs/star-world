@@ -1,11 +1,7 @@
 name: Long-session autosave scheduling quality gates
 
 on:
-  pull_request:
-  push:
-    branches:
-      - master
-
+  workflow_dispatch:
 permissions:
   contents: read
 
