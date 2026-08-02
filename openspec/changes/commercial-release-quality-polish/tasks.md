@@ -43,7 +43,7 @@
 - [x] 5.2 Split static streaming convergence from movement pressure and fail health when pending/building chunks do not converge within the bounded rule.
 - [x] 5.3 Capture like-for-like baseline and optimized performance across menu, each profile spawn/complex area, water/high/underground areas, rapid movement/turning, repeated loads, and settings changes.
 - [x] 5.4 Record average FPS, 1% low, frame-time percentiles, load time, CPU/GPU/VRAM availability, memory trend, object/allocator evidence, and valid unavailable-counter boundaries.
-- [ ] 5.5 Complete the fresh-EXE long-run soak covering all profiles, saves/loads/menu returns, with no crash, fatal log, sustained degradation, or unexplained memory growth.
+- [x] 5.5 Complete the fresh-EXE long-run soak covering all profiles, saves/loads/menu returns, with no crash, fatal log, sustained degradation, or unexplained memory growth.
 
 ## 6. Five-profile normal-entry release journeys
 
