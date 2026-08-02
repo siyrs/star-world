@@ -15,6 +15,10 @@ var warning_stutters_per_window := 3
 var critical_stutters_per_window := 8
 var warning_pending_chunks := 48
 var critical_pending_chunks := 96
+# Number of samples before chunk-pending health is evaluated.
+# Fresh world loads start with a large pending queue that naturally
+# converges; flagging it before convergence produces false warnings.
+var chunk_settle_samples := 3
 var warning_memory_mib := 1024.0
 var critical_memory_mib := 1536.0
 var warning_node_count := 5000
@@ -51,13 +55,19 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 			issues
 		)
 	var streaming: Dictionary = snapshot.get("streaming", {})
-	var pending_chunk_severity := _evaluate_upper_bound(
-		float(streaming.get("pending", 0)),
-		float(warning_pending_chunks),
-		float(critical_pending_chunks),
-		"区块构建队列积压",
-		issues
-	)
+	var pending_raw := float(streaming.get("pending", 0))
+	var pending_chunk_severity := 0
+	# Only evaluate chunk-pending health after the queue has had time to
+	# settle from the initial world-load spike. Before that, a large
+	# pending count is normal terrain generation work, not a health issue.
+	if int(streaming.get("settled_samples", 0)) >= maxi(1, chunk_settle_samples):
+		pending_chunk_severity = _evaluate_upper_bound(
+			pending_raw,
+			float(warning_pending_chunks),
+			float(critical_pending_chunks),
+			"区块构建队列积压",
+			issues
+		)
 	var memory_raw := float(snapshot.get("memory_mib", -1.0))
 	var memory_severity := 0
 	if memory_raw >= 0.0:

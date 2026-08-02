@@ -17,6 +17,8 @@ var _input_context: Node
 var _gameplay_input: Node
 var _creature_spawner: Node
 var _streaming_controller: Node
+var _chunk_settled_samples := 0
+const CHUNK_SETTLE_THRESHOLD := 48
 var _service_hub: Node
 var _health_policy = HealthPolicyScript.new()
 var _sample_accumulator := 0.0
@@ -204,8 +206,14 @@ func write_report(path: String) -> bool:
 
 func _get_streaming_stats() -> Dictionary:
 	if not is_instance_valid(_world) or not _world.has_method("get_streaming_stats"):
-		return {"loaded": 0, "building": 0, "pending": 0, "last_work_usec": 0}
+		return {"loaded": 0, "building": 0, "pending": 0, "last_work_usec": 0, "settled_samples": _chunk_settled_samples}
 	var stats = _world.call("get_streaming_stats")
+	var pending: int = int(stats.get("pending", 0))
+	if pending <= CHUNK_SETTLE_THRESHOLD:
+		_chunk_settled_samples += 1
+	else:
+		_chunk_settled_samples = 0
+	stats["settled_samples"] = _chunk_settled_samples
 	return stats.duplicate(true) if stats is Dictionary else {}
 
 
