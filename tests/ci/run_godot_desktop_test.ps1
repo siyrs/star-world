@@ -19,6 +19,25 @@ $stderrPath = Join-Path $outputDirectory "$outputBaseName.stderr.log"
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 Remove-Item -LiteralPath $outputFullPath, $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 
+# GitHub Actions jobs use isolated clean workspaces. A successful import in the
+# headless regression job does not populate this desktop job's .godot cache.
+# Preloaded fonts and other imported resources therefore failed to compile before
+# the first desktop test. Import once per desktop job and persist a local marker so
+# the remaining acceptance scripts reuse the same verified cache.
+$importMarker = Join-Path $projectFullPath '.godot\desktop-import-ready'
+if (-not (Test-Path -LiteralPath $importMarker)) {
+    $importRunner = Join-Path $projectFullPath 'tests\ci\Invoke-Godot.ps1'
+    if (-not (Test-Path -LiteralPath $importRunner)) {
+        throw "Missing strict Godot import runner: $importRunner"
+    }
+    Write-Host 'Preparing isolated desktop acceptance import cache...'
+    & $importRunner `
+        -Godot $Godot `
+        -Arguments "--headless --path `"$projectFullPath`" --editor --quit" `
+        -TimeoutMilliseconds 600000
+    New-Item -ItemType File -Force -Path $importMarker | Out-Null
+}
+
 function Assert-NoFatalGodotLog {
     param([Parameter(Mandatory = $true)][string[]]$Paths)
 
