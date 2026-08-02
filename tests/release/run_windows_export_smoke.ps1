@@ -1,9 +1,23 @@
 param(
     [string]$Godot = $env:GODOT_BIN,
-    [string]$OutputDirectory = ''
+    [string]$OutputDirectory = '',
+    [int]$RunnerTimeoutMilliseconds = 60000
 )
 
 $ErrorActionPreference = 'Stop'
+
+# This script requires PowerShell 7+ (pwsh). Windows PowerShell 5.1 is not
+# supported because its .NET Framework version lacks ProcessStartInfo.ArgumentList.
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw @'
+PowerShell 7 (pwsh) or later is required to run this script.
+Windows PowerShell 5.1 detected — it lacks .NET APIs used for safe argument
+passing and process termination.
+
+Install pwsh from https://github.com/PowerShell/PowerShell and run:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\release\run_windows_export_smoke.ps1 -Godot <path> -OutputDirectory <path>
+'@
+}
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
 if ([string]::IsNullOrWhiteSpace($Godot)) {
@@ -34,10 +48,11 @@ $exportStderrPath = Join-Path $OutputDirectory 'export.stderr.log'
 $stdoutPath = Join-Path $OutputDirectory 'release-smoke.stdout.log'
 $stderrPath = Join-Path $OutputDirectory 'release-smoke.stderr.log'
 $driverLogPath = Join-Path $OutputDirectory 'release-smoke.driver.log'
+$memoryEvidencePath = Join-Path $OutputDirectory 'release-smoke.memory.json'
 
 Remove-Item -Force -ErrorAction SilentlyContinue `
     $exePath, $consolePath, $pckPath, $reportPath, $screenshotPath, `
-    $exportStdoutPath, $exportStderrPath, $stdoutPath, $stderrPath, $driverLogPath
+    $exportStdoutPath, $exportStderrPath, $stdoutPath, $stderrPath, $driverLogPath, $memoryEvidencePath
 
 function Write-DriverLog {
     param([string]$Message)
@@ -95,6 +110,114 @@ function Invoke-WaitedProcess {
     return [pscustomobject]@{
         ExitCode = $process.ExitCode
         ProcessId = $process.Id
+    }
+}
+
+function Get-MemoryPercentile {
+    param(
+        [Parameter(Mandatory = $true)][long[]]$Values,
+        [Parameter(Mandatory = $true)][double]$Percentile
+    )
+
+    if ($Values.Count -eq 0) {
+        throw 'Cannot calculate a percentile without samples.'
+    }
+    $sorted = [long[]]($Values | Sort-Object)
+    $index = [int][Math]::Ceiling(($sorted.Count - 1) * $Percentile)
+    $index = [Math]::Max(0, [Math]::Min($index, $sorted.Count - 1))
+    return $sorted[$index]
+}
+
+function Get-MemorySummary {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Samples,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    $values = [System.Collections.Generic.List[long]]::new()
+    foreach ($sample in $Samples) {
+        $values.Add([long]$sample.$PropertyName)
+    }
+    if ($values.Count -eq 0) {
+        return [ordered]@{ sample_count = 0 }
+    }
+
+    $asArray = $values.ToArray()
+    return [ordered]@{
+        sample_count = $asArray.Count
+        min_mib = [Math]::Round((($asArray | Measure-Object -Minimum).Minimum / 1MB), 1)
+        p50_mib = [Math]::Round((Get-MemoryPercentile -Values $asArray -Percentile 0.50) / 1MB, 1)
+        p95_mib = [Math]::Round((Get-MemoryPercentile -Values $asArray -Percentile 0.95) / 1MB, 1)
+        max_mib = [Math]::Round((($asArray | Measure-Object -Maximum).Maximum / 1MB), 1)
+    }
+}
+
+function Invoke-SampledProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)][string]$StandardOutputPath,
+        [Parameter(Mandatory = $true)][string]$StandardErrorPath,
+        [Parameter(Mandatory = $true)][int]$TimeoutMilliseconds,
+        [int]$SampleIntervalMilliseconds = 1000
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FilePath
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $Arguments) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) {
+        throw "Unable to start process: $FilePath"
+    }
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $samples = [System.Collections.Generic.List[object]]::new()
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    $nextSampleAt = 0
+    $timedOut = $false
+
+    while (-not $process.HasExited) {
+        $elapsedMilliseconds = [int]$watch.ElapsedMilliseconds
+        if ($elapsedMilliseconds -ge $TimeoutMilliseconds) {
+            $timedOut = $true
+            $process.Kill($true)
+            break
+        }
+        if ($elapsedMilliseconds -ge $nextSampleAt) {
+            $process.Refresh()
+            $samples.Add([pscustomobject][ordered]@{
+                elapsed_ms = $elapsedMilliseconds
+                working_set_bytes = [long]$process.WorkingSet64
+                private_bytes = [long]$process.PrivateMemorySize64
+            })
+            $nextSampleAt += $SampleIntervalMilliseconds
+        }
+        $remaining = [Math]::Max(1, $TimeoutMilliseconds - $elapsedMilliseconds)
+        $process.WaitForExit([Math]::Min(250, $remaining)) | Out-Null
+    }
+
+    $process.WaitForExit()
+    $watch.Stop()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    Set-Content -LiteralPath $StandardOutputPath -Value $stdout -Encoding utf8
+    Set-Content -LiteralPath $StandardErrorPath -Value $stderr -Encoding utf8
+    return [pscustomobject]@{
+        ExitCode = $process.ExitCode
+        ProcessId = $process.Id
+        TimedOut = $timedOut
+        DurationMilliseconds = [int]$watch.ElapsedMilliseconds
+        Samples = $samples.ToArray()
     }
 }
 
@@ -158,13 +281,44 @@ try {
     $reportArgumentPath = ([System.IO.Path]::GetFullPath($reportPath)).Replace('\', '/')
     Write-DriverLog "runner=$runnerPath"
     Write-DriverLog "report_argument=$reportArgumentPath"
-    $runnerResult = Invoke-WaitedProcess `
+    # Collect timestamped external process evidence because release builds may
+    # not expose engine-internal allocation counters. Keep the raw samples so
+    # release review can distinguish a real percentile from a summary bug.
+    $memArgs = @('--verbose', '--', '--release-smoke', '--smoke-soak-frames=180', "--smoke-output=$reportArgumentPath")
+    $runnerResult = Invoke-SampledProcess `
         -FilePath $runnerPath `
-        -Arguments @('--verbose', '--', '--release-smoke', '--smoke-soak-frames=180', "--smoke-output=$reportArgumentPath") `
+        -Arguments $memArgs `
         -WorkingDirectory $OutputDirectory `
         -StandardOutputPath $stdoutPath `
         -StandardErrorPath $stderrPath `
-        -TimeoutMilliseconds 60000
+        -TimeoutMilliseconds $RunnerTimeoutMilliseconds
+    $memoryEvidence = [ordered]@{
+        schema_version = 1
+        sample_interval_ms = 1000
+        timeout_ms = $RunnerTimeoutMilliseconds
+        duration_ms = $runnerResult.DurationMilliseconds
+        timed_out = $runnerResult.TimedOut
+        samples = @($runnerResult.Samples)
+        working_set_mib = Get-MemorySummary -Samples @($runnerResult.Samples) -PropertyName 'working_set_bytes'
+        private_bytes_mib = Get-MemorySummary -Samples @($runnerResult.Samples) -PropertyName 'private_bytes'
+    }
+    $memoryEvidence | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $memoryEvidencePath -Encoding utf8
+    if ($runnerResult.TimedOut) {
+        throw "Exported Windows release smoke timed out after $RunnerTimeoutMilliseconds ms. See $memoryEvidencePath"
+    }
+    if ($memoryEvidence['working_set_mib']['sample_count'] -eq 0 -or $memoryEvidence['private_bytes_mib']['sample_count'] -eq 0) {
+        throw "Exported Windows release smoke produced no external memory samples. See $memoryEvidencePath"
+    }
+    if ($memoryEvidence['working_set_mib']['p95_mib'] -le 0 -or $memoryEvidence['private_bytes_mib']['p95_mib'] -le 0) {
+        throw "Exported Windows release smoke produced invalid external memory percentiles. See $memoryEvidencePath"
+    }
+    $memorySummary = [ordered]@{
+        duration_ms = $memoryEvidence['duration_ms']
+        timed_out = $memoryEvidence['timed_out']
+        working_set_mib = $memoryEvidence['working_set_mib']
+        private_bytes_mib = $memoryEvidence['private_bytes_mib']
+    }
+    Write-DriverLog "external_memory_mib=$($memorySummary | ConvertTo-Json -Compress)"
     Write-DriverLog "runner_process_id=$($runnerResult.ProcessId)"
     Write-DriverLog "runner_exit_code=$($runnerResult.ExitCode)"
     Show-ReleaseSmokeLogs

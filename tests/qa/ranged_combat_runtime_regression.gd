@@ -86,8 +86,8 @@ func _run() -> void:
 	sphere.radius = 0.65
 	collision_shape.shape = sphere
 	target.add_child(collision_shape)
-	target.global_position = Vector3(0.0, 0.0, -5.0)
 	host.add_child(target)
+	target.global_position = Vector3(0.0, 0.0, -5.0)
 	await physics_frame
 	await physics_frame
 

@@ -32,6 +32,7 @@ func _run() -> void:
 
 func _test_theme_contract() -> void:
 	var theme := ThemeFactory.create_theme()
+	var panel_theme := ThemeFactory.create_theme(ThemeFactory.CONTEXT_PANEL)
 	for variation: String in [
 		"PrimaryButton",
 		"SecondaryButton",
@@ -88,6 +89,102 @@ func _test_theme_contract() -> void:
 	_check(
 		_contrast_ratio(Tokens.color(Tokens.COLOR_TEXT), Tokens.color(Tokens.COLOR_SURFACE)) >= 7.0,
 		"primary text and glass surface exceed the high-contrast readability target"
+	)
+	# Flat buttons in overlay context must meet WCAG 4.5:1 across normal/hover/pressed/focus.
+	var overlay_flat_variations := [
+		["GhostButton"],
+		["CardButton"],
+		["SelectedCardButton"],
+		["ToolbarButton"],
+	]
+	var state_specs := [
+		["normal", "font_color"],
+		["hover", "font_hover_color"],
+		["pressed", "font_pressed_color"],
+		["focus", "font_focus_color"],
+	]
+	for entry: Array in overlay_flat_variations:
+		var variation: String = str(entry[0])
+		for spec: Array in state_specs:
+			var style_name: String = str(spec[0])
+			var color_prop: String = str(spec[1])
+			var font_color: Color = theme.get_color(color_prop, variation)
+			var stylebox := theme.get_stylebox(style_name, variation)
+			var background: Color = _effective_background(stylebox, Tokens.color(Tokens.COLOR_SURFACE))
+			_check(
+				_contrast_ratio(font_color, background) >= 4.5,
+				"overlay %s %s contrast >= 4.5" % [variation, style_name]
+			)
+	# Flat buttons in panel context must meet WCAG 4.5:1 across normal/hover/pressed/focus.
+	var panel_flat_variations := [
+		["GhostButton"],
+		["CardButton"],
+		["SelectedCardButton"],
+		["ToolbarButton"],
+	]
+	for entry: Array in panel_flat_variations:
+		var variation: String = str(entry[0])
+		for spec: Array in state_specs:
+			var style_name: String = str(spec[0])
+			var color_prop: String = str(spec[1])
+			var font_color: Color = panel_theme.get_color(color_prop, variation)
+			var stylebox := panel_theme.get_stylebox(style_name, variation)
+			var effective_bg: Color = _effective_background(stylebox, Tokens.color(Tokens.MC_PANEL))
+			_check(
+				_contrast_ratio(font_color, effective_bg) >= 4.5,
+				"panel %s %s contrast >= 4.5" % [variation, style_name]
+			)
+		var panel_surface: Color = Tokens.color(Tokens.MC_PANEL)
+		var disabled_font: Color = panel_theme.get_color("font_disabled_color", variation)
+		var disabled_stylebox := panel_theme.get_stylebox("disabled", variation)
+		var disabled_bg: Color = _effective_background(disabled_stylebox, panel_surface)
+		var normal_font: Color = panel_theme.get_color("font_color", variation)
+		var normal_stylebox := panel_theme.get_stylebox("normal", variation)
+		var normal_bg: Color = _effective_background(normal_stylebox, panel_surface)
+		var disabled_contrast: float = _contrast_ratio(disabled_font, disabled_bg)
+		var normal_contrast: float = _contrast_ratio(normal_font, normal_bg)
+		_check(
+			disabled_contrast <= normal_contrast - 0.5,
+			"panel %s disabled contrast (%.1f) is visibly lower than normal (%.1f)"
+			% [variation, disabled_contrast, normal_contrast]
+		)
+	# Textured buttons use pixel-art faces, so contrast must be measured against
+	# the pixels underneath the text content rectangle rather than a nominal
+	# token. Focus is an overlay ring and retains the normal face underneath.
+	var textured_variations := [
+		"Button",
+		"PrimaryButton",
+		"SecondaryButton",
+		"DangerButton",
+		"MenuPrimaryButton",
+	]
+	for variation: String in textured_variations:
+		for textured_theme_spec: Array in [["overlay", theme], ["panel", panel_theme]]:
+			var context_name: String = str(textured_theme_spec[0])
+			var textured_theme: Theme = textured_theme_spec[1] as Theme
+			for state_spec: Array in [
+				["normal", "font_color", "normal"],
+				["hover", "font_hover_color", "hover"],
+				["pressed", "font_pressed_color", "pressed"],
+				["focus", "font_focus_color", "normal"],
+			]:
+				var state_name: String = str(state_spec[0])
+				var font_property: String = str(state_spec[1])
+				var face_state: String = str(state_spec[2])
+				var textured_style := textured_theme.get_stylebox(face_state, variation)
+				var contrast: float = _minimum_textured_content_contrast(
+					textured_style,
+					textured_theme.get_color(font_property, variation)
+				)
+				_check(
+					contrast >= 4.5,
+					"%s %s %s effective content contrast >= 4.5 (%.2f)"
+					% [context_name, variation, state_name, contrast]
+				)
+	_check(
+		panel_theme.get_constant("shadow_outline_size", "PageTitle") == 0
+		and panel_theme.get_constant("shadow_outline_size", "SectionTitle") == 0,
+		"panel headings do not inherit dark pixel shadows"
 	)
 	_check(
 		Tokens.SPACE_SM == 8 and Tokens.SPACE_LG == 16 and Tokens.SPACE_XL == 24,
@@ -279,9 +376,55 @@ func _rect_inside(container_rect: Rect2, candidate: Rect2) -> bool:
 
 
 func _contrast_ratio(first: Color, second: Color) -> float:
-	var lighter := maxf(first.get_luminance(), second.get_luminance())
-	var darker := minf(first.get_luminance(), second.get_luminance())
+	var lighter := maxf(_relative_luminance(first), _relative_luminance(second))
+	var darker := minf(_relative_luminance(first), _relative_luminance(second))
 	return (lighter + 0.05) / (darker + 0.05)
+
+
+func _relative_luminance(color: Color) -> float:
+	return (
+		0.2126 * _linear_channel(color.r)
+		+ 0.7152 * _linear_channel(color.g)
+		+ 0.0722 * _linear_channel(color.b)
+	)
+
+
+func _effective_background(stylebox: StyleBox, fallback: Color) -> Color:
+	if stylebox is StyleBoxFlat:
+		var bg: Color = (stylebox as StyleBoxFlat).bg_color
+		if bg.a >= 0.99:
+			return bg
+		if bg.a >= 0.01:
+			return fallback.lerp(Color(bg.r, bg.g, bg.b, 1.0), bg.a)
+	return fallback
+
+
+func _minimum_textured_content_contrast(stylebox: StyleBox, font_color: Color) -> float:
+	if not stylebox is StyleBoxTexture:
+		return 0.0
+	var texture := (stylebox as StyleBoxTexture).texture
+	if texture == null:
+		return 0.0
+	var image := texture.get_image()
+	if image == null:
+		return 0.0
+	var left := int(ceilf(stylebox.content_margin_left))
+	var right := image.get_width() - int(ceilf(stylebox.content_margin_right))
+	var top := int(ceilf(stylebox.content_margin_top))
+	var bottom := image.get_height() - int(ceilf(stylebox.content_margin_bottom))
+	if left >= right or top >= bottom:
+		return 0.0
+	var minimum := INF
+	for y in range(top, bottom):
+		for x in range(left, right):
+			minimum = minf(minimum, _contrast_ratio(font_color, image.get_pixel(x, y)))
+	return minimum
+
+
+func _linear_channel(channel: float) -> float:
+	if channel <= 0.04045:
+		return channel / 12.92
+	return pow((channel + 0.055) / 1.055, 2.4)
 
 
 func _check(condition: bool, description: String) -> void:

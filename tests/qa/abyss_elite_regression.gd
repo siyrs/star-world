@@ -110,12 +110,12 @@ func _test_catalog_and_conditions() -> void:
 func _test_production_spawner_and_elite_pressure() -> void:
 	var day_night := FakeDayNight.new()
 	var player := Node3D.new()
-	player.global_position = Vector3(0.0, 15.0, 0.0)
 	var spawner = SpawnerScript.new()
 	root.add_child(day_night)
 	root.add_child(player)
 	root.add_child(spawner)
 	await process_frame
+	player.global_position = Vector3(0.0, 15.0, 0.0)
 	spawner.set_map_profile("abyss_world")
 	spawner.setup(player, null, day_night, Callable(), true)
 	var brute_variant: Variant = spawner.spawn_creature("abyss_brute", Vector3(2.0, 15.0, 0.0))

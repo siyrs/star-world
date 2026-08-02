@@ -58,13 +58,21 @@ func evaluate(snapshot: Dictionary) -> Dictionary:
 		"区块构建队列积压",
 		issues
 	)
-	var memory_severity := _evaluate_upper_bound(
-		float(snapshot.get("memory_mib", 0.0)),
-		warning_memory_mib,
-		critical_memory_mib,
-		"静态内存占用偏高",
-		issues
-	)
+	var memory_raw := float(snapshot.get("memory_mib", -1.0))
+	var memory_severity := 0
+	if memory_raw >= 0.0:
+		memory_severity = _evaluate_upper_bound(
+			memory_raw,
+			warning_memory_mib,
+			critical_memory_mib,
+			"静态内存占用偏高",
+			issues
+		)
+	else:
+		issues.append(
+			"内置静态内存指标不可用（Performance.MEMORY_STATIC 返回 %.1f）；请使用外部进程 Working Set / Private Bytes 采样"
+			% memory_raw
+		)
 	var node_severity := _evaluate_upper_bound(
 		float(snapshot.get("node_count", 0)),
 		float(warning_node_count),
