@@ -15,18 +15,18 @@
 - [x] 2.1 Reproduce the desktop runner evidence-contract failure and add the requested primary screenshot alongside the ten named captures and JSON report.
 - [x] 2.2 Independently QA-retest the runner contract: 32 interaction checks, ten captures, exact output path, logs, and user-world manifest must pass.
 - [x] 2.3 Rework map/settings geometry and obtain independent 1280x720 and 1024x576 non-overlap evidence.
-- [ ] 2.4 Repair enabled Button, SecondaryButton, PrimaryButton, MenuPrimaryButton, CardButton, SelectedCardButton, GhostButton, and DangerButton normal/hover/pressed/focus contrast to at least 4.5:1.
-- [ ] 2.5 Add parameterized effective-contrast regression coverage for every enabled variation/state and explicit disabled-state discernibility checks.
+- [x] 2.4 Repair enabled Button, SecondaryButton, PrimaryButton, MenuPrimaryButton, CardButton, SelectedCardButton, GhostButton, and DangerButton normal/hover/pressed/focus contrast to at least 4.5:1.
+- [x] 2.5 Add parameterized effective-contrast regression coverage for every enabled variation/state and explicit disabled-state discernibility checks.
 - [ ] 2.6 Have the same independent QA rerun the full UI matrix, real pointer hover/pressed/focus screenshots, 64-check design suite, 1280x720 desktop journey, and 1024x576 map/settings flows.
 
 ## 3. Safe spawn, collision, and recovery
 
 - [x] 3.1 Reproduce the first-frame tree/canopy spawn defect and identify the first-fit single-column spawn logic and resolver height mismatch.
-- [ ] 3.2 Finish deterministic, data-driven, hard-safe spawn assessment with unconditional work budget, staged cheap gates, explicit scoring, and no terrain-seed mutation.
+- [x] 3.2 Finish deterministic, data-driven, hard-safe spawn assessment with unconditional work budget, staged cheap gates, explicit scoring, and no terrain-seed mutation.
 - [x] 3.3 Fix focused spawn-test filter parsing and script-error fast exit so profile/seed diagnostics cannot silently become a full matrix run.
-- [ ] 3.4 Close the focused `star_continent/24681357` regression with valid parsed filters, bounded wall time, scanned/evaluated/termination metrics, hard-safe result, and no ObjectDB/resource leaks.
-- [ ] 3.5 Add the synthetic canopy-obstruction fixture, preserve valid existing-save positions, and verify resolver/respawn height behavior.
-- [ ] 3.6 Run five profiles × six fixed seeds with p50/p95/max assessment cost, adjacent terrain checks, and three clean leak-free exits.
+- [x] 3.4 Close the focused `star_continent/24681357` regression with valid parsed filters, bounded wall time, scanned/evaluated/termination metrics, hard-safe result, and no ObjectDB/resource leaks.
+- [x] 3.5 Add the synthetic canopy-obstruction fixture, preserve valid existing-save positions, and verify resolver/respawn height behavior.
+- [x] 3.6 Run five profiles × six fixed seeds with p50/p95/max assessment cost, adjacent terrain checks, and three clean leak-free exits.
 - [ ] 3.7 Build and run systematic profile collision, seam, steep-slope, entrapment, fall-through-world, and safe-recovery checks without using artificial completion/state changes.
 
 ## 4. Release tooling, resources, and version identity
