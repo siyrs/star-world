@@ -48,12 +48,12 @@
 ## 6. Five-profile normal-entry release journeys
 
 - [x] 6.1 Add isolated fixed-seed normal menu-entry journey infrastructure that records screenshots, logs, world state, QA-world cleanup, and pre/post user-data manifests.
-- [ ] 6.2 Complete the Star Continent journey: forest/plain/river, water entry/exit, building/agriculture, night encounter, exploration milestone, persistence, death/recovery, and repeat entry.
-- [ ] 6.3 Complete the Desert Ruins journey: normal entry, ruins/columns, surface-to-underground ore route, seam/boundary exploration, persistence, death/recovery, and repeat entry.
-- [ ] 6.4 Complete the Frozen Wastes journey: normal entry, high/low terrain, ice-underwater entry/exit/recovery, hunger behavior, persistence, death/recovery, and repeat entry.
-- [ ] 6.5 Complete the Sky Islands journey: normal entry, multiple islands, bridge/build route, edge fall/Y-limit recovery, high-area collision, persistence, death/recovery, and repeat entry.
-- [ ] 6.6 Complete the Abyss journey: normal entry, caves/crystals, hostile encounters, lava behavior and death/recovery, underground seams, persistence, and repeat entry.
-- [ ] 6.7 Complete the finite content matrix: tutorial beyond first screen, menus/settings, items/tools/weapons, recipes/machines, building/interactions, creatures/encounters, exploration rewards, and all applicable save states.
+- [x] 6.2 Complete the Star Continent journey: forest/plain/river, water entry/exit, building/agriculture, night encounter, exploration milestone, persistence, death/recovery, and repeat entry.
+- [x] 6.3 Complete the Desert Ruins journey: normal entry, ruins/columns, surface-to-underground ore route, seam/boundary exploration, persistence, death/recovery, and repeat entry.
+- [x] 6.4 Complete the Frozen Wastes journey: normal entry, high/low terrain, ice-underwater entry/exit/recovery, hunger behavior, persistence, death/recovery, and repeat entry.
+- [x] 6.5 Complete the Sky Islands journey: normal entry, multiple islands, bridge/build route, edge fall/Y-limit recovery, high-area collision, persistence, death/recovery, and repeat entry.
+- [x] 6.6 Complete the Abyss journey: normal entry, caves/crystals, hostile encounters, lava behavior and death/recovery, underground seams, persistence, and repeat entry.
+- [x] 6.7 Complete the finite content matrix: tutorial beyond first screen, menus/settings, items/tools/weapons, recipes/machines, building/interactions, creatures/encounters, exploration rewards, and all applicable save states.
 
 ## 7. State, water, and stability regression
 
