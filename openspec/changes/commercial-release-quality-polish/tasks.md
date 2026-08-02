@@ -47,7 +47,7 @@
 
 ## 6. Five-profile normal-entry release journeys
 
-- [ ] 6.1 Add isolated fixed-seed normal menu-entry journey infrastructure that records screenshots, logs, world state, QA-world cleanup, and pre/post user-data manifests.
+- [x] 6.1 Add isolated fixed-seed normal menu-entry journey infrastructure that records screenshots, logs, world state, QA-world cleanup, and pre/post user-data manifests.
 - [ ] 6.2 Complete the Star Continent journey: forest/plain/river, water entry/exit, building/agriculture, night encounter, exploration milestone, persistence, death/recovery, and repeat entry.
 - [ ] 6.3 Complete the Desert Ruins journey: normal entry, ruins/columns, surface-to-underground ore route, seam/boundary exploration, persistence, death/recovery, and repeat entry.
 - [ ] 6.4 Complete the Frozen Wastes journey: normal entry, high/low terrain, ice-underwater entry/exit/recovery, hunger behavior, persistence, death/recovery, and repeat entry.
