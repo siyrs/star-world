@@ -1,0 +1,133 @@
+name: Temporary cover v2 branch patch
+
+on:
+  push:
+    branches:
+      - agent/bounded-hostile-cover-counter-v2
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-cover-v2-branch-patch
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bounded-hostile-cover-counter-v2
+          fetch-depth: 0
+
+      - name: Apply reviewed production and regression corrections
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              content = file_path.read_text(encoding="utf-8")
+              count = content.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected one replacement, found {count}")
+              file_path.write_text(content.replace(old, new, 1), encoding="utf-8", newline="\n")
+
+          service_path = "src/entity/hostile_cover_counter_service.gd"
+          replace_once(
+              service_path,
+              '''\t\tvar candidate := _resolve_local_ground(raw_candidate, marksman.global_position.y)
+          \t\tif not _is_finite_position(candidate) or candidate.y <= -12.0:
+          \t\t\t_marksman_route_rejection_count += 1
+          \t\t\tcontinue
+          ''',
+              '''\t\tvar candidate := _resolve_local_ground(raw_candidate, marksman.global_position.y)
+          \t\tif not _is_finite_position(candidate) or candidate.y <= -12.0:
+          \t\t\t# A fluid or cactus column is a deliberate safety rejection, not an
+          \t\t\t# unexplained pathfinding failure. Keep the two counters distinct so
+          \t\t\t# production telemetry can reveal unsafe map layouts.
+          \t\t\tif _column_has_walk_hazard(raw_candidate, marksman.global_position.y):
+          \t\t\t\t_marksman_hazard_rejection_count += 1
+          \t\t\telse:
+          \t\t\t\t_marksman_route_rejection_count += 1
+          \t\t\tcontinue
+          ''',
+          )
+          replace_once(
+              service_path,
+              '''func _candidate_is_safe(candidate: Vector3) -> bool:
+          ''',
+              '''func _column_has_walk_hazard(candidate: Vector3, reference_y: float) -> bool:
+          \tvar x := floori(candidate.x)
+          \tvar z := floori(candidate.z)
+          \tvar reference_support_y := floori(reference_y - 0.2)
+          \tvar maximum_y := mini(61, reference_support_y + LOCAL_GROUND_SEARCH_UP)
+          \tvar minimum_y := maxi(1, reference_support_y - LOCAL_GROUND_SEARCH_DOWN)
+          \tfor y in range(maximum_y, minimum_y - 1, -1):
+          \t\tfor offset_y in [0, 1, 2]:
+          \t\t\tvar block_id := str(world.call("get_block", Vector3i(x, y + offset_y, z)))
+          \t\t\tif PolicyScript.is_walk_hazard(block_id):
+          \t\t\t\treturn true
+          \treturn false
+          
+          
+          func _candidate_is_safe(candidate: Vector3) -> bool:
+          ''',
+          )
+
+          regression_path = "tests/qa/hostile_cover_counter_v2_regression.gd"
+          replace_once(
+              regression_path,
+              '''\thub.add_child(world)
+          \thub.add_child(player)
+          \thub.add_child(spawner)
+          ''',
+              '''\thub.add_child(world)
+          \thub.add_child(player)
+          \tplayer.add_to_group("player")
+          \thub.add_child(spawner)
+          ''',
+          )
+          replace_once(
+              regression_path,
+              '''\tmarksman.set("_blocked_lane_seconds", PolicyScript.REPOSITION_DELAY_SECONDS)
+          \tmarksman.set("_reposition_cooldown_remaining", 0.0)
+          \tmarksman.call("_choose_direction")
+          \tvar marksman_snapshot: Dictionary = marksman.call("get_hostile_attack_snapshot")
+          ''',
+              '''\t# Physics was deliberately disabled for deterministic service assertions.
+          \t# Refresh the production LOS cache explicitly before exercising the caller;
+          \t# otherwise the test can retain the pre-wall clear result for 160 ms.
+          \tmarksman.set("_tracked_target_id", int(player.get_instance_id()))
+          \tmarksman.set("_line_of_sight_refresh_remaining", 0.0)
+          \tmarksman.call("_refresh_line_of_sight", true)
+          \t_check(not bool(marksman.get("_line_of_sight")), "cover-aware marksman observes the current voxel wall")
+          \tmarksman.set("_blocked_lane_seconds", PolicyScript.REPOSITION_DELAY_SECONDS)
+          \tmarksman.set("_reposition_cooldown_remaining", 0.0)
+          \tmarksman.call("_choose_direction")
+          \tvar marksman_snapshot: Dictionary = marksman.call("get_hostile_attack_snapshot")
+          \tprint("COVER_AWARE_MARKSMAN_RESULT %s" % JSON.stringify(marksman_snapshot))
+          ''',
+          )
+
+          validator_path = "tests/developer_b/validate_hostile_cover_counter_v2.ps1"
+          replace_once(
+              validator_path,
+              "Require-Contains $service '_ground_route_safe' 'Marksman repositioning must validate its whole route'\n",
+              "Require-Contains $service '_ground_route_safe' 'Marksman repositioning must validate its whole route'\nRequire-Contains $service '_column_has_walk_hazard' 'Unsafe columns must have explicit production telemetry'\n",
+          )
+
+      - name: Commit branch corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "star-world-quality-bot"
+          git config user.email "star-world-quality-bot@users.noreply.github.com"
+          git add src/entity/hostile_cover_counter_service.gd \
+                  tests/qa/hostile_cover_counter_v2_regression.gd \
+                  tests/developer_b/validate_hostile_cover_counter_v2.ps1
+          git diff --cached --check
+          git commit -m "fix: classify hostile hazards and refresh voxel LOS regression"
+          git push origin HEAD:agent/bounded-hostile-cover-counter-v2
