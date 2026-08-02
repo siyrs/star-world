@@ -82,6 +82,8 @@ func _test_policy_and_atomic_bucket_transform() -> void:
 		not inventory.replace_slot_item(0, "water_bucket", "bucket", {}),
 		"slot replacement rejects an unexpected source item without mutation",
 	)
+	# InventoryService extends Node: free the unparented instance (BUG-LEAK-001).
+	inventory.free()
 
 
 func _test_manual_irrigation_and_dry_growth() -> void:

@@ -258,6 +258,10 @@ func _test_game_and_service_integration() -> void:
 		var audio_player: AudioStreamPlayer = audio_service.get_node(player_name)
 		audio_player.stop()
 		audio_player.stream = null
+	# Full audio teardown releases the ambient stream cache; without it the
+	# AudioStreamWAV/AudioStreamPlaybackWAV leak from the ObjectDB (BUG-LEAK-001).
+	if audio_service.has_method("dispose"):
+		audio_service.call("dispose")
 	game.queue_free()
 	await process_frame
 	await process_frame

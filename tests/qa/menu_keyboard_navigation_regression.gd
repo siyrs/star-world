@@ -6,6 +6,22 @@ var checks := 0
 var failures: Array[String] = []
 
 
+# Fake save service with no worlds: the keyboard journey must observe the
+# no-save fallback ("continue" routes to world creation) regardless of what real
+# user worlds exist under user://worlds. QA never deletes or reads user data here.
+class EmptySaveService:
+	extends Node
+
+	func list_worlds() -> Array:
+		return []
+
+	func save_settings(_settings: Dictionary) -> bool:
+		return true
+
+	func load_settings(_defaults: Dictionary = {}) -> Dictionary:
+		return _defaults
+
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -15,6 +31,11 @@ func _run() -> void:
 	root.content_scale_size = Vector2i(1024, 576)
 	var menu := MainMenuScene.instantiate()
 	root.add_child(menu)
+	# Bind before the deferred _ensure_standalone_services runs so the menu uses
+	# the empty-save fake instead of scanning real user worlds. The fake is owned
+	# by this script (not the menu) so it is released explicitly at teardown.
+	var fake_save := EmptySaveService.new()
+	menu.call("setup", fake_save)
 	for _frame in 8:
 		await process_frame
 
@@ -65,6 +86,7 @@ func _run() -> void:
 	)
 
 	menu.queue_free()
+	fake_save.free()
 	for _frame in 6:
 		await process_frame
 	if failures.is_empty():

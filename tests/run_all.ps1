@@ -96,10 +96,21 @@ $script:passedCount = 0
 $script:failedCount = 0
 
 function Invoke-GodotTest {
-    param([Parameter(Mandatory = $true)][string]$ScriptPath)
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        # Isolated user:// dir for tests that assume a clean world/catalog directory
+        # (saves/catalog/counting). Pass a relative path under build/ so real user
+        # worlds under the default user:// are never touched or counted.
+        [string]$UserDataDir = ''
+    )
     $name = [System.IO.Path]::GetFileNameWithoutExtension($ScriptPath)
+    $userDataArg = ''
+    if (-not [string]::IsNullOrWhiteSpace($UserDataDir)) {
+        $absolute = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\build\qa-userdata\$UserDataDir"))
+        $userDataArg = " --user-data-dir $absolute"
+    }
     try {
-        & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path . --script $ScriptPath -- --disable-update-check"
+        & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path .$userDataArg --script $ScriptPath -- --disable-update-check"
         $script:passedCount++
         Write-Host "PASS $name"
     } catch {
@@ -178,14 +189,14 @@ Invoke-GodotTest 'res://tests/qa/structural_integrity_batched_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_mutation_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/recent_chunk_snapshot_cache_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_catalog_regression.gd'
-Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd'
-Invoke-GodotTest 'res://tests/qa/save_load_matrix_regression.gd'
+Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd' -UserDataDir 'save-recovery'
+Invoke-GodotTest 'res://tests/qa/save_load_matrix_regression.gd' -UserDataDir 'save-matrix'
 Invoke-GodotTest 'res://tests/qa/water_lava_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/stability_extreme_input_regression.gd'
-Invoke-GodotTest 'res://tests/qa/bounded_multi_world_recovery_regression.gd'
-Invoke-GodotTest 'res://tests/qa/bounded_catalog_rebuild_regression.gd'
-Invoke-GodotTest 'res://tests/qa/bounded_authoritative_read_regression.gd'
-Invoke-GodotTest 'res://tests/qa/catalog_stage_invalidation_regression.gd'
+Invoke-GodotTest 'res://tests/qa/bounded_multi_world_recovery_regression.gd' -UserDataDir 'bounded-multi-world'
+Invoke-GodotTest 'res://tests/qa/bounded_catalog_rebuild_regression.gd' -UserDataDir 'bounded-catalog-rebuild'
+Invoke-GodotTest 'res://tests/qa/bounded_authoritative_read_regression.gd' -UserDataDir 'bounded-authoritative-read'
+Invoke-GodotTest 'res://tests/qa/catalog_stage_invalidation_regression.gd' -UserDataDir 'catalog-stage-invalidation'
 Invoke-GodotTest 'res://tests/qa/save_browser_virtualization_regression.gd'
 Invoke-GodotTest 'res://tests/qa/save_browser_query_policy_regression.gd'
 Invoke-GodotTest 'res://tests/qa/indexed_save_browser_regression.gd'

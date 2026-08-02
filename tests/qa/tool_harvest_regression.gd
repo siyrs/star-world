@@ -117,6 +117,10 @@ func _test_policy_and_registry() -> void:
 		not bool(policy.evaluate(registry.get_profile("bedrock"), tools.get_tool_profile("diamond_pickaxe")).get("breakable", true)),
 		"bedrock remains unbreakable regardless of tool tier",
 	)
+	# InventoryService/ToolService extend Node: free the unparented instances
+	# explicitly or they leak from the ObjectDB at exit (BUG-LEAK-001).
+	inventory.free()
+	tools.free()
 
 
 func _test_progress_drop_and_durability() -> void:
@@ -254,6 +258,10 @@ func _test_durability_persistence() -> void:
 		int(tools.get_slot_context(restored_slot).get("remaining_durability", 0)) == 42,
 		"tool context reads restored durability without a new save schema",
 	)
+	# Free the unparented Node instances (BUG-LEAK-001).
+	inventory.free()
+	restored.free()
+	tools.free()
 
 
 func _test_runtime_composition() -> void:
@@ -271,8 +279,11 @@ func _test_runtime_composition() -> void:
 	if hub.get("audio_service") != null and hub.audio_service.has_method("shutdown"):
 		hub.audio_service.shutdown()
 	hub.queue_free()
-	await process_frame
-	await process_frame
+	# Hub teardown is asynchronous (deferred cleanup in audio/update/autosave
+	# children); give the scene tree enough frames to release everything so no
+	# ObjectDB/Resource instances leak at exit (BUG-LEAK-001).
+	for _frame in 12:
+		await process_frame
 
 
 func _check(condition: bool, description: String) -> void:

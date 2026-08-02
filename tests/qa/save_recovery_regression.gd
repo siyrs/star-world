@@ -246,8 +246,14 @@ func _test_save_service_repair_and_catalog_rebuild() -> void:
 	var steady_worlds: Array = save.list_worlds()
 	var steady_catalog: Dictionary = save.get_catalog_diagnostics()
 	_check(_contains_world(steady_worlds, world_id), "steady catalog still lists the repaired world")
+	# The user://worlds directory may hold real user worlds created outside this
+	# suite (the product saves there, and QA must never delete user data). Those
+	# worlds have valid sidecars, so a steady scan hits them too — the invariant
+	# is "every world in the directory is a sidecar hit and zero worlds need an
+	# authoritative read".
+	var steady_world_count := _count_world_directories()
 	_check(
-		int(steady_catalog.get("last_hit_count", 0)) == 1
+		int(steady_catalog.get("last_hit_count", 0)) == steady_world_count
 		and int(steady_catalog.get("last_fallback_count", 0)) == 0,
 		"next catalog scan is a pure sidecar hit without another authoritative read",
 	)
@@ -330,6 +336,23 @@ func _row_by_id(report: Dictionary, row_id: String) -> Dictionary:
 		if raw_row is Dictionary and str(raw_row.get("id", "")) == row_id:
 			return raw_row
 	return {}
+
+
+# Total world directories currently under user://worlds (this suite's own world is
+# still present at the steady-scan call site, so external worlds are included).
+func _count_world_directories() -> int:
+	var directory := DirAccess.open("user://worlds")
+	if directory == null:
+		return 0
+	var count := 0
+	directory.list_dir_begin()
+	var entry_name := directory.get_next()
+	while not entry_name.is_empty():
+		if not entry_name.begins_with(".") and directory.current_is_dir():
+			count += 1
+		entry_name = directory.get_next()
+	directory.list_dir_end()
+	return count
 
 
 func _contains_world(worlds: Array, world_id: String) -> bool:

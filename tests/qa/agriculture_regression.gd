@@ -92,6 +92,10 @@ func _test_registry_and_shovel_policy() -> void:
 		str(BlockRegistryScript.get_definition("carrot_stage_3").get("shape", "")) == "crop",
 		"mature carrots use the lightweight crop mesh contract",
 	)
+	# InventoryService/ToolService extend Node: free the unparented instances
+	# explicitly or they leak from the ObjectDB at exit (BUG-LEAK-001).
+	inventory.free()
+	tools.free()
 
 
 func _test_till_plant_grow_harvest() -> void:

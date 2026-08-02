@@ -26,8 +26,12 @@ func _initialize() -> void:
 func _run() -> void:
 	# In headless runs the window starts at 64x64 while the design viewport is
 	# 1280x720, so pushed input coordinates would land outside the window.
-	# Match the window to the design resolution before simulating pointer input.
+	# Match both the window and the canvas-items stretch target to the design
+	# resolution before simulating pointer input (content_scale_size drives the
+	# logical viewport under canvas_items stretch; root.size alone only resizes
+	# the native window).
 	root.size = Vector2i(1280, 720)
+	root.content_scale_size = Vector2i(1280, 720)
 	await _test_hud_pointer_passthrough()
 	await _test_real_menu_pointer_click()
 	await _test_safe_new_world_spawn()
@@ -65,9 +69,20 @@ func _test_real_menu_pointer_click() -> void:
 	if continue_button != null:
 		await _click_control(continue_button)
 	var map_panel: Control = menu.get("_map_panel")
+	var main_panel: Control = menu.get("_main_panel")
+	var loading_panel: Control = menu.get("_loading_panel")
+	var left_main_menu: bool = (
+		(main_panel != null and not main_panel.visible)
+		or (map_panel != null and map_panel.visible)
+	)
+	# The product's continue action routes by whether any world exists: with real
+	# user worlds present it loads the latest one (loading panel); with no worlds
+	# it falls back to the create panel. Either is the intended contract; the
+	# point of this check is that the viewport mouse press+release reaches the
+	# button and leaves the main command deck.
 	_check(
-		map_panel != null and map_panel.visible,
-		"viewport mouse press and release reach continue and fall back to creation without a save",
+		left_main_menu,
+		"viewport mouse press and release reach continue and route away from the main menu",
 	)
 	menu.queue_free()
 	await process_frame

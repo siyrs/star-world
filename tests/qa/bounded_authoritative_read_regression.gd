@@ -23,9 +23,12 @@ func _run() -> void:
 	var save = SaveServiceScript.new()
 	root.add_child(save)
 	await process_frame
+	# Count pre-existing user worlds before the fixture so scan hit expectations can
+	# separate fixture worlds from real user data (sidecar-valid, hit every scan).
+	var external_world_count := _count_directory_worlds()
 	await _create_worlds_without_catalogs(save)
 	if world_ids.size() == WORLD_COUNT:
-		_run_progressive_scans(save)
+		_run_progressive_scans(save, external_world_count)
 	for world_id: String in world_ids:
 		save.delete_world(world_id)
 	save.queue_free()
@@ -45,6 +48,21 @@ func _run() -> void:
 			% [checks, failures.size()]
 		)
 		quit(1)
+
+
+func _count_directory_worlds() -> int:
+	var directory := DirAccess.open("user://worlds")
+	if directory == null:
+		return 0
+	var count := 0
+	directory.list_dir_begin()
+	var entry_name := directory.get_next()
+	while not entry_name.is_empty():
+		if not entry_name.begins_with(".") and directory.current_is_dir():
+			count += 1
+		entry_name = directory.get_next()
+	directory.list_dir_end()
+	return count
 
 
 func _create_worlds_without_catalogs(save: Node) -> void:
@@ -74,7 +92,7 @@ func _create_worlds_without_catalogs(save: Node) -> void:
 	await process_frame
 
 
-func _run_progressive_scans(save: Node) -> void:
+func _run_progressive_scans(save: Node, external_world_count: int) -> void:
 	save.reset_catalog_diagnostics()
 	save.reset_recovery_diagnostics()
 	var expected_hits := [0, 16, 32, 48, 64, 80, 96]
@@ -138,7 +156,7 @@ func _run_progressive_scans(save: Node) -> void:
 			"scan %d reports every sidecar waiting behind reads or writes" % (scan_index + 1)
 		)
 		_check(
-			int(catalog.get("last_hit_count", -1)) == expected_hits[scan_index]
+			int(catalog.get("last_hit_count", -1)) == expected_hits[scan_index] + external_world_count
 			and int(catalog.get("last_fallback_count", -1))
 			== expected_fallbacks[scan_index],
 			"scan %d converges through the expected hit and miss counts"

@@ -1,6 +1,21 @@
 extends SceneTree
 
 const MainMenuScene = preload("res://scenes/ui/main_menu.tscn")
+
+
+# Empty save service: isolates menu navigation from real user worlds under
+# user://worlds (QA never deletes or reads user data).
+class EmptySaveService:
+	extends Node
+
+	func list_worlds() -> Array:
+		return []
+
+	func save_settings(_settings: Dictionary) -> bool:
+		return true
+
+	func load_settings(_defaults: Dictionary = {}) -> Dictionary:
+		return _defaults
 const SaveServiceScript = preload("res://src/save/save_service.gd")
 const SaveBrowserScript = preload("res://src/ui/save_browser_panel.gd")
 const InventoryScript = preload("res://src/inventory/inventory_service.gd")
@@ -41,6 +56,11 @@ func _run() -> void:
 func _test_menu_navigation() -> void:
 	var menu = MainMenuScene.instantiate()
 	root.add_child(menu)
+	# Bind an empty save service before the deferred standalone-services setup so
+	# "continue" observes the no-save fallback regardless of real user worlds that
+	# QA must never delete. Released explicitly at teardown (not owned by menu).
+	var fake_save := EmptySaveService.new()
+	menu.call("setup", fake_save)
 	await process_frame
 	var main_panel := menu.get("_main_panel") as Control
 	var map_panel := menu.get("_map_panel") as Control
@@ -90,6 +110,7 @@ func _test_menu_navigation() -> void:
 			"map button %d selects its own profile" % (index + 1)
 		)
 	menu.queue_free()
+	fake_save.free()
 	await process_frame
 
 

@@ -23,9 +23,12 @@ func _run() -> void:
 	var save = SaveServiceScript.new()
 	root.add_child(save)
 	await process_frame
+	# Count pre-existing user worlds before the fixture so the steady-scan hit
+	# expectation can separate fixture worlds from real user data (sidecar-valid).
+	var external_world_count := _count_directory_worlds()
 	await _create_worlds_without_catalogs(save)
 	if world_ids.size() == WORLD_COUNT:
-		_exercise_staging_and_invalidation(save)
+		_exercise_staging_and_invalidation(save, external_world_count)
 	for world_id: String in world_ids:
 		save.delete_world(world_id)
 	save.queue_free()
@@ -45,6 +48,21 @@ func _run() -> void:
 			% [checks, failures.size()]
 		)
 		quit(1)
+
+
+func _count_directory_worlds() -> int:
+	var directory := DirAccess.open("user://worlds")
+	if directory == null:
+		return 0
+	var count := 0
+	directory.list_dir_begin()
+	var entry_name := directory.get_next()
+	while not entry_name.is_empty():
+		if not entry_name.begins_with(".") and directory.current_is_dir():
+			count += 1
+		entry_name = directory.get_next()
+	directory.list_dir_end()
+	return count
 
 
 func _create_worlds_without_catalogs(save: Node) -> void:
@@ -74,7 +92,7 @@ func _create_worlds_without_catalogs(save: Node) -> void:
 	await process_frame
 
 
-func _exercise_staging_and_invalidation(save: Node) -> void:
+func _exercise_staging_and_invalidation(save: Node, external_world_count: int) -> void:
 	save.reset_catalog_diagnostics()
 	save.reset_recovery_diagnostics()
 	var first_worlds: Array = save.list_worlds()
@@ -213,8 +231,8 @@ func _exercise_staging_and_invalidation(save: Node) -> void:
 	var steady: Dictionary = save.get_catalog_diagnostics()
 	_check(
 		_matching_count(steady_worlds) == WORLD_COUNT
-		and int(steady.get("last_hit_count", -1)) == WORLD_COUNT,
-		"catalog staging converges to a pure forty-world sidecar hit"
+		and int(steady.get("last_hit_count", -1)) == WORLD_COUNT + external_world_count,
+		"catalog staging converges to a pure all-world sidecar hit"
 	)
 	_check(
 		int(steady.get("last_authoritative_read_budget_used", -1)) == 0
