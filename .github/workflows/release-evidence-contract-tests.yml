@@ -1,0 +1,60 @@
+name: Release evidence contract quality gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-evidence-contract-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/final-release-report.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'tests/developer_b/validate_release_evidence_contract.ps1'
+      - 'tests/qa/player_driven_regional_traversal_regression.gd'
+      - 'tests/qa/profile_release_journey_regression.gd'
+      - 'tests/qa/profile_deep_journey_regression.gd'
+      - 'src/core/**'
+      - 'src/input/**'
+      - 'src/player/**'
+      - 'src/world/**'
+      - 'scenes/game/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-evidence-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Evidence truthfulness, five-profile player traversal and adjacent release journeys
+      domain_timeout_minutes: 100
+      static_validators: |
+        tests/developer_b/validate_release_evidence_contract.ps1
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_controller_gameplay.ps1
+        tests/developer_b/validate_ui_accessibility.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/player_driven_regional_traversal_regression.gd
+      primary_headless_output_base: build\player-driven-regional-traversal
+      primary_headless_timeout_milliseconds: 2400000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/profile_release_journey_regression.gd
+        res://tests/qa/profile_deep_journey_regression.gd
+        res://tests/qa/movement_lifecycle_regression.gd
+        res://tests/qa/collision_seam_probe_regression.gd
+        res://tests/qa/water_lava_lifecycle_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: release-evidence-contract-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/player-driven-regional-traversal.stdout.log
+        build/player-driven-regional-traversal.stderr.log
+        build/player-regional-traversal-report.json
+        build/reusable-domain-*.stdout.log
+        build/reusable-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      retention_days: 21
