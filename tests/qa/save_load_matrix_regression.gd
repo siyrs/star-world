@@ -27,17 +27,21 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	var pre_manifest := _directory_manifest("user://worlds")
+	# Track only this suite's QA prefix: under headless CI the user://worlds dir is
+	# shared with any concurrently-running QA soak, so a global pre/post manifest
+	# would be polluted by unrelated QA worlds. The isolation contract that matters
+	# is "this suite leaves zero worlds behind".
+	var pre_qa_worlds := _qa_world_ids()
 
 	await _test_manual_save_roundtrip()
 	await _test_overwrite_generations()
 	await _test_multi_world_independence()
 	await _test_v1_schema_migration()
 
-	var post_manifest := _directory_manifest("user://worlds")
+	var post_qa_worlds := _qa_world_ids()
 	_check(
-		pre_manifest == post_manifest,
-		"save matrix restores the pre-run world-data manifest after cleanup"
+		post_qa_worlds == pre_qa_worlds,
+		"save matrix leaves no QA worlds behind (pre=%d post=%d)" % [pre_qa_worlds.size(), post_qa_worlds.size()]
 	)
 
 	if failures.is_empty():
@@ -48,6 +52,22 @@ func _run() -> void:
 		push_error("QA SAVE MATRIX FAILURE: %s" % failure)
 	print("QA SAVE MATRIX FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 	quit(1)
+
+
+func _qa_world_ids() -> Array[String]:
+	var ids: Array[String] = []
+	var directory := DirAccess.open("user://worlds")
+	if directory == null:
+		return ids
+	directory.list_dir_begin()
+	var entry_name := directory.get_next()
+	while not entry_name.is_empty():
+		if not entry_name.begins_with(".") and directory.current_is_dir() and entry_name.begins_with("qa-v130-savematrix-"):
+			ids.append(entry_name)
+		entry_name = directory.get_next()
+	directory.list_dir_end()
+	ids.sort()
+	return ids
 
 
 # --- 1. Manual save through the production hub path (UI save button / autosave / return all

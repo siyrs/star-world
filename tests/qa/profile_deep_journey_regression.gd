@@ -67,14 +67,33 @@ func _run() -> void:
 		await _finish()
 		return
 
-	var pre_manifest := _directory_manifest("user://worlds")
+	var pre_qa_worlds := _qa_world_ids()
 	for profile_id: String in profile_ids:
 		await _exercise_profile(profile_id)
 	await _exercise_content_matrix()
-	var post_manifest := _directory_manifest("user://worlds")
-	_check(pre_manifest == post_manifest, "deep journey restores the pre-run world manifest after cleanup")
-	_write_report(pre_manifest, post_manifest)
+	var post_qa_worlds := _qa_world_ids()
+	_check(
+		post_qa_worlds == pre_qa_worlds,
+		"deep journey leaves no QA worlds behind (pre=%d post=%d)" % [pre_qa_worlds.size(), post_qa_worlds.size()]
+	)
+	_write_report({}, {})
 	await _finish()
+
+
+func _qa_world_ids() -> Array[String]:
+	var ids: Array[String] = []
+	var directory := DirAccess.open("user://worlds")
+	if directory == null:
+		return ids
+	directory.list_dir_begin()
+	var entry_name := directory.get_next()
+	while not entry_name.is_empty():
+		if not entry_name.begins_with(".") and directory.current_is_dir() and entry_name.begins_with(QA_WORLD_PREFIX):
+			ids.append(entry_name)
+		entry_name = directory.get_next()
+	directory.list_dir_end()
+	ids.sort()
+	return ids
 
 
 # ---------------------------------------------------------------- profile journeys
