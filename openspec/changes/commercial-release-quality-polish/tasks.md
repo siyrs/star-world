@@ -27,7 +27,7 @@
 - [x] 3.4 Close the focused `star_continent/24681357` regression with valid parsed filters, bounded wall time, scanned/evaluated/termination metrics, hard-safe result, and no ObjectDB/resource leaks.
 - [x] 3.5 Add the synthetic canopy-obstruction fixture, preserve valid existing-save positions, and verify resolver/respawn height behavior.
 - [x] 3.6 Run five profiles × six fixed seeds with p50/p95/max assessment cost, adjacent terrain checks, and three clean leak-free exits.
-- [ ] 3.7 Build and run systematic profile collision, seam, steep-slope, entrapment, fall-through-world, and safe-recovery checks without using artificial completion/state changes.
+- [x] 3.7 Build and run systematic profile collision, seam, steep-slope, entrapment, fall-through-world, and safe-recovery checks without using artificial completion/state changes.
 
 ## 4. Release tooling, resources, and version identity
 
@@ -40,7 +40,7 @@
 ## 5. Performance and observability
 
 - [x] 5.1 Replace invalid release `0.0 MiB` memory interpretation with explicit availability semantics and launched-PID Working Set/Private Bytes sampling.
-- [ ] 5.2 Split static streaming convergence from movement pressure and fail health when pending/building chunks do not converge within the bounded rule.
+- [x] 5.2 Split static streaming convergence from movement pressure and fail health when pending/building chunks do not converge within the bounded rule.
 - [ ] 5.3 Capture like-for-like baseline and optimized performance across menu, each profile spawn/complex area, water/high/underground areas, rapid movement/turning, repeated loads, and settings changes.
 - [ ] 5.4 Record average FPS, 1% low, frame-time percentiles, load time, CPU/GPU/VRAM availability, memory trend, object/allocator evidence, and valid unavailable-counter boundaries.
 - [ ] 5.5 Complete the fresh-EXE long-run soak covering all profiles, saves/loads/menu returns, with no crash, fatal log, sustained degradation, or unexplained memory growth.
