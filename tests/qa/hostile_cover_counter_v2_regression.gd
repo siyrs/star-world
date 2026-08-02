@@ -215,6 +215,7 @@ func _test_runtime_safety_and_reposition() -> void:
 	hub.creature_spawner = spawner
 	hub.add_child(world)
 	hub.add_child(player)
+	player.add_to_group("player")
 	hub.add_child(spawner)
 	hub.add_child(service)
 	player.global_position = Vector3(0.0, 2.05, 0.0)
@@ -402,10 +403,18 @@ func _test_runtime_safety_and_reposition() -> void:
 
 	world.clear_explicit()
 	world.set_override(Vector3i(0, 3, -5), "wool")
+	# Physics was deliberately disabled for deterministic service assertions.
+	# Refresh the production LOS cache explicitly before exercising the caller;
+	# otherwise the test can retain the pre-wall clear result for 160 ms.
+	marksman.set("_tracked_target_id", int(player.get_instance_id()))
+	marksman.set("_line_of_sight_refresh_remaining", 0.0)
+	marksman.call("_refresh_line_of_sight", true)
+	_check(not bool(marksman.get("_line_of_sight")), "cover-aware marksman observes the current voxel wall")
 	marksman.set("_blocked_lane_seconds", PolicyScript.REPOSITION_DELAY_SECONDS)
 	marksman.set("_reposition_cooldown_remaining", 0.0)
 	marksman.call("_choose_direction")
 	var marksman_snapshot: Dictionary = marksman.call("get_hostile_attack_snapshot")
+	print("COVER_AWARE_MARKSMAN_RESULT %s" % JSON.stringify(marksman_snapshot))
 	_check(int(marksman_snapshot.get("reposition_attempt_count", 0)) == 1, "cover-aware marksman records a real attempt")
 	_check(int(marksman_snapshot.get("reposition_success_count", 0)) == 1, "cover-aware marksman accepts safe lane")
 	_check(bool(marksman_snapshot.get("cover_destination_active", false)), "marksman moves through existing destination contract")

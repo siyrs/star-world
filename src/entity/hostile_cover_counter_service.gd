@@ -185,7 +185,13 @@ func find_marksman_reposition_destination(
 		var raw_candidate := marksman.global_position + direction * PolicyScript.REPOSITION_RADIUS
 		var candidate := _resolve_local_ground(raw_candidate, marksman.global_position.y)
 		if not _is_finite_position(candidate) or candidate.y <= -12.0:
-			_marksman_route_rejection_count += 1
+			# A fluid or cactus column is a deliberate safety rejection, not an
+			# unexplained pathfinding failure. Keep the two counters distinct so
+			# production telemetry can reveal unsafe map layouts.
+			if _column_has_walk_hazard(raw_candidate, marksman.global_position.y):
+				_marksman_hazard_rejection_count += 1
+			else:
+				_marksman_route_rejection_count += 1
 			continue
 		var distance_to_target := _horizontal_distance(candidate, attack_target.global_position)
 		if distance_to_target < minimum_range or distance_to_target > maximum_range:
@@ -333,6 +339,20 @@ func _is_player_override(position: Vector3i, expected_block_id: String) -> bool:
 		return false
 	var key := str(world.call("block_key", position))
 	return str((raw_overrides as Dictionary).get(key, "")) == expected_block_id
+
+
+func _column_has_walk_hazard(candidate: Vector3, reference_y: float) -> bool:
+	var x := floori(candidate.x)
+	var z := floori(candidate.z)
+	var reference_support_y := floori(reference_y - 0.2)
+	var maximum_y := mini(61, reference_support_y + LOCAL_GROUND_SEARCH_UP)
+	var minimum_y := maxi(1, reference_support_y - LOCAL_GROUND_SEARCH_DOWN)
+	for y in range(maximum_y, minimum_y - 1, -1):
+		for offset_y in [0, 1, 2]:
+			var block_id := str(world.call("get_block", Vector3i(x, y + offset_y, z)))
+			if PolicyScript.is_walk_hazard(block_id):
+				return true
+	return false
 
 
 func _candidate_is_safe(candidate: Vector3) -> bool:

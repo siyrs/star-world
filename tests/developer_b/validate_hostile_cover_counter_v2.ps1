@@ -61,6 +61,7 @@ Require-Contains $service '"brute_break_budget_exhausted"' 'Budget exhaustion mu
 Require-Contains $service '"mutation_failed"' 'World mutation failure must remain a first-class result'
 Require-Contains $service '_is_player_override' 'Generated terrain must not be mistaken for player temporary cover'
 Require-Contains $service '_ground_route_safe' 'Marksman repositioning must validate its whole route'
+Require-Contains $service '_column_has_walk_hazard' 'Unsafe columns must have explicit production telemetry'
 Require-Contains $service '_resolve_local_ground' 'Cave combat must use local ground instead of global top-surface teleporting'
 Require-Contains $service 'MAX_BOUND_CREATURES := 32' 'Runtime hostile bindings must remain bounded'
 Require-Contains $service 'MAX_ROUTE_GROUND_SAMPLES := 12' 'Ground-route work must remain bounded'
