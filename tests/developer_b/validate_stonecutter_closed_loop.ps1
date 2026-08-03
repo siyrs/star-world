@@ -44,7 +44,7 @@ function Require-MinimumOccurrences {
     )
     $count = ([regex]::Matches($Content, [regex]::Escape($Needle))).Count
     if ($count -lt $Minimum) {
-        $script:failures.Add("$Description (expected >= $Minimum, found $count: $Needle)")
+        $script:failures.Add("$Description (expected >= $Minimum, found ${count}: $Needle)")
     }
 }
 
