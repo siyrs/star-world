@@ -48,10 +48,7 @@ func add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> int
 			and int(slot.get("count", 0)) < max_stack
 			and slot.get("metadata", {}) == metadata
 		):
-			var accepted := mini(
-				remaining,
-				max_stack - int(slot["count"]),
-			)
+			var accepted := mini(remaining, max_stack - int(slot["count"]))
 			slot["count"] = int(slot["count"]) + accepted
 			slots[index] = slot
 			remaining -= accepted
@@ -62,18 +59,12 @@ func add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> int
 		for index in slots.size():
 			if slots[index].is_empty():
 				var accepted := mini(remaining, max_stack)
-				var new_slot := {
-					"item_id": item_id,
-					"count": accepted,
-				}
+				var new_slot := {"item_id": item_id, "count": accepted}
 				if not metadata.is_empty():
 					new_slot["metadata"] = metadata.duplicate(true)
 				slots[index] = new_slot
 				remaining -= accepted
-				slot_changed.emit(
-					index,
-					new_slot.duplicate(true),
-				)
+				slot_changed.emit(index, new_slot.duplicate(true))
 				if remaining == 0:
 					break
 	var added := count - remaining
@@ -97,25 +88,15 @@ func get_add_capacity(item_id: String, metadata: Dictionary = {}) -> int:
 			str(slot.get("item_id", "")) == item_id
 			and slot.get("metadata", {}) == metadata
 		):
-			capacity += maxi(
-				0,
-				max_stack - int(slot.get("count", 0)),
-			)
+			capacity += maxi(0, max_stack - int(slot.get("count", 0)))
 	return capacity
 
 
-func can_add_item(
-	item_id: String,
-	count: int = 1,
-	metadata: Dictionary = {},
-) -> bool:
+func can_add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) -> bool:
 	return count <= 0 or get_add_capacity(item_id, metadata) >= count
 
 
-func can_transact_items(
-	removals: Dictionary = {},
-	additions: Array = [],
-) -> bool:
+func can_transact_items(removals: Dictionary = {}, additions: Array = []) -> bool:
 	return bool(
 		TransactionPolicyScript.plan(
 			slots,
@@ -126,10 +107,7 @@ func can_transact_items(
 	)
 
 
-func transact_items(
-	removals: Dictionary = {},
-	additions: Array = [],
-) -> Dictionary:
+func transact_items(removals: Dictionary = {}, additions: Array = []) -> Dictionary:
 	var plan: Dictionary = TransactionPolicyScript.plan(
 		slots,
 		registry,
@@ -140,18 +118,11 @@ func transact_items(
 		return plan
 	var raw_slots: Variant = plan.get("slots", [])
 	if raw_slots is not Array or raw_slots.size() != slots.size():
-		return {
-			"success": false,
-			"reason": "invalid_plan",
-		}
+		return {"success": false, "reason": "invalid_plan"}
 	var next_slots: Array = raw_slots
 	slots = []
 	for raw_slot: Variant in next_slots:
-		slots.append(
-			raw_slot.duplicate(true)
-			if raw_slot is Dictionary
-			else {}
-		)
+		slots.append(raw_slot.duplicate(true) if raw_slot is Dictionary else {})
 	var changed_indices: Array = plan.get("changed_indices", [])
 	for raw_index: Variant in changed_indices:
 		var index := int(raw_index)
@@ -181,10 +152,7 @@ func remove_item(item_id: String, count: int = 1) -> int:
 		var slot: Dictionary = slots[index]
 		if str(slot.get("item_id", "")) != item_id:
 			continue
-		var removed := mini(
-			remaining,
-			int(slot.get("count", 0)),
-		)
+		var removed := mini(remaining, int(slot.get("count", 0)))
 		slot["count"] = int(slot["count"]) - removed
 		remaining -= removed
 		if int(slot["count"]) <= 0:
@@ -202,22 +170,14 @@ func remove_item(item_id: String, count: int = 1) -> int:
 
 
 func remove_from_slot(index: int, count: int = 1) -> Dictionary:
-	if (
-		index < 0
-		or index >= slots.size()
-		or slots[index].is_empty()
-		or count <= 0
-	):
+	if index < 0 or index >= slots.size() or slots[index].is_empty() or count <= 0:
 		return {}
 	var slot: Dictionary = slots[index]
-	var taken := mini(
-		count,
-		int(slot.get("count", 0)),
-	)
+	var taken := mini(count, int(slot.get("count", 0)))
 	var result := {
 		"item_id": str(slot.get("item_id", "")),
 		"count": taken,
-		"metadata": slot.get("metadata", {}).duplicate(true),
+		"metadata": slot.get("metadata", {}).duplicate(true)
 	}
 	slot["count"] = int(slot["count"]) - taken
 	if int(slot["count"]) <= 0:
@@ -233,7 +193,7 @@ func replace_slot_item(
 	index: int,
 	expected_item_id: String,
 	replacement_item_id: String,
-	replacement_metadata: Dictionary = {},
+	replacement_metadata: Dictionary = {}
 ) -> bool:
 	if (
 		index < 0
@@ -299,11 +259,7 @@ func get_slot(index: int) -> Dictionary:
 
 
 func update_slot_metadata(index: int, metadata: Dictionary) -> bool:
-	if (
-		index < 0
-		or index >= slots.size()
-		or slots[index].is_empty()
-	):
+	if index < 0 or index >= slots.size() or slots[index].is_empty():
 		return false
 	var slot: Dictionary = slots[index]
 	if metadata.is_empty():
@@ -325,43 +281,20 @@ func is_hotbar_slot(index: int) -> bool:
 	return index >= 0 and index < hotbar_size
 
 
-func equip_slot(
-	source_index: int,
-	hotbar_index: int = -1,
-) -> bool:
-	if (
-		source_index < 0
-		or source_index >= slots.size()
-		or slots[source_index].is_empty()
-	):
+func equip_slot(source_index: int, hotbar_index: int = -1) -> bool:
+	if source_index < 0 or source_index >= slots.size() or slots[source_index].is_empty():
 		return false
-	var target_index := (
-		selected_slot
-		if hotbar_index < 0
-		else posmod(hotbar_index, hotbar_size)
-	)
-	if (
-		source_index != target_index
-		and not swap_slots(source_index, target_index)
-	):
+	var target_index := selected_slot if hotbar_index < 0 else posmod(hotbar_index, hotbar_size)
+	if source_index != target_index and not swap_slots(source_index, target_index):
 		return false
 	if selected_slot != target_index or source_index == target_index:
 		select_slot(target_index)
-	slot_equipped.emit(
-		source_index,
-		target_index,
-		get_slot(target_index),
-	)
+	slot_equipped.emit(source_index, target_index, get_slot(target_index))
 	return true
 
 
 func swap_slots(first: int, second: int) -> bool:
-	if (
-		first < 0
-		or second < 0
-		or first >= slots.size()
-		or second >= slots.size()
-	):
+	if first < 0 or second < 0 or first >= slots.size() or second >= slots.size():
 		return false
 	var temporary: Dictionary = slots[first]
 	slots[first] = slots[second]
@@ -400,55 +333,36 @@ func serialize() -> Dictionary:
 		"selected_slot": selected_slot,
 		"slot_count": slot_count,
 		"hotbar_size": hotbar_size,
-		"slots": saved_slots,
+		"slots": saved_slots
 	}
 
 
 func deserialize(data: Dictionary) -> bool:
 	if not data.has("slots") or data["slots"] is not Array:
 		return false
-	slot_count = maxi(
-		9,
-		int(data.get("slot_count", 36)),
-	)
-	hotbar_size = clampi(
-		int(data.get("hotbar_size", 9)),
-		1,
-		slot_count,
-	)
+	slot_count = maxi(9, int(data.get("slot_count", 36)))
+	hotbar_size = clampi(int(data.get("hotbar_size", 9)), 1, slot_count)
 	_reset_slots()
 	var saved_slots: Array = data["slots"]
 	for index in mini(saved_slots.size(), slot_count):
-		var raw_slot: Variant = saved_slots[index]
-		if raw_slot is not Dictionary:
-			continue
-		var item_id := str(raw_slot.get("item_id", ""))
-		var item_count := int(raw_slot.get("count", 0))
-		if not registry.has_item(item_id) or item_count <= 0:
-			continue
-		var restored_slot: Dictionary = {
-			"item_id": item_id,
-			"count": mini(
-				item_count,
-				registry.get_max_stack(item_id),
-			),
-		}
-		var raw_metadata: Variant = raw_slot.get("metadata", {})
-		if raw_metadata is Dictionary and not raw_metadata.is_empty():
-			restored_slot["metadata"] = raw_metadata.duplicate(true)
-		slots[index] = restored_slot
-	selected_slot = clampi(
-		int(data.get("selected_slot", 0)),
-		0,
-		hotbar_size - 1,
-	)
+		var raw_slot = saved_slots[index]
+		if raw_slot is Dictionary:
+			var item_id := str(raw_slot.get("item_id", ""))
+			var item_count := int(raw_slot.get("count", 0))
+			if registry.has_item(item_id) and item_count > 0:
+				var restored_slot: Dictionary = {
+					"item_id": item_id,
+					"count": mini(item_count, registry.get_max_stack(item_id))
+				}
+				var raw_metadata: Variant = raw_slot.get("metadata", {})
+				if raw_metadata is Dictionary and not raw_metadata.is_empty():
+					restored_slot["metadata"] = raw_metadata.duplicate(true)
+				slots[index] = restored_slot
+	selected_slot = clampi(int(data.get("selected_slot", 0)), 0, hotbar_size - 1)
 	inventory_changed.emit()
 	_emit_selected_slot()
 	return true
 
 
 func _emit_selected_slot() -> void:
-	selected_slot_changed.emit(
-		selected_slot,
-		get_selected_item(),
-	)
+	selected_slot_changed.emit(selected_slot, get_selected_item())
