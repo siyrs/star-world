@@ -28,7 +28,7 @@ func _init(p_slot_count: int = 36, p_hotbar_size: int = 9) -> void:
 
 func _reset_slots() -> void:
 	slots.clear()
-	for index in slot_count:
+	for _index in slot_count:
 		slots.append({})
 	selected_slot = 0
 
@@ -98,12 +98,22 @@ func can_add_item(item_id: String, count: int = 1, metadata: Dictionary = {}) ->
 
 func can_transact_items(removals: Dictionary = {}, additions: Array = []) -> bool:
 	return bool(
-		TransactionPolicyScript.plan(slots, registry, removals, additions).get("success", false)
+		TransactionPolicyScript.plan(
+			slots,
+			registry,
+			removals,
+			additions,
+		).get("success", false)
 	)
 
 
 func transact_items(removals: Dictionary = {}, additions: Array = []) -> Dictionary:
-	var plan: Dictionary = TransactionPolicyScript.plan(slots, registry, removals, additions)
+	var plan: Dictionary = TransactionPolicyScript.plan(
+		slots,
+		registry,
+		removals,
+		additions,
+	)
 	if not bool(plan.get("success", false)):
 		return plan
 	var raw_slots: Variant = plan.get("slots", [])
@@ -200,7 +210,10 @@ func replace_slot_item(
 		or int(current.get("count", 0)) != 1
 	):
 		return false
-	var replacement: Dictionary = {"item_id": replacement_item_id, "count": 1}
+	var replacement: Dictionary = {
+		"item_id": replacement_item_id,
+		"count": 1,
+	}
 	if not replacement_metadata.is_empty():
 		replacement["metadata"] = replacement_metadata.duplicate(true)
 	slots[index] = replacement
@@ -337,11 +350,14 @@ func deserialize(data: Dictionary) -> bool:
 			var item_id := str(raw_slot.get("item_id", ""))
 			var item_count := int(raw_slot.get("count", 0))
 			if registry.has_item(item_id) and item_count > 0:
-				slots[index] = {
+				var restored_slot: Dictionary = {
 					"item_id": item_id,
-					"count": mini(item_count, registry.get_max_stack(item_id)),
-					"metadata": raw_slot.get("metadata", {}).duplicate(true)
+					"count": mini(item_count, registry.get_max_stack(item_id))
 				}
+				var raw_metadata: Variant = raw_slot.get("metadata", {})
+				if raw_metadata is Dictionary and not raw_metadata.is_empty():
+					restored_slot["metadata"] = raw_metadata.duplicate(true)
+				slots[index] = restored_slot
 	selected_slot = clampi(int(data.get("selected_slot", 0)), 0, hotbar_size - 1)
 	inventory_changed.emit()
 	_emit_selected_slot()

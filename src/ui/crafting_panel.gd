@@ -14,8 +14,12 @@ var inventory
 var _station_select: OptionButton
 var _recipe_list: VBoxContainer
 var _summary: Label
+var _result_label: Label
 var _recipe_count_badge: Label
 var _recipe_scroll: ScrollContainer
+var _last_result_kind := "idle"
+var _last_result_recipe_id := ""
+var _last_result_text := ""
 
 
 func _ready() -> void:
@@ -33,12 +37,15 @@ func setup(p_crafting, p_inventory) -> void:
 		inventory.inventory_changed.connect(refresh)
 	if crafting != null:
 		crafting.craft_succeeded.connect(_on_craft_succeeded)
+		crafting.craft_failed.connect(_on_craft_failed)
+	_clear_result()
 	refresh()
 
 
 func open_station(station: String) -> void:
 	var index := STATIONS.find(station)
 	index = maxi(0, index)
+	_clear_result()
 	_station_select.select(index)
 	_set_station(index)
 
@@ -60,11 +67,16 @@ func refresh() -> void:
 		var recipe_station := str(recipe.get("station", "hand"))
 		if (
 			recipe_station != crafting.active_station
-			and not (recipe_station == "hand" and crafting.active_station == "workbench")
+			and not (
+				recipe_station == "hand"
+				and crafting.active_station == "workbench"
+			)
 		):
 			continue
 		visible_count += 1
 		var recipe_id := str(recipe.get("id", ""))
+		var output: Dictionary = recipe.get("output", {})
+		var output_item_id := str(output.get("id", ""))
 		var can_craft: bool = bool(crafting.can_craft(recipe_id))
 		if can_craft:
 			available_count += 1
@@ -75,22 +87,43 @@ func refresh() -> void:
 		button.tooltip_text = button.text
 		button.custom_minimum_size.y = 52.0
 		button.disabled = not can_craft
+		# Stable identities keep automation, accessibility bridges and future
+		# controller navigation independent from localized display text or order.
+		button.set_meta("recipe_id", recipe_id)
+		button.set_meta("output_item_id", output_item_id)
+		button.set_meta("station", recipe_station)
 		button.pressed.connect(func() -> void: crafting.craft(recipe_id))
 		_recipe_list.add_child(button)
 	_summary.theme_type_variation = "CaptionLabel"
 	_summary.text = "%s · 当前可制作 %d 项；材料不足的配方会保持可见。" % [
-		_station_name(crafting.active_station), available_count
+		_station_name(crafting.active_station),
+		available_count,
 	]
-	_recipe_count_badge.text = "%d / %d 配方" % [visible_count, crafting.recipe_count()]
+	_recipe_count_badge.text = "%d / %d 配方" % [
+		visible_count,
+		crafting.recipe_count(),
+	]
 
 
 func get_visual_snapshot() -> Dictionary:
 	return {
 		"panel": get_global_rect(),
-		"recipe_scroll": _recipe_scroll.get_global_rect() if _recipe_scroll != null else Rect2(),
-		"recipe_button_count": _recipe_list.get_child_count() if _recipe_list != null else 0,
+		"recipe_scroll": (
+			_recipe_scroll.get_global_rect()
+			if _recipe_scroll != null
+			else Rect2()
+		),
+		"recipe_button_count": (
+			_recipe_list.get_child_count()
+			if _recipe_list != null
+			else 0
+		),
 		"station": crafting.active_station if crafting != null else "",
 		"summary": _summary.text if _summary != null else "",
+		"result_kind": _last_result_kind,
+		"result_recipe_id": _last_result_recipe_id,
+		"result_text": _last_result_text,
+		"result_visible": _result_label != null and _result_label.visible,
 	}
 
 
@@ -107,16 +140,25 @@ func _build_ui() -> void:
 	header.add_child(heading)
 	heading.add_child(UiKit.make_eyebrow("合成"))
 	heading.add_child(UiKit.make_title("合成配方"))
-	heading.add_child(UiKit.make_subtitle("可制作状态会随着背包材料实时更新；工作台同时包含随身配方。"))
+	heading.add_child(
+		UiKit.make_subtitle(
+			"可制作状态会随着背包材料实时更新；工作台同时包含随身配方。"
+		)
+	)
 	_station_select = OptionButton.new()
 	_station_select.add_item("随身合成")
 	_station_select.add_item("工作台")
-	_station_select.custom_minimum_size = Vector2(144, Tokens.CONTROL_HEIGHT_MD)
+	_station_select.custom_minimum_size = Vector2(
+		144,
+		Tokens.CONTROL_HEIGHT_MD,
+	)
 	_station_select.disabled = true
 	_station_select.tooltip_text = "工位由当前打开的世界方块决定"
 	header.add_child(_station_select)
 	var close_button := UiKit.style_button(
-		Button.new(), "GhostButton", Vector2(150, Tokens.CONTROL_HEIGHT_MD)
+		Button.new(),
+		"GhostButton",
+		Vector2(150, Tokens.CONTROL_HEIGHT_MD),
 	)
 	close_button.text = "关闭 [C / Esc]"
 	close_button.pressed.connect(func() -> void: panel_closed.emit())
@@ -124,9 +166,12 @@ func _build_ui() -> void:
 
 	var status_card := UiKit.make_card("CardPanel")
 	root.add_child(status_card)
+	var status_root := VBoxContainer.new()
+	status_root.add_theme_constant_override("separation", Tokens.SPACE_XS)
+	status_card.add_child(status_root)
 	var status_row := HBoxContainer.new()
 	status_row.add_theme_constant_override("separation", Tokens.SPACE_MD)
-	status_card.add_child(status_row)
+	status_root.add_child(status_row)
 	_summary = Label.new()
 	_summary.theme_type_variation = "CaptionLabel"
 	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -134,6 +179,12 @@ func _build_ui() -> void:
 	status_row.add_child(_summary)
 	_recipe_count_badge = UiKit.make_badge("0 配方", "info")
 	status_row.add_child(_recipe_count_badge)
+	_result_label = Label.new()
+	_result_label.name = "CraftingResult"
+	_result_label.theme_type_variation = "CaptionLabel"
+	_result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_result_label.visible = false
+	status_root.add_child(_result_label)
 
 	var recipe_card := UiKit.make_card("InsetPanel")
 	recipe_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -160,13 +211,74 @@ func _build_ui() -> void:
 
 func _set_station(index: int) -> void:
 	if crafting != null:
-		crafting.set_station(STATIONS[clampi(index, 0, STATIONS.size() - 1)])
+		crafting.set_station(
+			STATIONS[clampi(index, 0, STATIONS.size() - 1)]
+		)
 	refresh()
 
 
-func _on_craft_succeeded(recipe_id: String, _output: Dictionary) -> void:
+func _on_craft_succeeded(recipe_id: String, output: Dictionary) -> void:
+	var item_id := str(output.get("item_id", ""))
+	var item_name := (
+		str(inventory.registry.get_display_name(item_id))
+		if inventory != null and not item_id.is_empty()
+		else item_id
+	)
+	_set_result(
+		"success",
+		recipe_id,
+		"制作成功：%s ×%d" % [item_name, int(output.get("count", 1))],
+	)
 	item_crafted.emit(recipe_id)
 	refresh()
+
+
+func _on_craft_failed(recipe_id: String, reason: String) -> void:
+	_set_result(
+		"error",
+		recipe_id,
+		_craft_failure_message(reason),
+	)
+	refresh()
+
+
+func _set_result(kind: String, recipe_id: String, text: String) -> void:
+	_last_result_kind = kind
+	_last_result_recipe_id = recipe_id
+	_last_result_text = text
+	if _result_label == null:
+		return
+	_result_label.text = text
+	_result_label.theme_type_variation = (
+		"SuccessLabel" if kind == "success" else "DangerLabel"
+	)
+	_result_label.visible = not text.is_empty()
+
+
+func _clear_result() -> void:
+	_last_result_kind = "idle"
+	_last_result_recipe_id = ""
+	_last_result_text = ""
+	if _result_label != null:
+		_result_label.text = ""
+		_result_label.theme_type_variation = "CaptionLabel"
+		_result_label.visible = false
+
+
+func _craft_failure_message(reason: String) -> String:
+	match reason:
+		"inventory_missing":
+			return "制作失败：背包服务暂不可用。"
+		"unknown_recipe":
+			return "制作失败：该配方不存在或已被移除。"
+		"invalid_output":
+			return "制作失败：配方产物配置无效。"
+		"inventory_full":
+			return "制作失败：背包空间不足，请先整理背包。"
+		"requirements_or_station":
+			return "制作失败：材料不足或当前工位不符合配方要求。"
+		_:
+			return "制作失败：%s" % reason
 
 
 func _recipe_text(recipe: Dictionary) -> String:
@@ -177,7 +289,12 @@ func _recipe_text(recipe: Dictionary) -> String:
 			if inventory != null
 			else str(item_id)
 		)
-		ingredients.append("%s ×%d" % [item_name, int(recipe["ingredients"][item_id])])
+		ingredients.append(
+			"%s ×%d" % [
+				item_name,
+				int(recipe["ingredients"][item_id]),
+			]
+		)
 	var output: Dictionary = recipe.get("output", {})
 	var output_name: String = (
 		str(inventory.registry.get_display_name(str(output.get("id", ""))))
@@ -185,20 +302,28 @@ func _recipe_text(recipe: Dictionary) -> String:
 		else str(output.get("id", ""))
 	)
 	return "%s   →   %s ×%d" % [
-		"  +  ".join(ingredients), output_name, int(output.get("count", 1))
+		"  +  ".join(ingredients),
+		output_name,
+		int(output.get("count", 1)),
 	]
 
 
 func _station_name(station: String) -> String:
-	return {"hand": "随身合成", "workbench": "工作台"}.get(station, station)
+	return {
+		"hand": "随身合成",
+		"workbench": "工作台",
+	}.get(station, station)
 
 
 func _disconnect_services() -> void:
 	if inventory != null:
-		var callback := Callable(self, "refresh")
-		if inventory.inventory_changed.is_connected(callback):
-			inventory.inventory_changed.disconnect(callback)
+		var inventory_callback := Callable(self, "refresh")
+		if inventory.inventory_changed.is_connected(inventory_callback):
+			inventory.inventory_changed.disconnect(inventory_callback)
 	if crafting != null:
-		var callback := Callable(self, "_on_craft_succeeded")
-		if crafting.craft_succeeded.is_connected(callback):
-			crafting.craft_succeeded.disconnect(callback)
+		var success_callback := Callable(self, "_on_craft_succeeded")
+		if crafting.craft_succeeded.is_connected(success_callback):
+			crafting.craft_succeeded.disconnect(success_callback)
+		var failure_callback := Callable(self, "_on_craft_failed")
+		if crafting.craft_failed.is_connected(failure_callback):
+			crafting.craft_failed.disconnect(failure_callback)
