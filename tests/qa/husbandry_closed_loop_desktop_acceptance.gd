@@ -5,6 +5,7 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://husbandry-closed-loop-desktop.png"
 const CLEANUP_FRAMES := 10
+const COW_COOLDOWN_ADVANCE_SECONDS := 241.0
 
 var checks := 0
 var failures: Array[String] = []
@@ -69,7 +70,15 @@ func _run() -> void:
 			rejection_events.append({"reason":reason, "context":context.duplicate(true)})
 	)
 
-	var pair: Array[Node3D] = await _spawn_parent_pair(game, hub)
+	var arena := _build_husbandry_arena(world, player)
+	player.global_position = arena.get("player_position", player.global_position)
+	player.rotation = Vector3.ZERO
+	player.call("reset_motion")
+	player.velocity.y = -1.0
+	await _settle_player(player, 120)
+	_check(player.is_on_floor(), "production player settles on the live husbandry arena")
+
+	var pair: Array[Node3D] = await _spawn_parent_pair(game, hub, arena)
 	_check(pair.size() == 2, "real creature spawner creates two bounded parent cows")
 	if pair.size() != 2:
 		await _finish(game, hub)
@@ -110,8 +119,16 @@ func _run() -> void:
 		and str(husbandry.call("get_record", first_baby_id).get("stage", "")) == "baby",
 		"first-generation baby restores baby domain and visual scale",
 	)
-	if first_baby != null:
-		_freeze_creature(first_baby)
+	_arrange_family(
+		world,
+		player,
+		husbandry,
+		{
+			first_parent_id:arena.get("parent_one_position", first.global_position),
+			second_parent_id:arena.get("parent_two_position", second.global_position),
+			first_baby_id:arena.get("baby_one_position", first_baby.global_position if first_baby != null else Vector3.ZERO),
+		},
+	)
 	var lifecycle_count_after_birth := lifecycle_events.size()
 	var interaction_count_after_birth := interaction_events.size()
 	_check(lifecycle_count_after_birth == 1, "first breeding produces one bounded lifecycle summary")
@@ -149,16 +166,27 @@ func _run() -> void:
 		and str(husbandry.call("get_record", first_baby_id).get("stage", "")) == "baby",
 		"first reload preserves baby stage and scale",
 	)
-	for creature: Node3D in [first, second, first_baby]:
-		if creature != null:
-			_freeze_creature(creature)
+	_arrange_family(
+		world,
+		player,
+		husbandry,
+		{
+			first_parent_id:arena.get("parent_one_position", first.global_position),
+			second_parent_id:arena.get("parent_two_position", second.global_position),
+			first_baby_id:arena.get("baby_one_position", first_baby.global_position),
+		},
+	)
 
 	inventory.clear()
 	inventory.add_item("wheat", 1)
 	inventory.select_slot(0)
 	var inventory_before_cooldown: Dictionary = inventory.call("serialize")
-	var records_before_cooldown: Dictionary = husbandry.call("get_managed_records")
+	var structure_before_cooldown := _structural_records(husbandry)
+	var cooldown_before := float(
+		husbandry.call("get_record", first_parent_id).get("breed_cooldown_seconds", 0.0)
+	)
 	await _aim_at(player, first.global_position + Vector3(0.0, 0.65, 0.0))
+	_check(_ray_hits_entity(player, first), "production center ray resolves the cooled parent")
 	await _right_click_center()
 	_check(not rejection_events.is_empty(), "real cooldown interaction emits a production rejection")
 	if not rejection_events.is_empty():
@@ -167,18 +195,46 @@ func _run() -> void:
 			"cooldown rejection retains the exact breed_cooldown reason",
 		)
 	_check(inventory.call("serialize") == inventory_before_cooldown, "cooldown failure cannot consume player wheat")
-	_check(husbandry.call("get_managed_records") == records_before_cooldown, "cooldown failure cannot mutate any animal record")
+	_check(_structural_records(husbandry) == structure_before_cooldown, "cooldown failure cannot add, remove, damage or restage any animal")
+	var cooldown_after := float(
+		husbandry.call("get_record", first_parent_id).get("breed_cooldown_seconds", 0.0)
+	)
+	_check(cooldown_after > 0.0 and cooldown_after <= cooldown_before, "cooldown failure only permits normal monotonic timer passage")
+	_check(
+		is_zero_approx(float(husbandry.call("get_record", first_parent_id).get("love_remaining_seconds", 0.0))),
+		"cooldown failure cannot place the parent into love state",
+	)
 
-	husbandry.call("_process", 181.0)
+	husbandry.call("_process", COW_COOLDOWN_ADVANCE_SECONDS)
+	_arrange_family(
+		world,
+		player,
+		husbandry,
+		{
+			first_parent_id:arena.get("parent_one_position", first.global_position),
+			second_parent_id:arena.get("parent_two_position", second.global_position),
+			first_baby_id:arena.get("baby_one_position", first_baby.global_position),
+		},
+	)
+	_check(
+		is_zero_approx(float(husbandry.call("get_record", first_parent_id).get("breed_cooldown_seconds", -1.0)))
+		and is_zero_approx(float(husbandry.call("get_record", second_parent_id).get("breed_cooldown_seconds", -1.0))),
+		"bounded production time completes both parent cooldowns",
+	)
 	inventory.clear()
-	inventory.add_item("wheat", 2, {"generation":2})
+	inventory.add_item("wheat", 2, {"generation":"second"})
 	inventory.select_slot(0)
 	await _aim_at(player, first.global_position + Vector3(0.0, 0.65, 0.0))
+	_check(_ray_hits_entity(player, first), "production center ray resolves the first parent after cooldown")
 	await _right_click_center()
+	_check(inventory.count_item("wheat") == 1, "first second-generation feed consumes exactly one wheat")
+	_check(float(husbandry.call("get_record", first_parent_id).get("love_remaining_seconds", 0.0)) > 0.0, "first parent re-enters production love state")
 	await _aim_at(player, second.global_position + Vector3(0.0, 0.65, 0.0))
+	_check(_ray_hits_entity(player, second), "production center ray resolves the second parent after cooldown")
 	await _right_click_center()
 	for _frame in 4:
 		await process_frame
+	_check(inventory.count_item("wheat") == 0, "second second-generation feed consumes the remaining wheat")
 	_check(int(husbandry.call("get_managed_count")) == 4, "second real breeding creates one additional baby")
 	var second_baby_id := _only_new_id(
 		_husbandry_ids(husbandry),
@@ -191,23 +247,34 @@ func _run() -> void:
 		and str(husbandry.call("get_record", second_baby_id).get("stage", "")) == "baby",
 		"second-generation baby is live and starts in the baby stage",
 	)
-	if second_baby != null:
-		_freeze_creature(second_baby)
 
+	_arrange_family(
+		world,
+		player,
+		husbandry,
+		{
+			first_parent_id:arena.get("parent_far_left", first.global_position),
+			second_parent_id:arena.get("parent_far_right", second.global_position),
+			first_baby_id:arena.get("combat_target_position", first_baby.global_position),
+			second_baby_id:arena.get("baby_two_position", second_baby.global_position if second_baby != null else Vector3.ZERO),
+		},
+	)
+	first_baby = husbandry.call("get_live_entity", first_baby_id) as Node3D
 	inventory.clear()
 	inventory.add_item("iron_sword", 1)
 	inventory.select_slot(0)
 	if first_baby != null:
 		first_baby.set("health", 1.0)
-		await _aim_at(player, first_baby.global_position + Vector3(0.0, 0.38, 0.0))
+		husbandry.call("_process", 0.0)
+		_freeze_creature(first_baby)
+		await _aim_at(player, first_baby.global_position + Vector3(0.0, 0.42, 0.0))
 		_check(_ray_hits_entity(player, first_baby), "production center ray resolves the first-generation baby for combat")
-		await _left_click_center()
-	for _frame in 6:
-		await process_frame
+		await _attack_until_removed(player, husbandry, first_baby_id, 3)
 	_check(husbandry.call("get_record", first_baby_id).is_empty(), "real player attack removes the defeated baby record")
 	_check(int(husbandry.call("get_managed_count")) == 3, "defeat leaves two parents and one surviving second-generation baby")
 
-	var final_records: Dictionary = husbandry.call("get_managed_records")
+	var final_structure := _structural_records(husbandry)
+	var final_timers := _timer_records(husbandry)
 	_check(bool(hub.call("save_current")), "post-death multi-generation state joins a second authoritative save")
 	var final_loaded: Dictionary = hub.get("save_service").load_world(_world_id)
 	var final_saved_animals: Dictionary = final_loaded.get("husbandry", {}).get("animals", {})
@@ -227,7 +294,8 @@ func _run() -> void:
 		await process_frame
 	game.call("begin_world_state", final_loaded)
 	_check(await _wait_for_world_ready(game, hub), "second complete husbandry reload reaches gameplay")
-	_check(husbandry.call("get_managed_records") == final_records, "second reload restores the exact surviving domain records")
+	_check(_structural_records(husbandry) == final_structure, "second reload restores exact surviving identities, species, stages and health")
+	_check(_timers_advance_monotonically(final_timers, _timer_records(husbandry)), "second reload advances only bounded lifecycle timers")
 	_check(husbandry.call("get_live_entity", first_baby_id) == null, "defeated first-generation baby does not respawn")
 	_check(
 		husbandry.call("get_live_entity", first_parent_id) != null
@@ -252,25 +320,73 @@ func _run() -> void:
 	await _finish(game, hub)
 
 
-func _spawn_parent_pair(game: Node, hub: Node) -> Array[Node3D]:
+func _build_husbandry_arena(world: Node, player: Node3D) -> Dictionary:
+	var origin: Vector3i = world.call("world_to_block", player.global_position)
+	var floor_y := clampi(origin.y - 1, 2, 59)
+	for x_offset in range(-8, 9):
+		for z_offset in range(-9, 5):
+			var floor_position := Vector3i(origin.x + x_offset, floor_y, origin.z + z_offset)
+			world.call("set_block", floor_position, "stone")
+			for y_offset in range(1, 6):
+				world.call("set_block", floor_position + Vector3i(0, y_offset, 0), "air")
+	return {
+		"player_position":Vector3(origin.x + 0.5, floor_y + 1.05, origin.z + 0.5),
+		"parent_one_position":Vector3(origin.x - 0.7, floor_y + 1.05, origin.z - 3.5),
+		"parent_two_position":Vector3(origin.x + 1.7, floor_y + 1.05, origin.z - 3.5),
+		"baby_one_position":Vector3(origin.x - 3.5, floor_y + 1.05, origin.z - 4.5),
+		"baby_two_position":Vector3(origin.x + 4.5, floor_y + 1.05, origin.z - 4.5),
+		"combat_target_position":Vector3(origin.x + 0.5, floor_y + 1.05, origin.z - 2.4),
+		"parent_far_left":Vector3(origin.x - 5.5, floor_y + 1.05, origin.z - 5.5),
+		"parent_far_right":Vector3(origin.x + 6.5, floor_y + 1.05, origin.z - 5.5),
+	}
+
+
+func _spawn_parent_pair(game: Node, hub: Node, arena: Dictionary) -> Array[Node3D]:
 	var result: Array[Node3D] = []
-	var player: Node3D = game.get("player") as Node3D
-	var world: Node = game.get("world") as Node
 	var spawner: Node = hub.get("creature_spawner") as Node
-	player.rotation = Vector3.ZERO
-	player.call("reset_motion")
-	var base_position := player.global_position
-	for x_offset: float in [-0.85, 0.85]:
-		var position: Vector3 = world.call(
-			"resolve_ground_position",
-			base_position + Vector3(x_offset, 1.0, -3.4),
-		)
+	for position: Vector3 in [
+		arena.get("parent_one_position", Vector3.ZERO),
+		arena.get("parent_two_position", Vector3.ZERO),
+	]:
 		var value: Variant = spawner.call("spawn_creature", "cow", position)
 		if value is Node3D:
 			var creature := value as Node3D
 			_freeze_creature(creature)
 			result.append(creature)
 	return result
+
+
+func _arrange_family(
+	world: Node,
+	player: CharacterBody3D,
+	husbandry: Node,
+	placements: Dictionary,
+) -> void:
+	for raw_id: Variant in placements.keys():
+		var husbandry_id := str(raw_id)
+		var creature: Node3D = husbandry.call("get_live_entity", husbandry_id) as Node3D
+		if creature == null:
+			continue
+		var candidate: Vector3 = placements.get(raw_id, creature.global_position)
+		var resolved: Variant = world.call("resolve_ground_position", candidate)
+		creature.global_position = resolved if resolved is Vector3 else candidate
+		_freeze_creature(creature)
+	player.global_position = world.call("resolve_ground_position", player.global_position)
+	player.call("reset_motion")
+	husbandry.call("_process", 0.0)
+	for raw_id: Variant in placements.keys():
+		var creature: Node3D = husbandry.call("get_live_entity", str(raw_id)) as Node3D
+		if creature != null:
+			_freeze_creature(creature)
+	await process_frame
+
+
+func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
+	for _frame in frame_limit:
+		if player.is_on_floor():
+			return
+		await physics_frame
+		await process_frame
 
 
 func _wait_for_world_ready(game: Node, hub: Node) -> bool:
@@ -288,9 +404,12 @@ func _wait_for_world_ready(game: Node, hub: Node) -> bool:
 
 
 func _freeze_creature(creature: Node3D) -> void:
+	creature.set("move_speed", 0.0)
 	creature.set_physics_process(false)
 	if creature is CharacterBody3D:
 		creature.velocity = Vector3.ZERO
+	if creature.has_method("clear_combat_motion"):
+		creature.call("clear_combat_motion")
 
 
 func _husbandry_ids(husbandry: Node) -> Array[String]:
@@ -309,10 +428,74 @@ func _only_new_id(ids: Array[String], existing: Array[String]) -> String:
 	return ""
 
 
+func _structural_records(husbandry: Node) -> Dictionary:
+	var result: Dictionary = {}
+	var records: Dictionary = husbandry.call("get_managed_records")
+	for raw_id: Variant in records.keys():
+		var husbandry_id := str(raw_id)
+		var record: Dictionary = records.get(raw_id, {}).duplicate(true)
+		result[husbandry_id] = {
+			"id":str(record.get("id", husbandry_id)),
+			"species_id":str(record.get("species_id", "")),
+			"stage":str(record.get("stage", "")),
+			"health":float(record.get("health", 0.0)),
+		}
+	return result
+
+
+func _timer_records(husbandry: Node) -> Dictionary:
+	var result: Dictionary = {}
+	var records: Dictionary = husbandry.call("get_managed_records")
+	for raw_id: Variant in records.keys():
+		var husbandry_id := str(raw_id)
+		var record: Dictionary = records.get(raw_id, {})
+		result[husbandry_id] = {
+			"growth":float(record.get("growth_remaining_seconds", 0.0)),
+			"cooldown":float(record.get("breed_cooldown_seconds", 0.0)),
+			"love":float(record.get("love_remaining_seconds", 0.0)),
+		}
+	return result
+
+
+func _timers_advance_monotonically(before: Dictionary, after: Dictionary) -> bool:
+	if before.keys().size() != after.keys().size():
+		return false
+	for raw_id: Variant in before.keys():
+		var husbandry_id := str(raw_id)
+		if not after.has(husbandry_id):
+			return false
+		var previous: Dictionary = before.get(raw_id, {})
+		var current: Dictionary = after.get(husbandry_id, {})
+		for key: String in ["growth", "cooldown", "love"]:
+			var previous_value := maxf(0.0, float(previous.get(key, 0.0)))
+			var current_value := maxf(0.0, float(current.get(key, 0.0)))
+			if current_value > previous_value + 0.001:
+				return false
+	return true
+
+
+func _attack_until_removed(
+	player: Node3D,
+	husbandry: Node,
+	husbandry_id: String,
+	attempt_limit: int,
+) -> void:
+	for _attempt in attempt_limit:
+		if husbandry.call("get_record", husbandry_id).is_empty():
+			return
+		await _left_click_center()
+		for _frame in 45:
+			await process_frame
+		if husbandry.call("get_record", husbandry_id).is_empty():
+			return
+
+
 func _aim_at(player: Node3D, target: Vector3) -> void:
 	var camera: Camera3D = player.call("get_view_camera") as Camera3D
 	if camera != null:
-		camera.look_at(target, Vector3.UP)
+		var direction := (target - camera.global_position).normalized()
+		var up := Vector3.FORWARD if absf(direction.dot(Vector3.UP)) > 0.98 else Vector3.UP
+		camera.look_at(target, up)
 	for _frame in 2:
 		await physics_frame
 		await process_frame
