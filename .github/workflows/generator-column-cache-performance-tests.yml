@@ -1,0 +1,189 @@
+name: Bounded generator column cache and truthful performance gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/generator-column-cache-performance-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/performance-baseline.md'
+      - 'src/core/frame_performance_metrics.gd'
+      - 'src/diagnostics/**'
+      - 'src/performance/**'
+      - 'src/world/world_generator.gd'
+      - 'src/world/world_generator_column_cache.gd'
+      - 'src/world/voxel_world.gd'
+      - 'src/chunk/**'
+      - 'tests/ci/run_performance_capture.ps1'
+      - 'tests/developer_b/validate_generator_column_cache.ps1'
+      - 'tests/qa/frame_performance_metrics_regression.gd'
+      - 'tests/qa/world_generator_column_cache_regression.gd'
+      - 'tests/qa/performance_scenario_capture.gd'
+      - 'tests/qa/adaptive_streaming_regression.gd'
+      - 'tests/qa/spawn_experience_regression.gd'
+      - 'tests/qa/profile_release_journey_regression.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generator-column-cache-performance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Deterministic bounded column caching and frame-time-derived release metrics
+      domain_timeout_minutes: 100
+      static_validators: |
+        tests/developer_b/validate_generator_column_cache.ps1
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_controller_gameplay.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/world_generator_column_cache_regression.gd
+      primary_headless_output_base: build\world-generator-column-cache
+      primary_headless_timeout_milliseconds: 2400000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/frame_performance_metrics_regression.gd
+        res://tests/qa/adaptive_streaming_regression.gd
+        res://tests/qa/spawn_experience_regression.gd
+        res://tests/qa/profile_release_journey_regression.gd
+        res://tests/qa/runtime_diagnostics_regression.gd
+        res://tests/qa/runtime_soak_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: generator-column-cache-performance-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/world-generator-column-cache.stdout.log
+        build/world-generator-column-cache.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      retention_days: 21
+
+  performance-capture:
+    name: Real desktop five-profile schema-v2 performance capture
+    needs: quality-gate
+    runs-on: windows-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate isolated project import
+        shell: pwsh
+        run: |
+          .\tests\ci\Invoke-Godot.ps1 `
+            -Arguments '--headless --path . --editor --quit' `
+            -TimeoutMilliseconds 600000
+
+      - name: Capture five-profile frame-time and external-memory evidence
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_performance_capture.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -OutputDirectory 'build\column-cache-perf'
+
+      - name: Validate schema-v2 performance report
+        shell: pwsh
+        run: |
+          $reportPath = 'build\column-cache-perf\perf-report.json'
+          $memoryPath = 'build\column-cache-perf\perf.memory.json'
+          if (-not (Test-Path -LiteralPath $reportPath)) {
+            throw "Missing performance report: $reportPath"
+          }
+          if (-not (Test-Path -LiteralPath $memoryPath)) {
+            throw "Missing external-memory report: $memoryPath"
+          }
+
+          $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ([int]$report.schema_version -ne 2) {
+            throw "Expected performance schema 2, got $($report.schema_version)"
+          }
+          if ([string]$report.metric_schema -ne 'frame-time-tail-v2') {
+            throw "Unexpected report metric schema: $($report.metric_schema)"
+          }
+
+          $measured = @($report.scenarios | Where-Object { [int]$_.sample_count -gt 0 })
+          if ($measured.Count -lt 12) {
+            throw "Expected at least 12 measured scenarios, got $($measured.Count)"
+          }
+          foreach ($scenario in $measured) {
+            $identity = "$($scenario.profile)/$($scenario.phase)"
+            if ([string]$scenario.metric_schema -ne 'frame-time-tail-v2') {
+              throw "Scenario $identity has invalid metric schema"
+            }
+            $frameAverage = [double]$scenario.frame_ms_avg
+            $averageFps = [double]$scenario.avg_fps
+            $onePercentLow = [double]$scenario.one_percent_low_fps
+            if ($frameAverage -le 0 -or $averageFps -le 0 -or $onePercentLow -le 0) {
+              throw "Scenario $identity has non-positive frame-time metrics"
+            }
+            $derivedAverage = 1000.0 / $frameAverage
+            if ([math]::Abs($averageFps - $derivedAverage) -gt 0.05) {
+              throw "Scenario $identity average FPS is not derived from real frame time"
+            }
+            if ($onePercentLow -gt $averageFps + 0.05) {
+              throw "Scenario $identity one-percent low exceeds average FPS"
+            }
+            if (
+              [double]$scenario.frame_budget_miss_60fps_percent -lt 0 -or
+              [double]$scenario.frame_budget_miss_60fps_percent -gt 100 -or
+              [double]$scenario.frame_budget_miss_30fps_percent -lt 0 -or
+              [double]$scenario.frame_budget_miss_30fps_percent -gt 100
+            ) {
+              throw "Scenario $identity has invalid frame-budget percentages"
+            }
+
+            if ([string]$scenario.profile -ne 'menu') {
+              $cache = $scenario.generator_column_cache
+              if ($null -eq $cache) {
+                throw "Scenario $identity is missing generator_column_cache telemetry"
+              }
+              if ([int]$cache.entry_count -lt 1 -or [int]$cache.entry_count -gt [int]$cache.capacity) {
+                throw "Scenario $identity cache entry count is outside its hard capacity"
+              }
+              if ([int]$cache.surface_height_evaluation_count -lt 1) {
+                throw "Scenario $identity has no real surface-height evaluations"
+              }
+              if (
+                [string]$scenario.profile -eq 'sky_islands' -and
+                [int]$cache.sky_strength_evaluation_count -lt 1
+              ) {
+                throw "Scenario $identity has no real sky-island evaluations"
+              }
+            }
+          }
+
+          $memory = Get-Content -LiteralPath $memoryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ([int]$memory.working_set_mib.sample_count -lt 1) {
+            throw 'External Working Set capture contains no samples'
+          }
+          if ([int]$memory.private_bytes_mib.sample_count -lt 1) {
+            throw 'External Private Bytes capture contains no samples'
+          }
+
+          $measured |
+            Select-Object profile, phase, avg_fps, one_percent_low_fps, frame_ms_p95, frame_ms_p99, frame_budget_miss_60fps_percent |
+            Format-Table -AutoSize
+
+      - name: Upload desktop performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generator-column-cache-performance-${{ github.run_number }}
+          path: |
+            build/column-cache-perf/**
+          if-no-files-found: error
+          retention-days: 21
