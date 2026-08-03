@@ -104,7 +104,7 @@ jobs:
   quality-gate:
     uses: ./.github/workflows/reusable-godot-quality-gate.yml
     with:
-      domain_job_name: Remaining player journeys and ranch product conservation
+      domain_job_name: Remaining player journeys, conservation and five-profile continuous routes
       domain_timeout_minutes: 100
       static_validators: |
         tests/developer_b/validate_remaining_player_journeys.ps1
@@ -125,6 +125,7 @@ jobs:
         res://tests/qa/inventory_canonical_roundtrip_regression.gd
         res://tests/qa/inventory_transaction_regression.gd
         res://tests/qa/profile_release_journey_regression.gd
+        res://tests/qa/player_continuous_route_regression.gd
       domain_scripts_verbose: true
       domain_artifact_name: remaining-player-journeys-domain
       domain_artifact_paths: |
@@ -161,6 +162,10 @@ jobs:
             script: res://tests/qa/rest_closed_loop_desktop_acceptance.gd
             output: build\rest-closed-loop-desktop.png
             artifact: remaining-rest-closed-loop
+          - name: Real complete exploration milestones rewards and exact reload
+            script: res://tests/qa/exploration_closed_loop_desktop_acceptance.gd
+            output: build\exploration-closed-loop-desktop.png
+            artifact: remaining-exploration-closed-loop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
