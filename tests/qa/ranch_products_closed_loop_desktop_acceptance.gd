@@ -223,7 +223,12 @@ func _build_flat_ranch_lane(world: Node, player: Node3D) -> Dictionary:
 func _fill_inventory(inventory: Node) -> void:
 	inventory.clear()
 	for index in 36:
-		inventory.call("add_item", "wooden_pickaxe", 1, {"fixture_slot":index})
+		inventory.call(
+			"add_item",
+			"wooden_pickaxe",
+			1,
+			{"fixture_slot":"slot_%02d" % index},
+		)
 
 
 func _occupied_slot_count(inventory: Node) -> int:
