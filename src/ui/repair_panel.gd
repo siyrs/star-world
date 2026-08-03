@@ -13,6 +13,8 @@ var _list: VBoxContainer
 var _summary_label: Label
 var _status_label: Label
 var _repair_buttons: Dictionary = {}
+var _status_kind := "idle"
+var _status_target_id := ""
 
 
 func _ready() -> void:
@@ -41,8 +43,7 @@ func setup(p_inventory: Node, p_equipment: Node, p_repair_service: Node) -> void
 func open_panel() -> bool:
 	if repair_service == null:
 		return false
-	_status_label.text = "选择受损物品进行修理"
-	_status_label.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
+	_show_status("选择受损物品进行修理", "idle")
 	refresh()
 	return true
 
@@ -79,6 +80,34 @@ func refresh() -> void:
 
 func get_repair_button(target_id: String) -> Button:
 	return _repair_buttons.get(target_id) as Button
+
+
+func get_visual_snapshot() -> Dictionary:
+	var targets: Dictionary = {}
+	for raw_target_id in _repair_buttons:
+		var target_id := str(raw_target_id)
+		var button := _repair_buttons.get(raw_target_id) as Button
+		if (
+			button == null
+			or not is_instance_valid(button)
+			or button.is_queued_for_deletion()
+		):
+			continue
+		targets[target_id] = {
+			"disabled": button.disabled,
+			"text": button.text,
+			"item_id": str(button.get_meta("item_id", "")),
+			"target_kind": str(button.get_meta("target_kind", "")),
+		}
+	return {
+		"visible": visible,
+		"summary_text": _summary_label.text if _summary_label != null else "",
+		"status_kind": _status_kind,
+		"status_target_id": _status_target_id,
+		"status_text": _status_label.text if _status_label != null else "",
+		"target_count": targets.size(),
+		"targets": targets,
+	}
 
 
 func get_layout_rects() -> Dictionary:
@@ -198,9 +227,13 @@ func _add_preview_row(preview: Dictionary) -> void:
 		button.text = "修理"
 	button.tooltip_text = _preview_tooltip(preview)
 	var target: Dictionary = preview.get("target", {}).duplicate(true)
+	var target_id := str(preview.get("target_id", ""))
+	button.set_meta("target_id", target_id)
+	button.set_meta("item_id", str(preview.get("item_id", "")))
+	button.set_meta("target_kind", str(target.get("kind", "")))
 	button.pressed.connect(_on_repair_pressed.bind(target))
 	content.add_child(button)
-	_repair_buttons[str(preview.get("target_id", ""))] = button
+	_repair_buttons[target_id] = button
 
 
 func _add_empty_state(message: String) -> void:
@@ -229,21 +262,24 @@ func _preview_tooltip(preview: Dictionary) -> String:
 func _on_repair_pressed(target: Dictionary) -> void:
 	if repair_service == null or not repair_service.has_method("repair_target"):
 		return
-	var result: Dictionary = repair_service.call("repair_target", target)
+	repair_service.call("repair_target", target)
+
+
+func _on_repair_completed(result: Dictionary) -> void:
 	_show_status(
 		str(result.get("message", "修理完成")),
-		"success" if bool(result.get("success", false)) else "warning"
+		"success",
+		str(result.get("target_id", "")),
 	)
 	refresh()
 
 
-func _on_repair_completed(result: Dictionary) -> void:
-	_show_status(str(result.get("message", "修理完成")), "success")
-	refresh()
-
-
 func _on_repair_rejected(_reason: String, context: Dictionary) -> void:
-	_show_status(str(context.get("message", "无法修理")), "warning")
+	_show_status(
+		str(context.get("message", "无法修理")),
+		"warning",
+		str(context.get("target_id", "")),
+	)
 	refresh()
 
 
@@ -251,15 +287,23 @@ func _on_equipment_changed(_snapshot: Dictionary) -> void:
 	refresh()
 
 
-func _show_status(message: String, severity: String) -> void:
+func _show_status(
+	message: String,
+	severity: String,
+	target_id: String = "",
+) -> void:
 	if _status_label == null:
 		return
+	_status_kind = severity
+	_status_target_id = target_id
 	_status_label.text = message
-	_status_label.modulate = (
-		Tokens.color(Tokens.COLOR_SUCCESS)
-		if severity == "success"
-		else Tokens.color(Tokens.COLOR_WARNING)
-	)
+	match severity:
+		"success":
+			_status_label.modulate = Tokens.color(Tokens.COLOR_SUCCESS)
+		"warning":
+			_status_label.modulate = Tokens.color(Tokens.COLOR_WARNING)
+		_:
+			_status_label.modulate = Tokens.color(Tokens.COLOR_TEXT_MUTED)
 
 
 func _clear_list() -> void:

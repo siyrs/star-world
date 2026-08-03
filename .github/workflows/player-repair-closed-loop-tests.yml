@@ -1,0 +1,107 @@
+name: Player repair closed-loop quality gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/player-repair-closed-loop-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/content-journey-matrix.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'qa/final-release-report.md'
+      - 'qa/issues-found.md'
+      - 'data/items.json'
+      - 'data/repair_profiles.json'
+      - 'scenes/game/**'
+      - 'scenes/ui/**'
+      - 'src/equipment/**'
+      - 'src/input/**'
+      - 'src/interaction/**'
+      - 'src/inventory/**'
+      - 'src/repair/**'
+      - 'src/save/**'
+      - 'src/tools/**'
+      - 'src/ui/**'
+      - 'src/world/**'
+      - 'tests/ci/run_godot_desktop_test.ps1'
+      - 'tests/developer_b/validate_repair_closed_loop.ps1'
+      - 'tests/qa/repair_regression.gd'
+      - 'tests/qa/repair_desktop_acceptance.gd'
+      - 'tests/qa/inventory_canonical_roundtrip_regression.gd'
+      - 'tests/qa/inventory_transaction_regression.gd'
+      - 'tests/qa/input_interaction_regression.gd'
+      - 'tests/qa/block_interaction_regression.gd'
+      - 'tests/qa/profile_release_journey_regression.gd'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/player-repair-closed-loop-tests.yml'
+      - 'qa/content-journey-matrix.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'qa/final-release-report.md'
+      - 'qa/issues-found.md'
+      - 'data/repair_profiles.json'
+      - 'src/equipment/**'
+      - 'src/interaction/**'
+      - 'src/inventory/**'
+      - 'src/repair/**'
+      - 'src/save/**'
+      - 'src/tools/**'
+      - 'src/ui/repair_panel.gd'
+      - 'src/ui/repair_game_ui.gd'
+      - 'src/ui/repair_progression_service_hub.gd'
+      - 'tests/developer_b/validate_repair_closed_loop.ps1'
+      - 'tests/qa/repair_regression.gd'
+      - 'tests/qa/repair_desktop_acceptance.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: player-repair-closed-loop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Real repair station success failure and exact save reload
+      domain_timeout_minutes: 90
+      static_validators: |
+        tests/developer_b/validate_repair_closed_loop.ps1
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_controller_gameplay.ps1
+        tests/developer_b/validate_ui_accessibility.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/repair_regression.gd
+      primary_headless_output_base: build\repair-service-domain
+      primary_headless_timeout_milliseconds: 1200000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/inventory_canonical_roundtrip_regression.gd
+        res://tests/qa/inventory_transaction_regression.gd
+        res://tests/qa/input_interaction_regression.gd
+        res://tests/qa/block_interaction_regression.gd
+        res://tests/qa/profile_release_journey_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: player-repair-closed-loop-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/repair-service-domain.stdout.log
+        build/repair-service-domain.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Real repair station desktop journey
+      desktop_timeout_minutes: 90
+      desktop_script: res://tests/qa/repair_desktop_acceptance.gd
+      desktop_output_path: build\repair-desktop-acceptance.png
+      desktop_timeout_milliseconds: 1800000
+      desktop_artifact_name: player-repair-closed-loop-evidence
+      desktop_artifact_paths: |
+        build/repair-desktop-acceptance.png
+        build/repair-desktop-acceptance.stdout.log
+        build/repair-desktop-acceptance.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 21

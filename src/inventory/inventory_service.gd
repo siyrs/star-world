@@ -9,6 +9,7 @@ signal item_removed(item_id: String, count: int)
 signal slot_equipped(source_index: int, hotbar_index: int, slot: Dictionary)
 
 const SERIAL_VERSION := 1
+const INTEGER_METADATA_KEYS := ["durability", "magazine_rounds"]
 const ItemRegistryScript = preload("res://src/inventory/item_registry.gd")
 const TransactionPolicyScript = preload("res://src/inventory/inventory_transaction_policy.gd")
 
@@ -327,7 +328,13 @@ func serialize() -> Dictionary:
 	var saved_slots: Array = []
 	for slot_value in slots:
 		var slot: Dictionary = slot_value
-		saved_slots.append(slot.duplicate(true))
+		var saved_slot: Dictionary = slot.duplicate(true)
+		var metadata := _canonicalize_metadata(saved_slot.get("metadata", {}))
+		if metadata.is_empty():
+			saved_slot.erase("metadata")
+		else:
+			saved_slot["metadata"] = metadata
+		saved_slots.append(saved_slot)
 	return {
 		"version": SERIAL_VERSION,
 		"selected_slot": selected_slot,
@@ -354,14 +361,30 @@ func deserialize(data: Dictionary) -> bool:
 					"item_id": item_id,
 					"count": mini(item_count, registry.get_max_stack(item_id))
 				}
-				var raw_metadata: Variant = raw_slot.get("metadata", {})
-				if raw_metadata is Dictionary and not raw_metadata.is_empty():
-					restored_slot["metadata"] = raw_metadata.duplicate(true)
+				var metadata := _canonicalize_metadata(raw_slot.get("metadata", {}))
+				if not metadata.is_empty():
+					restored_slot["metadata"] = metadata
 				slots[index] = restored_slot
 	selected_slot = clampi(int(data.get("selected_slot", 0)), 0, hotbar_size - 1)
 	inventory_changed.emit()
 	_emit_selected_slot()
 	return true
+
+
+func _canonicalize_metadata(raw_metadata: Variant) -> Dictionary:
+	if raw_metadata is not Dictionary:
+		return {}
+	var metadata: Dictionary = raw_metadata.duplicate(true)
+	for key: String in INTEGER_METADATA_KEYS:
+		if not metadata.has(key):
+			continue
+		var raw_value: Variant = metadata[key]
+		var value_type := typeof(raw_value)
+		if value_type == TYPE_INT or value_type == TYPE_FLOAT:
+			metadata[key] = int(raw_value)
+		else:
+			metadata.erase(key)
+	return metadata
 
 
 func _emit_selected_slot() -> void:

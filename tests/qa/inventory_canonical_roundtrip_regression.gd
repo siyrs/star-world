@@ -63,6 +63,46 @@ func _run() -> void:
 		"roundtrip preserves the selected hotbar slot",
 	)
 
+	var json_value: Variant = JSON.parse_string(JSON.stringify(serialized))
+	var json_payload: Dictionary = json_value if json_value is Dictionary else {}
+	_check(
+		not json_payload.is_empty(),
+		"canonical inventory crosses the real JSON value boundary",
+	)
+	_check(
+		bool(restored.deserialize(json_payload)),
+		"JSON-decoded canonical payload deserializes",
+	)
+	var json_roundtrip: Dictionary = restored.serialize()
+	_check(
+		json_roundtrip == serialized,
+		"JSON save-load boundary preserves exact canonical metadata types",
+	)
+	_check(
+		typeof(
+			json_roundtrip.get("slots", [])[1].get("metadata", {}).get(
+				"durability",
+				0,
+			)
+		) == TYPE_INT,
+		"JSON-decoded durability is restored as a canonical integer",
+	)
+
+	var legacy_numeric_expected: Dictionary = serialized.duplicate(true)
+	legacy_numeric_expected["slots"][1]["metadata"]["magazine_rounds"] = 4
+	var legacy_numeric: Dictionary = legacy_numeric_expected.duplicate(true)
+	legacy_numeric["slots"][1]["metadata"]["durability"] = 87.0
+	legacy_numeric["slots"][1]["metadata"]["magazine_rounds"] = 4.0
+	_check(
+		bool(restored.deserialize(legacy_numeric)),
+		"legacy floating integer metadata remains readable",
+	)
+	var normalized_numeric: Dictionary = restored.serialize()
+	_check(
+		normalized_numeric == legacy_numeric_expected,
+		"known floating metadata keys normalize to exact integer shape",
+	)
+
 	var legacy_empty_metadata: Dictionary = serialized.duplicate(true)
 	legacy_empty_metadata["slots"][0]["metadata"] = {}
 	_check(
@@ -92,6 +132,22 @@ func _run() -> void:
 			"",
 		) == "Canonical Pickaxe",
 		"valid metadata in another slot survives malformed-neighbour recovery",
+	)
+
+	var malformed_known_value: Dictionary = serialized.duplicate(true)
+	malformed_known_value["slots"][1]["metadata"]["durability"] = "invalid"
+	_check(
+		bool(restored.deserialize(malformed_known_value)),
+		"malformed known integer metadata does not reject the whole item",
+	)
+	var normalized_known_value: Dictionary = restored.serialize()
+	var normalized_metadata: Dictionary = (
+		normalized_known_value["slots"][1].get("metadata", {})
+	)
+	_check(
+		not normalized_metadata.has("durability")
+		and normalized_metadata.get("custom_name", "") == "Canonical Pickaxe",
+		"invalid known integer metadata is removed while unrelated metadata survives",
 	)
 
 	original.queue_free()
