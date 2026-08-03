@@ -10,6 +10,8 @@
 
 ### BUG-PERF-METRIC-001 — qa-passed
 
+**旧版 `1% Low FPS` 已废弃，不得用于发布判定或产品宣传。**
+
 旧脚本把 `Engine.get_frames_per_second()` 的滚动显示值收集后取 1 分位，并把结果命名为 `1% Low FPS`。这不是基于真实逐帧耗时的 1% Low，曾出现“主菜单 1% Low=1 FPS、但逐帧 p95 约 6ms”的内部矛盾。
 
 当前统一定义为：
