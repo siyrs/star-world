@@ -38,7 +38,7 @@ on:
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
       - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
-      - 'tests/qa/rest_and_respawn_regression.gd'
+      - 'tests/qa/rest_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
       - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/exploration_journal_regression.gd'
@@ -84,7 +84,7 @@ on:
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
       - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
-      - 'tests/qa/rest_and_respawn_regression.gd'
+      - 'tests/qa/rest_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
       - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/exploration_journal_regression.gd'
@@ -120,7 +120,7 @@ jobs:
         res://tests/qa/ranch_products_regression.gd
         res://tests/qa/husbandry_regression.gd
         res://tests/qa/agriculture_regression.gd
-        res://tests/qa/rest_and_respawn_regression.gd
+        res://tests/qa/rest_respawn_regression.gd
         res://tests/qa/exploration_journal_regression.gd
         res://tests/qa/inventory_canonical_roundtrip_regression.gd
         res://tests/qa/inventory_transaction_regression.gd
