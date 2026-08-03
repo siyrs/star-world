@@ -36,6 +36,7 @@ function Require-NotContains {
 }
 
 $journey = Read-RepoFile 'tests/qa/crafting_desktop_acceptance.gd'
+$canonicalRoundtrip = Read-RepoFile 'tests/qa/inventory_canonical_roundtrip_regression.gd'
 $panel = Read-RepoFile 'src/ui/crafting_panel.gd'
 $service = Read-RepoFile 'src/crafting/crafting_service.gd'
 $inventory = Read-RepoFile 'src/inventory/inventory_service.gd'
@@ -78,10 +79,20 @@ Require-Contains $service 'transact_items' 'Crafting success must use the invent
 Require-Contains $service 'craft_failed.emit' 'Crafting service must retain explicit failure reasons'
 Require-Contains $inventory 'func serialize() -> Dictionary:' 'Inventory must retain an authoritative serialization contract'
 Require-Contains $inventory 'func deserialize(data: Dictionary) -> bool:' 'Inventory must retain an authoritative reload contract'
+Require-Contains $inventory 'var restored_slot: Dictionary' 'Inventory reload must construct a canonical slot shape'
+Require-Contains $inventory 'if raw_metadata is Dictionary and not raw_metadata.is_empty()' 'Inventory reload must omit empty or malformed optional metadata'
+Require-Contains $inventory 'restored_slot["metadata"] = raw_metadata.duplicate(true)' 'Meaningful metadata must survive canonical reload'
+Require-NotContains $inventory '"metadata": raw_slot.get("metadata", {}).duplicate(true)' 'Reload must not inject empty metadata into every item stack'
 Require-Contains $gameUi 'event_toggles_crafting' 'Game UI must retain the production crafting input action'
 Require-Contains $gameUi 'open_workbench()' 'Game UI must retain a distinct workbench station entrypoint'
 
+Require-Contains $canonicalRoundtrip 'serialize-deserialize-serialize preserves exact canonical shape' 'Regression must assert exact canonical inventory equivalence'
+Require-Contains $canonicalRoundtrip 'legacy empty metadata is normalized away on the next save' 'Regression must retain compatibility with old empty metadata'
+Require-Contains $canonicalRoundtrip 'malformed metadata is rejected instead of entering runtime state' 'Regression must reject malformed optional metadata'
+Require-Contains $canonicalRoundtrip 'valid metadata in another slot survives malformed-neighbour recovery' 'Regression must preserve independent valid metadata'
+
 Require-Contains $workflow 'crafting_desktop_acceptance.gd' 'Crafting desktop journey must run in GitHub Actions'
+Require-Contains $workflow 'inventory_canonical_roundtrip_regression.gd' 'Canonical inventory regression must run in GitHub Actions'
 Require-Contains $workflow 'validate_crafting_closed_loop.ps1' 'Architecture contract must run in GitHub Actions'
 Require-Contains $workflow 'reusable-godot-quality-gate.yml' 'Crafting gate must reuse the authoritative Godot runner'
 Require-Contains $workflow 'pull_request:' 'Crafting gate must run for relevant pull requests'
@@ -114,6 +125,7 @@ Write-Host '  - stable recipe identities are independent of translated button te
 Write-Host '  - available, disabled and stale-UI failure paths are exercised'
 Write-Host '  - service calls are reached only through production UI controls'
 Write-Host '  - successful and failed crafting provide visible feedback'
+Write-Host '  - inventory serialization remains canonical across reload'
 Write-Host '  - exact crafted inventory survives save, menu return and reload'
 Write-Host '  - adjacent content journeys and the evidence matrix are reviewed'
 Write-Host '  - desktop visual evidence and permanent CI wiring are present'
