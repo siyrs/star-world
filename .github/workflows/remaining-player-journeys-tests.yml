@@ -1,0 +1,124 @@
+name: Remaining player journeys quality gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/remaining-player-journeys-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/content-journey-matrix.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'qa/final-release-report.md'
+      - 'qa/issues-found.md'
+      - 'data/**'
+      - 'scenes/game/**'
+      - 'scenes/ui/**'
+      - 'src/agriculture/**'
+      - 'src/entity/**'
+      - 'src/exploration/**'
+      - 'src/husbandry/**'
+      - 'src/input/**'
+      - 'src/interaction/**'
+      - 'src/inventory/**'
+      - 'src/player/**'
+      - 'src/rest/**'
+      - 'src/save/**'
+      - 'src/ui/**'
+      - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
+      - 'tests/ci/run_godot_headless_test.ps1'
+      - 'tests/ci/run_godot_desktop_test.ps1'
+      - 'tests/developer_b/validate_remaining_player_journeys.ps1'
+      - 'tests/qa/husbandry_regression.gd'
+      - 'tests/qa/husbandry_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_regression.gd'
+      - 'tests/qa/ranch_product_conservation_regression.gd'
+      - 'tests/qa/ranch_products_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_regression.gd'
+      - 'tests/qa/agriculture_desktop_acceptance.gd'
+      - 'tests/qa/rest_and_respawn_regression.gd'
+      - 'tests/qa/rest_desktop_acceptance.gd'
+      - 'tests/qa/exploration_journal_regression.gd'
+      - 'tests/qa/exploration_journal_desktop_acceptance.gd'
+      - 'tests/qa/player_continuous_route_regression.gd'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/remaining-player-journeys-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/content-journey-matrix.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'qa/final-release-report.md'
+      - 'qa/issues-found.md'
+      - 'data/**'
+      - 'scenes/game/**'
+      - 'scenes/ui/**'
+      - 'src/agriculture/**'
+      - 'src/entity/**'
+      - 'src/exploration/**'
+      - 'src/husbandry/**'
+      - 'src/input/**'
+      - 'src/interaction/**'
+      - 'src/inventory/**'
+      - 'src/player/**'
+      - 'src/rest/**'
+      - 'src/save/**'
+      - 'src/ui/**'
+      - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
+      - 'tests/ci/run_godot_headless_test.ps1'
+      - 'tests/ci/run_godot_desktop_test.ps1'
+      - 'tests/developer_b/validate_remaining_player_journeys.ps1'
+      - 'tests/qa/husbandry_regression.gd'
+      - 'tests/qa/husbandry_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_regression.gd'
+      - 'tests/qa/ranch_product_conservation_regression.gd'
+      - 'tests/qa/ranch_products_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_regression.gd'
+      - 'tests/qa/agriculture_desktop_acceptance.gd'
+      - 'tests/qa/rest_and_respawn_regression.gd'
+      - 'tests/qa/rest_desktop_acceptance.gd'
+      - 'tests/qa/exploration_journal_regression.gd'
+      - 'tests/qa/exploration_journal_desktop_acceptance.gd'
+      - 'tests/qa/player_continuous_route_regression.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remaining-player-journeys-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Remaining player journeys and ranch product conservation
+      domain_timeout_minutes: 100
+      static_validators: |
+        tests/developer_b/validate_remaining_player_journeys.ps1
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_controller_gameplay.ps1
+        tests/developer_b/validate_ui_accessibility.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/ranch_product_conservation_regression.gd
+      primary_headless_output_base: build\ranch-product-conservation
+      primary_headless_timeout_milliseconds: 1200000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/ranch_products_regression.gd
+        res://tests/qa/husbandry_regression.gd
+        res://tests/qa/inventory_canonical_roundtrip_regression.gd
+        res://tests/qa/inventory_transaction_regression.gd
+        res://tests/qa/profile_release_journey_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: remaining-player-journeys-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/ranch-product-conservation.stdout.log
+        build/ranch-product-conservation.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      retention_days: 21
