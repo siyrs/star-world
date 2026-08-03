@@ -30,9 +30,11 @@ on:
       - 'tests/developer_b/validate_remaining_player_journeys.ps1'
       - 'tests/qa/husbandry_regression.gd'
       - 'tests/qa/husbandry_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_regression.gd'
       - 'tests/qa/ranch_product_conservation_regression.gd'
       - 'tests/qa/ranch_products_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
       - 'tests/qa/rest_and_respawn_regression.gd'
@@ -71,9 +73,11 @@ on:
       - 'tests/developer_b/validate_remaining_player_journeys.ps1'
       - 'tests/qa/husbandry_regression.gd'
       - 'tests/qa/husbandry_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_regression.gd'
       - 'tests/qa/ranch_product_conservation_regression.gd'
       - 'tests/qa/ranch_products_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
       - 'tests/qa/rest_and_respawn_regression.gd'
@@ -122,3 +126,54 @@ jobs:
         build/reusable-ci-domain-*.stderr.log
       domain_artifact_if_no_files: error
       retention_days: 21
+
+  desktop-journeys:
+    name: ${{ matrix.name }}
+    needs: quality-gate
+    runs-on: windows-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Real husbandry live reload cooldown death and multigeneration
+            script: res://tests/qa/husbandry_closed_loop_desktop_acceptance.gd
+            output: build\husbandry-closed-loop-desktop.png
+            artifact: remaining-husbandry-closed-loop
+          - name: Real ranch timer full inventory collection and exact reload
+            script: res://tests/qa/ranch_products_closed_loop_desktop_acceptance.gd
+            output: build\ranch-products-closed-loop-desktop.png
+            artifact: remaining-ranch-products-closed-loop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production desktop journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath '${{ matrix.script }}' `
+            -OutputPath '${{ matrix.output }}' `
+            -TimeoutMilliseconds 2400000
+
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-${{ github.run_number }}
+          path: |
+            build/*.png
+            build/*.stdout.log
+            build/*.stderr.log
+          if-no-files-found: error
+          retention-days: 21
