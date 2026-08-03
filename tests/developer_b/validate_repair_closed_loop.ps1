@@ -36,6 +36,8 @@ function Require-NotContains {
 }
 
 $panel = Read-RepoFile 'src/ui/repair_panel.gd'
+$inventory = Read-RepoFile 'src/inventory/inventory_service.gd'
+$canonicalRegression = Read-RepoFile 'tests/qa/inventory_canonical_roundtrip_regression.gd'
 $desktop = Read-RepoFile 'tests/qa/repair_desktop_acceptance.gd'
 $workflow = Read-RepoFile '.github/workflows/player-repair-closed-loop-tests.yml'
 $matrix = Read-RepoFile 'qa/content-journey-matrix.md'
@@ -45,6 +47,13 @@ Require-Contains $panel 'button.set_meta("target_id", target_id)' 'Repair button
 Require-Contains $panel 'button.set_meta("item_id"' 'Repair buttons must publish stable item identity'
 Require-Contains $panel 'repair_service.call("repair_target", target)' 'Repair action must use the production service'
 Require-NotContains $panel 'var result: Dictionary = repair_service.call("repair_target", target)' 'Repair panel must not duplicate synchronous result handling and signal handling'
+
+Require-Contains $inventory 'INTEGER_METADATA_KEYS := ["durability", "magazine_rounds"]' 'Persisted integer metadata keys must have one canonical policy'
+Require-Contains $inventory 'func _canonicalize_metadata(raw_metadata: Variant) -> Dictionary:' 'Inventory must normalize metadata at the persistence boundary'
+Require-Contains $inventory 'value_type == TYPE_INT or value_type == TYPE_FLOAT' 'JSON floating integer metadata must be accepted and normalized'
+Require-Contains $canonicalRegression 'JSON.parse_string(JSON.stringify(serialized))' 'Canonical regression must cross the real JSON value boundary'
+Require-Contains $canonicalRegression 'JSON save-load boundary preserves exact canonical metadata types' 'Canonical regression must assert exact JSON roundtrip shape'
+Require-Contains $canonicalRegression 'known floating metadata keys normalize to exact integer shape' 'Legacy floating metadata normalization must remain covered'
 
 Require-Contains $desktop 'GameScene.instantiate()' 'Desktop repair must use the production game scene'
 Require-Contains $desktop '.create_world(' 'Desktop repair must create an authoritative world'
@@ -63,6 +72,7 @@ Require-Contains $desktop 'reload restores the real repair station world overrid
 Require-Contains $workflow 'validate_repair_closed_loop.ps1' 'Repair closed-loop validator must be wired into CI'
 Require-Contains $workflow 'repair_regression.gd' 'Repair domain regression must remain in the dedicated gate'
 Require-Contains $workflow 'repair_desktop_acceptance.gd' 'Repair desktop journey must remain in the dedicated gate'
+Require-Contains $workflow 'inventory_canonical_roundtrip_regression.gd' 'Repair gate must retain JSON inventory canonicalization regression'
 Require-Contains $workflow 'reusable-godot-quality-gate.yml' 'Repair gate must reuse the authoritative runner'
 
 Require-Contains $matrix '| 修理 | 是 |' 'Content matrix must classify repair as a production-scene journey'
@@ -80,6 +90,7 @@ Write-Host 'PLAYER REPAIR CLOSED LOOP CONTRACT PASS'
 Write-Host '  - production repair station and real pointer interactions are retained'
 Write-Host '  - stable target identities and exact visible feedback are retained'
 Write-Host '  - disabled and stale-service failure paths remain atomic'
+Write-Host '  - persisted integer metadata remains canonical across real JSON'
 Write-Host '  - repaired durability, metadata, materials and station survive save/reload'
 Write-Host '  - dedicated permanent CI wiring is present'
 exit 0
