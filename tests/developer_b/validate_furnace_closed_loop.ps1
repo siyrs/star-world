@@ -35,6 +35,21 @@ function Require-NotContains {
     }
 }
 
+function Require-CountAtLeast {
+    param(
+        [Parameter(Mandatory = $true)][string]$Content,
+        [Parameter(Mandatory = $true)][string]$Needle,
+        [Parameter(Mandatory = $true)][int]$Minimum,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+    $count = [regex]::Matches($Content, [regex]::Escape($Needle)).Count
+    if ($count -lt $Minimum) {
+        $script:failures.Add(
+            "$Description (found: $count, expected at least: $Minimum, token: $Needle)"
+        )
+    }
+}
+
 $panel = Read-RepoFile 'src/ui/furnace_panel.gd'
 $desktop = Read-RepoFile 'tests/qa/furnace_desktop_acceptance.gd'
 $domain = Read-RepoFile 'tests/qa/furnace_machine_regression.gd'
@@ -84,6 +99,34 @@ Require-Contains $workflow 'reusable-godot-quality-gate.yml' 'Furnace gate must 
 Require-Contains $workflow 'stonecutter_machine_desktop_acceptance.gd' 'Shared machine changes must re-review the adjacent stonecutter journey'
 Require-Contains $workflow 'pull_request:' 'Furnace gate must run for relevant pull requests'
 Require-Contains $workflow 'push:' 'Furnace gate must rerun after merge to master'
+Require-Contains $workflow 'permissions:' 'Furnace workflow must declare an explicit permission boundary'
+Require-Contains $workflow 'contents: read' 'Furnace workflow must remain read-only'
+Require-Contains $workflow 'cancel-in-progress: true' 'Furnace workflow must cancel superseded branch runs'
+foreach ($pathToken in @(
+    "'.github/workflows/reusable-godot-quality-gate.yml'",
+    "'data/items.json'",
+    "'scenes/game/**'",
+    "'scenes/ui/**'",
+    "'src/input/**'",
+    "'src/interaction/**'",
+    "'src/inventory/**'",
+    "'src/machine/**'",
+    "'src/save/**'",
+    "'src/ui/**'",
+    "'src/world/**'",
+    "'tests/ci/Invoke-Godot.ps1'",
+    "'tests/ci/run_godot_headless_test.ps1'",
+    "'tests/ci/run_godot_desktop_test.ps1'",
+    "'tests/qa/furnace_machine_regression.gd'",
+    "'tests/qa/furnace_desktop_acceptance.gd'",
+    "'tests/qa/stonecutter_machine_desktop_acceptance.gd'"
+)) {
+    Require-CountAtLeast `
+        $workflow `
+        $pathToken `
+        2 `
+        "Pull-request and master-push triggers must both cover shared dependency $pathToken"
+}
 
 Require-Contains $matrix '| 熔炉 | 是 | **真实中心射线与右键熔炉**' 'Content matrix must record the real furnace player entry'
 Require-Contains $matrix '**E3 闭环**' 'Content matrix must classify furnace without claiming final-export E4'
@@ -104,5 +147,6 @@ Write-Host '  - production signals remain the single exact feedback source'
 Write-Host '  - unsupported input and full-inventory output failures remain atomic'
 Write-Host '  - pending and collected output survive authoritative save and full reload'
 Write-Host '  - historical completion feedback cannot replay on reload'
+Write-Host '  - pull-request and master-push dependency boundaries stay aligned'
 Write-Host '  - adjacent stonecutter and permanent CI coverage are retained'
 exit 0
