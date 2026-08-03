@@ -37,10 +37,13 @@ on:
       - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/rest_and_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/exploration_journal_regression.gd'
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
+      - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/player_continuous_route_regression.gd'
   push:
     branches:
@@ -80,10 +83,13 @@ on:
       - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/rest_and_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/exploration_journal_regression.gd'
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
+      - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/player_continuous_route_regression.gd'
   workflow_dispatch:
 
@@ -113,6 +119,9 @@ jobs:
       domain_scripts: |
         res://tests/qa/ranch_products_regression.gd
         res://tests/qa/husbandry_regression.gd
+        res://tests/qa/agriculture_regression.gd
+        res://tests/qa/rest_and_respawn_regression.gd
+        res://tests/qa/exploration_journal_regression.gd
         res://tests/qa/inventory_canonical_roundtrip_regression.gd
         res://tests/qa/inventory_transaction_regression.gd
         res://tests/qa/profile_release_journey_regression.gd
@@ -144,6 +153,14 @@ jobs:
             script: res://tests/qa/ranch_products_closed_loop_desktop_acceptance.gd
             output: build\ranch-products-closed-loop-desktop.png
             artifact: remaining-ranch-products-closed-loop
+          - name: Real agriculture failure growth harvest and exact reload
+            script: res://tests/qa/agriculture_closed_loop_desktop_acceptance.gd
+            output: build\agriculture-closed-loop-desktop.png
+            artifact: remaining-agriculture-closed-loop
+          - name: Real bed respawn removal fallback and exact reload
+            script: res://tests/qa/rest_closed_loop_desktop_acceptance.gd
+            output: build\rest-closed-loop-desktop.png
+            artifact: remaining-rest-closed-loop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
