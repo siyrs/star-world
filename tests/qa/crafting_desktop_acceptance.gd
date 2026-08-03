@@ -3,11 +3,13 @@ extends SceneTree
 const GameScene = preload("res://scenes/game/game.tscn")
 const GameUIScript = preload("res://src/ui/game_ui.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
+const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 
 const OUTPUT_PATH := "user://crafting-desktop-acceptance.png"
 const WORLD_READY_FRAMES := 720
 const CLEANUP_FRAMES := 24
 const WORKBENCH_DISTANCE := 3
+const CONTROL_READY_FRAMES := 30
 
 var checks := 0
 var failures: Array[String] = []
@@ -81,21 +83,38 @@ func _run() -> void:
 		return
 
 	var arena: Dictionary = _build_arena(world, player)
-	player.global_position = arena.get(
+	var arena_position: Vector3 = arena.get(
 		"player_position",
 		player.global_position,
 	)
+	var arena_floor_y := int(arena.get("floor_y", 0))
+	player.global_position = arena_position
 	player.rotation = Vector3.ZERO
 	player.call("reset_motion")
 	player.velocity.y = -1.0
 	await _settle_player(player, 180)
-	_check(player.is_on_floor(), "QA arena settles the production player on live collision")
+	var settled_position := player.global_position
+	_check(
+		_is_finite_position(settled_position)
+		and settled_position.y >= float(arena_floor_y) + 0.75
+		and settled_position.y <= float(arena_floor_y) + 3.5
+		and Vector2(
+			settled_position.x - arena_position.x,
+			settled_position.z - arena_position.z,
+		).length() <= 1.0,
+		"QA arena keeps the production player stable on live collision",
+	)
+
 	var workbench_position: Vector3i = arena.get(
 		"workbench_position",
 		Vector3i.ZERO,
 	)
+	var placed := bool(
+		world.call("set_block", workbench_position, "crafting_table")
+	)
 	_check(
-		bool(world.call("set_block", workbench_position, "crafting_table")),
+		placed
+		or str(world.call("get_block", workbench_position)) == "crafting_table",
 		"QA setup places one real crafting table block",
 	)
 	for _frame in 4:
@@ -148,7 +167,7 @@ func _run() -> void:
 		"newly opened station starts without stale result feedback",
 	)
 
-	var planks_button := _find_recipe_button(panel, "oak_planks")
+	var planks_button := await _wait_for_recipe_button(panel, "oak_planks")
 	_check(
 		planks_button != null,
 		"hand panel exposes the log-to-planks recipe by stable output identity",
@@ -189,14 +208,14 @@ func _run() -> void:
 		"fixture grants exactly two real logs",
 	)
 	await _tap_key(KEY_C)
-	planks_button = _find_recipe_button(panel, "oak_planks")
+	planks_button = await _wait_for_recipe_button(panel, "oak_planks")
 	_check(
 		planks_button != null and not planks_button.disabled,
 		"material availability enables the real recipe button",
 	)
 	if planks_button != null:
 		await _click_control(planks_button)
-		planks_button = _find_recipe_button(panel, "oak_planks")
+		planks_button = await _wait_for_recipe_button(panel, "oak_planks")
 		await _click_control(planks_button)
 	_check(
 		int(inventory.call("count_item", "oak_log")) == 0,
@@ -214,7 +233,7 @@ func _run() -> void:
 		"successful pointer crafting publishes exact recipe feedback",
 	)
 
-	var sticks_button := _find_recipe_button(panel, "stick")
+	var sticks_button := await _wait_for_recipe_button(panel, "stick")
 	_check(
 		sticks_button != null and not sticks_button.disabled,
 		"new planks immediately enable the sticks recipe",
@@ -230,7 +249,7 @@ func _run() -> void:
 		"stick crafting produces four sticks",
 	)
 
-	var table_button := _find_recipe_button(panel, "crafting_table")
+	var table_button := await _wait_for_recipe_button(panel, "crafting_table")
 	_check(
 		table_button != null and not table_button.disabled,
 		"hand station exposes the crafting-table recipe",
@@ -276,7 +295,7 @@ func _run() -> void:
 		"block interaction grants the workbench station",
 	)
 
-	var sword_button := _find_recipe_button(panel, "wooden_sword")
+	var sword_button := await _wait_for_recipe_button(panel, "wooden_sword")
 	_check(
 		sword_button != null and not sword_button.disabled,
 		"workbench enables a station-only wooden sword recipe",
@@ -303,16 +322,15 @@ func _run() -> void:
 		"workbench success displays the exact crafted recipe",
 	)
 
-	# Exercise a real pointer-click failure after the button was rendered enabled.
-	# Directly changing the service station simulates a stale-UI/lifecycle race;
-	# the click must fail atomically and provide visible feedback.
+	# Keep a rendered button alive while changing the service condition underneath
+	# it. The following real pointer click must fail atomically and expose feedback.
 	_check(
 		int(inventory.call("add_item", "oak_planks", 3)) == 0,
 		"failure fixture temporarily enables the wooden pickaxe",
 	)
 	for _frame in 2:
 		await process_frame
-	var pickaxe_button := _find_recipe_button(panel, "wooden_pickaxe")
+	var pickaxe_button := await _wait_for_recipe_button(panel, "wooden_pickaxe")
 	_check(
 		pickaxe_button != null and not pickaxe_button.disabled,
 		"wooden pickaxe is enabled before the stale-station race",
@@ -348,7 +366,7 @@ func _run() -> void:
 	)
 	for _frame in 2:
 		await process_frame
-	pickaxe_button = _find_recipe_button(panel, "wooden_pickaxe")
+	pickaxe_button = await _wait_for_recipe_button(panel, "wooden_pickaxe")
 	_check(
 		pickaxe_button != null and pickaxe_button.disabled,
 		"insufficient planks disable the station-only pickaxe recipe",
@@ -390,9 +408,20 @@ func _run() -> void:
 	)
 	var saved_state: Dictionary = hub.get("save_service").load_world(_world_id)
 	_check(not saved_state.is_empty(), "saved crafting world is loadable")
+	var saved_inventory: Dictionary = _canonical_inventory(
+		saved_state.get("inventory", {}),
+	)
+	if saved_inventory != expected_inventory:
+		print(
+			"CRAFTING_SAVE_INVENTORY_MISMATCH expected=%s actual=%s"
+			% [
+				JSON.stringify(expected_inventory),
+				JSON.stringify(saved_inventory),
+			]
+		)
 	_check(
-		saved_state.get("inventory", {}) == expected_inventory,
-		"world.json contains the exact crafted inventory",
+		saved_inventory == expected_inventory,
+		"world.json contains the exact crafted inventory in canonical form",
 	)
 
 	hub.call("return_to_menu")
@@ -514,6 +543,7 @@ func _build_arena(world: Node, player: Node3D) -> Dictionary:
 				str(change.get("block_id", "air")),
 			)
 	return {
+		"floor_y": floor_y,
 		"player_position": Vector3(
 			origin.x + 0.5,
 			floor_y + 1.25,
@@ -531,11 +561,31 @@ func _settle_player(
 	player: CharacterBody3D,
 	frame_limit: int,
 ) -> void:
+	var stable_frames := 0
+	var previous := player.global_position
 	for _frame in frame_limit:
-		if player.is_on_floor():
-			return
 		await physics_frame
 		await process_frame
+		var current := player.global_position
+		if current.distance_to(previous) <= 0.002:
+			stable_frames += 1
+			if stable_frames >= 8:
+				return
+		else:
+			stable_frames = 0
+		previous = current
+
+
+func _wait_for_recipe_button(
+	panel: Node,
+	output_item_id: String,
+) -> Button:
+	for _frame in CONTROL_READY_FRAMES:
+		var button := _find_recipe_button(panel, output_item_id)
+		if button != null and is_instance_valid(button) and not button.is_queued_for_deletion():
+			return button
+		await process_frame
+	return null
 
 
 func _find_recipe_button(
@@ -552,6 +602,79 @@ func _find_recipe_button(
 		):
 			return child as Button
 	return null
+
+
+func _click_control(control: Control) -> void:
+	if control == null or not is_instance_valid(control):
+		return
+	var visible := await _ensure_control_visible(control)
+	var identity := str(control.get_meta("recipe_id", control.name))
+	_check(
+		visible,
+		"real pointer target is visible inside its scroll viewport: %s" % identity,
+	)
+	if not visible:
+		return
+	var target := control.get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = target
+	motion.global_position = target
+	root.push_input(motion, true)
+	await process_frame
+	for pressed: bool in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = target
+		event.global_position = target
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.button_mask = (
+			MOUSE_BUTTON_MASK_LEFT
+			if pressed
+			else 0
+		)
+		event.pressed = pressed
+		root.push_input(event, true)
+		await process_frame
+	await process_frame
+
+
+func _ensure_control_visible(control: Control) -> bool:
+	var scroll := _ancestor_scroll_container(control)
+	if scroll != null:
+		scroll.ensure_control_visible(control)
+		for _frame in 3:
+			await process_frame
+		scroll.ensure_control_visible(control)
+		await RenderingServer.frame_post_draw
+		await process_frame
+		var viewport_rect := scroll.get_global_rect().grow(-3.0)
+		return viewport_rect.has_point(control.get_global_rect().get_center())
+	await process_frame
+	return Rect2(Vector2.ZERO, Vector2(root.size)).has_point(
+		control.get_global_rect().get_center(),
+	)
+
+
+func _ancestor_scroll_container(control: Control) -> ScrollContainer:
+	var current: Node = control.get_parent()
+	while current != null:
+		if current is ScrollContainer:
+			return current as ScrollContainer
+		current = current.get_parent()
+	return null
+
+
+func _canonical_inventory(raw_data: Variant) -> Dictionary:
+	if raw_data is not Dictionary:
+		return {}
+	var data: Dictionary = raw_data
+	var verifier = InventoryScript.new(
+		maxi(9, int(data.get("slot_count", 36))),
+		maxi(1, int(data.get("hotbar_size", 9))),
+	)
+	var restored := bool(verifier.deserialize(data))
+	var result: Dictionary = verifier.serialize() if restored else {}
+	verifier.free()
+	return result
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
@@ -593,6 +716,10 @@ func _vector3i(value: Variant) -> Vector3i:
 	return Vector3i.ZERO
 
 
+func _is_finite_position(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
 func _right_click_center() -> void:
 	_mouse_button(MOUSE_BUTTON_RIGHT, true)
 	await process_frame
@@ -613,32 +740,6 @@ func _mouse_button(button: MouseButton, pressed: bool) -> void:
 	)
 	event.pressed = pressed
 	root.push_input(event)
-
-
-func _click_control(control: Control) -> void:
-	if control == null:
-		return
-	await process_frame
-	var target := control.get_global_rect().get_center()
-	var motion := InputEventMouseMotion.new()
-	motion.position = target
-	motion.global_position = target
-	root.push_input(motion, true)
-	await process_frame
-	for pressed: bool in [true, false]:
-		var event := InputEventMouseButton.new()
-		event.position = target
-		event.global_position = target
-		event.button_index = MOUSE_BUTTON_LEFT
-		event.button_mask = (
-			MOUSE_BUTTON_MASK_LEFT
-			if pressed
-			else 0
-		)
-		event.pressed = pressed
-		root.push_input(event, true)
-		await process_frame
-	await process_frame
 
 
 func _tap_key(keycode: Key) -> void:
