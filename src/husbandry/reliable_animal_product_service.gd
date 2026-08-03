@@ -1,8 +1,6 @@
 class_name ReliableAnimalProductService
 extends "res://src/husbandry/animal_product_service.gd"
 
-const ItemPickupScript = preload("res://src/entity/item_pickup.gd")
-
 var _active_pickups: Dictionary = {}
 var _restoring_pickups := false
 
