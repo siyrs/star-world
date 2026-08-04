@@ -146,12 +146,19 @@ func _on_pickup_collected(
 	husbandry_id: String,
 	pickup: Node
 ) -> void:
-	if _active_pickup(husbandry_id) != pickup or not records.has(husbandry_id):
+	# ItemPickup emits collected immediately before queue_free(). Do not resolve the
+	# node through _active_pickup() here: that helper intentionally rejects queued
+	# nodes and would drop the accepted transaction during the disposal window.
+	var current_pickup: Variant = _active_pickups.get(husbandry_id)
+	if current_pickup != pickup or not records.has(husbandry_id):
+		return
+	var accepted := maxi(0, accepted_count)
+	if accepted <= 0:
 		return
 	var record := get_record(husbandry_id)
 	var next_pending := maxi(
 		0,
-		int(record.get("pending_count", 0)) - maxi(0, accepted_count)
+		int(record.get("pending_count", 0)) - accepted
 	)
 	record["pending_count"] = next_pending
 	records[husbandry_id] = record
@@ -159,6 +166,7 @@ func _on_pickup_collected(
 		int(_announced_pending.get(husbandry_id, next_pending)),
 		next_pending
 	)
+	_active_pickups.erase(husbandry_id)
 	_emit_state_changed(husbandry_id)
 
 
