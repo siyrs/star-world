@@ -1,0 +1,41 @@
+name: Temporary repository snapshot
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/temporary-repository-snapshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create repository snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          git ls-files -z | tar --null -T - -czf build/star-world-repository.tar.gz
+          git rev-parse HEAD > build/snapshot-head.txt
+          git status --short > build/snapshot-status.txt
+
+      - name: Upload repository snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-world-repository-${{ github.run_number }}
+          path: |
+            build/star-world-repository.tar.gz
+            build/snapshot-head.txt
+            build/snapshot-status.txt
+          if-no-files-found: error
+          retention-days: 1
