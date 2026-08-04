@@ -51,6 +51,7 @@ function Require-MinimumOccurrences {
 $product = Read-RepoFile 'src/husbandry/reliable_animal_product_service.gd'
 $ranchRuntime = Read-RepoFile 'src/husbandry/ranch_runtime_participant.gd'
 $ranchRegression = Read-RepoFile 'tests/qa/ranch_product_conservation_regression.gd'
+$ranchExpirationRegression = Read-RepoFile 'tests/qa/ranch_product_expiration_conservation_regression.gd'
 $husbandryDesktop = Read-RepoFile 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
 $ranchDesktop = Read-RepoFile 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
 $agricultureDesktop = Read-RepoFile 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
@@ -62,14 +63,18 @@ $continuousRoute = Read-RepoFile 'tests/qa/player_continuous_route_buffered_jump
 $workflow = Read-RepoFile '.github/workflows/remaining-player-journeys-tests.yml'
 
 Require-Contains $product 'class_name ReliableAnimalProductService' 'Production must expose the reliable product service'
-Require-Contains $product 'record["pending_count"] = maxi(' 'Collection must commit the authoritative pending count'
-Require-Contains $product 'if not _restoring_pickups:' 'Reloaded pickups must not replay new-product feedback'
+Require-Contains $product 'record["pending_count"] = next_pending' 'Collection must commit the authoritative pending count'
+Require-Contains $product '_announced_pending[husbandry_id] = normalized_pending' 'Announcements must use a per-animal pending ledger'
+Require-Contains $product 'if _restoring_pickups or new_count <= 0:' 'Historical or zero-delta pickups must not replay new-product feedback'
 Require-Contains $product 'var missing_count := maxi(0, pending - current_count)' 'Active pickups must merge only unmaterialized pending products'
+Require-Contains $product 'announcement_ledger_count' 'Runtime diagnostics must expose the bounded announcement ledger'
 Require-NotContains $product 'record["pending_count"] = 0' 'Pickup materialization must not erase pending product state'
 Require-NotContains $product 'const ItemPickupScript' 'Reliable subclass must inherit the parent pickup script without shadowing it'
 Require-Contains $ranchRuntime 'reliable_animal_product_service.gd' 'Production ranch composition must install reliable persistence'
 Require-Contains $ranchRegression 'zero-acceptance collection leaves authoritative product state untouched' 'Domain evidence must cover full-inventory-style zero acceptance'
 Require-Contains $ranchRegression 'restoring an existing product does not replay production feedback' 'Domain evidence must cover reload event suppression'
+Require-Contains $ranchExpirationRegression 'expiration recovery %d does not replay production feedback' 'Domain evidence must cover repeated pickup expiration recovery'
+Require-Contains $ranchExpirationRegression 'world clear releases the announcement ledger' 'Domain evidence must cover announcement-ledger lifecycle cleanup'
 
 Require-Contains $husbandryDesktop 'first reload restores all three live creatures' 'Husbandry journey must restore live parents and baby'
 Require-Contains $husbandryDesktop 'cooldown failure cannot consume player wheat' 'Husbandry journey must prove atomic cooldown failure'
@@ -130,6 +135,7 @@ Require-NotContains $continuousRoute 'player.is_on_floor()' 'Buffered jump input
 Require-NotContains $continuousRoute 'player.global_position =' 'Buffered route executor may not transport the player'
 
 Require-Contains $workflow 'ranch_product_conservation_regression.gd' 'Permanent CI must run product conservation'
+Require-Contains $workflow 'ranch_product_expiration_conservation_regression.gd' 'Permanent CI must run expiration conservation'
 Require-Contains $workflow 'husbandry_closed_loop_desktop_acceptance.gd' 'Permanent CI must run the husbandry closed loop'
 Require-Contains $workflow 'ranch_products_closed_loop_desktop_acceptance.gd' 'Permanent CI must run the ranch closed loop'
 Require-Contains $workflow 'agriculture_closed_loop_canonical_desktop_acceptance.gd' 'Permanent CI must run the JSON-canonical agriculture closed loop'
@@ -149,6 +155,7 @@ Require-MinimumOccurrences $workflow "      - 'src/exploration/**'" 2 'Explorati
 Require-MinimumOccurrences $workflow "      - 'src/rest/**'" 2 'Rest changes must trigger both pull-request and master-push gates'
 Require-MinimumOccurrences $workflow "      - 'src/inventory/**'" 2 'Inventory changes must trigger both pull-request and master-push gates'
 Require-MinimumOccurrences $workflow "      - 'tests/ci/run_godot_desktop_test.ps1'" 2 'Desktop runner changes must trigger both pull-request and master-push gates'
+Require-MinimumOccurrences $workflow "      - 'tests/qa/ranch_product_expiration_conservation_regression.gd'" 2 'Expiration-regression changes must trigger both pull-request and master-push gates'
 Require-MinimumOccurrences $workflow "      - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'" 2 'Buffered-route changes must trigger both pull-request and master-push gates'
 
 if ($failures.Count -gt 0) {
@@ -161,7 +168,7 @@ if ($failures.Count -gt 0) {
 
 Write-Host 'REMAINING PLAYER JOURNEYS CONTRACT PASS'
 Write-Host '  - ranch products remain authoritative until accepted collection'
-Write-Host '  - zero-acceptance, reload and offline materialization are covered'
+Write-Host '  - zero-acceptance, reload, expiration and offline materialization are covered'
 Write-Host '  - husbandry live reload, cooldown, death and multigeneration are covered'
 Write-Host '  - ranch timer, full inventory and exact collection reload are covered'
 Write-Host '  - agriculture failure, growth, harvest and exact reload are covered'
