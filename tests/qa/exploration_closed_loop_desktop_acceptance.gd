@@ -56,7 +56,7 @@ func _run() -> void:
 	var inventory: Node = hub.get("inventory") as Node
 	var prospecting: Node = hub.get("prospecting_service") as Node
 	var journal: Node = hub.get("exploration_journal_service") as Node
-	var rewards: Node = hub.get("exploration_milestone_reward_service") as Node
+	var rewards: Node = hub.get("exploration_reward_service") as Node
 	var danger: Node = hub.get("exploration_danger_service") as Node
 	var day_night: Node = hub.get("day_night") as Node
 	var game_ui: Node = hub.get("game_ui") as Node
@@ -221,7 +221,7 @@ func _run() -> void:
 	player = game.get("player") as CharacterBody3D
 	inventory = hub.get("inventory") as Node
 	journal = hub.get("exploration_journal_service") as Node
-	rewards = hub.get("exploration_milestone_reward_service") as Node
+	rewards = hub.get("exploration_reward_service") as Node
 	game_ui = hub.get("game_ui") as Node
 	_check(inventory.call("serialize") == claimed_inventory, "reload restores the exact claimed reward inventory")
 	_check(journal.call("get_snapshot").get("record_count", 0) == 12, "reload restores all twelve exploration records")
