@@ -1,3 +1,5 @@
+# Self-removing, branch-scoped exact patch. This second commit intentionally
+# triggers the workflow after it already exists on the branch.
 name: Temporary final journey contract patch
 
 on:
