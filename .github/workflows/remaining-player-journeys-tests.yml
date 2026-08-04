@@ -38,6 +38,7 @@ on:
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
       - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_canonical_desktop_acceptance.gd'
       - 'tests/qa/rest_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
       - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
@@ -85,6 +86,7 @@ on:
       - 'tests/qa/agriculture_regression.gd'
       - 'tests/qa/agriculture_desktop_acceptance.gd'
       - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_canonical_desktop_acceptance.gd'
       - 'tests/qa/rest_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
       - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
@@ -157,7 +159,7 @@ jobs:
             output: build\ranch-products-closed-loop-desktop.png
             artifact: remaining-ranch-products-closed-loop
           - name: Real agriculture failure growth harvest and exact reload
-            script: res://tests/qa/agriculture_closed_loop_desktop_acceptance.gd
+            script: res://tests/qa/agriculture_closed_loop_canonical_desktop_acceptance.gd
             output: build\agriculture-closed-loop-desktop.png
             artifact: remaining-agriculture-closed-loop
           - name: Real bed respawn removal fallback and exact reload
