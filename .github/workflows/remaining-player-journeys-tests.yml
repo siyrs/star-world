@@ -33,6 +33,7 @@ on:
       - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_regression.gd'
       - 'tests/qa/ranch_product_conservation_regression.gd'
+      - 'tests/qa/ranch_product_expiration_conservation_regression.gd'
       - 'tests/qa/ranch_products_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/agriculture_regression.gd'
@@ -81,6 +82,7 @@ on:
       - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_regression.gd'
       - 'tests/qa/ranch_product_conservation_regression.gd'
+      - 'tests/qa/ranch_product_expiration_conservation_regression.gd'
       - 'tests/qa/ranch_products_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/agriculture_regression.gd'
@@ -121,6 +123,7 @@ jobs:
       primary_headless_timeout_milliseconds: 1200000
       primary_headless_verbose: true
       domain_scripts: |
+        res://tests/qa/ranch_product_expiration_conservation_regression.gd
         res://tests/qa/ranch_products_regression.gd
         res://tests/qa/husbandry_regression.gd
         res://tests/qa/agriculture_regression.gd
