@@ -4,6 +4,7 @@ extends "res://tests/qa/husbandry_closed_loop_desktop_acceptance.gd"
 # only makes the initial collision contact deterministic on software-rendered CI:
 # CharacterBody3D receives a real downward move_and_slide before the base test
 # samples is_on_floor(). No animal, inventory, world or husbandry state is changed.
+# This is collision sampling, not a position teleport or a husbandry-domain shortcut.
 
 
 func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
