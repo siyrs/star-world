@@ -4,6 +4,7 @@ const GameScene = preload("res://scenes/game/game.tscn")
 const InputContextScript = preload("res://src/input/input_context_service.gd")
 const OverlayIds = preload("res://src/ui/game_ui_extension_overlay_ids.gd")
 const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
+const InventoryScript = preload("res://src/inventory/inventory_service.gd")
 
 const OUTPUT_PATH := "user://exploration-closed-loop-desktop.png"
 const CLEANUP_FRAMES := 10
@@ -211,7 +212,10 @@ func _run() -> void:
 	var loaded: Dictionary = hub.get("save_service").load_world(_world_id)
 	_check((loaded.get("exploration", {}).get("records", []) as Array).size() == 12, "world.json stores all twelve exploration records")
 	_check((loaded.get("exploration_rewards", {}).get("claimed", []) as Array).size() == 8, "world.json stores all eight claimed reward identities")
-	_check(loaded.get("inventory", {}) == claimed_inventory, "world.json stores the exact reward inventory")
+	_check(
+		_canonical_inventory_payload(loaded.get("inventory", {})) == claimed_inventory,
+		"world.json restores the exact canonical reward inventory",
+	)
 
 	hub.call("return_to_menu")
 	for _frame in 10:
@@ -242,6 +246,15 @@ func _run() -> void:
 	await _tap_key(KEY_J)
 	_check(bool(player.get("input_enabled")) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "final journal close restores normal gameplay")
 	await _finish(game, hub)
+
+
+func _canonical_inventory_payload(raw_payload: Variant) -> Dictionary:
+	var canonical = InventoryScript.new(36, 9)
+	root.add_child(canonical)
+	var readable := canonical.deserialize(raw_payload)
+	var result: Dictionary = canonical.serialize() if readable else {}
+	canonical.queue_free()
+	return result
 
 
 func _station_centers(world: Node, player: Node3D) -> Array[Vector3i]:
