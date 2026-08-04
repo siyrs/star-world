@@ -8,7 +8,7 @@ const AttractionServiceScript = preload(
 	"res://src/husbandry/animal_attraction_service.gd"
 )
 const ProductServiceScript = preload(
-	"res://src/husbandry/animal_product_service.gd"
+	"res://src/husbandry/reliable_animal_product_service.gd"
 )
 const ProductStateMigrationScript = preload(
 	"res://src/husbandry/animal_product_state_migration.gd"

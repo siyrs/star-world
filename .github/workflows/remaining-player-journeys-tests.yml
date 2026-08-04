@@ -1,0 +1,217 @@
+name: Remaining player journeys quality gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/remaining-player-journeys-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/content-journey-matrix.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'qa/final-release-report.md'
+      - 'qa/issues-found.md'
+      - 'qa/pr-100-closure-report.md'
+      - 'data/**'
+      - 'scenes/game/**'
+      - 'scenes/ui/**'
+      - 'src/agriculture/**'
+      - 'src/entity/**'
+      - 'src/exploration/**'
+      - 'src/husbandry/**'
+      - 'src/input/**'
+      - 'src/interaction/**'
+      - 'src/inventory/**'
+      - 'src/player/**'
+      - 'src/rest/**'
+      - 'src/save/**'
+      - 'src/ui/**'
+      - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
+      - 'tests/ci/run_godot_headless_test.ps1'
+      - 'tests/ci/run_godot_desktop_test.ps1'
+      - 'tests/developer_b/validate_remaining_player_journeys.ps1'
+      - 'tests/qa/husbandry_regression.gd'
+      - 'tests/qa/husbandry_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_stable_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_regression.gd'
+      - 'tests/qa/ranch_product_conservation_regression.gd'
+      - 'tests/qa/ranch_product_expiration_conservation_regression.gd'
+      - 'tests/qa/ranch_products_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_regression.gd'
+      - 'tests/qa/agriculture_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_canonical_desktop_acceptance.gd'
+      - 'tests/qa/rest_respawn_regression.gd'
+      - 'tests/qa/rest_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_stable_desktop_acceptance.gd'
+      - 'tests/qa/exploration_journal_regression.gd'
+      - 'tests/qa/exploration_journal_desktop_acceptance.gd'
+      - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/exploration_reward_inventory_persistence_regression.gd'
+      - 'tests/qa/player_continuous_route_regression.gd'
+      - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/remaining-player-journeys-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+      - 'qa/content-journey-matrix.md'
+      - 'qa/map-coverage-matrix.md'
+      - 'qa/final-release-report.md'
+      - 'qa/issues-found.md'
+      - 'qa/pr-100-closure-report.md'
+      - 'data/**'
+      - 'scenes/game/**'
+      - 'scenes/ui/**'
+      - 'src/agriculture/**'
+      - 'src/entity/**'
+      - 'src/exploration/**'
+      - 'src/husbandry/**'
+      - 'src/input/**'
+      - 'src/interaction/**'
+      - 'src/inventory/**'
+      - 'src/player/**'
+      - 'src/rest/**'
+      - 'src/save/**'
+      - 'src/ui/**'
+      - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
+      - 'tests/ci/run_godot_headless_test.ps1'
+      - 'tests/ci/run_godot_desktop_test.ps1'
+      - 'tests/developer_b/validate_remaining_player_journeys.ps1'
+      - 'tests/qa/husbandry_regression.gd'
+      - 'tests/qa/husbandry_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_stable_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_regression.gd'
+      - 'tests/qa/ranch_product_conservation_regression.gd'
+      - 'tests/qa/ranch_product_expiration_conservation_regression.gd'
+      - 'tests/qa/ranch_products_desktop_acceptance.gd'
+      - 'tests/qa/ranch_products_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_regression.gd'
+      - 'tests/qa/agriculture_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/agriculture_closed_loop_canonical_desktop_acceptance.gd'
+      - 'tests/qa/rest_respawn_regression.gd'
+      - 'tests/qa/rest_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_stable_desktop_acceptance.gd'
+      - 'tests/qa/exploration_journal_regression.gd'
+      - 'tests/qa/exploration_journal_desktop_acceptance.gd'
+      - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/exploration_reward_inventory_persistence_regression.gd'
+      - 'tests/qa/player_continuous_route_regression.gd'
+      - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remaining-player-journeys-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Remaining player journeys, conservation and five-profile continuous routes
+      domain_timeout_minutes: 100
+      static_validators: |
+        tests/developer_b/validate_remaining_player_journeys.ps1
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_controller_gameplay.ps1
+        tests/developer_b/validate_ui_accessibility.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/ranch_product_conservation_regression.gd
+      primary_headless_output_base: build\ranch-product-conservation
+      primary_headless_timeout_milliseconds: 1200000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/ranch_product_expiration_conservation_regression.gd
+        res://tests/qa/ranch_products_regression.gd
+        res://tests/qa/husbandry_regression.gd
+        res://tests/qa/agriculture_regression.gd
+        res://tests/qa/rest_respawn_regression.gd
+        res://tests/qa/exploration_journal_regression.gd
+        res://tests/qa/exploration_reward_inventory_persistence_regression.gd
+        res://tests/qa/inventory_canonical_roundtrip_regression.gd
+        res://tests/qa/inventory_transaction_regression.gd
+        res://tests/qa/profile_release_journey_regression.gd
+        res://tests/qa/player_continuous_route_buffered_jump_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: remaining-player-journeys-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/ranch-product-conservation.stdout.log
+        build/ranch-product-conservation.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      retention_days: 21
+
+  desktop-journeys:
+    name: ${{ matrix.name }}
+    needs: quality-gate
+    runs-on: windows-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Real husbandry live reload cooldown death and multigeneration
+            script: res://tests/qa/husbandry_closed_loop_stable_desktop_acceptance.gd
+            output: build\husbandry-closed-loop-desktop.png
+            artifact: remaining-husbandry-closed-loop
+          - name: Real ranch timer full inventory collection and exact reload
+            script: res://tests/qa/ranch_products_closed_loop_desktop_acceptance.gd
+            output: build\ranch-products-closed-loop-desktop.png
+            artifact: remaining-ranch-products-closed-loop
+          - name: Real agriculture failure growth harvest and exact reload
+            script: res://tests/qa/agriculture_closed_loop_canonical_desktop_acceptance.gd
+            output: build\agriculture-closed-loop-desktop.png
+            artifact: remaining-agriculture-closed-loop
+          - name: Real bed respawn removal fallback and exact reload
+            script: res://tests/qa/rest_closed_loop_stable_desktop_acceptance.gd
+            output: build\rest-closed-loop-desktop.png
+            artifact: remaining-rest-closed-loop
+          - name: Real complete exploration milestones rewards and exact reload
+            script: res://tests/qa/exploration_closed_loop_desktop_acceptance.gd
+            output: build\exploration-closed-loop-desktop.png
+            artifact: remaining-exploration-closed-loop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production desktop journey
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath '${{ matrix.script }}' `
+            -OutputPath '${{ matrix.output }}' `
+            -TimeoutMilliseconds 2400000
+
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-${{ github.run_number }}
+          path: |
+            build/*.png
+            build/*.stdout.log
+            build/*.stderr.log
+          if-no-files-found: error
+          retention-days: 21
