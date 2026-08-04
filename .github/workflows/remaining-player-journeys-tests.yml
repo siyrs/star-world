@@ -31,6 +31,7 @@ on:
       - 'tests/qa/husbandry_regression.gd'
       - 'tests/qa/husbandry_desktop_acceptance.gd'
       - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_stable_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_regression.gd'
       - 'tests/qa/ranch_product_conservation_regression.gd'
       - 'tests/qa/ranch_product_expiration_conservation_regression.gd'
@@ -43,6 +44,7 @@ on:
       - 'tests/qa/rest_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
       - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_stable_desktop_acceptance.gd'
       - 'tests/qa/exploration_journal_regression.gd'
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
       - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
@@ -80,6 +82,7 @@ on:
       - 'tests/qa/husbandry_regression.gd'
       - 'tests/qa/husbandry_desktop_acceptance.gd'
       - 'tests/qa/husbandry_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/husbandry_closed_loop_stable_desktop_acceptance.gd'
       - 'tests/qa/ranch_products_regression.gd'
       - 'tests/qa/ranch_product_conservation_regression.gd'
       - 'tests/qa/ranch_product_expiration_conservation_regression.gd'
@@ -92,6 +95,7 @@ on:
       - 'tests/qa/rest_respawn_regression.gd'
       - 'tests/qa/rest_desktop_acceptance.gd'
       - 'tests/qa/rest_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/rest_closed_loop_stable_desktop_acceptance.gd'
       - 'tests/qa/exploration_journal_regression.gd'
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
       - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
@@ -154,7 +158,7 @@ jobs:
       matrix:
         include:
           - name: Real husbandry live reload cooldown death and multigeneration
-            script: res://tests/qa/husbandry_closed_loop_desktop_acceptance.gd
+            script: res://tests/qa/husbandry_closed_loop_stable_desktop_acceptance.gd
             output: build\husbandry-closed-loop-desktop.png
             artifact: remaining-husbandry-closed-loop
           - name: Real ranch timer full inventory collection and exact reload
@@ -166,7 +170,7 @@ jobs:
             output: build\agriculture-closed-loop-desktop.png
             artifact: remaining-agriculture-closed-loop
           - name: Real bed respawn removal fallback and exact reload
-            script: res://tests/qa/rest_closed_loop_desktop_acceptance.gd
+            script: res://tests/qa/rest_closed_loop_stable_desktop_acceptance.gd
             output: build\rest-closed-loop-desktop.png
             artifact: remaining-rest-closed-loop
           - name: Real complete exploration milestones rewards and exact reload
