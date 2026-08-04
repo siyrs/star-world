@@ -45,6 +45,7 @@ on:
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
       - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/player_continuous_route_regression.gd'
+      - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'
   push:
     branches:
       - master
@@ -91,6 +92,7 @@ on:
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
       - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/player_continuous_route_regression.gd'
+      - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'
   workflow_dispatch:
 
 permissions:
@@ -125,7 +127,7 @@ jobs:
         res://tests/qa/inventory_canonical_roundtrip_regression.gd
         res://tests/qa/inventory_transaction_regression.gd
         res://tests/qa/profile_release_journey_regression.gd
-        res://tests/qa/player_continuous_route_regression.gd
+        res://tests/qa/player_continuous_route_buffered_jump_regression.gd
       domain_scripts_verbose: true
       domain_artifact_name: remaining-player-journeys-domain
       domain_artifact_paths: |
