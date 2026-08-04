@@ -1,3 +1,5 @@
+# Branch-scoped self-removing patch. This second commit triggers the workflow
+# after the workflow definition already exists on the branch.
 name: Temporary agriculture state contract patch
 
 on:
