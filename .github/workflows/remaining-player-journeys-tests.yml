@@ -9,6 +9,7 @@ on:
       - 'qa/map-coverage-matrix.md'
       - 'qa/final-release-report.md'
       - 'qa/issues-found.md'
+      - 'qa/pr-100-closure-report.md'
       - 'data/**'
       - 'scenes/game/**'
       - 'scenes/ui/**'
@@ -48,7 +49,6 @@ on:
       - 'tests/qa/exploration_journal_regression.gd'
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
       - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
-      - 'tests/qa/exploration_closed_loop_canonical_desktop_acceptance.gd'
       - 'tests/qa/exploration_reward_inventory_persistence_regression.gd'
       - 'tests/qa/player_continuous_route_regression.gd'
       - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'
@@ -62,6 +62,7 @@ on:
       - 'qa/map-coverage-matrix.md'
       - 'qa/final-release-report.md'
       - 'qa/issues-found.md'
+      - 'qa/pr-100-closure-report.md'
       - 'data/**'
       - 'scenes/game/**'
       - 'scenes/ui/**'
@@ -101,7 +102,6 @@ on:
       - 'tests/qa/exploration_journal_regression.gd'
       - 'tests/qa/exploration_journal_desktop_acceptance.gd'
       - 'tests/qa/exploration_closed_loop_desktop_acceptance.gd'
-      - 'tests/qa/exploration_closed_loop_canonical_desktop_acceptance.gd'
       - 'tests/qa/exploration_reward_inventory_persistence_regression.gd'
       - 'tests/qa/player_continuous_route_regression.gd'
       - 'tests/qa/player_continuous_route_buffered_jump_regression.gd'
@@ -179,7 +179,7 @@ jobs:
             output: build\rest-closed-loop-desktop.png
             artifact: remaining-rest-closed-loop
           - name: Real complete exploration milestones rewards and exact reload
-            script: res://tests/qa/exploration_closed_loop_canonical_desktop_acceptance.gd
+            script: res://tests/qa/exploration_closed_loop_desktop_acceptance.gd
             output: build\exploration-closed-loop-desktop.png
             artifact: remaining-exploration-closed-loop
     steps:
