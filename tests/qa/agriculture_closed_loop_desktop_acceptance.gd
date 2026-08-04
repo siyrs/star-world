@@ -5,18 +5,24 @@ const CaptureConfig = preload("res://tests/qa/desktop_capture_config.gd")
 
 const OUTPUT_PATH := "user://agriculture-closed-loop-desktop.png"
 const CLEANUP_FRAMES := 10
+const MAX_TEST_SECONDS := 600.0
 
 var checks := 0
 var failures: Array[String] = []
 var _capture_path := ""
 var _world_id := ""
+var _finished := false
+var _stage := "initialize"
 
 
 func _initialize() -> void:
+	var watchdog := create_timer(MAX_TEST_SECONDS)
+	watchdog.timeout.connect(_on_watchdog_timeout)
 	call_deferred("_run")
 
 
 func _run() -> void:
+	_stage = "create_world"
 	_capture_path = CaptureConfig.resolve(OS.get_cmdline_user_args(), OUTPUT_PATH)
 	root.size = Vector2i(1024, 576)
 	var game: Node = GameScene.instantiate()
@@ -72,6 +78,7 @@ func _run() -> void:
 			})
 	)
 
+	_stage = "prepare_arena"
 	var arena: Dictionary = _build_farm_arena(world, player)
 	var soil_position: Vector3i = arena.get("soil_position", Vector3i.ZERO)
 	var crop_position := soil_position + Vector3i.UP
@@ -98,18 +105,19 @@ func _run() -> void:
 	)
 	inventory.select_slot(hoe_slot)
 
+	_stage = "blocked_tilling"
 	world.call("set_block", crop_position, "stone")
 	await _aim_at(player, world.call("block_to_world", soil_position))
 	_check(_focus_hits_block(player, soil_position, "grass"), "production focus resolves the blocked grass target")
 	var blocked_inventory: Dictionary = inventory.call("serialize")
 	await _right_click_center()
 	_check(not rejections.is_empty(), "blocked tilling emits a production rejection")
-	if not rejections.is_empty():
-		_check(str(rejections[-1].get("reason", "")) == "space_blocked", "blocked tilling retains the exact space_blocked reason")
+	_check(_last_rejection_reason(rejections) == "space_blocked", "blocked tilling retains the exact space_blocked reason")
 	_check(inventory.call("serialize") == blocked_inventory, "blocked tilling cannot consume hoe durability or materials")
 	_check(str(world.call("get_block", soil_position)) == "grass", "blocked tilling cannot mutate the target block")
 	world.call("set_block", crop_position, "air")
 
+	_stage = "till_water_plant"
 	await _aim_at(player, world.call("block_to_world", soil_position))
 	await _right_click_center()
 	_check(str(world.call("get_block", soil_position)) == "farmland", "real right click tills dry production farmland")
@@ -135,12 +143,13 @@ func _run() -> void:
 	var planted_state: Dictionary = agriculture.call("get_crop_state", crop_position)
 	_check(str(planted_state.get("crop_id", "")) == "wheat" and int(planted_state.get("stage", -1)) == 0, "planted crop enters canonical stage-zero state")
 
+	_stage = "early_harvest_and_fertilize"
 	var early_inventory: Dictionary = inventory.call("serialize")
 	var early_crop: Dictionary = planted_state.duplicate(true)
 	await _aim_at(player, world.call("block_to_world", soil_position))
 	_check(_focus_hits_block(player, crop_position, "wheat_stage_0"), "production focus proxies non-colliding crop through supporting soil")
 	await _right_click_center()
-	_check(str(rejections[-1].get("reason", "")) == "crop_growing", "early harvest retains the exact crop_growing reason")
+	_check(_last_rejection_reason(rejections) == "crop_growing", "early harvest retains the exact crop_growing reason")
 	_check(inventory.call("serialize") == early_inventory, "early harvest failure cannot mutate player inventory")
 	_check(agriculture.call("get_crop_state", crop_position) == early_crop, "early harvest failure cannot mutate crop state")
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_0", "early harvest failure keeps the visible crop unchanged")
@@ -154,6 +163,7 @@ func _run() -> void:
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_1", "fertilizer commits the matching visible stage")
 	_check(inventory.count_item("compost") == 0, "successful fertilization consumes exactly one compost")
 
+	_stage = "mid_growth_save_reload"
 	var mid_inventory: Dictionary = inventory.call("serialize")
 	var mid_crop: Dictionary = fertilized_state.duplicate(true)
 	var mid_soil: Dictionary = agriculture.call("get_soil_state", soil_position)
@@ -188,6 +198,7 @@ func _run() -> void:
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_1", "first reload restores the visible stage-one crop")
 	_check(maturity_events.size() == maturity_before_reload and harvest_events.size() == harvest_before_reload, "first reload does not replay maturity or harvest feedback")
 
+	_stage = "mature_and_full_inventory_failure"
 	agriculture.call("advance_time", 120.0)
 	for _frame in 5:
 		await process_frame
@@ -203,7 +214,7 @@ func _run() -> void:
 	await _aim_at(player, world.call("block_to_world", soil_position))
 	_check(_focus_hits_block(player, crop_position, "wheat_stage_3"), "production focus resolves the mature crop proxy")
 	await _right_click_center()
-	_check(str(rejections[-1].get("reason", "")) == "inventory_full", "mature full-inventory failure retains the exact inventory_full reason")
+	_check(_last_rejection_reason(rejections) == "inventory_full", "mature full-inventory failure retains the exact inventory_full reason")
 	_check(inventory.call("serialize") == full_inventory, "full-inventory harvest cannot partially add seeds or wheat")
 	_check(agriculture.call("get_crop_state", crop_position) == mature_before_failure, "full-inventory harvest keeps authoritative crop state mature")
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_3", "full-inventory harvest keeps the mature crop visible")
@@ -216,6 +227,7 @@ func _run() -> void:
 		_check(image.get_size() == root.size, "agriculture evidence uses 1024x576 resolution")
 		_save_image(image)
 
+	_stage = "mature_save_reload"
 	_check(bool(hub.call("save_current")), "mature full-inventory crop joins a second authoritative save")
 	var mature_loaded: Dictionary = hub.get("save_service").load_world(_world_id)
 	var maturity_before_second_reload := maturity_events.size()
@@ -233,6 +245,7 @@ func _run() -> void:
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_3", "second reload restores the mature production voxel")
 	_check(maturity_events.size() == maturity_before_second_reload, "second reload does not replay the maturity summary")
 
+	_stage = "successful_harvest"
 	var freed_slot := _first_pickaxe_slot(inventory)
 	_check(freed_slot >= 0, "fixture finds one non-seed slot to release")
 	if freed_slot >= 0:
@@ -246,6 +259,7 @@ func _run() -> void:
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_0", "successful harvest commits the replanted production voxel")
 	_check(harvest_events.size() == harvest_before_reload + 1, "successful harvest emits exactly one production event")
 
+	_stage = "final_save_reload"
 	var final_inventory: Dictionary = inventory.call("serialize")
 	var final_crop: Dictionary = agriculture.call("get_crop_state", crop_position)
 	var final_harvest_count := harvest_events.size()
@@ -314,12 +328,22 @@ func _occupied_slot_count(inventory: Node) -> int:
 	return count
 
 
+func _last_rejection_reason(rejections: Array[Dictionary]) -> String:
+	if rejections.is_empty():
+		return ""
+	return str(rejections[-1].get("reason", ""))
+
+
 func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
 	for _frame in frame_limit:
+		player.velocity.y = minf(player.velocity.y, -0.5)
+		player.move_and_slide()
 		if player.is_on_floor():
 			return
 		await physics_frame
 		await process_frame
+	player.velocity.y = -0.5
+	player.move_and_slide()
 
 
 func _wait_for_world_ready(game: Node, hub: Node) -> bool:
@@ -390,7 +414,19 @@ func _save_image(image: Image) -> void:
 	_check(error == OK and FileAccess.file_exists(_capture_path), "agriculture desktop screenshot is saved")
 
 
+func _on_watchdog_timeout() -> void:
+	if _finished:
+		return
+	push_error("QA AGRICULTURE CLOSED LOOP DESKTOP WATCHDOG: stage=%s" % _stage)
+	print(
+		"QA AGRICULTURE CLOSED LOOP DESKTOP TIMEOUT | stage=%s | checks=%d | failures=%d"
+		% [_stage, checks, failures.size()]
+	)
+	quit(2)
+
+
 func _finish(game: Node, hub: Node) -> void:
+	_finished = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hub != null:
 		if not _world_id.is_empty() and hub.get("save_service") != null:
