@@ -113,7 +113,7 @@ func _run() -> void:
 
 	var collected := _find_pickup(spawner, "egg")
 	if collected != null:
-		collected.call("_finish_collection", 0)
+		collected.call("_finish_collection", 1)
 	await process_frame
 	await process_frame
 	_check(inventory.count_item("egg") == 0, "direct pickup fixture does not bypass player inventory")
