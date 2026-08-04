@@ -1,3 +1,4 @@
+# Second branch commit intentionally triggers this already-installed workflow.
 name: Temporary canonical exploration save patch
 
 on:
