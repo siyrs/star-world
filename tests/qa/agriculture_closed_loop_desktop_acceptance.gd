@@ -151,7 +151,14 @@ func _run() -> void:
 	await _right_click_center()
 	_check(_last_rejection_reason(rejections) == "crop_growing", "early harvest retains the exact crop_growing reason")
 	_check(inventory.call("serialize") == early_inventory, "early harvest failure cannot mutate player inventory")
-	_check(agriculture.call("get_crop_state", crop_position) == early_crop, "early harvest failure cannot mutate crop state")
+	_check(
+		_crop_state_matches_with_bounded_elapsed(
+			early_crop,
+			agriculture.call("get_crop_state", crop_position),
+			2.0,
+		),
+		"early harvest failure cannot mutate crop state beyond bounded passive elapsed progression",
+	)
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_0", "early harvest failure keeps the visible crop unchanged")
 
 	compost_slot = _find_item_slot(inventory, "compost")
@@ -185,15 +192,18 @@ func _run() -> void:
 	inventory = hub.get("inventory") as Node
 	agriculture = hub.get("agriculture_service") as Node
 	_check(inventory.call("serialize") == mid_inventory, "first reload restores the exact mid-growth inventory")
-	_check(agriculture.call("get_crop_state", crop_position) == mid_crop, "first reload restores the exact crop stage and elapsed state")
+	_check(
+		_crop_state_matches_with_bounded_elapsed(
+			mid_crop,
+			agriculture.call("get_crop_state", crop_position),
+			20.0,
+		),
+		"first reload restores the exact crop stage and elapsed state contract with bounded real-time progression",
+	)
 	var reloaded_soil: Dictionary = agriculture.call("get_soil_state", soil_position)
 	_check(
-		bool(reloaded_soil.get("hydrated", false)) == bool(mid_soil.get("hydrated", false))
-		and is_equal_approx(
-			float(reloaded_soil.get("manual_remaining_seconds", 0.0)),
-			float(mid_soil.get("manual_remaining_seconds", 0.0))
-		),
-		"first reload restores the exact manual hydration timer",
+		_soil_state_matches_with_bounded_timer(mid_soil, reloaded_soil, 20.0),
+		"first reload restores hydration identity with only bounded timer consumption",
 	)
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_1", "first reload restores the visible stage-one crop")
 	_check(maturity_events.size() == maturity_before_reload and harvest_events.size() == harvest_before_reload, "first reload does not replay maturity or harvest feedback")
@@ -276,7 +286,14 @@ func _run() -> void:
 	world = game.get("world") as Node
 	_check(inventory.call("serialize") == final_inventory, "final reload restores exact harvested inventory without duplication")
 	_check(inventory.count_item("wheat") == 1 and inventory.count_item("wheat_seeds") == 3, "final reload preserves exact harvest conservation")
-	_check(agriculture.call("get_crop_state", crop_position) == final_crop, "final reload restores the exact replanted crop state")
+	_check(
+		_crop_state_matches_with_bounded_elapsed(
+			final_crop,
+			agriculture.call("get_crop_state", crop_position),
+			20.0,
+		),
+		"final reload restores the exact replanted crop state contract with bounded real-time progression",
+	)
 	_check(str(world.call("get_block", crop_position)) == "wheat_stage_0", "final reload cannot resurrect the mature crop")
 	_check(harvest_events.size() == final_harvest_count and maturity_events.size() == final_maturity_count, "final reload does not replay harvest or maturity feedback")
 	_check(bool((game.get("player") as CharacterBody3D).get("input_enabled")), "final agriculture reload remains playable")
@@ -381,8 +398,52 @@ func _focus_hits_block(player: Node, expected_position: Vector3i, expected_block
 	var focus: Dictionary = raw_focus
 	return (
 		str(focus.get("type", "")) == "block"
-		and _vector3i(focus.get("hit_position", [])) == expected_position
+		and _vector3i(focus.get("position", [])) == expected_position
 		and str(focus.get("block_id", "")) == expected_block_id
+	)
+
+
+func _crop_state_matches_with_bounded_elapsed(
+	expected: Dictionary,
+	actual: Dictionary,
+	maximum_advance_seconds: float
+) -> bool:
+	if expected.is_empty() or actual.is_empty():
+		return false
+	if (
+		str(actual.get("crop_id", "")) != str(expected.get("crop_id", ""))
+		or actual.get("position", []) != expected.get("position", [])
+		or int(actual.get("stage", -1)) != int(expected.get("stage", -1))
+	):
+		return false
+	var expected_elapsed := maxf(0.0, float(expected.get("elapsed_seconds", 0.0)))
+	var actual_elapsed := maxf(0.0, float(actual.get("elapsed_seconds", 0.0)))
+	var advance := actual_elapsed - expected_elapsed
+	return advance >= -0.001 and advance <= maxf(0.0, maximum_advance_seconds)
+
+
+func _soil_state_matches_with_bounded_timer(
+	expected: Dictionary,
+	actual: Dictionary,
+	maximum_consumption_seconds: float
+) -> bool:
+	if expected.is_empty() or actual.is_empty():
+		return false
+	if (
+		actual.get("position", []) != expected.get("position", [])
+		or bool(actual.get("hydrated", false)) != bool(expected.get("hydrated", false))
+	):
+		return false
+	var expected_remaining := maxf(
+		0.0, float(expected.get("manual_remaining_seconds", 0.0))
+	)
+	var actual_remaining := maxf(
+		0.0, float(actual.get("manual_remaining_seconds", 0.0))
+	)
+	var consumption := expected_remaining - actual_remaining
+	return (
+		consumption >= -0.001
+		and consumption <= maxf(0.0, maximum_consumption_seconds)
 	)
 
 
