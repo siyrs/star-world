@@ -30,6 +30,7 @@ var failures: Array[String] = []
 var _world_started := false
 var _world_start_failure := ""
 var _world_start_ms := 0
+var _tutorial_hidden_for_evidence := false
 
 
 static func configuration_from_arguments(arguments: PackedStringArray) -> Dictionary:
@@ -97,6 +98,7 @@ func _run() -> void:
 		return
 	_world_started = false
 	_world_start_failure = ""
+	_tutorial_hidden_for_evidence = false
 	var world_start_begin := Time.get_ticks_msec()
 	game.connect("world_started", Callable(self, "_on_world_started"), CONNECT_ONE_SHOT)
 	game.connect("world_start_failed", Callable(self, "_on_world_start_failed"), CONNECT_ONE_SHOT)
@@ -125,6 +127,24 @@ func _run() -> void:
 			input_context != null and str(input_context.call("get_context")) == "gameplay",
 			"gameplay_input_context"
 		)
+	var experience: Node = null
+	if hub != null:
+		experience = hub.get("player_experience") as Node
+	var onboarding_state: Dictionary = {}
+	if experience != null and experience.has_method("get_status"):
+		var raw_status: Variant = experience.call("get_status")
+		if raw_status is Dictionary:
+			var raw_onboarding: Variant = raw_status.get("onboarding", {})
+			if raw_onboarding is Dictionary:
+				onboarding_state = raw_onboarding
+	_tutorial_hidden_for_evidence = (
+		bool(onboarding_state.get("completed", false))
+		and not bool(onboarding_state.get("visible", true))
+	)
+	_check(
+		_tutorial_hidden_for_evidence,
+		"release_smoke_tutorial_is_hidden_for_map_evidence"
+	)
 	_check(diagnostics != null, "runtime_diagnostics_mounted")
 	if diagnostics != null:
 		_check(diagnostics.get("telemetry") != null, "runtime_telemetry_mounted")
@@ -315,6 +335,7 @@ func _finish(
 		"profile_id": profile_id,
 		"seed": seed,
 		"route_probe_enabled": route_probe_enabled,
+		"tutorial_hidden_for_evidence": _tutorial_hidden_for_evidence,
 		"world_start_ms": _world_start_ms,
 		"route": route_result,
 		"visual": visual_result,
@@ -405,6 +426,27 @@ func _smoke_world_state() -> Dictionary:
 		"player": {"position": [], "rotation": [0.0, 0.0, 0.0], "look_pitch": 0.0},
 		"inventory": {},
 		"containers": {"version": 1, "containers": {}},
+		# Release evidence is deliberately post-tutorial so screenshots and map
+		# traversal prove the designed world instead of repeatedly documenting the
+		# onboarding card. The real new-player tutorial remains covered by its E3
+		# cross-session desktop acceptance journey.
+		"experience": {
+			"version": 1,
+			"onboarding": {
+				"version": 2,
+				"completed": true,
+				"dismissed": false,
+				"current_index": 6,
+				"completed_actions": {
+					"move": true,
+					"look": true,
+					"mine": true,
+					"place": true,
+					"inventory": true,
+					"crafting": true,
+				},
+			},
+		},
 		"world": {"block_overrides": {}, "loaded_chunks": []},
 		"survival": {"health": 20.0, "hunger": 20.0},
 		"day_night": {"time_of_day": 9.0, "day": 1},

@@ -2,10 +2,12 @@ param(
     [Parameter(Mandatory = $true)][string]$Godot,
     [string]$ProjectRoot = '.',
     [string]$OutputDirectory = 'build/claude-soak',
-    [int]$SoakSeconds = 600
+    [int]$SoakSeconds = 600,
+    [int]$MinimumCycles = 5
 )
 
 $ErrorActionPreference = 'Stop'
+$MinimumCycles = [Math]::Max(2, $MinimumCycles)
 
 $projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
 $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputDirectory))
@@ -39,6 +41,7 @@ foreach ($argument in @(
     '--script', 'res://tests/qa/long_soak_journey.gd',
     '--',
     "--soak-seconds=$SoakSeconds",
+    "--minimum-cycles=$MinimumCycles",
     "--soak-output=$reportPath"
 )) {
     [void]$startInfo.ArgumentList.Add($argument)
@@ -59,7 +62,8 @@ $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $nextSampleMs = 1000
 $workloadProcess = $null
 $workloadLogged = $false
-$timeoutMs = ($SoakSeconds + 300) * 1000
+$timeoutSeconds = [Math]::Max($SoakSeconds, $MinimumCycles * 120) + 300
+$timeoutMs = $timeoutSeconds * 1000
 while (-not $process.WaitForExit(500)) {
     if ($stopwatch.ElapsedMilliseconds -gt $timeoutMs) {
         Write-Host "soak exceeded timeout, killing"
@@ -124,6 +128,7 @@ $memoryEvidence = [ordered]@{
     schema_version = 1
     sample_interval_ms = 1000
     soak_seconds_target = $SoakSeconds
+    minimum_cycles_target = $MinimumCycles
     duration_ms = [long]$stopwatch.ElapsedMilliseconds
     samples = @($samples)
     working_set_mib = Get-MemorySummary -Samples @($samples) -PropertyName 'working_set_bytes'
@@ -159,5 +164,22 @@ if ($hits.Count -gt 0) {
 if ($process.ExitCode -ne 0) {
     throw "Soak failed with exit $($process.ExitCode); see $stdoutPath"
 }
+if (-not (Test-Path -LiteralPath $reportPath)) {
+    throw "Soak report missing: $reportPath"
+}
+$report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+$cycles = @($report.cycles)
+$uniqueProfiles = @($cycles | ForEach-Object { [string]$_.profile } | Sort-Object -Unique)
+$requiredProfiles = [Math]::Min(5, $MinimumCycles)
+if ($cycles.Count -lt $MinimumCycles) {
+    throw "Soak completed $($cycles.Count) cycles; expected at least $MinimumCycles."
+}
+if ($uniqueProfiles.Count -lt $requiredProfiles) {
+    throw "Soak covered $($uniqueProfiles.Count) profiles; expected $requiredProfiles."
+}
+$transported = @($cycles | Where-Object { [bool]$_.post_spawn_transport -or [int]$_.route.player_transform_writes -ne 0 })
+if ($transported.Count -ne 0) {
+    throw 'Soak report contains forbidden post-spawn transport.'
+}
 
-Write-Host "LONG SOAK PASS | target=${SoakSeconds}s | ws_p95=$($memoryEvidence.working_set_mib.p95_mib) MiB | trend=$trend | evidence=$outputFullPath"
+Write-Host "LONG SOAK PASS | target=${SoakSeconds}s | cycles=$($cycles.Count) | profiles=$($uniqueProfiles.Count) | ws_p95=$($memoryEvidence.working_set_mib.p95_mib) MiB | trend=$trend | evidence=$outputFullPath"

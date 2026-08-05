@@ -27,6 +27,7 @@ $route = Read-RepoFile 'src/diagnostics/production_route_probe.gd'
 $smoke = Read-RepoFile 'src/diagnostics/release_smoke_runner.gd'
 $runtimePolicy = Read-RepoFile 'src/diagnostics/release_smoke_runtime_policy.gd'
 $runtimeScopeRegression = Read-RepoFile 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
+$evidenceStateRegression = Read-RepoFile 'tests/qa/release_smoke_evidence_state_regression.gd'
 $soak = Read-RepoFile 'tests/qa/long_soak_journey.gd'
 $soakDriver = Read-RepoFile 'tests/ci/run_long_soak.ps1'
 $godotInvoker = Read-RepoFile 'tests/ci/Invoke-Godot.ps1'
@@ -59,6 +60,9 @@ Require-Contains $runtimePolicy 'runtime_status' 'Runtime health policy must ret
 Require-Contains $runtimePolicy 'sustained_runtime_status' 'Runtime health policy must retain sustained runtime as a compatibility fallback'
 Require-Contains $runtimeScopeRegression 'operations-only critical health remains observable' 'Runtime health scope must reject operations-only false positives'
 Require-Contains $runtimeScopeRegression 'runtime peak failures remain release-blocking' 'Runtime health scope must not weaken repeated peak-frame protection'
+Require-Contains $smoke 'tutorial_hidden_for_evidence' 'Release smoke must publish tutorial-free map evidence state'
+Require-Contains $smoke '"experience"' 'Release smoke must carry a completed onboarding domain'
+Require-Contains $evidenceStateRegression 'release evidence starts after tutorial completion' 'Tutorial-free release evidence must have a deterministic state regression'
 
 Require-Contains $soak 'RouteProbeScript.new()' 'Long soak must reuse the production route contract'
 Require-Contains $soak '"schema_version": 2' 'Long soak must advertise the no-transport schema'
@@ -66,6 +70,9 @@ Require-Contains $soak '"post_spawn_transport": false' 'Every soak cycle must re
 Require-NotContains $soak 'player.global_position =' 'Long soak cannot simulate pressure by teleporting the player'
 Require-Contains $soakDriver 'Invoke-Godot.ps1' 'Long-soak runner must own fresh-checkout project import'
 Require-Contains $soakDriver '--editor --quit' 'Long-soak runner must complete a strict import before execution'
+Require-Contains $soak 'minimum-cycles' 'Long soak must enforce a minimum route-cycle contract'
+Require-Contains $soak 'required_profile_count' 'Long soak must require every configured profile when enough cycles are requested'
+Require-Contains $soakDriver '[int]$MinimumCycles = 5' 'Hosted soak driver must default to five profile cycles'
 Require-Contains $godotInvoker '[string]$WorkingDirectory' 'Godot process wrapper must support an explicit project working directory'
 
 Require-Contains $smokeDriver '[switch]$SkipExport' 'Release driver must reuse one verified binary across profiles'
@@ -77,6 +84,7 @@ Require-Contains $matrixDriver "'frozen_wastes'" 'Export matrix must include fro
 Require-Contains $matrixDriver "'sky_islands'" 'Export matrix must include sky_islands'
 Require-Contains $matrixDriver "'abyss_world'" 'Export matrix must include abyss_world'
 Require-Contains $matrixDriver 'hosted_ci_reference' 'Hosted evidence must be labelled as a reference, not target hardware'
+Require-Contains $matrixDriver 'all_tutorial_overlays_hidden' 'Five-profile matrix must reject tutorial-obscured screenshots'
 
 try {
     $policy = $policyText | ConvertFrom-Json
@@ -113,6 +121,8 @@ Require-Contains $workflow 'contents: read' 'Permanent workflow must be read-onl
 Require-Contains $workflow 'run_windows_export_journey_matrix.ps1' 'Permanent workflow must run the five-profile final executable'
 Require-Contains $workflow 'run_long_soak.ps1' 'Permanent workflow must exercise the no-transport soak mechanism'
 Require-Contains $workflow 'release_smoke_runtime_health_scope_regression.gd' 'Permanent workflow must guard runtime-versus-operations health scope'
+Require-Contains $workflow 'release_smoke_evidence_state_regression.gd' 'Permanent workflow must guard tutorial-free map evidence'
+Require-Contains $workflow '-MinimumCycles 5' 'Permanent hosted soak must cover all five profiles'
 Require-Contains $workflow 'tutorial_placement_desktop_acceptance.gd' 'Permanent workflow must run the cross-session tutorial'
 Require-Contains $workflow 'building_mining_closed_loop_desktop_acceptance.gd' 'Permanent workflow must run building/mining closure'
 Require-NotContains $workflow 'contents: write' 'Permanent release-readiness workflow cannot write repository contents'
@@ -120,6 +130,8 @@ Require-NotContains $workflow 'contents: write' 'Permanent release-readiness wor
 Require-Contains $report '状态：**HOLD' 'Commercial release must remain HOLD until external sign-off exists'
 Require-Contains $report 'BUG-QA-COVERAGE-001 — qa-passed' 'PR #100 route evidence must close the stale coverage blocker accurately'
 Require-Contains $report 'BUG-QA-CONTENT-001 — qa-passed' 'Completed content journeys must close the stale content blocker accurately'
+Require-Contains $report 'BUG-QA-VISUAL-EVIDENCE-001' 'Release report must track tutorial-free final screenshots'
+Require-Contains $report 'BUG-QA-SOAK-PROFILE-COVERAGE-001' 'Release report must track five-profile hosted soak coverage'
 Require-Contains $report 'BUG-QA-E4-SIGNOFF-001' 'Independent final-export experience sign-off must remain explicit'
 Require-Contains $report 'BUG-PERF-002' 'Target-hardware performance remains a release boundary'
 Require-Contains $report 'BUG-SOAK-120-001' 'Strict target-hardware soak remains a release boundary'

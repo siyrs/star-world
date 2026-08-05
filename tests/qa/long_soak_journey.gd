@@ -25,6 +25,7 @@ var failures: Array[String] = []
 var _created_world_ids: Array[String] = []
 var _cycles: Array[Dictionary] = []
 var _soak_seconds := 600
+var _minimum_cycles := 5
 var _start_msec := 0
 
 var _game: Node
@@ -38,6 +39,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_soak_seconds = maxi(60, int(_user_argument("soak-seconds", "600")))
+	_minimum_cycles = clampi(int(_user_argument("minimum-cycles", "5")), 2, 100)
 	root.size = Vector2i(1280, 720)
 	root.content_scale_size = Vector2i(1280, 720)
 	_start_msec = Time.get_ticks_msec()
@@ -55,12 +57,12 @@ func _run() -> void:
 
 	var profile_ids := MapProfileCatalogScript.get_ids()
 	var cycle := 0
-	while _elapsed_seconds() < _soak_seconds:
+	while _elapsed_seconds() < _soak_seconds or cycle < _minimum_cycles:
 		var profile_id: String = profile_ids[cycle % profile_ids.size()]
 		await _soak_cycle(profile_id, cycle)
 		cycle += 1
 	print("SOAK_COMPLETE cycles=%d elapsed=%ds" % [cycle, _elapsed_seconds()])
-	_evaluate_trend()
+	_evaluate_trend(profile_ids)
 	_write_report()
 	await _finish()
 
@@ -143,8 +145,11 @@ func _soak_cycle(profile_id: String, cycle: int) -> void:
 	)
 
 
-func _evaluate_trend() -> void:
-	_check(_cycles.size() >= 2, "soak completes at least 2 cycles (got %d)" % _cycles.size())
+func _evaluate_trend(profile_ids: Array) -> void:
+	_check(
+		_cycles.size() >= _minimum_cycles,
+		"soak completes the minimum %d cycles (got %d)" % [_minimum_cycles, _cycles.size()]
+	)
 	if _cycles.size() < 2:
 		return
 	var first_p95 := float(_cycles[0].get("frame_ms_p95", 0.0))
@@ -156,9 +161,11 @@ func _evaluate_trend() -> void:
 	var profiles_seen: Dictionary = {}
 	for cycle_data: Dictionary in _cycles:
 		profiles_seen[str(cycle_data.get("profile", ""))] = true
+	var required_profile_count := mini(profile_ids.size(), _minimum_cycles)
 	_check(
-		profiles_seen.size() >= mini(5, _cycles.size()),
-		"soak spans multiple profiles (%d distinct)" % profiles_seen.size()
+		profiles_seen.size() >= required_profile_count,
+		"soak spans all required profiles (%d / %d distinct)"
+		% [profiles_seen.size(), required_profile_count]
 	)
 
 
@@ -166,10 +173,17 @@ func _write_report() -> void:
 	var output := _user_argument("soak-output", "")
 	if output.is_empty():
 		return
+	var profiles_seen: Array[String] = []
+	for cycle_data: Dictionary in _cycles:
+		var profile_id := str(cycle_data.get("profile", ""))
+		if not profile_id.is_empty() and profile_id not in profiles_seen:
+			profiles_seen.append(profile_id)
 	var report := {
 		"schema_version": 2,
 		"soak_seconds_target": _soak_seconds,
+		"minimum_cycles_target": _minimum_cycles,
 		"elapsed_seconds": _elapsed_seconds(),
+		"unique_profiles": profiles_seen,
 		"cycles": _cycles,
 		"checks": checks,
 		"failures": failures,

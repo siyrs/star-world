@@ -111,6 +111,7 @@ for ($index = 0; $index -lt $profiles.Count; $index++) {
         maximum_single_fall = [double]$report.route.maximum_single_fall
         transport_after_spawn = [bool]$report.route.transport_after_spawn
         player_transform_writes = [int]$report.route.player_transform_writes
+        tutorial_hidden_for_evidence = [bool]$report.tutorial_hidden_for_evidence
         visual_ok = [bool]$report.visual.ok
         avg_fps = [double]$report.soak.frame_metrics.avg_fps
         one_percent_low_fps = [double]$report.soak.frame_metrics.one_percent_low_fps
@@ -143,6 +144,7 @@ $summary = [ordered]@{
         minimum_unique_chunks = [int](($records | Measure-Object -Property unique_chunks -Minimum).Minimum)
         post_spawn_transport_count = @($records | Where-Object { $_.transport_after_spawn -or $_.player_transform_writes -ne 0 }).Count
         all_visual_checks_passed = @($records | Where-Object { -not $_.visual_ok }).Count -eq 0
+        all_tutorial_overlays_hidden = @($records | Where-Object { -not $_.tutorial_hidden_for_evidence }).Count -eq 0
     }
 }
 
@@ -152,6 +154,7 @@ if ($summary.assertions.minimum_displacement -lt 14.0) { throw 'At least one exp
 if ($summary.assertions.minimum_unique_chunks -lt 2) { throw 'At least one exported route did not cross two chunks.' }
 if ($summary.assertions.post_spawn_transport_count -ne 0) { throw 'Exported route matrix contains forbidden post-spawn transport.' }
 if (-not $summary.assertions.all_visual_checks_passed) { throw 'At least one exported screenshot failed visual acceptance.' }
+if (-not $summary.assertions.all_tutorial_overlays_hidden) { throw 'At least one exported map screenshot is still obscured by onboarding.' }
 
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding utf8
 Write-Host "WINDOWS EXPORT JOURNEY MATRIX PASS | profiles=$($records.Count) | evidence=$summaryPath"

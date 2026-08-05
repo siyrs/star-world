@@ -21,7 +21,7 @@ PR #101 将同一生产路线合同放入最终 PCK，通过一个已验证的 W
 
 - `transport_after_spawn=false`；
 - `player_transform_writes=0`；
-- 路线终点截图通过视觉细节检查；
+- 路线终点截图通过视觉细节检查，并且诊断世界教程已完成、引导卡片不遮挡地图；
 - 每图输出真实 frame-time、加载时间和外部内存；
 - GitHub Runner 标记为 `hosted_ci_reference`，不冒充目标硬件。
 
