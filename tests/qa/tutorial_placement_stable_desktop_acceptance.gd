@@ -34,7 +34,10 @@ func _aim_at(player: Node3D, target: Vector3) -> void:
 
 
 func _active_production_player() -> Node3D:
-	var camera := get_viewport().get_camera_3d()
+	# This script extends SceneTree, so the root Window is the authoritative
+	# viewport. Resolve the active camera from that viewport rather than calling
+	# Node.get_viewport(), which is not available on SceneTree.
+	var camera := root.get_camera_3d() as Camera3D
 	if camera == null:
 		return null
 	var pivot := camera.get_parent() as Node3D
