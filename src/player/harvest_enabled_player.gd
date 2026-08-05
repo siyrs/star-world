@@ -66,14 +66,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func break_target_block() -> bool:
-	if not _refresh_interaction_ray():
-		return false
-	var collider = interaction_ray.get_collider()
-	if collider != null and collider.has_method("take_damage"):
-		return _try_attack_entity(collider)
+	# Physics collision is authoritative for living entities. Block-capable
+	# subclasses may additionally resolve a voxel from the grid ray when a freshly
+	# rebuilt chunk has not published its collision shape yet.
+	if _refresh_interaction_ray():
+		var collider = interaction_ray.get_collider()
+		if collider != null and collider.has_method("take_damage"):
+			return _try_attack_entity(collider)
 	if harvest_service == null:
 		return super.break_target_block()
-	var target := _harvest_target_from_current_ray()
+	var target := _resolve_harvest_target()
 	if target.is_empty():
 		return false
 	var result: Dictionary = harvest_service.call(
@@ -87,20 +89,18 @@ func break_target_block() -> bool:
 
 
 func _start_primary_action() -> void:
-	# Resolve the live target exactly once for the action-start transaction. A
-	# dynamic voxel edit can rebuild the physics shape between two immediate
-	# RayCast queries; resolving once and reusing that target prevents a valid
-	# first press from becoming target_lost before the harvest clock is created.
-	if not _refresh_interaction_ray():
-		_primary_action_held = false
-		_cancel_harvest("no_target")
-		return
-	var collider = interaction_ray.get_collider()
-	if collider != null and collider.has_method("take_damage"):
-		_primary_action_held = false
-		_try_attack_entity(collider)
-		return
-	var target := _harvest_target_from_current_ray()
+	# Check a live physics collider only for entity attacks. Voxel targeting is a
+	# virtual policy boundary: PrecisionInteractionPlayer can resolve the same
+	# visible block through its deterministic grid ray even while dynamic chunk
+	# collision is between rebuild generations. Requiring physics collision here
+	# would make the crosshair show a valid block while the first click is dropped.
+	if _refresh_interaction_ray():
+		var collider = interaction_ray.get_collider()
+		if collider != null and collider.has_method("take_damage"):
+			_primary_action_held = false
+			_try_attack_entity(collider)
+			return
+	var target := _resolve_harvest_target()
 	if target.is_empty():
 		_primary_action_held = false
 		_cancel_harvest("no_target")
