@@ -7,6 +7,7 @@ extends "res://tests/qa/tutorial_placement_desktop_acceptance.gd"
 
 const HARVEST_TIMEOUT_MILLISECONDS := 15000
 const AIM_REFRESH_MILLISECONDS := 250
+const DIAGNOSTIC_INTERVAL_MILLISECONDS := 500
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
@@ -38,6 +39,25 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	var target_world: Vector3 = world.call("block_to_world", target)
 	if player != null:
 		await _aim_at(player, target_world)
+	var inventory: Node = player.get("inventory") as Node if player != null else null
+	var harvest: Node = player.get("harvest_service") as Node if player != null else null
+	var selected_slot := int(inventory.get("selected_slot")) if inventory != null else -1
+	var selected_item: Dictionary = (
+		inventory.call("get_slot", selected_slot)
+		if inventory != null and selected_slot >= 0
+		else {}
+	)
+	print(
+		"TUTORIAL HARVEST START | mouse=%d | input=%s | slot=%d | item=%s | focus=%s"
+		% [
+			Input.mouse_mode,
+			str(player.get("input_enabled")) if player != null else "missing",
+			selected_slot,
+			str(selected_item.get("item_id", "")),
+			str(player.call("get_interaction_focus")) if player != null else "{}",
+		]
+	)
+
 	var center := root.get_visible_rect().get_center()
 	var press := InputEventMouseButton.new()
 	press.position = center
@@ -46,6 +66,14 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	press.button_mask = MOUSE_BUTTON_MASK_LEFT
 	press.pressed = true
 	root.push_input(press)
+	await process_frame
+	print(
+		"TUTORIAL HARVEST PRESSED | held=%s | active=%s"
+		% [
+			str(player.get("_primary_action_held")) if player != null else "missing",
+			str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
+		]
+	)
 
 	# Harvest progress is measured in elapsed seconds by the production service.
 	# A frame-count timeout is invalid because desktop CI can run hundreds of
@@ -53,6 +81,7 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	# 15-second monotonic deadline is both deterministic and strictly bounded.
 	var deadline := Time.get_ticks_msec() + HARVEST_TIMEOUT_MILLISECONDS
 	var next_aim_refresh := Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
+	var next_diagnostic := Time.get_ticks_msec() + DIAGNOSTIC_INTERVAL_MILLISECONDS
 	while (
 		str(world.call("get_block", target)) != "air"
 		and Time.get_ticks_msec() < deadline
@@ -61,6 +90,17 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 		if player != null and Time.get_ticks_msec() >= next_aim_refresh:
 			await _aim_at(player, target_world)
 			next_aim_refresh = Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
+		if Time.get_ticks_msec() >= next_diagnostic:
+			print(
+				"TUTORIAL HARVEST TICK | block=%s | held=%s | active=%s | focus=%s"
+				% [
+					str(world.call("get_block", target)),
+					str(player.get("_primary_action_held")) if player != null else "missing",
+					str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
+					str(player.call("get_interaction_focus")) if player != null else "{}",
+				]
+			)
+			next_diagnostic = Time.get_ticks_msec() + DIAGNOSTIC_INTERVAL_MILLISECONDS
 
 	var release := InputEventMouseButton.new()
 	release.position = center
@@ -71,3 +111,11 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	root.push_input(release)
 	await process_frame
 	await process_frame
+	print(
+		"TUTORIAL HARVEST END | block=%s | held=%s | active=%s"
+		% [
+			str(world.call("get_block", target)),
+			str(player.get("_primary_action_held")) if player != null else "missing",
+			str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
+		]
+	)
