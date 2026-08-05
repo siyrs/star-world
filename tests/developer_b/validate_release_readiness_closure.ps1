@@ -55,9 +55,10 @@ Require-Contains $smoke 'FrameMetricsScript.summarize' 'Final executable evidenc
 Require-Contains $smoke '"version": 4' 'Release smoke report schema must advertise route and performance evidence'
 Require-NotContains $smoke 'player.global_position =' 'Release smoke cannot transport the player for soak or screenshots'
 Require-Contains $smoke 'RuntimePolicy.is_runtime_critical' 'Release smoke must gate on runtime health rather than global operations capacity'
-Require-Contains $runtimePolicy 'sustained_runtime_status' 'Runtime health policy must prefer sustained runtime evidence'
-Require-Contains $runtimePolicy 'runtime_status' 'Runtime health policy must support the direct runtime status fallback'
-Require-Contains $runtimeScopeRegression 'operations-only critical health remains observable' 'Runtime health scope must have a deterministic regression test'
+Require-Contains $runtimePolicy 'runtime_status' 'Runtime health policy must retain the primary full runtime signal'
+Require-Contains $runtimePolicy 'sustained_runtime_status' 'Runtime health policy must retain sustained runtime as a compatibility fallback'
+Require-Contains $runtimeScopeRegression 'operations-only critical health remains observable' 'Runtime health scope must reject operations-only false positives'
+Require-Contains $runtimeScopeRegression 'runtime peak failures remain release-blocking' 'Runtime health scope must not weaken repeated peak-frame protection'
 
 Require-Contains $soak 'RouteProbeScript.new()' 'Long soak must reuse the production route contract'
 Require-Contains $soak '"schema_version": 2' 'Long soak must advertise the no-transport schema'
@@ -139,7 +140,7 @@ if ($failures.Count -gt 0) {
 
 Write-Host 'RELEASE READINESS CLOSURE CONTRACT PASS'
 Write-Host '  - fresh-checkout soak imports resources before running'
-Write-Host '  - final executable runtime health excludes unrelated operations saturation'
+Write-Host '  - final executable runtime health excludes unrelated operations saturation without weakening peak checks'
 Write-Host '  - final executable route evidence uses production input and no transport'
 Write-Host '  - tutorial and building/mining cross full save/menu/reload boundaries'
 Write-Host '  - hosted CI and target-hardware qualification evidence remain separated'
