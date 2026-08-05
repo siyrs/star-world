@@ -7,6 +7,8 @@ const OUTPUT_PATH := "user://building-mining-closed-loop-desktop.png"
 const CLEANUP_FRAMES := 10
 const MAX_HARVEST_FRAMES := 360
 const MAX_TEST_SECONDS := 600.0
+const AIM_TIMEOUT_FRAMES := 90
+const AIM_HEIGHT_OFFSETS: Array[float] = [0.28, 0.12, 0.0, -0.12]
 
 var checks := 0
 var failures: Array[String] = []
@@ -77,22 +79,37 @@ func _run() -> void:
 	inventory.call("add_item", "oak_planks", 4)
 	inventory.call("select_slot", _find_item_slot(inventory, "oak_planks"))
 	var failure_inventory: Dictionary = inventory.call("serialize")
-	await _aim_at(player, world.call("block_to_world", failure_anchor))
-	_check(_focus_hits_block(player, failure_anchor, "stone"), "centre ray resolves the placement-failure anchor")
+	var failure_focus_ready := await _aim_at_block(
+		player, world, failure_anchor, "stone"
+	)
+	_check(failure_focus_ready, "centre ray resolves the placement-failure anchor")
+	if not failure_focus_ready:
+		await _finish(game, hub)
+		return
 	await _right_click_center()
 	_check(str(world.call("get_block", failure_target)) == "air", "placement cannot create a block inside the live player capsule")
 	_check(inventory.call("serialize") == failure_inventory, "rejected placement cannot consume material")
 
 	_stage = "three_block_structure"
-	player.global_position = arena["build_player_position"]
-	player.call("reset_motion")
-	player.velocity.y = -1.0
-	await _settle_player(player, 120)
 	for index in anchors.size():
 		var anchor: Vector3i = anchors[index]
 		var expected: Vector3i = structure[index]
-		await _aim_at(player, world.call("block_to_world", anchor))
-		_check(_focus_hits_block(player, anchor, "stone"), "structure anchor %d is targeted by the production ray" % index)
+		# Align the production player with each face before the real right-click.
+		# This prevents a previously placed neighbour from becoming the nearer
+		# target while still exercising the exact player focus and placement path.
+		player.global_position = Vector3(
+			float(anchor.x) + 0.5,
+			float(arena["floor_y"]) + 1.05,
+			float(arena["build_player_z"]),
+		)
+		player.call("reset_motion")
+		player.velocity.y = -1.0
+		await _settle_player(player, 120)
+		var anchor_ready := await _aim_at_block(player, world, anchor, "stone")
+		_check(anchor_ready, "structure anchor %d is targeted by the production ray" % index)
+		if not anchor_ready:
+			await _finish(game, hub)
+			return
 		await _right_click_center()
 		_check(str(world.call("get_block", expected)) == "planks", "real right click places structure block %d" % index)
 	_check(inventory.count_item("oak_planks") == 1, "three successful placements consume exactly three planks")
@@ -109,8 +126,13 @@ func _run() -> void:
 	var durability_before := int(
 		(inventory.call("get_slot", pickaxe_slot) as Dictionary).get("metadata", {}).get("durability", 251)
 	)
-	await _aim_at(player, world.call("block_to_world", mining_target))
-	_check(_focus_hits_block(player, mining_target, "stone"), "production ray targets the real mining voxel")
+	var mining_focus_ready := await _aim_at_block(
+		player, world, mining_target, "stone"
+	)
+	_check(mining_focus_ready, "production ray targets the real mining voxel")
+	if not mining_focus_ready:
+		await _finish(game, hub)
+		return
 	await _hold_left_for_frames(180)
 	_check(_last_rejection_reason(rejections) == "inventory_full", "full inventory mining retains the exact inventory_full rejection")
 	_check(str(world.call("get_block", mining_target)) == "stone", "full inventory mining leaves the world voxel unchanged")
@@ -125,7 +147,10 @@ func _run() -> void:
 	_check(freed_slot >= 0, "fixture exposes one slot to release for the mining drop")
 	if freed_slot >= 0:
 		inventory.call("remove_from_slot", freed_slot, 1)
-	await _aim_at(player, world.call("block_to_world", mining_target))
+	_check(
+		await _aim_at_block(player, world, mining_target, "stone"),
+		"successful mining reacquires the production voxel",
+	)
 	await _hold_left_until_removed(world, mining_target)
 	_check(str(world.call("get_block", mining_target)) == "air", "real hold-to-mine removes the production voxel")
 	_check(inventory.count_item("cobblestone") == 1, "successful mining grants exactly one configured drop")
@@ -189,13 +214,14 @@ func _build_arena(world: Node, player: Node3D) -> Dictionary:
 	world.call("set_block", mining_target, "stone")
 	world.call("set_block", mining_target + Vector3i.DOWN, "stone")
 	return {
+		"floor_y": floor_y,
+		"build_player_z": float(origin.z) + 5.5,
 		"failure_anchor": failure_anchor,
 		"failure_target": failure_target,
 		"anchors": anchors,
 		"structure": structure,
 		"mining_target": mining_target,
 		"failure_player_position": Vector3(origin.x + 0.5, floor_y + 1.05, origin.z + 2.5),
-		"build_player_position": Vector3(origin.x + 0.5, floor_y + 1.05, origin.z + 5.5),
 		"mining_player_position": Vector3(origin.x + 3.5, floor_y + 1.05, origin.z + 5.5),
 	}
 
@@ -248,6 +274,24 @@ func _wait_for_world_ready(game: Node, hub: Node) -> bool:
 			and bool(candidate_player.get("input_enabled"))
 		):
 			return true
+	return false
+
+
+func _aim_at_block(
+	player: Node3D,
+	world: Node,
+	block_position: Vector3i,
+	expected_block_id: String
+) -> bool:
+	var block_center: Vector3 = world.call("block_to_world", block_position)
+	for height_offset: float in AIM_HEIGHT_OFFSETS:
+		await _aim_at(player, block_center + Vector3.UP * height_offset)
+		for _frame in AIM_TIMEOUT_FRAMES / AIM_HEIGHT_OFFSETS.size():
+			player.call("_update_interaction_focus", true)
+			if _focus_hits_block(player, block_position, expected_block_id):
+				return true
+			await physics_frame
+			await process_frame
 	return false
 
 
