@@ -33,25 +33,36 @@ func _aim_at(player: Node3D, target: Vector3) -> void:
 	await process_frame
 
 
+func _active_production_player() -> Node3D:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return null
+	var pivot := camera.get_parent() as Node3D
+	if pivot == null:
+		return null
+	return pivot.get_parent() as Node3D
+
+
 func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
-	var player := root.find_child("Player", true, false) as Node3D
+	# The active viewport camera is the authoritative player identity after a full
+	# menu reload. A global name search can observe a stale queued player during
+	# scene replacement and start the input action against a different instance.
+	var player := _active_production_player()
 	var target_world: Vector3 = world.call("block_to_world", target)
 	if player != null:
 		await _aim_at(player, target_world)
-	var harvest: Node = player.get("harvest_service") as Node if player != null else null
-	var rejections: Array[Dictionary] = []
-	if harvest != null:
-		harvest.harvest_rejected.connect(
-			func(reason: String, snapshot: Dictionary) -> void:
-				rejections.append({"reason": reason, "snapshot": snapshot.duplicate(true)})
-		)
+	var ray := (
+		player.get_node_or_null("CameraPivot/Camera3D/InteractionRay") as RayCast3D
+		if player != null
+		else null
+	)
+	if ray != null:
+		ray.force_raycast_update()
+	await physics_frame
 
 	Input.action_press(InputActions.PRIMARY_ACTION, 1.0)
 	for _frame in 3:
 		await process_frame
-	if not rejections.is_empty():
-		print("TUTORIAL HARVEST REJECTED | %s" % str(rejections[-1]))
-
 	var deadline := Time.get_ticks_msec() + HARVEST_TIMEOUT_MILLISECONDS
 	var next_aim_refresh := Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
 	while (
@@ -65,5 +76,3 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	Input.action_release(InputActions.PRIMARY_ACTION)
 	for _frame in 3:
 		await process_frame
-	if not rejections.is_empty():
-		print("TUTORIAL HARVEST FINAL REJECTION | %s" % str(rejections[-1]))
