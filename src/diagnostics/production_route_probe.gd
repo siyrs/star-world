@@ -24,6 +24,11 @@ const TARGET_HORIZONTAL_TOLERANCE := 0.36
 const TARGET_SPEED_TOLERANCE := 0.75
 const STEERING_DEADZONE := 0.08
 const STEERING_BRAKE_DISTANCE := 0.46
+# A one-block descent briefly moves the production body through its air-control
+# path. Keep the approach below normal walking speed and start braking before
+# the ledge so a valid lower support cell is reached without overshooting it.
+const DESCENT_APPROACH_SPEED_LIMIT := 1.65
+const DESCENT_BRAKE_DISTANCE := 0.72
 const MIN_STEP_PROGRESS := 0.20
 const STALL_WINDOW_FRAMES := 16
 const MIN_STALL_WINDOW_PROGRESS := 0.04
@@ -408,6 +413,10 @@ func _walk_step(
 	var reached := false
 	var frame_count := 0
 	var ascent := target.y > previous.y
+	var cautious_descent := target.y < previous.y
+	var peak_horizontal_speed := Vector2(
+		player.velocity.x, player.velocity.z
+	).length()
 	for frame_index in max_step_frames:
 		frame_count = frame_index + 1
 		var before := player.global_position
@@ -415,7 +424,7 @@ func _walk_step(
 			target_position.x - before.x,
 			target_position.z - before.z
 		)
-		_apply_target_steering(offset, player.velocity)
+		_apply_target_steering(offset, player.velocity, cautious_descent)
 		if ascent and jump_attempts == 0:
 			Input.action_press(Actions.JUMP)
 			jump_hold_remaining = JUMP_HOLD_FRAMES
@@ -435,6 +444,7 @@ func _walk_step(
 		var horizontal_speed := Vector2(
 			player.velocity.x, player.velocity.z
 		).length()
+		peak_horizontal_speed = maxf(peak_horizontal_speed, horizontal_speed)
 		if (
 			distance <= TARGET_HORIZONTAL_TOLERANCE
 			and horizontal_speed <= TARGET_SPEED_TOLERANCE
@@ -492,6 +502,8 @@ func _walk_step(
 		"frame_count": frame_count,
 		"stall_windows": stall_windows,
 		"jump_attempts": jump_attempts,
+		"cautious_descent": cautious_descent,
+		"peak_horizontal_speed": peak_horizontal_speed,
 		"minimum_y": minimum_y,
 		"fall": maxf(0.0, starting_y - minimum_y),
 		"start": [
@@ -504,19 +516,26 @@ func _walk_step(
 	}
 
 
-func _apply_target_steering(offset: Vector2, velocity: Vector3) -> void:
+func _apply_target_steering(
+	offset: Vector2, velocity: Vector3, cautious_descent: bool = false
+) -> void:
 	_release_movement_actions()
+	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+	if cautious_descent and horizontal_speed >= DESCENT_APPROACH_SPEED_LIMIT:
+		return
 	_apply_axis_action(
 		offset.x,
 		velocity.x,
 		Actions.MOVE_RIGHT,
-		Actions.MOVE_LEFT
+		Actions.MOVE_LEFT,
+		cautious_descent
 	)
 	_apply_axis_action(
 		offset.y,
 		velocity.z,
 		Actions.MOVE_BACKWARD,
-		Actions.MOVE_FORWARD
+		Actions.MOVE_FORWARD,
+		cautious_descent
 	)
 
 
@@ -524,14 +543,18 @@ func _apply_axis_action(
 	offset: float,
 	velocity: float,
 	positive_action: StringName,
-	negative_action: StringName
+	negative_action: StringName,
+	cautious_descent: bool = false
 ) -> void:
 	var distance := absf(offset)
 	if distance <= STEERING_DEADZONE:
 		return
 	var moving_toward := signf(velocity) == signf(offset)
+	var brake_distance := (
+		DESCENT_BRAKE_DISTANCE if cautious_descent else STEERING_BRAKE_DISTANCE
+	)
 	if (
-		distance <= STEERING_BRAKE_DISTANCE
+		distance <= brake_distance
 		and moving_toward
 		and absf(velocity) > TARGET_SPEED_TOLERANCE
 	):
