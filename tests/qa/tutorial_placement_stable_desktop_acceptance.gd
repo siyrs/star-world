@@ -5,6 +5,9 @@ extends "res://tests/qa/tutorial_placement_desktop_acceptance.gd"
 # This adapter only prevents a transient Camera3D look_at transform from being
 # overwritten while a real left-button harvest is held across physics frames.
 
+const HARVEST_TIMEOUT_MILLISECONDS := 15000
+const AIM_REFRESH_MILLISECONDS := 250
+
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
 	var camera := player.call("get_view_camera") as Camera3D
@@ -32,8 +35,9 @@ func _aim_at(player: Node3D, target: Vector3) -> void:
 
 func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	var player := root.find_child("Player", true, false) as Node3D
+	var target_world: Vector3 = world.call("block_to_world", target)
 	if player != null:
-		await _aim_at(player, world.call("block_to_world", target))
+		await _aim_at(player, target_world)
 	var center := root.get_visible_rect().get_center()
 	var press := InputEventMouseButton.new()
 	press.position = center
@@ -42,12 +46,22 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	press.button_mask = MOUSE_BUTTON_MASK_LEFT
 	press.pressed = true
 	root.push_input(press)
-	for frame_index in MAX_HARVEST_FRAMES:
+
+	# Harvest progress is measured in elapsed seconds by the production service.
+	# A frame-count timeout is invalid because desktop CI can run hundreds of
+	# process frames per second. The policy hard-caps a block at 12 seconds, so a
+	# 15-second monotonic deadline is both deterministic and strictly bounded.
+	var deadline := Time.get_ticks_msec() + HARVEST_TIMEOUT_MILLISECONDS
+	var next_aim_refresh := Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
+	while (
+		str(world.call("get_block", target)) != "air"
+		and Time.get_ticks_msec() < deadline
+	):
 		await process_frame
-		if str(world.call("get_block", target)) == "air":
-			break
-		if player != null and (frame_index + 1) % 30 == 0:
-			await _aim_at(player, world.call("block_to_world", target))
+		if player != null and Time.get_ticks_msec() >= next_aim_refresh:
+			await _aim_at(player, target_world)
+			next_aim_refresh = Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
+
 	var release := InputEventMouseButton.new()
 	release.position = center
 	release.global_position = center
