@@ -148,3 +148,18 @@
 4. 对比优化前后同场景数据，而不是跨机器比较；
 5. 完成严格长稳门槛；
 6. 仅在上述证据满足后关闭商业性能阻塞。
+
+## 9. 2026-08-05 最终包资格链路
+
+PR #101 新增 `data/release_qualification.json`，首次把最低/推荐硬件参考级别、平均 FPS、1% Low、p95/p99、30 FPS 预算、加载时间、Working Set 与严格 7,200 秒长稳写成版本化、机器可判定的产品策略。
+
+最终 Windows 程序不再只运行星辰大陆静态 smoke：
+
+- `ProductionRouteProbe` 进入最终 PCK；
+- `ReleaseSmokeRunner` 支持五图 Profile/Seed 和真实输入路线；
+- soak 与截图阶段禁止写玩家坐标；
+- 报告 schema 4 使用 `FramePerformanceMetrics` 的真实逐帧指标；
+- `run_windows_export_journey_matrix.ps1` 导出一次并复用同一 EXE/PCK 完成五图；
+- `run_target_hardware_qualification.ps1` 在真实机器上强制 7,200 秒、五图循环、操作人和硬件身份。
+
+GitHub 托管 Runner 的输出固定标记为 `hosted_ci_reference`。只有真实最低/推荐机器运行得到的 `target_hardware_candidate`，并经发布负责人核对硬件身份后，才可用于关闭 `BUG-PERF-002` 和 `BUG-SOAK-120-001`。

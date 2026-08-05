@@ -75,8 +75,8 @@ Require-Contains $workflow 'repair_desktop_acceptance.gd' 'Repair desktop journe
 Require-Contains $workflow 'inventory_canonical_roundtrip_regression.gd' 'Repair gate must retain JSON inventory canonicalization regression'
 Require-Contains $workflow 'reusable-godot-quality-gate.yml' 'Repair gate must reuse the authoritative runner'
 
-Require-Contains $matrix '| 修理 | 是 |' 'Content matrix must classify repair as a production-scene journey'
-Require-Contains $matrix '**E3 闭环**' 'Content matrix must record the completed repair loop without claiming E4'
+Require-Contains $matrix '| 修理 | **E3 闭环** |' 'Content matrix must classify repair as a completed production-scene journey'
+Require-Contains $matrix '商业正式发布继续 HOLD' 'Content matrix must retain external E4 and hardware release boundaries'
 
 if ($failures.Count -gt 0) {
     Write-Host 'PLAYER REPAIR CLOSED LOOP CONTRACT FAIL'

@@ -1,6 +1,8 @@
 class_name HarvestEnabledPlayer
 extends "res://src/player/first_person_player.gd"
 
+const PRIMARY_RAYCAST_ATTEMPTS := 2
+
 var tool_service: Node
 var harvest_service: Node
 var _primary_action_held := false
@@ -24,9 +26,24 @@ func bind_harvest_service(p_harvest_service: Node) -> void:
 
 func set_input_enabled(enabled: bool) -> void:
 	if not enabled:
-		_primary_action_held = false
-		_cancel_harvest("input_disabled")
+		set_primary_action_active(false, "input_disabled")
 	super.set_input_enabled(enabled)
+
+
+func set_primary_action_active(
+	active: bool,
+	release_reason: String = "released"
+) -> void:
+	if active and not input_enabled:
+		set_primary_action_active(false, "input_disabled")
+		return
+	if _primary_action_held == active:
+		return
+	_primary_action_held = active
+	if active:
+		_start_primary_action()
+	else:
+		_cancel_harvest(release_reason)
 
 
 func _process(delta: float) -> void:
@@ -42,23 +59,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if mouse_event != null and mouse_event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			return
-		_primary_action_held = mouse_event.pressed
-		if mouse_event.pressed:
-			_start_primary_action()
-		else:
-			_cancel_harvest("released")
+		set_primary_action_active(mouse_event.pressed, "released")
 		get_viewport().set_input_as_handled()
 		return
 	super._unhandled_input(event)
 
 
 func break_target_block() -> bool:
-	interaction_ray.force_raycast_update()
-	if not interaction_ray.is_colliding():
-		return false
-	var collider = interaction_ray.get_collider()
-	if collider != null and collider.has_method("take_damage"):
-		return _try_attack_entity(collider)
+	# Physics collision is authoritative for living entities. Block-capable
+	# subclasses may additionally resolve a voxel from the grid ray when a freshly
+	# rebuilt chunk has not published its collision shape yet.
+	if _refresh_interaction_ray():
+		var collider = interaction_ray.get_collider()
+		if collider != null and collider.has_method("take_damage"):
+			return _try_attack_entity(collider)
 	if harvest_service == null:
 		return super.break_target_block()
 	var target := _resolve_harvest_target()
@@ -75,17 +89,23 @@ func break_target_block() -> bool:
 
 
 func _start_primary_action() -> void:
-	interaction_ray.force_raycast_update()
-	if not interaction_ray.is_colliding():
+	# Check a live physics collider only for entity attacks. Voxel targeting is a
+	# virtual policy boundary: PrecisionInteractionPlayer can resolve the same
+	# visible block through its deterministic grid ray even while dynamic chunk
+	# collision is between rebuild generations. Requiring physics collision here
+	# would make the crosshair show a valid block while the first click is dropped.
+	if _refresh_interaction_ray():
+		var collider = interaction_ray.get_collider()
+		if collider != null and collider.has_method("take_damage"):
+			_primary_action_held = false
+			_try_attack_entity(collider)
+			return
+	var target := _resolve_harvest_target()
+	if target.is_empty():
 		_primary_action_held = false
 		_cancel_harvest("no_target")
 		return
-	var collider = interaction_ray.get_collider()
-	if collider != null and collider.has_method("take_damage"):
-		_primary_action_held = false
-		_try_attack_entity(collider)
-		return
-	_advance_harvest(0.0)
+	_advance_resolved_harvest(target, 0.0)
 
 
 func _try_attack_entity(_collider: Node) -> bool:
@@ -105,6 +125,10 @@ func _advance_harvest(delta: float) -> void:
 		_primary_action_held = false
 		_cancel_harvest("target_lost")
 		return
+	_advance_resolved_harvest(target, delta)
+
+
+func _advance_resolved_harvest(target: Dictionary, delta: float) -> void:
 	var result: Dictionary = harvest_service.call(
 		"advance",
 		world,
@@ -121,10 +145,13 @@ func _advance_harvest(delta: float) -> void:
 
 
 func _resolve_harvest_target() -> Dictionary:
-	if world == null:
+	if world == null or not _refresh_interaction_ray():
 		return {}
-	interaction_ray.force_raycast_update()
-	if not interaction_ray.is_colliding():
+	return _harvest_target_from_current_ray()
+
+
+func _harvest_target_from_current_ray() -> Dictionary:
+	if world == null or interaction_ray == null or not interaction_ray.is_colliding():
 		return {}
 	var collider = interaction_ray.get_collider()
 	if collider != null and collider.has_method("take_damage"):
@@ -136,6 +163,16 @@ func _resolve_harvest_target() -> Dictionary:
 	if block_id == BlockRegistryScript.AIR:
 		return {}
 	return {"position": block_position, "block_id": block_id}
+
+
+func _refresh_interaction_ray() -> bool:
+	if interaction_ray == null:
+		return false
+	for _attempt in PRIMARY_RAYCAST_ATTEMPTS:
+		interaction_ray.force_raycast_update()
+		if interaction_ray.is_colliding():
+			return true
+	return false
 
 
 func _handle_harvest_result(result: Dictionary) -> bool:

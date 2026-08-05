@@ -175,8 +175,8 @@ func _run() -> void:
 		"get_entity_prompt", focus, ""
 	)
 	_check(
-		str(product_prompt.get("subtitle", "")).contains("下次鸡蛋"),
-		"chicken prompt exposes the next egg timer",
+		str(product_prompt.get("subtitle", "")).contains("鸡蛋待收集 ×1"),
+		"chicken prompt exposes the conserved pending egg before collection",
 	)
 
 	await _aim_at(player, chicken.global_position + Vector3(0.0, 0.55, 0.0))
@@ -194,6 +194,13 @@ func _run() -> void:
 	_check(
 		hub.inventory.count_item("egg") == 1,
 		"player collects the produced egg through world pickup physics",
+	)
+	var collected_prompt: Dictionary = hub.husbandry_interaction.call(
+		"get_entity_prompt", focus, ""
+	)
+	_check(
+		str(collected_prompt.get("subtitle", "")).contains("下次鸡蛋"),
+		"chicken prompt exposes the next egg timer after collection",
 	)
 	var furnace_recipes: Variant = hub.furnace_service.get("recipes")
 	_check(

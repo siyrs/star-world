@@ -12,19 +12,20 @@ extends SceneTree
 
 const GameScene = preload("res://scenes/game/game.tscn")
 const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
+const RouteProbeScript = preload("res://src/diagnostics/production_route_probe.gd")
 
 const QA_PREFIX := "qa-v130-soak-"
 const JOURNEY_SEED := 112358
 const READY_FRAMES := 720
 const CLEANUP_FRAMES := 60
 const WANDER_FRAMES := 300
-const MOVE_INTERVAL := 24
 
 var checks := 0
 var failures: Array[String] = []
 var _created_world_ids: Array[String] = []
 var _cycles: Array[Dictionary] = []
 var _soak_seconds := 600
+var _minimum_cycles := 5
 var _start_msec := 0
 
 var _game: Node
@@ -38,6 +39,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_soak_seconds = maxi(60, int(_user_argument("soak-seconds", "600")))
+	_minimum_cycles = clampi(int(_user_argument("minimum-cycles", "5")), 2, 100)
 	root.size = Vector2i(1280, 720)
 	root.content_scale_size = Vector2i(1280, 720)
 	_start_msec = Time.get_ticks_msec()
@@ -55,12 +57,12 @@ func _run() -> void:
 
 	var profile_ids := MapProfileCatalogScript.get_ids()
 	var cycle := 0
-	while _elapsed_seconds() < _soak_seconds:
+	while _elapsed_seconds() < _soak_seconds or cycle < _minimum_cycles:
 		var profile_id: String = profile_ids[cycle % profile_ids.size()]
 		await _soak_cycle(profile_id, cycle)
 		cycle += 1
 	print("SOAK_COMPLETE cycles=%d elapsed=%ds" % [cycle, _elapsed_seconds()])
-	_evaluate_trend()
+	_evaluate_trend(profile_ids)
 	_write_report()
 	await _finish()
 
@@ -83,20 +85,36 @@ func _soak_cycle(profile_id: String, cycle: int) -> void:
 		_check(false, "soak cycle %d (%s) enters the world" % [cycle, profile_id])
 		return
 
-	# Wander with movement pressure, sampling frame times.
+	# Generate real streaming and movement pressure through the production input
+	# route probe. No cycle is allowed to write the player transform after spawn.
+	var player: CharacterBody3D = _game.get("player")
+	var world: Node = _game.get("world") as Node
+	var route_probe = RouteProbeScript.new()
+	var route_result: Dictionary = await route_probe.execute(
+		self,
+		world,
+		player,
+		profile_id,
+		JOURNEY_SEED + cycle,
+		{
+			"min_route_steps": 12,
+			"target_route_steps": 18,
+			"min_route_displacement": 8.0,
+		}
+	)
+	_check(bool(route_result.get("ok", false)), "soak cycle %d (%s) completes production-input route pressure" % [cycle, profile_id])
+	_check(int(route_result.get("player_transform_writes", -1)) == 0, "soak cycle %d (%s) performs no post-spawn transport" % [cycle, profile_id])
+
+	# Sample a bounded settle window after the live route so frame trends remain
+	# comparable across cycles and profiles.
 	var frame_ms: Array[float] = []
 	var last_usec := Time.get_ticks_usec()
-	var player: CharacterBody3D = _game.get("player")
-	var origin: Vector3 = player.global_position if player != null else Vector3.ZERO
 	var max_pending := 0
 	for frame_index in WANDER_FRAMES:
 		await process_frame
 		var now_usec := Time.get_ticks_usec()
 		frame_ms.append(float(now_usec - last_usec) / 1000.0)
 		last_usec = now_usec
-		if player != null and frame_index % MOVE_INTERVAL == 0:
-			var leg := frame_index / MOVE_INTERVAL
-			player.global_position = origin + Vector3(float(leg % 6) * 10.0, 0.0, float(leg / 6 % 6) * 10.0)
 		if frame_index % 60 == 0:
 			var diagnostics: Node = _game.get("runtime_diagnostics")
 			if diagnostics != null:
@@ -117,6 +135,8 @@ func _soak_cycle(profile_id: String, cycle: int) -> void:
 		"frame_ms_avg": _average(frame_ms),
 		"frame_ms_p95": p95,
 		"max_pending_chunks": max_pending,
+		"route": route_result,
+		"post_spawn_transport": false,
 		"elapsed_s": _elapsed_seconds(),
 	})
 	print(
@@ -125,8 +145,11 @@ func _soak_cycle(profile_id: String, cycle: int) -> void:
 	)
 
 
-func _evaluate_trend() -> void:
-	_check(_cycles.size() >= 2, "soak completes at least 2 cycles (got %d)" % _cycles.size())
+func _evaluate_trend(profile_ids: Array) -> void:
+	_check(
+		_cycles.size() >= _minimum_cycles,
+		"soak completes the minimum %d cycles (got %d)" % [_minimum_cycles, _cycles.size()]
+	)
 	if _cycles.size() < 2:
 		return
 	var first_p95 := float(_cycles[0].get("frame_ms_p95", 0.0))
@@ -138,9 +161,11 @@ func _evaluate_trend() -> void:
 	var profiles_seen: Dictionary = {}
 	for cycle_data: Dictionary in _cycles:
 		profiles_seen[str(cycle_data.get("profile", ""))] = true
+	var required_profile_count := mini(profile_ids.size(), _minimum_cycles)
 	_check(
-		profiles_seen.size() >= mini(5, _cycles.size()),
-		"soak spans multiple profiles (%d distinct)" % profiles_seen.size()
+		profiles_seen.size() >= required_profile_count,
+		"soak spans all required profiles (%d / %d distinct)"
+		% [profiles_seen.size(), required_profile_count]
 	)
 
 
@@ -148,10 +173,17 @@ func _write_report() -> void:
 	var output := _user_argument("soak-output", "")
 	if output.is_empty():
 		return
+	var profiles_seen: Array[String] = []
+	for cycle_data: Dictionary in _cycles:
+		var profile_id := str(cycle_data.get("profile", ""))
+		if not profile_id.is_empty() and profile_id not in profiles_seen:
+			profiles_seen.append(profile_id)
 	var report := {
-		"schema_version": 1,
+		"schema_version": 2,
 		"soak_seconds_target": _soak_seconds,
+		"minimum_cycles_target": _minimum_cycles,
 		"elapsed_seconds": _elapsed_seconds(),
+		"unique_profiles": profiles_seen,
 		"cycles": _cycles,
 		"checks": checks,
 		"failures": failures,

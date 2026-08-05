@@ -1,0 +1,219 @@
+name: Release readiness closure quality gates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-readiness-closure-tests.yml'
+      - '.github/workflows/godot-tests.yml'
+      - 'data/release_qualification.json'
+      - 'qa/**'
+      - 'src/core/**'
+      - 'src/diagnostics/**'
+      - 'src/experience/**'
+      - 'src/input/**'
+      - 'src/player/**'
+      - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
+      - 'tests/ci/run_long_soak.ps1'
+      - 'tests/release/**'
+      - 'tests/developer_b/validate_release_readiness_closure.ps1'
+      - 'tests/qa/tutorial_placement_desktop_acceptance.gd'
+      - 'tests/qa/tutorial_placement_stable_desktop_acceptance.gd'
+      - 'tests/qa/building_mining_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/long_soak_journey.gd'
+      - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
+      - 'tests/qa/release_smoke_evidence_state_regression.gd'
+      - 'tests/qa/sky_islands_cautious_descent_regression.gd'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-readiness-closure-tests.yml'
+      - '.github/workflows/godot-tests.yml'
+      - 'data/release_qualification.json'
+      - 'qa/**'
+      - 'src/core/**'
+      - 'src/diagnostics/**'
+      - 'src/experience/**'
+      - 'src/input/**'
+      - 'src/player/**'
+      - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
+      - 'tests/ci/run_long_soak.ps1'
+      - 'tests/release/**'
+      - 'tests/developer_b/validate_release_readiness_closure.ps1'
+      - 'tests/qa/tutorial_placement_desktop_acceptance.gd'
+      - 'tests/qa/tutorial_placement_stable_desktop_acceptance.gd'
+      - 'tests/qa/building_mining_closed_loop_desktop_acceptance.gd'
+      - 'tests/qa/long_soak_journey.gd'
+      - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
+      - 'tests/qa/release_smoke_evidence_state_regression.gd'
+      - 'tests/qa/sky_islands_cautious_descent_regression.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-readiness-closure-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  content-and-contract:
+    name: Cross-session content and release contracts
+    runs-on: windows-latest
+    timeout-minutes: 65
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Validate release-readiness contract
+        shell: pwsh
+        run: .\tests\developer_b\validate_release_readiness_closure.ps1
+
+      - name: Validate release smoke runtime health scope
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_runtime_health_scope_regression.gd'
+
+      - name: Validate release smoke tutorial-free evidence state
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_evidence_state_regression.gd'
+
+      - name: Validate sky-island cautious descent on the exact failing seed
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --rendering-method gl_compatibility --script res://tests/qa/sky_islands_cautious_descent_regression.gd' -TimeoutMilliseconds 900000
+
+      - name: Tutorial interruption completion and double reload
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/tutorial_placement_stable_desktop_acceptance.gd' `
+            -OutputPath 'build\tutorial-closed-loop.png' `
+            -TimeoutMilliseconds 2400000
+
+      - name: Building mining failure conservation and reload
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/building_mining_closed_loop_desktop_acceptance.gd' `
+            -OutputPath 'build\building-mining-closed-loop.png' `
+            -TimeoutMilliseconds 2400000
+
+      - name: Re-review combat reward death and reload boundary
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/encounter_reward_economy_desktop_acceptance.gd' `
+            -OutputPath 'build\combat-reward-rereview.png' `
+            -TimeoutMilliseconds 2400000
+
+      - name: Upload content closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-content-closure-${{ github.run_number }}
+          path: |
+            build/tutorial-closed-loop.*
+            build/building-mining-closed-loop.*
+            build/combat-reward-rereview.*
+          if-no-files-found: error
+          retention-days: 21
+
+  exported-five-profile-routes:
+    name: Final Windows executable five-profile routes
+    needs: content-and-contract
+    runs-on: windows-latest
+    timeout-minutes: 100
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot with export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Export once and traverse all five profiles
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\release\run_windows_export_journey_matrix.ps1 `
+            -Godot $godotPath `
+            -OutputDirectory 'build\release-journey-matrix' `
+            -QualificationTier hosted-ci-reference
+
+      - name: Upload final executable route evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-five-profile-routes-${{ github.run_number }}
+          path: build/release-journey-matrix/**
+          if-no-files-found: error
+          retention-days: 21
+
+  hosted-reference-soak:
+    name: No-transport long-soak mechanism
+    needs: content-and-contract
+    runs-on: windows-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Run hosted reference soak
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_long_soak.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -OutputDirectory 'build\release-reference-soak' `
+            -SoakSeconds 240 `
+            -MinimumCycles 5
+          $report = Get-Content '.\build\release-reference-soak\soak-report.json' -Raw | ConvertFrom-Json
+          if ([int]$report.schema_version -ne 2) { throw 'Long-soak schema is not the no-transport v2 contract.' }
+          if ([int]$report.minimum_cycles_target -lt 5) { throw 'Long-soak report does not retain the five-cycle minimum.' }
+          $cycles = @($report.cycles)
+          if ($cycles.Count -lt 5) { throw "Long-soak completed $($cycles.Count) cycles; expected at least 5." }
+          $profiles = @($cycles | ForEach-Object { [string]$_.profile } | Sort-Object -Unique)
+          if ($profiles.Count -ne 5) { throw "Long-soak covered $($profiles.Count) profiles; expected all five." }
+          $transported = @($cycles | Where-Object { [bool]$_.post_spawn_transport -or [int]$_.route.player_transform_writes -ne 0 })
+          if ($transported.Count -ne 0) { throw 'Long-soak report contains post-spawn transport.' }
+
+      - name: Upload hosted soak evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-reference-soak-${{ github.run_number }}
+          path: build/release-reference-soak/**
+          if-no-files-found: error
+          retention-days: 21

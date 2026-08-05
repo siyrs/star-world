@@ -15,13 +15,19 @@ param(
     [Parameter(Mandatory = $true)][string]$Arguments,
     # Godot executable; defaults to the one on PATH (CI) but accepts an explicit path.
     [string]$Godot = 'godot',
+    # Optional project working directory. Defaults to the repository root.
+    [string]$WorkingDirectory = '',
     # Fail if Godot does not exit within this budget.
     [int]$TimeoutMilliseconds = 600000
 )
 
 $ErrorActionPreference = 'Stop'
 
-$projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$projectRoot = if ([string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+    [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+} else {
+    [System.IO.Path]::GetFullPath($WorkingDirectory)
+}
 
 # A bare name (e.g. 'godot') must be resolved through PowerShell first:
 # System.Diagnostics.Process does not find the extension-less symlink that

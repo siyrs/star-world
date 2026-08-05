@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "product": "Star World",
+  "platform": "Windows x86_64",
+  "rendering_method": "gl_compatibility",
+  "resolution": [1280, 720],
+  "tiers": {
+    "minimum": {
+      "cpu_reference": "Intel Core i5-8400 or AMD Ryzen 5 2600 class (6 physical cores)",
+      "memory_gib_min": 16,
+      "gpu_reference": "NVIDIA GeForce GTX 1060 6GB or AMD Radeon RX 580 8GB class",
+      "storage": "SSD",
+      "metrics": {
+        "avg_fps_min": 30.0,
+        "one_percent_low_fps_min": 20.0,
+        "frame_ms_p95_max": 50.0,
+        "frame_ms_p99_max": 100.0,
+        "frame_budget_miss_30fps_percent_max": 20.0,
+        "profile_load_ms_max": 10000,
+        "working_set_p95_mib_max": 4096
+      }
+    },
+    "recommended": {
+      "cpu_reference": "Intel Core i5-12400 or AMD Ryzen 5 5600 class (6 physical cores)",
+      "memory_gib_min": 16,
+      "gpu_reference": "NVIDIA GeForce RTX 2060 6GB or AMD Radeon RX 6600 8GB class",
+      "storage": "SSD",
+      "metrics": {
+        "avg_fps_min": 60.0,
+        "one_percent_low_fps_min": 45.0,
+        "frame_ms_p95_max": 22.22,
+        "frame_ms_p99_max": 33.33,
+        "frame_budget_miss_30fps_percent_max": 1.0,
+        "profile_load_ms_max": 6000,
+        "working_set_p95_mib_max": 6144
+      }
+    }
+  },
+  "soak": {
+    "duration_seconds_min": 7200,
+    "all_profiles_required": true,
+    "minimum_completed_routes": 10,
+    "fatal_diagnostics_max": 0,
+    "memory_growth_percent_max": 25.0,
+    "route_transport_after_spawn_max": 0
+  }
+}
