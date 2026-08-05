@@ -52,6 +52,12 @@ func _run() -> void:
 	var player: Node3D = game.player
 	var world: Node = game.world
 	var experience: Node = hub.player_experience
+	var completion_events: Array[int] = [0]
+	var onboarding_service: Node = experience.call("get_onboarding") as Node
+	if onboarding_service != null:
+		onboarding_service.tutorial_completed.connect(
+			func() -> void: completion_events[0] += 1
+		)
 	var onboarding: Dictionary = experience.call("get_status").get("onboarding", {})
 	_check(_step_id(onboarding) == "move", "new-world tutorial starts at movement")
 
@@ -83,6 +89,32 @@ func _run() -> void:
 		str(_onboarding_state(experience).get("step", {}).get("description", "")).contains("按住"),
 		"the live tutorial tells the player to hold the mining button",
 	)
+
+	# Interrupt the six-step journey through the production F1 guidance toggle,
+	# authoritative save, menu return, and full world re-entry.
+	await _tap_key(KEY_F1)
+	_check(bool(_onboarding_state(experience).get("dismissed", false)), "F1 hides the live tutorial without advancing it")
+	_check(bool(hub.save_current()), "mid-tutorial progress joins the authoritative save")
+	var interrupted_loaded: Dictionary = hub.save_service.load_world(_created_world_id)
+	var interrupted_onboarding: Dictionary = interrupted_loaded.get("experience", {}).get("onboarding", {})
+	_check(
+		int(interrupted_onboarding.get("current_index", -1)) == 2
+		and bool(interrupted_onboarding.get("dismissed", false)),
+		"saved world contains the exact interrupted tutorial domain",
+	)
+	hub.return_to_menu()
+	for _frame in 10:
+		await process_frame
+	game.begin_world_state(interrupted_loaded)
+	_check(await _wait_for_world_ready(game, hub), "interrupted tutorial completes a full production reload")
+	player = game.player
+	world = game.world
+	experience = hub.player_experience
+	_check(_current_step(experience) == "mine", "reload resumes the exact mining step")
+	_check(bool(_onboarding_state(experience).get("dismissed", false)), "reload preserves the hidden guidance state")
+	_check(completion_events[0] == 0, "interrupted reload cannot replay tutorial completion")
+	await _tap_key(KEY_F1)
+	_check(not bool(_onboarding_state(experience).get("dismissed", true)), "F1 restores the tutorial after re-entry")
 
 	var camera: Camera3D = player.call("get_view_camera")
 	var player_block: Vector3i = world.call("world_to_block", player.global_position)
@@ -155,19 +187,52 @@ func _run() -> void:
 	_check(bool(player.get("input_enabled")), "closing the journey overlays restores player input")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "closing the journey overlays recaptures the mouse")
 
+	var completed_inventory: Dictionary = hub.inventory.serialize()
 	_check(bool(hub.save_current()), "completed tutorial participates in the world save transaction")
 	var loaded: Dictionary = hub.save_service.load_world(_created_world_id)
 	_check(
 		bool(loaded.get("experience", {}).get("onboarding", {}).get("completed", false)),
-		"completed tutorial survives a real save and reload",
+		"completed tutorial survives the authoritative save file",
 	)
-	await _aim_at(player, world.call("block_to_world", anchor))
+	_check(completion_events[0] == 1, "the six-step journey emits tutorial completion exactly once")
+	hub.return_to_menu()
+	for _frame in 10:
+		await process_frame
+	game.begin_world_state(loaded)
+	_check(await _wait_for_world_ready(game, hub), "completed tutorial completes a second full production reload")
+	player = game.player
+	world = game.world
+	experience = hub.player_experience
+	_check(bool(_onboarding_state(experience).get("completed", false)), "completed tutorial remains completed after menu re-entry")
+	_check(_current_step(experience).is_empty(), "completed tutorial does not resurrect an old step")
+	_check(completion_events[0] == 1, "completed reload does not replay tutorial completion feedback")
+	_check(hub.inventory.serialize() == completed_inventory, "tutorial reload restores exact inventory without duplication")
+	_check(str(world.call("get_block", expected_placement)) == "planks", "tutorial placement survives the full reload")
+	_check(bool(player.get("input_enabled")), "completed tutorial reload remains playable")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "completed tutorial reload restores mouse capture")
+	await _aim_at(player, world.call("block_to_world", expected_placement))
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	_check(image != null and not image.is_empty(), "tutorial placement viewport produces a rendered frame")
 	if image != null and not image.is_empty():
 		_save_image(image)
 	await _finish(game, hub)
+
+
+func _wait_for_world_ready(game: Node, hub: Node) -> bool:
+	for _frame in 360:
+		await process_frame
+		var candidate_world: Node = game.get("world") as Node if is_instance_valid(game) else null
+		var candidate_player: Node = game.get("player") as Node if is_instance_valid(game) else null
+		if (
+			candidate_world != null
+			and candidate_player != null
+			and bool(candidate_world.get("is_started"))
+			and str(hub.get("current_world_id")) == _created_world_id
+			and bool(candidate_player.get("input_enabled"))
+		):
+			return true
+	return false
 
 
 func _prepare_target_corridor(world: Node, player_block: Vector3i, target: Vector3i) -> void:

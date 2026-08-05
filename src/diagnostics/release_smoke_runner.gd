@@ -2,44 +2,72 @@ class_name ReleaseSmokeRunner
 extends Node
 
 const VisualPolicy = preload("res://src/diagnostics/visual_acceptance_policy.gd")
+const RouteProbeScript = preload("res://src/diagnostics/production_route_probe.gd")
+const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
+const Actions = preload("res://src/input/gameplay_input_actions.gd")
+const FrameMetricsScript = preload("res://src/core/frame_performance_metrics.gd")
 const DEFAULT_REPORT_PATH := "user://release-smoke.json"
 const SMOKE_WORLD_ID := "release-smoke-runtime"
 const TELEMETRY_STABILIZATION_FRAMES := 12
 const DEFAULT_SOAK_FRAMES := 180
 const SOAK_SAMPLE_INTERVAL_FRAMES := 30
-const SOAK_MOVE_INTERVAL_FRAMES := 60
 const EVIDENCE_SETTLE_FRAMES := 18
 const AUDIO_SHUTDOWN_SETTLE_FRAMES := 4
 const FINAL_CLEANUP_FRAMES := 6
+const DEFAULT_PROFILE_ID := "star_continent"
+const DEFAULT_SEED := 24681357
 
 var game: Node
 var report_path := DEFAULT_REPORT_PATH
 var screenshot_path := "user://release-smoke.png"
 var soak_frames := DEFAULT_SOAK_FRAMES
+var profile_id := DEFAULT_PROFILE_ID
+var seed := DEFAULT_SEED
+var route_probe_enabled := false
 var checks := 0
 var failures: Array[String] = []
 var _world_started := false
 var _world_start_failure := ""
+var _world_start_ms := 0
 
 
 static func configuration_from_arguments(arguments: PackedStringArray) -> Dictionary:
 	var enabled := false
 	var output := DEFAULT_REPORT_PATH
 	var configured_soak_frames := DEFAULT_SOAK_FRAMES
+	var configured_profile := DEFAULT_PROFILE_ID
+	var configured_seed := DEFAULT_SEED
+	var configured_route_probe := false
 	for argument in arguments:
 		if argument == "--release-smoke":
 			enabled = true
+		elif argument == "--smoke-route-probe":
+			configured_route_probe = true
 		elif argument.begins_with("--smoke-output="):
 			output = argument.trim_prefix("--smoke-output=").strip_edges()
 		elif argument.begins_with("--smoke-soak-frames="):
 			var raw_frames := argument.trim_prefix("--smoke-soak-frames=").strip_edges()
 			if raw_frames.is_valid_int():
 				configured_soak_frames = clampi(int(raw_frames), 60, 600)
+		elif argument.begins_with("--smoke-profile="):
+			configured_profile = argument.trim_prefix("--smoke-profile=").strip_edges()
+		elif argument.begins_with("--smoke-seed="):
+			var raw_seed := argument.trim_prefix("--smoke-seed=").strip_edges()
+			if raw_seed.is_valid_int():
+				configured_seed = int(raw_seed)
 	if not enabled:
 		return {}
 	if output.is_empty():
 		output = DEFAULT_REPORT_PATH
-	return {"report_path": output, "soak_frames": configured_soak_frames}
+	if configured_profile not in MapProfileCatalogScript.get_ids():
+		configured_profile = DEFAULT_PROFILE_ID
+	return {
+		"report_path": output,
+		"soak_frames": configured_soak_frames,
+		"profile_id": configured_profile,
+		"seed": configured_seed,
+		"route_probe": configured_route_probe,
+	}
 
 
 func configure(p_game: Node, configuration: Dictionary) -> void:
@@ -49,6 +77,9 @@ func configure(p_game: Node, configuration: Dictionary) -> void:
 	soak_frames = clampi(
 		int(configuration.get("soak_frames", DEFAULT_SOAK_FRAMES)), 60, 600
 	)
+	profile_id = str(configuration.get("profile_id", DEFAULT_PROFILE_ID))
+	seed = int(configuration.get("seed", DEFAULT_SEED))
+	route_probe_enabled = bool(configuration.get("route_probe", false))
 
 
 func _ready() -> void:
@@ -65,12 +96,14 @@ func _run() -> void:
 		return
 	_world_started = false
 	_world_start_failure = ""
+	var world_start_begin := Time.get_ticks_msec()
 	game.connect("world_started", Callable(self, "_on_world_started"), CONNECT_ONE_SHOT)
 	game.connect("world_start_failed", Callable(self, "_on_world_start_failed"), CONNECT_ONE_SHOT)
 	game.call("begin_world_state", _smoke_world_state())
 	await get_tree().process_frame
 	await get_tree().physics_frame
 	await get_tree().process_frame
+	_world_start_ms = Time.get_ticks_msec() - world_start_begin
 	_check(_world_started, "world_started:%s" % _world_start_failure)
 	var hub: Node = game.get("service_hub")
 	var world: Node = game.get("world")
@@ -101,6 +134,17 @@ func _run() -> void:
 		)
 	for _frame in TELEMETRY_STABILIZATION_FRAMES:
 		await get_tree().process_frame
+	var route_result: Dictionary = {}
+	if route_probe_enabled:
+		var route_probe = RouteProbeScript.new()
+		route_result = await route_probe.execute(
+			get_tree(), world, player, profile_id, seed
+		)
+		_check(bool(route_result.get("ok", false)), "production_input_route_probe_passes")
+		_check(
+			int(route_result.get("player_transform_writes", -1)) == 0,
+			"route_probe_never_writes_player_transform"
+		)
 	var soak_result: Dictionary = await _run_runtime_soak(world, player, diagnostics)
 	_check(bool(soak_result.get("ok", false)), "runtime_soak_stays_bounded")
 	var evidence_result: Dictionary = await _prepare_visual_evidence(world, player)
@@ -112,7 +156,7 @@ func _run() -> void:
 	if image != null and not image.is_empty():
 		_ensure_output_directory(screenshot_path)
 		_check(image.save_png(screenshot_path) == OK, "screenshot_saved")
-	await _finish(visual_result, diagnostics, soak_result, evidence_result)
+	await _finish(visual_result, diagnostics, soak_result, evidence_result, route_result)
 
 
 func _on_world_started(_profile_id: String, _seed: int, _world_id: String) -> void:
@@ -130,26 +174,25 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	var max_loaded := 0
 	var critical_samples := 0
 	var samples := 0
-	var start_position: Vector3 = world.call("get_spawn_position")
+	var frame_times_ms: Array[float] = []
+	var engine_fps_samples: Array[float] = []
+	var previous_usec := Time.get_ticks_usec()
+	# Movement pressure is supplied by the production route probe. The soak phase
+	# deliberately performs no coordinate mutation; it observes the live endpoint
+	# and adaptive streaming state for a bounded number of frames.
 	for frame_index in soak_frames:
-		if frame_index > 0 and frame_index % SOAK_MOVE_INTERVAL_FRAMES == 0:
-			var leg := floori(float(frame_index) / float(SOAK_MOVE_INTERVAL_FRAMES))
-			var candidate := start_position + Vector3(
-				float(leg * 20), 4.0, float((leg % 2) * 18)
-			)
-			var resolved = world.call("resolve_ground_position", candidate)
-			if resolved is Vector3:
-				player.global_position = resolved
-				if player.has_method("reset_motion"):
-					player.call("reset_motion")
 		await get_tree().process_frame
+		var now_usec := Time.get_ticks_usec()
+		frame_times_ms.append(float(now_usec - previous_usec) / 1000.0)
+		previous_usec = now_usec
 		if frame_index % SOAK_SAMPLE_INTERVAL_FRAMES != 0:
 			continue
+		engine_fps_samples.append(float(Engine.get_frames_per_second()))
 		var snapshot: Dictionary = diagnostics.call("sample_now")
 		var streaming: Dictionary = snapshot.get("streaming", {})
 		max_pending = maxi(max_pending, int(streaming.get("pending", 0)))
 		max_loaded = maxi(max_loaded, int(streaming.get("loaded", 0)))
-		if frame_index >= SOAK_MOVE_INTERVAL_FRAMES:
+		if frame_index >= SOAK_SAMPLE_INTERVAL_FRAMES:
 			var health: Dictionary = snapshot.get("health", {})
 			if str(health.get("status", "healthy")) == "critical":
 				critical_samples += 1
@@ -159,6 +202,9 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	var profile: Dictionary = adaptive.get("profile", {})
 	var budget_ms := float(profile.get("budget_ms", 0.0))
 	var change_count := int(adaptive.get("change_count", 0))
+	var frame_metrics: Dictionary = FrameMetricsScript.summarize(
+		frame_times_ms, engine_fps_samples
+	)
 	var bounded := (
 		max_pending <= 128
 		and max_loaded <= 96
@@ -180,6 +226,9 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 		"adaptive_change_count": change_count,
 		"adaptive_level": str(adaptive.get("level_name", "unknown")),
 		"adaptive_budget_ms": budget_ms,
+		"movement_pressure": "production_route_probe" if route_probe_enabled else "stationary",
+		"player_transform_writes": 0,
+		"frame_metrics": frame_metrics,
 		"final_snapshot": final_snapshot,
 	}
 
@@ -187,12 +236,8 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 func _prepare_visual_evidence(world: Node, player: Node3D) -> Dictionary:
 	if world == null or player == null:
 		return {"ok": false, "reason": "runtime_missing"}
-	var evidence_position: Vector3 = world.call("get_spawn_position")
-	if world.has_method("resolve_ground_position"):
-		var grounded = world.call("resolve_ground_position", evidence_position)
-		if grounded is Vector3:
-			evidence_position = grounded
-	player.global_position = evidence_position
+	# Capture the actual production-route endpoint. Do not transport the player
+	# back to spawn merely to make a convenient screenshot.
 	if player.has_method("reset_motion"):
 		player.call("reset_motion")
 	if player.has_method("restore_orientation"):
@@ -227,6 +272,8 @@ func _prepare_visual_evidence(world: Node, player: Node3D) -> Dictionary:
 		"focus_chunk_renderable": chunk_ready,
 		"camera_current": camera_ready,
 		"look_pitch_degrees": -24.0,
+		"captured_at_route_endpoint": route_probe_enabled,
+		"player_transform_writes": 0,
 		"player_position": [
 			player.global_position.x,
 			player.global_position.y,
@@ -239,7 +286,8 @@ func _finish(
 	visual_result: Dictionary = {},
 	diagnostics: Node = null,
 	soak_result: Dictionary = {},
-	evidence_result: Dictionary = {}
+	evidence_result: Dictionary = {},
+	route_result: Dictionary = {}
 ) -> void:
 	var telemetry_snapshot: Dictionary = {}
 	if diagnostics != null and diagnostics.has_method("sample_now"):
@@ -247,13 +295,18 @@ func _finish(
 	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
 	var payload := {
-		"version": 3,
+		"version": 4,
 		"ok": failures.is_empty(),
 		"checks": checks,
 		"failures": failures,
 		"generated_at": Time.get_datetime_string_from_system(),
 		"report_path": report_path,
 		"screenshot_path": screenshot_path,
+		"profile_id": profile_id,
+		"seed": seed,
+		"route_probe_enabled": route_probe_enabled,
+		"world_start_ms": _world_start_ms,
+		"route": route_result,
 		"visual": visual_result,
 		"visual_evidence": evidence_result,
 		"soak": soak_result,
@@ -282,6 +335,15 @@ func _finish(
 
 
 func _cleanup_runtime() -> void:
+	for action: StringName in [
+		Actions.MOVE_FORWARD,
+		Actions.MOVE_BACKWARD,
+		Actions.MOVE_LEFT,
+		Actions.MOVE_RIGHT,
+		Actions.JUMP,
+		Actions.SPRINT,
+	]:
+		Input.action_release(action)
 	if game == null or not is_instance_valid(game):
 		return
 	var tree_root := get_tree().root
@@ -327,8 +389,8 @@ func _smoke_world_state() -> Dictionary:
 		"metadata": {
 			"id": SMOKE_WORLD_ID,
 			"name": "Release Smoke",
-			"map_id": "star_continent",
-			"seed": 24681357,
+			"map_id": profile_id,
+			"seed": seed,
 		},
 		"player": {"position": [], "rotation": [0.0, 0.0, 0.0], "look_pitch": 0.0},
 		"inventory": {},

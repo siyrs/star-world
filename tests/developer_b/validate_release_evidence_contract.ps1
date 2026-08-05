@@ -54,19 +54,21 @@ Require-Contains $workflow 'pull_request:' 'The evidence gate must run automatic
 Require-Contains $workflow 'reusable-godot-quality-gate.yml' 'The gate must reuse the authoritative Godot runner'
 
 Require-Contains $report '状态：**HOLD' 'The authoritative release report must not claim RELEASE while evidence blockers remain'
-Require-Contains $report 'BUG-QA-COVERAGE-001' 'The release report must retain the map-coverage blocker'
-Require-Contains $report 'BUG-QA-CONTENT-001' 'The release report must retain the end-to-end content blocker'
-Require-Contains $report 'BUG-QA-VISUAL-001' 'The release report must retain the final-export visual blocker'
-Require-Contains $report 'BUG-PERF-002' 'The release report must retain the commercial performance blocker'
+Require-Contains $report 'BUG-QA-COVERAGE-001 — qa-passed' 'The release report must reconcile the bounded map-route blocker'
+Require-Contains $report 'BUG-QA-CONTENT-001 — qa-passed' 'The release report must reconcile the end-to-end content blocker'
+Require-Contains $report 'BUG-QA-E4-SIGNOFF-001' 'The release report must retain independent final-export sign-off'
+Require-Contains $report 'BUG-PERF-002' 'The release report must retain the target-hardware performance blocker'
+Require-Contains $report 'BUG-SOAK-120-001' 'The release report must retain the strict hardware-soak blocker'
 Require-Contains $report 'E0' 'The release report must define evidence levels'
 Require-Contains $report 'E4' 'The release report must define final-export evidence'
 Require-NotContains $report '推荐发布（RELEASE）' 'The report must not retain the superseded release recommendation'
 
-Require-Contains $matrix 'E3 玩家区域穿行' 'The map matrix must distinguish player-driven regional evidence'
+Require-Contains $matrix '连续正常路线 | **E3 通过**' 'The map matrix must record player-driven continuous route evidence'
 Require-Contains $matrix '不等于“完整探索”' 'The map matrix must prohibit cross-level evidence claims'
 Require-Contains $matrix '| **否** | HOLD |' 'Every currently incomplete map must remain explicitly on hold'
-Require-Contains $matrix '内容覆盖纠偏' 'The matrix must separate domain contracts from player journeys'
+Require-Contains $matrix '最终包路线 E4-A' 'The matrix must distinguish final executable automation from player journeys'
 Require-NotContains $matrix '| ✓ 验收旅程' 'The old generator/service journey must not remain labelled complete exploration'
+Require-Contains $matrix '不等于“完整探索”' 'The matrix must retain the infinite-world evidence boundary'
 
 if ($failures.Count -gt 0) {
     Write-Host 'RELEASE EVIDENCE CONTRACT FAIL'
@@ -79,6 +81,6 @@ if ($failures.Count -gt 0) {
 Write-Host 'RELEASE EVIDENCE CONTRACT PASS'
 Write-Host '  - five-profile player-driven regional traversal is present'
 Write-Host '  - CI wiring is present'
-Write-Host '  - release and map reports use E0-E4 evidence levels'
+Write-Host '  - release and map reports separate E3, E4-A and E4-H evidence'
 Write-Host '  - unsupported COMPLETE/RELEASE claims are blocked'
 exit 0

@@ -12,13 +12,13 @@ extends SceneTree
 
 const GameScene = preload("res://scenes/game/game.tscn")
 const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
+const RouteProbeScript = preload("res://src/diagnostics/production_route_probe.gd")
 
 const QA_PREFIX := "qa-v130-soak-"
 const JOURNEY_SEED := 112358
 const READY_FRAMES := 720
 const CLEANUP_FRAMES := 60
 const WANDER_FRAMES := 300
-const MOVE_INTERVAL := 24
 
 var checks := 0
 var failures: Array[String] = []
@@ -83,20 +83,36 @@ func _soak_cycle(profile_id: String, cycle: int) -> void:
 		_check(false, "soak cycle %d (%s) enters the world" % [cycle, profile_id])
 		return
 
-	# Wander with movement pressure, sampling frame times.
+	# Generate real streaming and movement pressure through the production input
+	# route probe. No cycle is allowed to write the player transform after spawn.
+	var player: CharacterBody3D = _game.get("player")
+	var world: Node = _game.get("world") as Node
+	var route_probe = RouteProbeScript.new()
+	var route_result: Dictionary = await route_probe.execute(
+		self,
+		world,
+		player,
+		profile_id,
+		JOURNEY_SEED + cycle,
+		{
+			"min_route_steps": 12,
+			"target_route_steps": 18,
+			"min_route_displacement": 8.0,
+		}
+	)
+	_check(bool(route_result.get("ok", false)), "soak cycle %d (%s) completes production-input route pressure" % [cycle, profile_id])
+	_check(int(route_result.get("player_transform_writes", -1)) == 0, "soak cycle %d (%s) performs no post-spawn transport" % [cycle, profile_id])
+
+	# Sample a bounded settle window after the live route so frame trends remain
+	# comparable across cycles and profiles.
 	var frame_ms: Array[float] = []
 	var last_usec := Time.get_ticks_usec()
-	var player: CharacterBody3D = _game.get("player")
-	var origin: Vector3 = player.global_position if player != null else Vector3.ZERO
 	var max_pending := 0
 	for frame_index in WANDER_FRAMES:
 		await process_frame
 		var now_usec := Time.get_ticks_usec()
 		frame_ms.append(float(now_usec - last_usec) / 1000.0)
 		last_usec = now_usec
-		if player != null and frame_index % MOVE_INTERVAL == 0:
-			var leg := frame_index / MOVE_INTERVAL
-			player.global_position = origin + Vector3(float(leg % 6) * 10.0, 0.0, float(leg / 6 % 6) * 10.0)
 		if frame_index % 60 == 0:
 			var diagnostics: Node = _game.get("runtime_diagnostics")
 			if diagnostics != null:
@@ -117,6 +133,8 @@ func _soak_cycle(profile_id: String, cycle: int) -> void:
 		"frame_ms_avg": _average(frame_ms),
 		"frame_ms_p95": p95,
 		"max_pending_chunks": max_pending,
+		"route": route_result,
+		"post_spawn_transport": false,
 		"elapsed_s": _elapsed_seconds(),
 	})
 	print(
@@ -149,7 +167,7 @@ func _write_report() -> void:
 	if output.is_empty():
 		return
 	var report := {
-		"schema_version": 1,
+		"schema_version": 2,
 		"soak_seconds_target": _soak_seconds,
 		"elapsed_seconds": _elapsed_seconds(),
 		"cycles": _cycles,

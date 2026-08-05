@@ -1,7 +1,12 @@
 param(
     [string]$Godot = $env:GODOT_BIN,
     [string]$OutputDirectory = '',
-    [int]$RunnerTimeoutMilliseconds = 60000
+    [int]$RunnerTimeoutMilliseconds = 60000,
+    [string]$ProfileId = 'star_continent',
+    [int]$Seed = 24681357,
+    [switch]$RouteProbe,
+    [switch]$SkipExport,
+    [string]$ExecutablePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,27 +25,47 @@ Install pwsh from https://github.com/PowerShell/PowerShell and run:
 }
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
-if ([string]::IsNullOrWhiteSpace($Godot)) {
-    foreach ($commandName in @('godot4', 'godot')) {
-        $command = Get-Command $commandName -ErrorAction SilentlyContinue
-        if ($null -ne $command) {
-            $Godot = $command.Source
-            break
+if (-not $SkipExport) {
+    if ([string]::IsNullOrWhiteSpace($Godot)) {
+        foreach ($commandName in @('godot4', 'godot')) {
+            $command = Get-Command $commandName -ErrorAction SilentlyContinue
+            if ($null -ne $command) {
+                $Godot = $command.Source
+                break
+            }
         }
     }
-}
-if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot)) {
-    throw 'Godot 4 executable not found. Pass -Godot <path> or set GODOT_BIN.'
+    if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot)) {
+        throw 'Godot 4 executable not found. Pass -Godot <path> or set GODOT_BIN.'
+    }
 }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $ProjectRoot 'build\release-smoke'
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+$validProfiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
+if ($ProfileId -notin $validProfiles) {
+    throw "Unknown release-smoke profile: $ProfileId"
+}
+if ($RouteProbe -and $RunnerTimeoutMilliseconds -lt 600000) {
+    $RunnerTimeoutMilliseconds = 600000
+}
 
-$exePath = Join-Path $OutputDirectory 'StarWorld.exe'
-$consolePath = Join-Path $OutputDirectory 'StarWorld.console.exe'
-$pckPath = Join-Path $OutputDirectory 'StarWorld.pck'
+if ($SkipExport) {
+    if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
+        throw '-ExecutablePath is required when -SkipExport is used.'
+    }
+    $exePath = [System.IO.Path]::GetFullPath($ExecutablePath)
+    $binaryDirectory = Split-Path -Parent $exePath
+    $consolePath = Join-Path $binaryDirectory 'StarWorld.console.exe'
+    $pckPath = Join-Path $binaryDirectory 'StarWorld.pck'
+} else {
+    $exePath = Join-Path $OutputDirectory 'StarWorld.exe'
+    $binaryDirectory = $OutputDirectory
+    $consolePath = Join-Path $OutputDirectory 'StarWorld.console.exe'
+    $pckPath = Join-Path $OutputDirectory 'StarWorld.pck'
+}
 $reportPath = Join-Path $OutputDirectory 'release-smoke.json'
 $screenshotPath = Join-Path $OutputDirectory 'release-smoke.png'
 $exportStdoutPath = Join-Path $OutputDirectory 'export.stdout.log'
@@ -50,9 +75,14 @@ $stderrPath = Join-Path $OutputDirectory 'release-smoke.stderr.log'
 $driverLogPath = Join-Path $OutputDirectory 'release-smoke.driver.log'
 $memoryEvidencePath = Join-Path $OutputDirectory 'release-smoke.memory.json'
 
-Remove-Item -Force -ErrorAction SilentlyContinue `
-    $exePath, $consolePath, $pckPath, $reportPath, $screenshotPath, `
-    $exportStdoutPath, $exportStderrPath, $stdoutPath, $stderrPath, $driverLogPath, $memoryEvidencePath
+$evidenceFiles = @(
+    $reportPath, $screenshotPath, $exportStdoutPath, $exportStderrPath,
+    $stdoutPath, $stderrPath, $driverLogPath, $memoryEvidencePath
+)
+if (-not $SkipExport) {
+    $evidenceFiles += @($exePath, $consolePath, $pckPath)
+}
+Remove-Item -Force -ErrorAction SilentlyContinue $evidenceFiles
 
 function Write-DriverLog {
     param([string]$Message)
@@ -256,18 +286,24 @@ Write-DriverLog "godot=$Godot"
 Write-DriverLog "output_directory=$OutputDirectory"
 
 try {
-    Write-DriverLog "export_begin=$exePath"
-    $exportResult = Invoke-WaitedProcess `
-        -FilePath $Godot `
-        -Arguments @('--headless', '--path', $ProjectRoot, '--export-release', 'Windows Desktop', $exePath) `
-        -WorkingDirectory $ProjectRoot `
-        -StandardOutputPath $exportStdoutPath `
-        -StandardErrorPath $exportStderrPath `
-        -TimeoutMilliseconds 120000
-    Write-DriverLog "export_process_id=$($exportResult.ProcessId)"
-    Write-DriverLog "export_exit_code=$($exportResult.ExitCode)"
-    if ($exportResult.ExitCode -ne 0) {
-        throw "Windows release export failed with exit code $($exportResult.ExitCode)"
+    if (-not $SkipExport) {
+        Write-DriverLog "export_begin=$exePath"
+        $exportResult = Invoke-WaitedProcess `
+            -FilePath $Godot `
+            -Arguments @('--headless', '--path', $ProjectRoot, '--export-release', 'Windows Desktop', $exePath) `
+            -WorkingDirectory $ProjectRoot `
+            -StandardOutputPath $exportStdoutPath `
+            -StandardErrorPath $exportStderrPath `
+            -TimeoutMilliseconds 120000
+        Write-DriverLog "export_process_id=$($exportResult.ProcessId)"
+        Write-DriverLog "export_exit_code=$($exportResult.ExitCode)"
+        if ($exportResult.ExitCode -ne 0) {
+            throw "Windows release export failed with exit code $($exportResult.ExitCode)"
+        }
+    } else {
+        Set-Content -LiteralPath $exportStdoutPath -Value 'export skipped; reusing verified binary' -Encoding utf8
+        Set-Content -LiteralPath $exportStderrPath -Value '' -Encoding utf8
+        Write-DriverLog "export_skipped=true"
     }
     if (-not (Test-Path -LiteralPath $exePath)) {
         throw "Windows release executable missing: $exePath"
@@ -281,14 +317,19 @@ try {
     $reportArgumentPath = ([System.IO.Path]::GetFullPath($reportPath)).Replace('\', '/')
     Write-DriverLog "runner=$runnerPath"
     Write-DriverLog "report_argument=$reportArgumentPath"
+    Write-DriverLog "profile_id=$ProfileId seed=$Seed route_probe=$([bool]$RouteProbe)"
     # Collect timestamped external process evidence because release builds may
     # not expose engine-internal allocation counters. Keep the raw samples so
     # release review can distinguish a real percentile from a summary bug.
-    $memArgs = @('--verbose', '--', '--release-smoke', '--smoke-soak-frames=180', "--smoke-output=$reportArgumentPath")
+    $memArgs = @(
+        '--verbose', '--', '--release-smoke', '--smoke-soak-frames=180',
+        "--smoke-output=$reportArgumentPath", "--smoke-profile=$ProfileId", "--smoke-seed=$Seed"
+    )
+    if ($RouteProbe) { $memArgs += '--smoke-route-probe' }
     $runnerResult = Invoke-SampledProcess `
         -FilePath $runnerPath `
         -Arguments $memArgs `
-        -WorkingDirectory $OutputDirectory `
+        -WorkingDirectory $binaryDirectory `
         -StandardOutputPath $stdoutPath `
         -StandardErrorPath $stderrPath `
         -TimeoutMilliseconds $RunnerTimeoutMilliseconds
@@ -341,6 +382,20 @@ try {
     if (-not [bool]$report.soak.ok) {
         throw 'Release smoke soak report is not healthy.'
     }
+    if ([string]$report.profile_id -ne $ProfileId -or [int]$report.seed -ne $Seed) {
+        throw "Release smoke report identity mismatch: expected $ProfileId/$Seed, got $($report.profile_id)/$($report.seed)"
+    }
+    if ($RouteProbe) {
+        if (-not [bool]$report.route_probe_enabled -or -not [bool]$report.route.ok) {
+            throw "Release route probe failed for $ProfileId"
+        }
+        if ([int]$report.route.player_transform_writes -ne 0 -or [bool]$report.route.transport_after_spawn) {
+            throw "Release route probe used forbidden post-spawn transport for $ProfileId"
+        }
+        if ([int]$report.route.successful_steps -lt 20 -or [double]$report.route.horizontal_displacement -lt 14.0 -or [int]$report.route.unique_chunks -lt 2) {
+            throw "Release route evidence is below the commercial reference floor for $ProfileId"
+        }
+    }
     if ([int64](Get-Item -LiteralPath $exePath).Length -le 0) {
         throw 'Exported executable is empty.'
     }
@@ -351,8 +406,8 @@ try {
         throw 'Release smoke screenshot is empty.'
     }
 
-    Write-DriverLog "release_smoke_pass=checks:$($report.checks),soak_frames:$($report.soak.frames)"
-    Write-Host "PASS: exported Windows release smoke | checks=$($report.checks) | output=$OutputDirectory"
+    Write-DriverLog "release_smoke_pass=profile:$ProfileId,checks:$($report.checks),soak_frames:$($report.soak.frames),route:$([bool]$RouteProbe)"
+    Write-Host "PASS: exported Windows release smoke | profile=$ProfileId | checks=$($report.checks) | output=$OutputDirectory"
 }
 catch {
     Show-ReleaseSmokeLogs
