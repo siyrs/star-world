@@ -13,6 +13,7 @@ on:
       - 'src/input/**'
       - 'src/player/**'
       - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
       - 'tests/ci/run_long_soak.ps1'
       - 'tests/release/**'
       - 'tests/developer_b/validate_release_readiness_closure.ps1'
@@ -20,6 +21,7 @@ on:
       - 'tests/qa/tutorial_placement_stable_desktop_acceptance.gd'
       - 'tests/qa/building_mining_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/long_soak_journey.gd'
+      - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
   push:
     branches:
       - master
@@ -34,6 +36,7 @@ on:
       - 'src/input/**'
       - 'src/player/**'
       - 'src/world/**'
+      - 'tests/ci/Invoke-Godot.ps1'
       - 'tests/ci/run_long_soak.ps1'
       - 'tests/release/**'
       - 'tests/developer_b/validate_release_readiness_closure.ps1'
@@ -41,6 +44,7 @@ on:
       - 'tests/qa/tutorial_placement_stable_desktop_acceptance.gd'
       - 'tests/qa/building_mining_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/long_soak_journey.gd'
+      - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
   workflow_dispatch:
 
 permissions:
@@ -73,6 +77,10 @@ jobs:
       - name: Validate release-readiness contract
         shell: pwsh
         run: .\tests\developer_b\validate_release_readiness_closure.ps1
+
+      - name: Validate release smoke runtime health scope
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_runtime_health_scope_regression.gd'
 
       - name: Tutorial interruption completion and double reload
         shell: pwsh
