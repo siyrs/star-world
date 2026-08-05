@@ -199,7 +199,7 @@ func _build_arena(world: Node, player: Node3D) -> Dictionary:
 			world.call("set_block", floor_position, "stone")
 			for y_offset in range(1, 6):
 				world.call("set_block", floor_position + Vector3i(0, y_offset, 0), "air")
-	var failure_anchor := Vector3i(origin.x, floor_y + 1, origin.z + 1)
+	var failure_anchor := Vector3i(origin.x, floor_y + 2, origin.z + 1)
 	var failure_target := failure_anchor + Vector3i(0, 0, 1)
 	world.call("set_block", failure_anchor, "stone")
 	var anchors: Array[Vector3i] = []
@@ -221,7 +221,7 @@ func _build_arena(world: Node, player: Node3D) -> Dictionary:
 		"anchors": anchors,
 		"structure": structure,
 		"mining_target": mining_target,
-		"failure_player_position": Vector3(origin.x + 0.5, floor_y + 1.05, origin.z + 2.5),
+		"failure_player_position": Vector3(origin.x + 0.5, floor_y + 1.05, origin.z + 2.45),
 		"mining_player_position": Vector3(origin.x + 3.5, floor_y + 1.05, origin.z + 5.5),
 	}
 
