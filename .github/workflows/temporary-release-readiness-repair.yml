@@ -1,4 +1,4 @@
-name: Temporary release-readiness repair
+name: Temporary release-readiness source repair
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
           ref: agent/release-readiness-closure
           fetch-depth: 0
 
-      - name: Apply reviewed repair
+      - name: Apply reviewed source and test repair
         shell: bash
         run: |
           python - <<'PY'
@@ -33,14 +33,6 @@ jobs:
               if count != 1:
                   raise SystemExit(f"{path}: expected one match, got {count}: {old[:80]!r}")
               target.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          def replace_exact(path: str, old: str, new: str, expected: int) -> None:
-              target = Path(path)
-              text = target.read_text(encoding="utf-8")
-              count = text.count(old)
-              if count != expected:
-                  raise SystemExit(f"{path}: expected {expected} matches, got {count}: {old[:80]!r}")
-              target.write_text(text.replace(old, new), encoding="utf-8")
 
           policy = '''class_name ReleaseSmokeRuntimePolicy
           extends RefCounted
@@ -191,25 +183,6 @@ jobs:
               "$memoryPath = Join-Path $outputFullPath 'soak.memory.json'\n\n# This runner is intentionally self-contained: a fresh checkout has no .godot\n# import cache, so importing first is part of the long-soak contract rather than\n# an accidental responsibility of a calling workflow.\n$invokeGodotPath = Join-Path $PSScriptRoot 'Invoke-Godot.ps1'\n& $invokeGodotPath `\n    -Godot $Godot `\n    -WorkingDirectory $projectFullPath `\n    -Arguments '--headless --path . --editor --quit' `\n    -TimeoutMilliseconds 600000\n\n$startInfo = [System.Diagnostics.ProcessStartInfo]::new()",
           )
 
-          workflow_path = '.github/workflows/release-readiness-closure-tests.yml'
-          replace_exact(
-              workflow_path,
-              "      - 'tests/ci/run_long_soak.ps1'\n",
-              "      - 'tests/ci/Invoke-Godot.ps1'\n      - 'tests/ci/run_long_soak.ps1'\n",
-              2,
-          )
-          replace_exact(
-              workflow_path,
-              "      - 'tests/qa/long_soak_journey.gd'\n",
-              "      - 'tests/qa/long_soak_journey.gd'\n      - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'\n",
-              2,
-          )
-          replace_once(
-              workflow_path,
-              "      - name: Validate release-readiness contract\n        shell: pwsh\n        run: .\\tests\\developer_b\\validate_release_readiness_closure.ps1\n\n      - name: Tutorial interruption completion and double reload",
-              "      - name: Validate release-readiness contract\n        shell: pwsh\n        run: .\\tests\\developer_b\\validate_release_readiness_closure.ps1\n\n      - name: Validate release smoke runtime health scope\n        shell: pwsh\n        run: .\\tests\\ci\\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_runtime_health_scope_regression.gd'\n\n      - name: Tutorial interruption completion and double reload",
-          )
-
           validator = 'tests/developer_b/validate_release_readiness_closure.ps1'
           replace_once(
               validator,
@@ -238,13 +211,18 @@ jobs:
           )
           PY
 
-      - name: Commit permanent repair and remove temporary workflow
+      - name: Commit source and test repair
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/temporary-release-readiness-repair.yml
-          git add -A
+          git add \
+            src/diagnostics/release_smoke_runner.gd \
+            src/diagnostics/release_smoke_runtime_policy.gd \
+            tests/ci/Invoke-Godot.ps1 \
+            tests/ci/run_long_soak.ps1 \
+            tests/developer_b/validate_release_readiness_closure.ps1 \
+            tests/qa/release_smoke_runtime_health_scope_regression.gd
           git diff --cached --check
           git commit -m 'fix: stabilize release-readiness runtime gates'
           git push origin HEAD:agent/release-readiness-closure
