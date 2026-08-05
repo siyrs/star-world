@@ -7,7 +7,6 @@ extends "res://tests/qa/tutorial_placement_desktop_acceptance.gd"
 
 const HARVEST_TIMEOUT_MILLISECONDS := 15000
 const AIM_REFRESH_MILLISECONDS := 250
-const DIAGNOSTIC_INTERVAL_MILLISECONDS := 500
 
 
 func _aim_at(player: Node3D, target: Vector3) -> void:
@@ -39,34 +38,22 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	var target_world: Vector3 = world.call("block_to_world", target)
 	if player != null:
 		await _aim_at(player, target_world)
-	var input_service: Node = player.get("input_service") as Node if player != null else null
 	var harvest: Node = player.get("harvest_service") as Node if player != null else null
-	print(
-		"TUTORIAL PRIMARY START | class=%s | action_exists=%s | service_active=%s | input_enabled=%s"
-		% [
-			player.get_class() if player != null else "missing",
-			str(InputMap.has_action(InputActions.PRIMARY_ACTION)),
-			str(input_service.call("is_active")) if input_service != null else "missing",
-			str(player.get("input_enabled")) if player != null else "missing",
-		]
-	)
+	var rejections: Array[Dictionary] = []
+	if harvest != null:
+		harvest.harvest_rejected.connect(
+			func(reason: String, snapshot: Dictionary) -> void:
+				rejections.append({"reason": reason, "snapshot": snapshot.duplicate(true)})
+		)
 
 	Input.action_press(InputActions.PRIMARY_ACTION, 1.0)
 	for _frame in 3:
 		await process_frame
-	print(
-		"TUTORIAL PRIMARY PRESSED | action=%s | controller=%s | held=%s | active=%s"
-		% [
-			str(Input.is_action_pressed(InputActions.PRIMARY_ACTION)),
-			str(player.call("get_controller_gameplay_snapshot")) if player != null else "{}",
-			str(player.get("_primary_action_held")) if player != null else "missing",
-			str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
-		]
-	)
+	if not rejections.is_empty():
+		print("TUTORIAL HARVEST REJECTED | %s" % str(rejections[-1]))
 
 	var deadline := Time.get_ticks_msec() + HARVEST_TIMEOUT_MILLISECONDS
 	var next_aim_refresh := Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
-	var next_diagnostic := Time.get_ticks_msec() + DIAGNOSTIC_INTERVAL_MILLISECONDS
 	while (
 		str(world.call("get_block", target)) != "air"
 		and Time.get_ticks_msec() < deadline
@@ -75,28 +62,8 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 		if player != null and Time.get_ticks_msec() >= next_aim_refresh:
 			await _aim_at(player, target_world)
 			next_aim_refresh = Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
-		if Time.get_ticks_msec() >= next_diagnostic:
-			print(
-				"TUTORIAL PRIMARY TICK | action=%s | controller=%s | held=%s | active=%s | focus=%s"
-				% [
-					str(Input.is_action_pressed(InputActions.PRIMARY_ACTION)),
-					str(player.call("get_controller_gameplay_snapshot")) if player != null else "{}",
-					str(player.get("_primary_action_held")) if player != null else "missing",
-					str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
-					str(player.call("get_interaction_focus")) if player != null else "{}",
-				]
-			)
-			next_diagnostic = Time.get_ticks_msec() + DIAGNOSTIC_INTERVAL_MILLISECONDS
 	Input.action_release(InputActions.PRIMARY_ACTION)
 	for _frame in 3:
 		await process_frame
-	print(
-		"TUTORIAL PRIMARY END | block=%s | action=%s | controller=%s | held=%s | active=%s"
-		% [
-			str(world.call("get_block", target)),
-			str(Input.is_action_pressed(InputActions.PRIMARY_ACTION)),
-			str(player.call("get_controller_gameplay_snapshot")) if player != null else "{}",
-			str(player.get("_primary_action_held")) if player != null else "missing",
-			str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
-		]
-	)
+	if not rejections.is_empty():
+		print("TUTORIAL HARVEST FINAL REJECTION | %s" % str(rejections[-1]))
