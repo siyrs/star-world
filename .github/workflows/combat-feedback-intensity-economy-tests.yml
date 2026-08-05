@@ -1,0 +1,96 @@
+name: Combat feedback, encounter intensity and economy quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'data/encounter_intensity_profiles.json'
+      - 'data/encounter_rewards.json'
+      - 'data/ranged_combat.json'
+      - 'src/combat/**'
+      - 'src/entity/**'
+      - 'src/player/**'
+      - 'src/settings/**'
+      - 'src/ui/**'
+      - 'tests/qa/combat_feedback_intensity_*'
+      - 'tests/qa/mixed_combat_long_run_regression.gd'
+      - 'tests/qa/encounter_reward_economy_*'
+      - 'tests/qa/ranged_combat_registry_regression.gd'
+      - 'tests/developer_b/validate_combat_feedback_intensity_economy.ps1'
+      - '.github/workflows/combat-feedback-intensity-economy-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'data/encounter_intensity_profiles.json'
+      - 'data/encounter_rewards.json'
+      - 'data/ranged_combat.json'
+      - 'src/combat/**'
+      - 'src/entity/**'
+      - 'src/player/**'
+      - 'src/settings/**'
+      - 'src/ui/**'
+      - 'tests/qa/combat_feedback_intensity_*'
+      - 'tests/qa/mixed_combat_long_run_regression.gd'
+      - 'tests/qa/encounter_reward_economy_*'
+      - 'tests/qa/ranged_combat_registry_regression.gd'
+      - 'tests/developer_b/validate_combat_feedback_intensity_economy.ps1'
+      - '.github/workflows/combat-feedback-intensity-economy-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: combat-feedback-intensity-economy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Directional damage, versioned intensity, crafting-input rewards and one-hour mixed combat
+      domain_timeout_minutes: 105
+      static_validators: |
+        tests/developer_b/validate_data.ps1
+        tests/developer_b/validate_bounded_ranged_combat.ps1
+        tests/developer_b/validate_bounded_hostile_encounters.ps1
+        tests/developer_b/validate_bounded_encounter_rewards.ps1
+        tests/developer_b/validate_combat_feedback_intensity_economy.ps1
+      primary_headless_script: res://tests/qa/combat_feedback_intensity_economy_regression.gd
+      primary_headless_output_base: build\combat-feedback-intensity-economy
+      primary_headless_timeout_milliseconds: 900000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/mixed_combat_long_run_regression.gd
+        res://tests/qa/encounter_reward_economy_regression.gd
+        res://tests/qa/ranged_combat_registry_regression.gd
+        res://tests/qa/hostile_encounter_director_regression.gd
+        res://tests/qa/settings_retest.gd
+        res://tests/qa/runtime_soak_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: combat-feedback-intensity-economy-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/combat-feedback-intensity-economy.stdout.log
+        build/combat-feedback-intensity-economy.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Production settings and accessible directional-damage HUD
+      desktop_timeout_minutes: 70
+      desktop_script: res://tests/qa/combat_feedback_intensity_desktop_acceptance.gd
+      desktop_output_path: build\combat-feedback-intensity-settings.png
+      desktop_timeout_milliseconds: 720000
+      desktop_artifact_name: combat-feedback-intensity-economy-evidence
+      desktop_artifact_paths: |
+        build/combat-feedback-intensity-settings.png
+        build/combat-feedback-direction-text.png
+        build/combat-feedback-intensity-report.json
+        build/combat-feedback-intensity-settings.stdout.log
+        build/combat-feedback-intensity-settings.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 14
