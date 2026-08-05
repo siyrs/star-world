@@ -128,9 +128,9 @@ foreach ($pathToken in @(
         "Pull-request and master-push triggers must both cover shared dependency $pathToken"
 }
 
-Require-Contains $matrix '| 熔炉 | 是 | **真实中心射线与右键熔炉**' 'Content matrix must record the real furnace player entry'
-Require-Contains $matrix '**E3 闭环**' 'Content matrix must classify furnace without claiming final-export E4'
-Require-Contains $matrix 'BUG-QA-CONTENT-001` 仍未关闭' 'Completing furnace must not overclaim all content as complete'
+Require-Contains $matrix '| 熔炉 | **E3 闭环** |' 'Content matrix must retain the completed furnace production journey'
+Require-Contains $matrix '真实体素、面板投入、加工、取回' 'Content matrix must retain the real furnace entry and success path'
+Require-Contains $matrix '商业正式发布继续 HOLD' 'Content closure must not overclaim external E4 and hardware release readiness'
 
 if ($failures.Count -gt 0) {
     Write-Host 'PLAYER FURNACE CLOSED LOOP CONTRACT FAIL'

@@ -107,11 +107,11 @@ Require-Contains $workflow 'husbandry_desktop_acceptance.gd' 'Adjacent gate must
 Require-Contains $workflow 'ranch_products_desktop_acceptance.gd' 'Adjacent gate must retain ranch-product evidence'
 Require-Contains $workflow 'repair_desktop_acceptance.gd' 'Adjacent gate must retain repair evidence'
 
-Require-Contains $contentMatrix '| 合成 |' 'Content matrix must contain an explicit crafting row'
-Require-Contains $contentMatrix '真实 C 键' 'Content matrix must record the production hand-crafting input'
-Require-Contains $contentMatrix '真实右键工作台' 'Content matrix must record the production workbench interaction'
-Require-Contains $contentMatrix '完整返回菜单并重载' 'Content matrix must distinguish full reload from save-file inspection'
-Require-Contains $contentMatrix '仍未关闭' 'Content matrix must not overclaim all content as release-complete'
+Require-Contains $contentMatrix '| 合成 | **E3 闭环** |' 'Content matrix must contain an explicit completed crafting row'
+Require-Contains $contentMatrix '正式 C 面板' 'Content matrix must record the production hand-crafting input'
+Require-Contains $contentMatrix '稳定配方控件和成功产出' 'Content matrix must retain production crafting controls and success output'
+Require-Contains $contentMatrix '两次权威保存与菜单重载' 'Content matrix must distinguish full reload from save-file inspection'
+Require-Contains $contentMatrix '商业正式发布继续 HOLD' 'Content closure must not overclaim external E4 and hardware release readiness'
 
 if ($failures.Count -gt 0) {
     Write-Host 'PLAYER CRAFTING CLOSED LOOP CONTRACT FAIL'

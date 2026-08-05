@@ -111,9 +111,9 @@ Require-MinimumOccurrences $workflow "      - 'src/ui/**'" 2 'Shared UI changes 
 Require-MinimumOccurrences $workflow "      - 'scenes/ui/**'" 2 'Shared UI scenes must trigger both pull-request and master-push gates'
 Require-MinimumOccurrences $workflow "      - 'tests/ci/run_godot_desktop_test.ps1'" 2 'Desktop runner changes must trigger both pull-request and master-push gates'
 
-Require-Contains $matrix '| 切石机 | 是 | **真实中心射线与右键切石机**' 'Content matrix must record the real stonecutter player entry'
-Require-Contains $matrix '**E3 闭环**' 'Content matrix must classify stonecutter without claiming final-export E4'
-Require-Contains $matrix 'BUG-QA-CONTENT-001` 仍未关闭' 'Completing stonecutter must not overclaim all content as complete'
+Require-Contains $matrix '| 切石机 | **E3 闭环** |' 'Content matrix must retain the completed stonecutter production journey'
+Require-Contains $matrix '真实体素、投入、加工、取回' 'Content matrix must retain the real stonecutter entry and success path'
+Require-Contains $matrix '商业正式发布继续 HOLD' 'Content closure must not overclaim external E4 and hardware release readiness'
 Require-Contains $issues 'BUG-QA-CONTENT-STONECUTTER-001' 'Issue register must retain the stonecutter evidence defect and fix'
 
 if ($failures.Count -gt 0) {
