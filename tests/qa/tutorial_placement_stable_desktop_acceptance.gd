@@ -63,9 +63,41 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 		ray.force_raycast_update()
 	await physics_frame
 
+	var harvest: Node = player.get("harvest_service") as Node if player != null else null
+	var ranged: Node = player.get("ranged_combat_service") as Node if player != null else null
+	var equipment: Node = player.get("equipment_service") as Node if player != null else null
+	var rejection_log: Array[Dictionary] = []
+	if harvest != null:
+		harvest.harvest_rejected.connect(
+			func(reason: String, snapshot: Dictionary) -> void:
+				rejection_log.append({"reason": reason, "snapshot": snapshot.duplicate(true)})
+		)
+	var collider: Variant = ray.get_collider() if ray != null and ray.is_colliding() else null
+	print(
+		"TUTORIAL PRIMARY PREFLIGHT | player=%s | ray=%s | collider=%s | damage=%s | target=%s | ranged=%s | main_hand=%s"
+		% [
+			str(player),
+			str(ray != null and ray.is_colliding()),
+			str(collider),
+			str(collider != null and collider.has_method("take_damage")),
+			str(player.call("_resolve_harvest_target")) if player != null else "{}",
+			str(ranged.call("get_active_profile")) if ranged != null else "{}",
+			str(equipment.call("get_slot", "main_hand")) if equipment != null else "{}",
+		]
+	)
+
 	Input.action_press(InputActions.PRIMARY_ACTION, 1.0)
 	for _frame in 3:
 		await process_frame
+	print(
+		"TUTORIAL PRIMARY AFTER PRESS | controller=%s | held=%s | harvest=%s | rejections=%s"
+		% [
+			str(player.call("get_controller_gameplay_snapshot")) if player != null else "{}",
+			str(player.get("_primary_action_held")) if player != null else "missing",
+			str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
+			str(rejection_log),
+		]
+	)
 	var deadline := Time.get_ticks_msec() + HARVEST_TIMEOUT_MILLISECONDS
 	var next_aim_refresh := Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
 	while (
@@ -79,3 +111,12 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	Input.action_release(InputActions.PRIMARY_ACTION)
 	for _frame in 3:
 		await process_frame
+	print(
+		"TUTORIAL PRIMARY END | block=%s | held=%s | harvest=%s | rejections=%s"
+		% [
+			str(world.call("get_block", target)),
+			str(player.get("_primary_action_held")) if player != null else "missing",
+			str(harvest.call("get_active_snapshot")) if harvest != null else "{}",
+			str(rejection_log),
+		]
+	)
