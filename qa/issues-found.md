@@ -31,6 +31,8 @@
 | BUG-PACK-001 | P1 | Windows 导出内容 | qa-passed | 检查 PCK 导出日志 | 原包含 `build/*` QA 资源 | preset all_resources 未排除 | `export_presets.cfg` | 排除 docs/tests/.godot/build/qa | fresh export 不含 build QA 资源 | smoke 16/16 |
 | BUG-LAVA-001 | P2 | 深渊世界熔岩 | qa-passed | 玩家进入固定熔岩柱 | 原可游泳且 5 秒伤害为 0 | water/lava 共用 fluid 判断，无伤害系统 | 玩家流体/熔岩逻辑 | 独立 lava 检测与 4.0/0.5s 伤害门控 | lifecycle 32 checks | QA-003 复测通过 |
 
+| BUG-PR102-SCOPE-001 | P1 | Iteration 57 / PR 完整性 | self-tested | 对比 PR #102 描述与实际 Git diff | 初始 PR 仅有临时快照 workflow，方向受击、遭遇强度、弹药经济和长稳均未提交 | 把工作区意图和 PR 描述误当成远程交付 | PR #102 分支、永久专项 workflow、`qa/pr-102-closure-report.md` | 补齐全部实现/回归/文档，删除临时 workflow，固定 head CI 全绿后才允许合并 | 静态、Headless、桌面、相邻回归与严格导入 | 等待本 PR 固定 SHA 的 GitHub Actions 复核（2026-08-06） |
+
 ## 状态说明
 
 - `open`：已复现，待定位或修复。

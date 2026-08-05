@@ -19,6 +19,9 @@ var _autosave_interval: OptionButton
 var _show_tutorial: CheckButton
 var _show_interaction_prompts: CheckButton
 var _camera_bob: CheckButton
+var _show_damage_direction_pulses: CheckButton
+var _damage_camera_impact: HSlider
+var _encounter_intensity: OptionButton
 var _scroll_container: ScrollContainer
 var _settings_content: VBoxContainer
 var _status: Label
@@ -183,6 +186,20 @@ func _build_world_card() -> void:
 	)
 	_volume = _add_slider(card_root, "主音量", 0.0, 1.0, 0.01, "%d%%", 100.0)
 	_cycle = _add_slider(card_root, "昼夜周期", 2.0, 30.0, 1.0, "%d 分钟")
+	var intensity_row := _make_control_row(
+		card_root,
+		"遭遇强度",
+		"只调整敌对遭遇冷却和危险压力预算，不改变固定队伍构成或世界存档。"
+	)
+	_encounter_intensity = OptionButton.new()
+	_encounter_intensity.name = "EncounterIntensity"
+	_encounter_intensity.custom_minimum_size = Vector2(230, Tokens.CONTROL_HEIGHT_MD)
+	for profile_id: String in SettingsPolicy.allowed_encounter_intensities():
+		_encounter_intensity.add_item(SettingsPolicy.encounter_intensity_label(profile_id))
+		_encounter_intensity.set_item_metadata(
+			_encounter_intensity.item_count - 1, profile_id
+		)
+	intensity_row.add_child(_encounter_intensity)
 	var autosave_row := _make_control_row(card_root, "自动保存", "按未暂停的活动时间计算")
 	_autosave_interval = OptionButton.new()
 	_autosave_interval.custom_minimum_size = Vector2(230, Tokens.CONTROL_HEIGHT_MD)
@@ -210,6 +227,22 @@ func _build_guidance_card() -> void:
 		"显示准星附近的操作提示",
 		"面向方块、机器、生物或可交互对象时显示上下文操作。"
 	)
+	_show_damage_direction_pulses = _make_switch_row(
+		card_root,
+		"显示受击方向边缘脉冲",
+		"关闭后仍保留伤害数值、来源方向文字和全部战斗规则。"
+	)
+	_show_damage_direction_pulses.name = "DamageDirectionPulses"
+	_damage_camera_impact = _add_slider(
+		card_root,
+		"受击镜头冲击",
+		SettingsPolicy.MIN_DAMAGE_CAMERA_IMPACT,
+		SettingsPolicy.MAX_DAMAGE_CAMERA_IMPACT,
+		0.05,
+		"%d%%",
+		100.0
+	)
+	_damage_camera_impact.name = "DamageCameraImpact"
 
 
 func _make_setting_card(title: String, subtitle: String, index: String) -> VBoxContainer:
@@ -346,6 +379,43 @@ func _load_values() -> void:
 		settings.get("show_interaction_prompts", defaults.show_interaction_prompts)
 	)
 	_camera_bob.button_pressed = bool(settings.get("camera_bob", true))
+	_show_damage_direction_pulses.button_pressed = bool(
+		settings.get("show_damage_direction_pulses", defaults.show_damage_direction_pulses)
+	)
+	_damage_camera_impact.value = float(
+		settings.get("damage_camera_impact", defaults.damage_camera_impact)
+	)
+	_select_string_option(
+		_encounter_intensity,
+		str(settings.get("encounter_intensity", defaults.encounter_intensity))
+	)
+
+
+func get_encounter_intensity_control() -> OptionButton:
+	return _encounter_intensity
+
+
+func get_damage_direction_pulses_control() -> CheckButton:
+	return _show_damage_direction_pulses
+
+
+func get_damage_camera_impact_control() -> HSlider:
+	return _damage_camera_impact
+
+
+func _select_string_option(option: OptionButton, target_value: String) -> void:
+	if option == null:
+		return
+	for index in option.item_count:
+		if str(option.get_item_metadata(index)) == target_value:
+			option.select(index)
+			return
+
+
+func _selected_string_option(option: OptionButton, fallback: String) -> String:
+	if option == null or option.selected < 0:
+		return fallback
+	return str(option.get_item_metadata(option.selected))
 
 
 func _select_option_by_id(option: OptionButton, target_id: int) -> void:
@@ -366,6 +436,11 @@ func _apply() -> void:
 		"show_tutorial": _show_tutorial.button_pressed,
 		"show_interaction_prompts": _show_interaction_prompts.button_pressed,
 		"camera_bob": _camera_bob.button_pressed,
+		"show_damage_direction_pulses": _show_damage_direction_pulses.button_pressed,
+		"damage_camera_impact": _damage_camera_impact.value,
+		"encounter_intensity": _selected_string_option(
+			_encounter_intensity, str(SettingsPolicy.DEFAULTS.encounter_intensity)
+		),
 	})
 	_status.text = "正在保存并应用设置…"
 	_status.theme_type_variation = "CaptionLabel"

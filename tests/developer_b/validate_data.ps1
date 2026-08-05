@@ -123,7 +123,7 @@ foreach ($item in $items) {
 }
 if ($armorCount -lt 8) { throw "Expected >=8 armor items, got $armorCount" }
 if ($equippableCount -lt 17) { throw "Expected >=17 equippable items including ranged extensions, got $equippableCount" }
-foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','repair_station','glass_pane','stonecutter','prospecting_kit','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe','bow','arrow','gunpowder','light_round','shotgun_shell','star_pistol','frontier_carbine','scattergun')) {
+foreach ($requiredItem in @('wheat_seeds','wheat','carrot','potato','baked_potato','water_bucket','bucket','oak_bed','repair_station','glass_pane','stonecutter','prospecting_kit','wooden_shovel','diamond_shovel','wooden_hoe','diamond_hoe','bow','arrow','flint','gunpowder','light_round','shotgun_shell','star_pistol','frontier_carbine','scattergun')) {
   if (-not $ids.ContainsKey($requiredItem)) { throw "Missing global item: $requiredItem" }
 }
 

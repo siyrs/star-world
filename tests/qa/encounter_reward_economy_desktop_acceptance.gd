@@ -137,10 +137,11 @@ func _run() -> void:
 	_check(first_granted, "last production member grants the encounter reward exactly once")
 	var first_result: Dictionary = reward_service.call("get_snapshot").get("last_result", {})
 	_check(int(first_result.get("shot_count", -1)) == 4, "last-kill reward waits until the fourth shot is recorded")
-	_check(int(first_result.get("rewards", {}).get("light_round", 0)) == 6, "efficient assault grants six light rounds")
-	_check(int(first_result.get("net_ammo", {}).get("light_round", 99)) == 2, "four spent rounds and six rewarded rounds produce net plus two")
-	_check(hub.inventory.count_item("gunpowder") == 2, "first assault atomically grants two gunpowder")
-	_check(hub.inventory.count_item("shotgun_shell") == 1, "first assault atomically grants one shotgun shell")
+	_check(int(first_result.get("rewards", {}).get("flint", 0)) == 2, "efficient assault grants two flint crafting inputs")
+	_check(int(first_result.get("rewards", {}).get("gunpowder", 0)) == 4, "efficient assault grants four gunpowder crafting inputs")
+	_check(int(first_result.get("net_ammo", {}).get("light_round", 99)) == -4, "four spent rounds remain a real ammunition sink")
+	_check(hub.inventory.count_item("light_round") == 0, "first assault grants no completed light rounds")
+	_check(hub.inventory.count_item("shotgun_shell") == 0, "first assault grants no completed shotgun shells")
 	var reward_hud_ready := await _wait_until(
 		func() -> bool:
 			var snapshot: Dictionary = reward_overlay.call("get_snapshot")
@@ -162,7 +163,7 @@ func _run() -> void:
 	_check(first_completed, "first rewarded encounter completes and releases all tracked members")
 
 	_fill_reward_inventory_to_capacity(hub.inventory)
-	_check(hub.inventory.get_add_capacity("light_round") == 0, "real inventory has no remaining light-round capacity")
+	_check(hub.inventory.get_add_capacity("flint") == 0, "real inventory has no remaining flint capacity")
 	_check(hub.inventory.get_add_capacity("gunpowder") == 0, "real inventory has no remaining gunpowder capacity")
 	_check(_occupied_slots(hub.inventory) == int(hub.inventory.get("slot_count")), "all real inventory slots are occupied before the pending test")
 	director.call("clear", "pending_reward_setup")
@@ -178,7 +179,7 @@ func _run() -> void:
 		ACTION_TIMEOUT_MS
 	)
 	_check(pending_ready, "full production inventory keeps the complete reward in one pending record")
-	_check(hub.inventory.count_item("light_round") == 64, "pending transaction does not partially add light rounds")
+	_check(hub.inventory.count_item("flint") == 64, "pending transaction does not partially add flint")
 	_check(hub.inventory.count_item("gunpowder") == 64, "pending transaction does not partially add gunpowder")
 	var pending_hud_ready := await _wait_until(
 		func() -> bool:
@@ -198,8 +199,8 @@ func _run() -> void:
 	)
 	_check(retry_granted, "inventory change automatically retries and grants the pending reward")
 	_check(int(reward_service.call("get_snapshot").get("pending_reward_count", -1)) == 0, "successful production retry clears the pending record")
-	_check(hub.inventory.count_item("light_round") == 69, "pending skirmish atomically adds five light rounds")
-	_check(hub.inventory.count_item("gunpowder") == 65, "pending skirmish atomically adds one gunpowder")
+	_check(hub.inventory.count_item("flint") == 65, "pending skirmish atomically adds one flint")
+	_check(hub.inventory.count_item("gunpowder") == 66, "pending skirmish atomically adds two gunpowder")
 
 	var grants_before_abandon := int(reward_service.call("get_snapshot").get("reward_grant_count", 0))
 	director.call("clear", "abandoned_reward_setup")
@@ -326,9 +327,8 @@ func _defeat_members_with_pistol(
 
 
 func _fill_reward_inventory_to_capacity(inventory: Node) -> void:
-	inventory.add_item("light_round", maxi(0, 64 - inventory.count_item("light_round")))
+	inventory.add_item("flint", maxi(0, 64 - inventory.count_item("flint")))
 	inventory.add_item("gunpowder", maxi(0, 64 - inventory.count_item("gunpowder")))
-	inventory.add_item("shotgun_shell", maxi(0, 32 - inventory.count_item("shotgun_shell")))
 	while inventory.add_item("star_pistol", 1) == 0:
 		pass
 

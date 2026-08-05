@@ -8,6 +8,7 @@ signal snapshot_changed(snapshot: Dictionary)
 
 const RegistryScript = preload("res://src/entity/hostile_encounter_registry.gd")
 const PolicyScript = preload("res://src/entity/hostile_encounter_policy.gd")
+const IntensityRegistryScript = preload("res://src/entity/encounter_intensity_registry.gd")
 const OverlayScript = preload("res://src/ui/hostile_encounter_overlay.gd")
 const DECISION_INTERVAL_SECONDS := 1.0
 const INITIAL_DELAY_SECONDS := 6.0
@@ -23,6 +24,8 @@ var map_id := "star_continent"
 var active := false
 
 var _registry = RegistryScript.new()
+var _intensity_registry = IntensityRegistryScript.new()
+var _intensity_profile_id := IntensityRegistryScript.DEFAULT_PROFILE_ID
 var _rng := RandomNumberGenerator.new()
 var _decision_remaining := INITIAL_DELAY_SECONDS
 var _cooldown_remaining := 0.0
@@ -90,6 +93,20 @@ func set_map_profile(p_map_id: String) -> void:
 	_publish_if_changed(true)
 
 
+func set_encounter_intensity(profile_id: String) -> void:
+	var normalized := _intensity_registry.normalize_profile_id(profile_id)
+	if _intensity_profile_id == normalized:
+		return
+	var previous_profile := _intensity_registry.get_profile(_intensity_profile_id)
+	var next_profile := _intensity_registry.get_profile(normalized)
+	var previous_multiplier := maxf(0.01, float(previous_profile.get("cooldown_multiplier", 1.0)))
+	var next_multiplier := maxf(0.01, float(next_profile.get("cooldown_multiplier", 1.0)))
+	if _cooldown_remaining > 0.0:
+		_cooldown_remaining = (_cooldown_remaining / previous_multiplier) * next_multiplier
+	_intensity_profile_id = normalized
+	_publish_if_changed(true)
+
+
 func clear(reason: String = "clear") -> void:
 	var completed: Array[Dictionary] = []
 	for raw_id: Variant in _active_encounters.keys():
@@ -133,6 +150,8 @@ func get_snapshot() -> Dictionary:
 		"world_id": _bound_world_id,
 		"map_id": map_id,
 		"phase_id": _current_phase(),
+		"intensity_profile_id": _intensity_profile_id,
+		"intensity_profile": _intensity_registry.get_profile(_intensity_profile_id),
 		"decision_remaining_seconds": _decision_remaining,
 		"cooldown_remaining_seconds": _cooldown_remaining,
 		"active_encounter_count": encounters.size(),
@@ -150,6 +169,8 @@ func get_snapshot() -> Dictionary:
 		"encounters": encounters,
 		"registry_schema_version": _registry.schema_version,
 		"registry_profile_count": _registry.get_profile_ids().size(),
+		"intensity_registry_schema_version": _intensity_registry.schema_version,
+		"intensity_registry_profile_count": _intensity_registry.get_profile_ids().size(),
 		"overlay_available": _overlay != null,
 	}
 
@@ -186,6 +207,9 @@ func _refresh_parent_bindings(delta: float = 0.0, force: bool = false) -> void:
 		else {}
 	)
 	set_map_profile(str(metadata.get("map_id", map_id)))
+	var current_settings: Variant = _parent_hub.get("current_settings")
+	if current_settings is Dictionary:
+		set_encounter_intensity(str(current_settings.get("encounter_intensity", _intensity_profile_id)))
 	var next_world_id := str(_parent_hub.get("current_world_id"))
 	if next_world_id != _bound_world_id:
 		if not _bound_world_id.is_empty() or not _active_encounters.is_empty():
@@ -259,6 +283,10 @@ func _attempt_start(profile_id: String, roll: float) -> Dictionary:
 	for member: Node3D in spawned:
 		refs.append(weakref(member))
 		member_ids.append(int(member.get_instance_id()))
+	var intensity_profile := _intensity_registry.get_profile(_intensity_profile_id)
+	var effective_cooldown := PolicyScript.effective_cooldown_seconds(
+		profile, intensity_profile
+	)
 	var record := {
 		"id": encounter_id,
 		"profile_id": str(profile.get("id", "")),
@@ -268,12 +296,12 @@ func _attempt_start(profile_id: String, roll: float) -> Dictionary:
 		"initial_member_count": spawned.size(),
 		"initial_pressure": PolicyScript.estimate_pressure(profile),
 		"started_at_msec": Time.get_ticks_msec(),
-		"cooldown_seconds": float(profile.get("cooldown_seconds", 30.0)),
+		"base_cooldown_seconds": float(profile.get("cooldown_seconds", 30.0)),
+		"cooldown_seconds": effective_cooldown,
+		"intensity_profile_id": _intensity_profile_id,
 	}
 	_active_encounters[encounter_id] = record
-	_cooldown_remaining = maxf(
-		_cooldown_remaining, float(profile.get("cooldown_seconds", 30.0))
-	)
+	_cooldown_remaining = maxf(_cooldown_remaining, effective_cooldown)
 	_start_count += 1
 	_last_profile_id = str(profile.get("id", ""))
 	_last_rejection_reason = ""
@@ -359,6 +387,8 @@ func _build_context() -> Dictionary:
 	return {
 		"map_id": map_id,
 		"phase_id": _current_phase(),
+		"intensity_profile_id": _intensity_profile_id,
+		"intensity_profile": _intensity_registry.get_profile(_intensity_profile_id),
 		"player_y": player.global_position.y if player != null else 0.0,
 		"health_ratio": _player_health_ratio(),
 		"existing_pressure": float(population.get("pressure", 0.0)),
@@ -437,6 +467,9 @@ func _public_encounter_snapshot(record: Dictionary) -> Dictionary:
 		"species": species,
 		"living_member_ids": living_ids,
 		"started_at_msec": int(record.get("started_at_msec", 0)),
+		"base_cooldown_seconds": float(record.get("base_cooldown_seconds", 0.0)),
+		"cooldown_seconds": float(record.get("cooldown_seconds", 0.0)),
+		"intensity_profile_id": str(record.get("intensity_profile_id", "standard")),
 		"completion_reason": str(record.get("completion_reason", "")),
 	}
 

@@ -360,6 +360,16 @@ func _apply_settings(settings: Dictionary) -> void:
 			"camera_bob_enabled",
 			bool(settings.get("camera_bob", DEFAULT_SETTINGS.get("camera_bob", true)))
 		)
+		if player_node.has_method("apply_combat_feedback_settings"):
+			player_node.call("apply_combat_feedback_settings", settings.duplicate(true))
+	if game_ui != null and game_ui.has_method("apply_combat_feedback_settings"):
+		game_ui.call("apply_combat_feedback_settings", settings.duplicate(true))
+	var encounter_director := get_node_or_null("HostileEncounterDirector")
+	if encounter_director != null and encounter_director.has_method("set_encounter_intensity"):
+		encounter_director.call(
+			"set_encounter_intensity",
+			str(settings.get("encounter_intensity", DEFAULT_SETTINGS.encounter_intensity))
+		)
 	settings_applied.emit(settings.duplicate(true))
 
 

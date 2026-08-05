@@ -15,7 +15,10 @@ const DEFAULTS := {
 	"show_interaction_prompts": true,
 	"autosave_minutes": 5,
 	"camera_bob": true,
+	"show_damage_direction_pulses": true,
+	"damage_camera_impact": 1.0,
 	"survival_difficulty": "relaxed",
+	"encounter_intensity": "standard",
 	"ui_scale": UiAccessibilityPolicyScript.DEFAULT_SCALE,
 }
 const AUTOSAVE_MINUTES := [0, 2, 5, 10, 15]
@@ -25,12 +28,20 @@ const SURVIVAL_DIFFICULTY_LABELS := {
 	"balanced": "平衡生存",
 	"challenging": "挑战生存",
 }
+const ENCOUNTER_INTENSITIES: Array[String] = ["casual", "standard", "high_risk"]
+const ENCOUNTER_INTENSITY_LABELS := {
+	"casual": "休闲",
+	"standard": "标准",
+	"high_risk": "高风险",
+}
 const MIN_MOUSE_SENSITIVITY := 0.05
 const MAX_MOUSE_SENSITIVITY := 0.60
 const MIN_RENDER_DISTANCE := 1
 const MAX_RENDER_DISTANCE := 5
 const MIN_CYCLE_MINUTES := 2
 const MAX_CYCLE_MINUTES := 30
+const MIN_DAMAGE_CAMERA_IMPACT := 0.0
+const MAX_DAMAGE_CAMERA_IMPACT := 1.5
 
 
 static func defaults() -> Dictionary:
@@ -51,6 +62,15 @@ static func allowed_survival_difficulties() -> Array[String]:
 static func survival_difficulty_label(profile_id: String) -> String:
 	var normalized := normalize_survival_difficulty(profile_id)
 	return str(SURVIVAL_DIFFICULTY_LABELS[normalized])
+
+
+static func allowed_encounter_intensities() -> Array[String]:
+	return ENCOUNTER_INTENSITIES.duplicate()
+
+
+static func encounter_intensity_label(profile_id: String) -> String:
+	var normalized := normalize_encounter_intensity(profile_id)
+	return str(ENCOUNTER_INTENSITY_LABELS[normalized])
 
 
 static func allowed_ui_scales() -> Array[float]:
@@ -111,8 +131,23 @@ static func normalize(raw_settings: Dictionary = {}) -> Dictionary:
 	normalized["camera_bob"] = _bool_or_default(
 		raw_settings.get("camera_bob"), bool(DEFAULTS["camera_bob"])
 	)
+	normalized["show_damage_direction_pulses"] = _bool_or_default(
+		raw_settings.get("show_damage_direction_pulses"),
+		bool(DEFAULTS["show_damage_direction_pulses"])
+	)
+	normalized["damage_camera_impact"] = clampf(
+		_number_or_default(
+			raw_settings.get("damage_camera_impact"),
+			float(DEFAULTS["damage_camera_impact"])
+		),
+		MIN_DAMAGE_CAMERA_IMPACT,
+		MAX_DAMAGE_CAMERA_IMPACT
+	)
 	normalized["survival_difficulty"] = normalize_survival_difficulty(
 		raw_settings.get("survival_difficulty")
+	)
+	normalized["encounter_intensity"] = normalize_encounter_intensity(
+		raw_settings.get("encounter_intensity")
 	)
 	normalized["ui_scale"] = normalize_ui_scale(raw_settings.get("ui_scale"))
 	return normalized
@@ -148,6 +183,15 @@ static func normalize_survival_difficulty(value: Variant) -> String:
 		requested
 		if requested in SURVIVAL_DIFFICULTIES
 		else str(DEFAULTS["survival_difficulty"])
+	)
+
+
+static func normalize_encounter_intensity(value: Variant) -> String:
+	var requested := str(value).strip_edges().to_lower()
+	return (
+		requested
+		if requested in ENCOUNTER_INTENSITIES
+		else str(DEFAULTS["encounter_intensity"])
 	)
 
 

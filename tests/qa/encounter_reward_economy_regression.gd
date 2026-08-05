@@ -55,12 +55,14 @@ func _test_registry_and_economy_policy() -> void:
 	var assault := registry.build_reward("abyss_assault", 6)
 	_check(bool(assault.get("efficient", false)), "six-shot abyss assault earns the configured efficiency bonus")
 	_check(
-		assault.get("rewards", {}) == {"gunpowder":2, "light_round":6, "shotgun_shell":1},
-		"assault reward combines base supply and efficiency bonus deterministically"
+		assault.get("rewards", {}) == {"flint":2, "gunpowder":4},
+		"assault reward combines only bounded crafting inputs deterministically"
 	)
 	var expensive := registry.build_reward("abyss_assault", 8)
-	_check(not bool(expensive.get("efficient", true)), "shots above the efficiency limit do not receive bonus ammunition")
-	_check(int(expensive.get("rewards", {}).get("light_round", 0)) == 4, "expensive assault keeps only the bounded base light-round reward")
+	_check(not bool(expensive.get("efficient", true)), "shots above the efficiency limit do not receive the crafting-input bonus")
+	_check(expensive.get("rewards", {}) == {"flint":2, "gunpowder":3}, "expensive assault keeps only the bounded base crafting inputs")
+	for ammo_item_id: String in ["arrow", "light_round", "shotgun_shell"]:
+		_check(int(assault.get("rewards", {}).get(ammo_item_id, 0)) == 0, "formal rewards never grant completed ammunition: %s" % ammo_item_id)
 
 	var invalid_path := "user://invalid-encounter-rewards.json"
 	var file := FileAccess.open(invalid_path, FileAccess.WRITE)
@@ -135,12 +137,13 @@ func _test_real_reward_transactions() -> void:
 		2000
 	)
 	_check(granted, "last defeated member grants the squad reward before director cleanup")
-	_check(inventory.count_item("light_round") == 6, "atomic reward grants six efficient light rounds")
-	_check(inventory.count_item("gunpowder") == 2, "atomic reward grants two gunpowder")
-	_check(inventory.count_item("shotgun_shell") == 1, "atomic reward grants one shotgun shell")
+	_check(inventory.count_item("flint") == 2, "atomic reward grants two flint crafting inputs")
+	_check(inventory.count_item("gunpowder") == 4, "atomic reward grants four gunpowder crafting inputs")
+	_check(inventory.count_item("light_round") == 0, "formal reward grants no completed light rounds")
+	_check(inventory.count_item("shotgun_shell") == 0, "formal reward grants no completed shotgun shells")
 	var rewarded_snapshot := service.get_snapshot()
 	_check(int(rewarded_snapshot.get("reward_grant_count", 0)) == 1, "all reward items commit as one grant")
-	_check(int(rewarded_snapshot.get("net_ammo_total", {}).get("light_round", 0)) == 0, "six shots and six rewarded rounds produce neutral light-ammo net")
+	_check(int(rewarded_snapshot.get("net_ammo_total", {}).get("light_round", 0)) == -6, "six shots remain a real six-round ammunition sink")
 
 	director.encounter_completed.emit({
 		"id":"abyss-assault-test-1",
@@ -148,13 +151,13 @@ func _test_real_reward_transactions() -> void:
 		"completion_reason":"members_cleared",
 	})
 	_check(int(service.get_snapshot().get("active_ledger_count", -1)) == 0, "normal director completion closes the rewarded ledger")
-	var light_rounds_after_completion := inventory.count_item("light_round")
+	var gunpowder_after_completion := inventory.count_item("gunpowder")
 	director.encounter_completed.emit({
 		"id":"abyss-assault-test-1",
 		"profile_id":"abyss_assault",
 		"completion_reason":"members_cleared",
 	})
-	_check(inventory.count_item("light_round") == light_rounds_after_completion, "duplicate completion cannot grant the same reward twice")
+	_check(inventory.count_item("gunpowder") == gunpowder_after_completion, "duplicate completion cannot grant the same crafting inputs twice")
 	_check(int(service.get_snapshot().get("duplicate_completion_count", 0)) == 1, "duplicate completion is recorded without inventory mutation")
 
 	var abandoned_members := _create_members(spawner, 3)
@@ -174,7 +177,7 @@ func _test_real_reward_transactions() -> void:
 		"completion_reason":"members_cleared",
 	})
 	_check(int(service.get_snapshot().get("abandoned_encounter_count", 0)) == 1, "unloaded members are not misclassified as defeated")
-	_check(inventory.count_item("gunpowder") == 2, "member unload does not grant encounter rewards")
+	_check(inventory.count_item("gunpowder") == 4, "member unload does not grant encounter rewards")
 
 	var first_members := _create_members(spawner, 2)
 	var second_members := _create_members(spawner, 2)
@@ -215,7 +218,7 @@ func _test_pending_reward_retry() -> void:
 	await process_frame
 	for _index in 9:
 		_check(inventory.add_item("star_pistol", 1) == 0, "full-inventory fixture fills one weapon slot atomically")
-	_check(inventory.get_add_capacity("light_round") == 0, "pending fixture has zero light-round capacity")
+	_check(inventory.get_add_capacity("flint") == 0, "pending fixture has zero flint capacity")
 
 	var members := _create_members(spawner, 2)
 	director.encounter_started.emit({
@@ -231,14 +234,14 @@ func _test_pending_reward_retry() -> void:
 		2000
 	)
 	_check(pending_ready, "full inventory queues one bounded pending reward")
-	_check(inventory.count_item("light_round") == 0, "pending reward does not partially mutate a full inventory")
+	_check(inventory.count_item("flint") == 0, "pending reward does not partially mutate a full inventory")
 	inventory.remove_from_slot(0, 1)
 	var retried := await _wait_until(
 		func() -> bool: return int(service.get_snapshot().get("reward_grant_count", 0)) == 1,
 		2000
 	)
 	_check(retried, "inventory change automatically retries the pending reward")
-	_check(inventory.count_item("light_round") == 2, "pending patrol reward commits base and efficiency bonus together")
+	_check(inventory.count_item("flint") == 2, "pending patrol reward commits base and efficiency flint together")
 	_check(int(service.get_snapshot().get("pending_reward_count", -1)) == 0, "successful retry removes the pending record")
 
 	for index in 300:
@@ -255,7 +258,9 @@ func _test_sixty_minute_economy_simulation() -> void:
 	var encounter_count := 0
 	var total_reward_quantity := 0
 	var total_light_spent := 0
-	var total_light_rewarded := 0
+	var total_finished_ammo_rewarded := 0
+	var total_flint_rewarded := 0
+	var total_gunpowder_rewarded := 0
 	var maximum_single_reward := 0
 	for second in range(0, 3600, 45):
 		var profile_id := "abyss_assault" if encounter_count % 2 == 0 else "abyss_skirmish"
@@ -268,13 +273,19 @@ func _test_sixty_minute_economy_simulation() -> void:
 		total_reward_quantity += quantity
 		maximum_single_reward = maxi(maximum_single_reward, quantity)
 		total_light_spent += shot_count
-		total_light_rewarded += int(rewards.get("light_round", 0))
+		total_finished_ammo_rewarded += int(rewards.get("arrow", 0))
+		total_finished_ammo_rewarded += int(rewards.get("light_round", 0))
+		total_finished_ammo_rewarded += int(rewards.get("shotgun_shell", 0))
+		total_flint_rewarded += int(rewards.get("flint", 0))
+		total_gunpowder_rewarded += int(rewards.get("gunpowder", 0))
 		encounter_count += 1
 	_check(encounter_count == 80, "sixty minute economy simulation resolves eighty bounded encounters")
 	_check(maximum_single_reward <= 16, "every simulated reward remains inside the sixteen-item hard limit")
 	_check(total_reward_quantity <= encounter_count * 16, "sixty minute reward production remains linearly bounded")
-	_check(total_light_rewarded - total_light_spent <= 40, "sixty minute efficient play cannot create runaway light ammunition")
-	_check(total_light_rewarded - total_light_spent >= 0, "efficient mixed encounters sustain but do not starve light ammunition")
+	_check(total_finished_ammo_rewarded == 0, "sixty minute rewards never mint completed ammunition")
+	_check(total_light_spent == 400, "sixty minute fixture records the exact mixed-combat ammunition sink")
+	_check(total_flint_rewarded == 120, "sixty minute fixture produces bounded flint crafting inputs")
+	_check(total_gunpowder_rewarded == 240, "sixty minute fixture produces bounded gunpowder crafting inputs")
 
 
 func _create_members(parent: Node3D, count: int) -> Array[FakeMember]:

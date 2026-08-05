@@ -34,6 +34,9 @@ func _run() -> void:
 		"autosave_minutes": 9,
 		"show_tutorial": false,
 		"show_interaction_prompts": true,
+		"encounter_intensity": "high_risk",
+		"show_damage_direction_pulses": false,
+		"damage_camera_impact": 0.4,
 	}
 	hub.main_menu.settings_changed.emit(requested)
 	_expect(is_equal_approx(player.mouse_sensitivity, 0.0042), "live actual player sensitivity")
@@ -43,6 +46,12 @@ func _run() -> void:
 		int(hub.current_settings.get("autosave_minutes", -1)) == 10,
 		"production settings policy normalizes autosave to an allowed interval"
 	)
+	_expect(str(hub.current_settings.get("encounter_intensity", "")) == "high_risk", "live encounter intensity setting")
+	_expect(not bool(hub.current_settings.get("show_damage_direction_pulses", true)), "live direction pulse setting")
+	_expect(is_equal_approx(float(hub.current_settings.get("damage_camera_impact", 0.0)), 0.4), "live camera impact setting")
+	var encounter_director: Node = hub.get_node_or_null("HostileEncounterDirector")
+	var encounter_snapshot: Dictionary = encounter_director.call("get_snapshot") if encounter_director != null else {}
+	_expect(str(encounter_snapshot.get("intensity_profile_id", "")) == "high_risk", "live encounter director receives high-risk intensity")
 	var autosave: Node = hub.get("autosave_runtime_participant") as Node
 	var autosave_snapshot: Dictionary = autosave.call("get_snapshot") if autosave != null else {}
 	_expect(
@@ -56,6 +65,9 @@ func _run() -> void:
 	_expect(int(persisted.get("render_distance", 0)) == 5, "render distance persisted")
 	_expect(int(persisted.get("cycle_minutes", 0)) == 13, "cycle duration persisted")
 	_expect(int(persisted.get("autosave_minutes", -1)) == 10, "autosave interval persisted")
+	_expect(str(persisted.get("encounter_intensity", "")) == "high_risk", "encounter intensity persisted")
+	_expect(not bool(persisted.get("show_damage_direction_pulses", true)), "direction pulse setting persisted")
+	_expect(is_equal_approx(float(persisted.get("damage_camera_impact", 0.0)), 0.4), "camera impact persisted")
 	_expect(
 		persisted.keys().all(func(key: Variant) -> bool: return key in SettingsPolicy.DEFAULTS),
 		"persisted settings retain only the canonical whitelist"
@@ -73,6 +85,12 @@ func _run() -> void:
 	_expect(is_equal_approx(reloaded_player.mouse_sensitivity, 0.0042), "reloaded actual player sensitivity")
 	_expect(reloaded_world.render_distance == 5, "reloaded actual world render distance")
 	_expect(is_equal_approx(reloaded_hub.day_night.cycle_duration_seconds, 780.0), "reloaded day/night duration")
+	_expect(str(reloaded_hub.current_settings.get("encounter_intensity", "")) == "high_risk", "reloaded encounter intensity")
+	_expect(not bool(reloaded_hub.current_settings.get("show_damage_direction_pulses", true)), "reloaded direction pulse setting")
+	_expect(is_equal_approx(float(reloaded_hub.current_settings.get("damage_camera_impact", 0.0)), 0.4), "reloaded camera impact setting")
+	var reloaded_encounter_director: Node = reloaded_hub.get_node_or_null("HostileEncounterDirector")
+	var reloaded_encounter_snapshot: Dictionary = reloaded_encounter_director.call("get_snapshot") if reloaded_encounter_director != null else {}
+	_expect(str(reloaded_encounter_snapshot.get("intensity_profile_id", "")) == "high_risk", "reloaded encounter director uses persisted intensity")
 	var reloaded_autosave: Node = reloaded_hub.get("autosave_runtime_participant") as Node
 	var reloaded_snapshot: Dictionary = (
 		reloaded_autosave.call("get_snapshot") if reloaded_autosave != null else {}

@@ -9,6 +9,7 @@ const CONFIG_PATH := "res://data/camera_feel.json"
 const PolicyScript = preload("res://src/player/camera_feel_policy.gd")
 
 var bob_enabled := true
+var damage_impact_multiplier := 1.0
 var config: Dictionary = PolicyScript.defaults()
 var _player: CharacterBody3D
 var _pivot: Node3D
@@ -57,6 +58,10 @@ func add_shake(strength: float) -> void:
 	_shake_strength = minf(1.6, _shake_strength + maxf(0.0, strength))
 
 
+func set_damage_impact_multiplier(value: float) -> void:
+	damage_impact_multiplier = clampf(value, 0.0, 1.5)
+
+
 func get_snapshot() -> Dictionary:
 	return {
 		"enabled": is_physics_processing(),
@@ -67,6 +72,7 @@ func get_snapshot() -> Dictionary:
 		"land_count": _land_count,
 		"dig_tick_count": _dig_tick_count,
 		"damage_shake_count": _damage_shake_count,
+		"damage_impact_multiplier": damage_impact_multiplier,
 		"harvest_connected": _harvest_service != null and is_instance_valid(_harvest_service),
 		"shake_strength": _shake_strength,
 		"bob_offset": [_bob_offset.x, _bob_offset.y],
@@ -254,7 +260,7 @@ func _refresh_floor_block() -> void:
 
 func _on_player_damage(_amount: float, _source: String) -> void:
 	_damage_shake_count += 1
-	add_shake(float(config["hurt_shake_strength"]))
+	add_shake(float(config["hurt_shake_strength"]) * damage_impact_multiplier)
 
 
 func _load_config() -> void:

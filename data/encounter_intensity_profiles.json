@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "id": "casual",
+      "display_name": "休闲",
+      "cooldown_multiplier": 1.35,
+      "danger_pressure_multiplier": 0.75
+    },
+    {
+      "id": "standard",
+      "display_name": "标准",
+      "cooldown_multiplier": 1.0,
+      "danger_pressure_multiplier": 1.0
+    },
+    {
+      "id": "high_risk",
+      "display_name": "高风险",
+      "cooldown_multiplier": 0.75,
+      "danger_pressure_multiplier": 1.25
+    }
+  ]
+}

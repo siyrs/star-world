@@ -10,7 +10,22 @@ func _commit_attack() -> void:
 	_set_attack_state(HostileAttackPolicyScript.STATE_COOLDOWN)
 	var applied := false
 	if attack_target != null and is_instance_valid(attack_target):
-		if attack_target.has_method("take_hostile_damage"):
+		if attack_target.has_method("take_hostile_damage_with_context"):
+			var raw_result: Variant = attack_target.call(
+				"take_hostile_damage_with_context",
+				attack_damage,
+				attack_source_id,
+				get_instance_id(),
+				{
+					"source_position":[global_position.x, global_position.y, global_position.z],
+					"attack_kind":"hostile_melee",
+				}
+			)
+			if raw_result is Dictionary:
+				applied = bool(raw_result.get("applied", raw_result.get("accepted", false)))
+			else:
+				applied = bool(raw_result)
+		elif attack_target.has_method("take_hostile_damage"):
 			var raw_result: Variant = attack_target.call(
 				"take_hostile_damage",
 				attack_damage,

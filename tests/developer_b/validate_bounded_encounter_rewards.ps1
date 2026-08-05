@@ -49,6 +49,8 @@ foreach ($itemPath in @($paths.Items, $paths.Ranged, $paths.Firearms)) {
     if (-not [string]::IsNullOrWhiteSpace($itemId)) { $itemIds[$itemId] = $true }
   }
 }
+$allowedRewardItemIds = @('flint','gunpowder')
+$finishedAmmunitionIds = @('arrow','light_round','shotgun_shell')
 $profileIds = @{}
 foreach ($profile in $profiles) {
   $id = [string]$profile.encounter_profile_id
@@ -64,6 +66,8 @@ foreach ($profile in $profiles) {
       $itemId = [string]$rewardProperty.Name
       $quantity = [int]$rewardProperty.Value
       if (-not $itemIds.ContainsKey($itemId)) { throw "Encounter reward references unknown item: $id/$itemId" }
+      if ($itemId -in $finishedAmmunitionIds) { throw "Encounter reward must not contain completed ammunition: $id/$itemId" }
+      if ($itemId -notin $allowedRewardItemIds) { throw "Encounter reward must contain only crafting inputs: $id/$itemId" }
       if ($quantity -lt 1 -or $quantity -gt 8) { throw "Encounter reward quantity must be 1..8: $id/$itemId/$quantity" }
       $rewardTypes[$itemId] = $true
       $totalQuantity += $quantity
@@ -94,7 +98,8 @@ foreach ($token in @(
   'MAX_PENDING_REWARDS\s*:=\s*8','MAX_CLAIM_HISTORY\s*:=\s*256',
   'encounter_started','encounter_completed','shot_fired','inventory_changed',
   '_on_member_died','_accepted_target_ids','transact_items','_pending_rewards',
-  '_schedule_reward_flush','duplicate_completion','unattributed_shot_count','EncounterRewardOverlay'
+  '_schedule_reward_flush','duplicate_completion','unattributed_shot_count','EncounterRewardOverlay',
+  'FINISHED_AMMUNITION_IDS','ALLOWED_REWARD_ITEM_IDS','_contains_unsupported_reward_items'
 )) {
   if ($text.Service -notmatch $token) { throw "Bounded reward service is missing: $token" }
 }
@@ -127,7 +132,7 @@ foreach ($token in @('EncounterRewardPanel','补给等待领取','净弹药','�
 foreach ($phrase in @(
   'one invalid reward profile rejects the entire staged registry',
   'last defeated member grants the squad reward before director cleanup',
-  'duplicate completion cannot grant the same reward twice',
+  'duplicate completion cannot grant the same crafting inputs twice',
   'unloaded members are not misclassified as defeated',
   'full inventory queues one bounded pending reward',
   'inventory change automatically retries the pending reward',

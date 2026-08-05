@@ -60,6 +60,20 @@ func _build_world_card() -> void:
 			_survival_difficulty.item_count - 1, profile_id
 		)
 	difficulty_row.add_child(_survival_difficulty)
+	var intensity_row := _make_control_row(
+		card_root,
+		"遭遇强度",
+		"只调整敌对遭遇冷却和危险压力预算；队伍身份、构成、奖励归属和世界进度保持不变。"
+	)
+	_encounter_intensity = OptionButton.new()
+	_encounter_intensity.name = "EncounterIntensity"
+	_encounter_intensity.custom_minimum_size = Vector2(230, Tokens.CONTROL_HEIGHT_MD)
+	for profile_id: String in SettingsPolicy.allowed_encounter_intensities():
+		_encounter_intensity.add_item(SettingsPolicy.encounter_intensity_label(profile_id))
+		_encounter_intensity.set_item_metadata(
+			_encounter_intensity.item_count - 1, profile_id
+		)
+	intensity_row.add_child(_encounter_intensity)
 	var autosave_row := _make_control_row(card_root, "自动保存", "按未暂停的活动时间计算")
 	_autosave_interval = OptionButton.new()
 	_autosave_interval.custom_minimum_size = Vector2(230, Tokens.CONTROL_HEIGHT_MD)
@@ -138,7 +152,12 @@ func _apply() -> void:
 		"show_tutorial": _show_tutorial.button_pressed,
 		"show_interaction_prompts": _show_interaction_prompts.button_pressed,
 		"camera_bob": _camera_bob.button_pressed,
+		"show_damage_direction_pulses": _show_damage_direction_pulses.button_pressed,
+		"damage_camera_impact": _damage_camera_impact.value,
 		"survival_difficulty": _selected_difficulty_id(),
+		"encounter_intensity": _selected_string_option(
+			_encounter_intensity, str(SettingsPolicy.DEFAULTS.encounter_intensity)
+		),
 		"ui_scale": _selected_ui_scale(),
 	})
 	_status.text = "正在保存并应用设置…"

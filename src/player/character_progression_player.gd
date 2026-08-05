@@ -7,6 +7,7 @@ const WORLD_ENTRY_DAMAGE_GRACE_SECONDS := 90.0
 const RESPAWN_DAMAGE_GRACE_SECONDS := 30.0
 const REPEATED_HOSTILE_DAMAGE_COOLDOWN := 4.5
 const MAX_HOSTILE_DAMAGE_COOLDOWN_SOURCES := 32
+const DamageDirectionPolicyScript = preload("res://src/combat/damage_direction_policy.gd")
 const LEGACY_HOSTILE_SOURCES: Array[String] = [
 	"zombie", "abyss_brute", "abyss_marksman",
 ]
@@ -26,6 +27,7 @@ var _hostile_damage_accept_count := 0
 var _hostile_damage_rejection_count := 0
 var _hostile_damage_eviction_count := 0
 var _ranged_recoil_count := 0
+var _damage_camera_impact := 1.0
 
 
 func _ready() -> void:
@@ -151,6 +153,15 @@ func take_hostile_damage(
 	source: String = "hostile",
 	attacker_id: int = 0
 ) -> Dictionary:
+	return take_hostile_damage_with_context(amount, source, attacker_id, {})
+
+
+func take_hostile_damage_with_context(
+	amount: float,
+	source: String = "hostile",
+	attacker_id: int = 0,
+	context: Dictionary = {}
+) -> Dictionary:
 	var normalized_source := source.strip_edges()
 	if normalized_source.is_empty():
 		normalized_source = "hostile"
@@ -181,7 +192,8 @@ func take_hostile_damage(
 		result["reason"] = "attacker_cooldown"
 		result["cooldown_remaining_seconds"] = cooldown_remaining
 		return result
-	var incoming := _apply_incoming_damage(amount, normalized_source)
+	var incoming_context := _incoming_damage_context(context, attacker_id)
+	var incoming := _apply_incoming_damage(amount, normalized_source, incoming_context)
 	result.merge(incoming, true)
 	var applied := bool(incoming.get("applied", false))
 	result["handled"] = true
@@ -199,7 +211,9 @@ func take_hostile_damage(
 	return result
 
 
-func _apply_incoming_damage(amount: float, source: String) -> Dictionary:
+func _apply_incoming_damage(
+	amount: float, source: String, context: Dictionary = {}
+) -> Dictionary:
 	if amount <= 0.0:
 		return {"handled": false, "accepted": false, "applied": false, "reason": "invalid_damage"}
 	var result: Dictionary = {}
@@ -217,7 +231,9 @@ func _apply_incoming_damage(amount: float, source: String) -> Dictionary:
 		}
 		combat_result_reported.emit(result.duplicate(true))
 		return result
-	result = combat_service.call("resolve_incoming_damage", amount, source, true)
+	result = combat_service.call(
+		"resolve_incoming_damage", amount, source, true, context.duplicate(true)
+	)
 	var final_damage := maxf(0.0, float(result.get("final_damage", amount)))
 	result["handled"] = true
 	result["accepted"] = final_damage > 0.0
@@ -232,6 +248,43 @@ func _apply_incoming_damage(amount: float, source: String) -> Dictionary:
 		survival.call("take_damage", final_damage, source)
 	combat_result_reported.emit(result.duplicate(true))
 	return result
+
+
+func apply_combat_feedback_settings(settings: Dictionary) -> void:
+	_damage_camera_impact = clampf(
+		float(settings.get("damage_camera_impact", 1.0)), 0.0, 1.5
+	)
+	var feel := get_node_or_null("CameraFeel")
+	if feel != null and feel.has_method("set_damage_impact_multiplier"):
+		feel.call("set_damage_impact_multiplier", _damage_camera_impact)
+
+
+func _incoming_damage_context(context: Dictionary, attacker_id: int) -> Dictionary:
+	var normalized := context.duplicate(true)
+	normalized["attacker_id"] = attacker_id
+	var source_position := _vector3_context(
+		normalized.get("source_position", []), global_position
+	)
+	var direction := DamageDirectionPolicyScript.classify(
+		global_position, -global_transform.basis.z, source_position
+	)
+	normalized["source_position"] = [source_position.x, source_position.y, source_position.z]
+	normalized["damage_direction"] = str(direction.get("direction", "front"))
+	normalized["damage_direction_angle_degrees"] = float(direction.get("angle_degrees", 0.0))
+	normalized["damage_source_available"] = bool(direction.get("source_available", false))
+	return normalized
+
+
+func _vector3_context(value: Variant, fallback: Vector3) -> Vector3:
+	if value is Vector3:
+		var vector_value: Vector3 = value
+		if is_finite(vector_value.x) and is_finite(vector_value.y) and is_finite(vector_value.z):
+			return vector_value
+	if value is Array and value.size() >= 3:
+		var array_vector := Vector3(float(value[0]), float(value[1]), float(value[2]))
+		if is_finite(array_vector.x) and is_finite(array_vector.y) and is_finite(array_vector.z):
+			return array_vector
+	return fallback
 
 
 func _start_primary_action() -> void:

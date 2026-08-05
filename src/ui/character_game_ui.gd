@@ -41,6 +41,13 @@ func end_gameplay() -> void:
 	super.end_gameplay()
 
 
+
+
+func apply_combat_feedback_settings(settings: Dictionary) -> void:
+	if combat_feedback_overlay != null and combat_feedback_overlay.has_method("apply_settings"):
+		combat_feedback_overlay.call("apply_settings", settings.duplicate(true))
+
+
 func get_character_panel() -> Node:
 	return inventory_panel
 

@@ -17,6 +17,13 @@
       "color": "#9A6A3B"
     },
     {
+      "id": "flint",
+      "name": "燧石",
+      "category": "material",
+      "max_stack": 64,
+      "color": "#5F6468"
+    },
+    {
       "id": "arrow",
       "name": "箭矢",
       "category": "ammunition",
@@ -43,9 +50,9 @@
       "name": "箭矢",
       "station": "workbench",
       "ingredients": {
-        "stone": 1,
         "stick": 1,
-        "feather": 1
+        "feather": 1,
+        "flint": 1
       },
       "output": {
         "id": "arrow",

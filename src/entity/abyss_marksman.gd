@@ -361,6 +361,7 @@ func _commit_attack() -> void:
 				"damage_flow": "hostile",
 				"damage_source": attack_source_id,
 				"attacker_id": get_instance_id(),
+				"source_position": [global_position.x, global_position.y, global_position.z],
 				"raw_damage": attack_damage,
 				"shot_direction": [direction.x, direction.y, direction.z],
 				"knockback_horizontal": projectile_knockback_horizontal,

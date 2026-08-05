@@ -107,6 +107,8 @@ func _show_rejected(result: Dictionary) -> void:
 		"reward_profile_missing":"该遭遇没有奖励配置",
 		"pending_capacity":"待领取补给已达到安全上限",
 		"inventory_unavailable":"背包服务暂不可用",
+		"finished_ammunition_reward":"奖励配置包含成品弹药，已被安全策略拒绝",
+		"unsupported_reward_item":"奖励配置包含非制造输入，已被安全策略拒绝",
 	}.get(reason, "奖励事务失败：%s" % reason))
 	_remaining = DISPLAY_SECONDS
 	_refresh_visibility()
