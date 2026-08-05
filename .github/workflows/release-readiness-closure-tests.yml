@@ -22,6 +22,7 @@ on:
       - 'tests/qa/building_mining_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/long_soak_journey.gd'
       - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
+      - 'tests/qa/release_smoke_evidence_state_regression.gd'
   push:
     branches:
       - master
@@ -45,6 +46,7 @@ on:
       - 'tests/qa/building_mining_closed_loop_desktop_acceptance.gd'
       - 'tests/qa/long_soak_journey.gd'
       - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
+      - 'tests/qa/release_smoke_evidence_state_regression.gd'
   workflow_dispatch:
 
 permissions:
@@ -81,6 +83,10 @@ jobs:
       - name: Validate release smoke runtime health scope
         shell: pwsh
         run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_runtime_health_scope_regression.gd'
+
+      - name: Validate release smoke tutorial-free evidence state
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_evidence_state_regression.gd'
 
       - name: Tutorial interruption completion and double reload
         shell: pwsh
@@ -165,7 +171,7 @@ jobs:
     name: No-transport long-soak mechanism
     needs: content-and-contract
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 70
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -185,10 +191,16 @@ jobs:
             -Godot $godotPath `
             -ProjectRoot . `
             -OutputDirectory 'build\release-reference-soak' `
-            -SoakSeconds 240
+            -SoakSeconds 240 `
+            -MinimumCycles 5
           $report = Get-Content '.\build\release-reference-soak\soak-report.json' -Raw | ConvertFrom-Json
           if ([int]$report.schema_version -ne 2) { throw 'Long-soak schema is not the no-transport v2 contract.' }
-          $transported = @($report.cycles | Where-Object { [bool]$_.post_spawn_transport -or [int]$_.route.player_transform_writes -ne 0 })
+          if ([int]$report.minimum_cycles_target -lt 5) { throw 'Long-soak report does not retain the five-cycle minimum.' }
+          $cycles = @($report.cycles)
+          if ($cycles.Count -lt 5) { throw "Long-soak completed $($cycles.Count) cycles; expected at least 5." }
+          $profiles = @($cycles | ForEach-Object { [string]$_.profile } | Sort-Object -Unique)
+          if ($profiles.Count -ne 5) { throw "Long-soak covered $($profiles.Count) profiles; expected all five." }
+          $transported = @($cycles | Where-Object { [bool]$_.post_spawn_transport -or [int]$_.route.player_transform_writes -ne 0 })
           if ($transported.Count -ne 0) { throw 'Long-soak report contains post-spawn transport.' }
 
       - name: Upload hosted soak evidence
