@@ -54,8 +54,7 @@ func _sync_controller_primary() -> void:
 	if pressed and not _controller_primary_active:
 		_controller_primary_active = true
 		_controller_primary_press_count += 1
-		_primary_action_held = true
-		_start_primary_action()
+		set_primary_action_active(true)
 	elif not pressed and _controller_primary_active:
 		_release_controller_primary("controller_released")
 
@@ -65,8 +64,7 @@ func _release_controller_primary(reason: String) -> void:
 		return
 	_controller_primary_active = false
 	_controller_primary_release_count += 1
-	_primary_action_held = false
-	_cancel_harvest(reason)
+	set_primary_action_active(false, reason)
 
 
 func _apply_controller_look(delta: float) -> void:
