@@ -1,0 +1,42 @@
+name: Temporary next-iteration repository snapshot
+
+on:
+  push:
+    branches:
+      - agent/post-release-feature-iteration
+    paths:
+      - '.github/workflows/temporary-next-iteration-snapshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create complete repository snapshot
+        shell: bash
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='build' \
+            --exclude='.godot' \
+            -czf next-iteration-repository.tgz .
+          sha256sum next-iteration-repository.tgz > next-iteration-repository.sha256
+
+      - name: Upload repository snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-iteration-repository-${{ github.run_number }}
+          path: |
+            next-iteration-repository.tgz
+            next-iteration-repository.sha256
+          if-no-files-found: error
+          retention-days: 3
