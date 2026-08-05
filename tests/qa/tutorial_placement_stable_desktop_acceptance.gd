@@ -2,8 +2,8 @@ extends "res://tests/qa/tutorial_placement_desktop_acceptance.gd"
 
 # Stabilize the production player's body-yaw / CameraPivot-pitch hierarchy after
 # a full menu reload. The base journey and every assertion remain unchanged.
-# This adapter only prevents a transient Camera3D look_at transform from being
-# overwritten while a real left-button harvest is held across physics frames.
+# Held mining uses the same production PRIMARY_ACTION consumed by
+# GameplayInputService and ControllerExplorationPlayer.
 
 const HARVEST_TIMEOUT_MILLISECONDS := 15000
 const AIM_REFRESH_MILLISECONDS := 250
@@ -38,22 +38,12 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 	var target_world: Vector3 = world.call("block_to_world", target)
 	if player != null:
 		await _aim_at(player, target_world)
-	var center := root.get_visible_rect().get_center()
-	var press := InputEventMouseButton.new()
-	press.position = center
-	press.global_position = center
-	press.button_index = MOUSE_BUTTON_LEFT
-	press.button_mask = MOUSE_BUTTON_MASK_LEFT
-	press.pressed = true
-	# Viewport.push_input can be consumed by the production UI routing before the
-	# player's _unhandled_input callback. parse_input_event follows the same global
-	# input path as an OS mouse event and also updates the Input singleton.
-	Input.parse_input_event(press)
-	await process_frame
 
-	# Harvest progress is measured in elapsed seconds by the production service.
-	# The policy hard-caps a block at 12 seconds, so a 15-second monotonic deadline
-	# is deterministic and strictly bounded regardless of CI frame rate.
+	# The production controller bridge maps this action into the same held state,
+	# target resolution, harvest service, progress UI and completion path as a
+	# physical primary button. No player or service method is invoked directly.
+	Input.action_press(InputActions.PRIMARY_ACTION)
+	await process_frame
 	var deadline := Time.get_ticks_msec() + HARVEST_TIMEOUT_MILLISECONDS
 	var next_aim_refresh := Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
 	while (
@@ -64,13 +54,6 @@ func _hold_left_until_removed(world: Node, target: Vector3i) -> void:
 		if player != null and Time.get_ticks_msec() >= next_aim_refresh:
 			await _aim_at(player, target_world)
 			next_aim_refresh = Time.get_ticks_msec() + AIM_REFRESH_MILLISECONDS
-
-	var release := InputEventMouseButton.new()
-	release.position = center
-	release.global_position = center
-	release.button_index = MOUSE_BUTTON_LEFT
-	release.button_mask = 0
-	release.pressed = false
-	Input.parse_input_event(release)
+	Input.action_release(InputActions.PRIMARY_ACTION)
 	await process_frame
 	await process_frame
