@@ -27,15 +27,23 @@ func _run() -> void:
 	)
 	_check(
 		RuntimePolicy.is_runtime_critical({
+			"status": "critical",
+			"runtime_status": "critical",
+			"sustained_runtime_status": "healthy",
+			"operations_status": "healthy",
+		}),
+		"runtime peak failures remain release-blocking even when sustained status is healthy"
+	)
+	_check(
+		RuntimePolicy.is_runtime_critical({
 			"status": "warning",
-			"runtime_status": "healthy",
 			"sustained_runtime_status": "critical",
 		}),
-		"sustained runtime critical status is release-blocking"
+		"sustained runtime critical status is the fallback when runtime status is absent"
 	)
 	_check(
 		RuntimePolicy.runtime_health_status({"runtime_status": " CRITICAL "}) == "critical",
-		"runtime status is normalized when sustained status is unavailable"
+		"runtime status is normalized"
 	)
 	_check(
 		RuntimePolicy.is_runtime_critical({"status": "critical"}),
