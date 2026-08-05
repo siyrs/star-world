@@ -29,6 +29,23 @@ func set_input_enabled(enabled: bool) -> void:
 	super.set_input_enabled(enabled)
 
 
+# Unified controller/keyboard action entry used by ControllerExplorationPlayer.
+# Mouse input continues through _unhandled_input, but both paths own the same
+# held state and start/cancel the same production harvest lifecycle.
+func set_controller_primary_active(active: bool) -> void:
+	if not input_enabled:
+		_primary_action_held = false
+		_cancel_harvest("input_disabled")
+		return
+	if _primary_action_held == active:
+		return
+	_primary_action_held = active
+	if active:
+		_start_primary_action()
+	else:
+		_cancel_harvest("released")
+
+
 func _process(delta: float) -> void:
 	super._process(delta)
 	if input_enabled and _primary_action_held:
