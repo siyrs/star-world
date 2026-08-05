@@ -24,11 +24,13 @@ jobs:
       - name: Create complete repository snapshot
         shell: bash
         run: |
+          snapshot_path="$RUNNER_TEMP/next-iteration-repository.tgz"
           tar \
             --exclude='.git' \
             --exclude='build' \
             --exclude='.godot' \
-            -czf next-iteration-repository.tgz .
+            -czf "$snapshot_path" .
+          cp "$snapshot_path" next-iteration-repository.tgz
           sha256sum next-iteration-repository.tgz > next-iteration-repository.sha256
 
       - name: Upload repository snapshot
