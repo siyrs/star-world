@@ -6,6 +6,7 @@ const RouteProbeScript = preload("res://src/diagnostics/production_route_probe.g
 const MapProfileCatalogScript = preload("res://src/world/map_profile_catalog.gd")
 const Actions = preload("res://src/input/gameplay_input_actions.gd")
 const FrameMetricsScript = preload("res://src/core/frame_performance_metrics.gd")
+const RuntimePolicy = preload("res://src/diagnostics/release_smoke_runtime_policy.gd")
 const DEFAULT_REPORT_PATH := "user://release-smoke.json"
 const SMOKE_WORLD_ID := "release-smoke-runtime"
 const TELEMETRY_STABILIZATION_FRAMES := 12
@@ -172,7 +173,9 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 		return {"ok": false, "reason": "runtime_missing"}
 	var max_pending := 0
 	var max_loaded := 0
-	var critical_samples := 0
+	var runtime_critical_samples := 0
+	var global_critical_samples := 0
+	var operations_critical_samples := 0
 	var samples := 0
 	var frame_times_ms: Array[float] = []
 	var engine_fps_samples: Array[float] = []
@@ -194,8 +197,12 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 		max_loaded = maxi(max_loaded, int(streaming.get("loaded", 0)))
 		if frame_index >= SOAK_SAMPLE_INTERVAL_FRAMES:
 			var health: Dictionary = snapshot.get("health", {})
-			if str(health.get("status", "healthy")) == "critical":
-				critical_samples += 1
+			if RuntimePolicy.is_runtime_critical(health):
+				runtime_critical_samples += 1
+			if RuntimePolicy.normalized_status(health.get("status", "healthy")) == "critical":
+				global_critical_samples += 1
+			if RuntimePolicy.normalized_status(health.get("operations_status", "healthy")) == "critical":
+				operations_critical_samples += 1
 		samples += 1
 	var final_snapshot: Dictionary = diagnostics.call("sample_now")
 	var adaptive: Dictionary = final_snapshot.get("adaptive_streaming", {})
@@ -208,7 +215,7 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	var bounded := (
 		max_pending <= 128
 		and max_loaded <= 96
-		and critical_samples <= 1
+		and runtime_critical_samples <= 1
 		and change_count <= 12
 		and budget_ms >= 0.5
 		and budget_ms <= 12.0
@@ -222,7 +229,10 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 		"samples": samples,
 		"max_pending_chunks": max_pending,
 		"max_loaded_chunks": max_loaded,
-		"critical_samples": critical_samples,
+		"critical_samples": runtime_critical_samples,
+		"health_scope": "runtime",
+		"global_critical_samples": global_critical_samples,
+		"operations_critical_samples": operations_critical_samples,
 		"adaptive_change_count": change_count,
 		"adaptive_level": str(adaptive.get("level_name", "unknown")),
 		"adaptive_budget_ms": budget_ms,

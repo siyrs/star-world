@@ -16,6 +16,16 @@ $stdoutPath = Join-Path $outputFullPath 'soak.stdout.log'
 $stderrPath = Join-Path $outputFullPath 'soak.stderr.log'
 $memoryPath = Join-Path $outputFullPath 'soak.memory.json'
 
+# This runner is intentionally self-contained: a fresh checkout has no .godot
+# import cache, so importing first is part of the long-soak contract rather than
+# an accidental responsibility of a calling workflow.
+$invokeGodotPath = Join-Path $PSScriptRoot 'Invoke-Godot.ps1'
+& $invokeGodotPath `
+    -Godot $Godot `
+    -WorkingDirectory $projectFullPath `
+    -Arguments '--headless --path . --editor --quit' `
+    -TimeoutMilliseconds 600000
+
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $Godot
 $startInfo.WorkingDirectory = $projectFullPath

@@ -25,7 +25,11 @@ function Require-NotContains {
 
 $route = Read-RepoFile 'src/diagnostics/production_route_probe.gd'
 $smoke = Read-RepoFile 'src/diagnostics/release_smoke_runner.gd'
+$runtimePolicy = Read-RepoFile 'src/diagnostics/release_smoke_runtime_policy.gd'
+$runtimeScopeRegression = Read-RepoFile 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
 $soak = Read-RepoFile 'tests/qa/long_soak_journey.gd'
+$soakDriver = Read-RepoFile 'tests/ci/run_long_soak.ps1'
+$godotInvoker = Read-RepoFile 'tests/ci/Invoke-Godot.ps1'
 $smokeDriver = Read-RepoFile 'tests/release/run_windows_export_smoke.ps1'
 $matrixDriver = Read-RepoFile 'tests/release/run_windows_export_journey_matrix.ps1'
 $hardwareDriver = Read-RepoFile 'tests/release/run_target_hardware_qualification.ps1'
@@ -50,11 +54,18 @@ Require-Contains $smoke '--smoke-route-probe' 'Release smoke must expose the pro
 Require-Contains $smoke 'FrameMetricsScript.summarize' 'Final executable evidence must use frame-time schema metrics'
 Require-Contains $smoke '"version": 4' 'Release smoke report schema must advertise route and performance evidence'
 Require-NotContains $smoke 'player.global_position =' 'Release smoke cannot transport the player for soak or screenshots'
+Require-Contains $smoke 'RuntimePolicy.is_runtime_critical' 'Release smoke must gate on runtime health rather than global operations capacity'
+Require-Contains $runtimePolicy 'sustained_runtime_status' 'Runtime health policy must prefer sustained runtime evidence'
+Require-Contains $runtimePolicy 'runtime_status' 'Runtime health policy must support the direct runtime status fallback'
+Require-Contains $runtimeScopeRegression 'operations-only critical health remains observable' 'Runtime health scope must have a deterministic regression test'
 
 Require-Contains $soak 'RouteProbeScript.new()' 'Long soak must reuse the production route contract'
 Require-Contains $soak '"schema_version": 2' 'Long soak must advertise the no-transport schema'
 Require-Contains $soak '"post_spawn_transport": false' 'Every soak cycle must record its transport boundary'
 Require-NotContains $soak 'player.global_position =' 'Long soak cannot simulate pressure by teleporting the player'
+Require-Contains $soakDriver 'Invoke-Godot.ps1' 'Long-soak runner must own fresh-checkout project import'
+Require-Contains $soakDriver '--editor --quit' 'Long-soak runner must complete a strict import before execution'
+Require-Contains $godotInvoker '[string]$WorkingDirectory' 'Godot process wrapper must support an explicit project working directory'
 
 Require-Contains $smokeDriver '[switch]$SkipExport' 'Release driver must reuse one verified binary across profiles'
 Require-Contains $smokeDriver '--smoke-route-probe' 'Release driver must invoke exported production routes'
@@ -100,6 +111,7 @@ Require-Contains $workflow 'permissions:' 'Permanent workflow must declare permi
 Require-Contains $workflow 'contents: read' 'Permanent workflow must be read-only'
 Require-Contains $workflow 'run_windows_export_journey_matrix.ps1' 'Permanent workflow must run the five-profile final executable'
 Require-Contains $workflow 'run_long_soak.ps1' 'Permanent workflow must exercise the no-transport soak mechanism'
+Require-Contains $workflow 'release_smoke_runtime_health_scope_regression.gd' 'Permanent workflow must guard runtime-versus-operations health scope'
 Require-Contains $workflow 'tutorial_placement_desktop_acceptance.gd' 'Permanent workflow must run the cross-session tutorial'
 Require-Contains $workflow 'building_mining_closed_loop_desktop_acceptance.gd' 'Permanent workflow must run building/mining closure'
 Require-NotContains $workflow 'contents: write' 'Permanent release-readiness workflow cannot write repository contents'
@@ -126,6 +138,8 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'RELEASE READINESS CLOSURE CONTRACT PASS'
+Write-Host '  - fresh-checkout soak imports resources before running'
+Write-Host '  - final executable runtime health excludes unrelated operations saturation'
 Write-Host '  - final executable route evidence uses production input and no transport'
 Write-Host '  - tutorial and building/mining cross full save/menu/reload boundaries'
 Write-Host '  - hosted CI and target-hardware qualification evidence remain separated'
