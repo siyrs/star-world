@@ -35,7 +35,7 @@ jobs:
           xz --decompress --stdout "$RUNNER_TEMP/iteration57.diff.xz" > "$RUNNER_TEMP/iteration57.diff"
           test "$(wc -c < "$RUNNER_TEMP/iteration57.diff")" -eq 153225
 
-      - name: Apply complete implementation
+      - name: Apply source implementation
         shell: bash
         run: |
           set -euo pipefail
@@ -47,14 +47,18 @@ jobs:
           path = Path('docs/PRODUCT_ROADMAP.md')
           path.write_text(path.read_text(encoding='utf-8').rstrip('\n') + '\n', encoding='utf-8')
           PY
-          test ! -e .github/workflows/temporary-next-iteration-snapshot.yml
-          test -e .github/workflows/combat-feedback-intensity-economy-tests.yml
+
+          # Workflow mutations are performed separately through the authorized
+          # GitHub connector because GITHUB_TOKEN cannot change workflow files.
+          rm -f .github/workflows/combat-feedback-intensity-economy-tests.yml
+          git checkout -- .github/workflows/temporary-next-iteration-snapshot.yml
+
           test -e src/combat/damage_direction_policy.gd
           test -e src/entity/encounter_intensity_registry.gd
           test -e tests/qa/mixed_combat_long_run_regression.gd
           git diff --check
 
-      - name: Commit complete iteration
+      - name: Commit complete source iteration
         shell: bash
         run: |
           set -euo pipefail
