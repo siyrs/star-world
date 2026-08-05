@@ -26,9 +26,24 @@ func bind_harvest_service(p_harvest_service: Node) -> void:
 
 func set_input_enabled(enabled: bool) -> void:
 	if not enabled:
-		_primary_action_held = false
-		_cancel_harvest("input_disabled")
+		set_primary_action_active(false, "input_disabled")
 	super.set_input_enabled(enabled)
+
+
+func set_primary_action_active(
+	active: bool,
+	release_reason: String = "released"
+) -> void:
+	if active and not input_enabled:
+		set_primary_action_active(false, "input_disabled")
+		return
+	if _primary_action_held == active:
+		return
+	_primary_action_held = active
+	if active:
+		_start_primary_action()
+	else:
+		_cancel_harvest(release_reason)
 
 
 func _process(delta: float) -> void:
@@ -44,11 +59,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if mouse_event != null and mouse_event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			return
-		_primary_action_held = mouse_event.pressed
-		if mouse_event.pressed:
-			_start_primary_action()
-		else:
-			_cancel_harvest("released")
+		set_primary_action_active(mouse_event.pressed, "released")
 		get_viewport().set_input_as_handled()
 		return
 	super._unhandled_input(event)
@@ -62,7 +73,7 @@ func break_target_block() -> bool:
 		return _try_attack_entity(collider)
 	if harvest_service == null:
 		return super.break_target_block()
-	var target := _resolve_harvest_target()
+	var target := _harvest_target_from_current_ray()
 	if target.is_empty():
 		return false
 	var result: Dictionary = harvest_service.call(
@@ -76,11 +87,10 @@ func break_target_block() -> bool:
 
 
 func _start_primary_action() -> void:
-	# Dynamic voxel edits rebuild a chunk's physics shape asynchronously. On the
-	# first query after that rebuild, RayCast3D can still expose the previous empty
-	# result even though an immediate second physics-server query resolves the
-	# target. Keep this bounded to two synchronous samples at action start so a
-	# valid first click is not discarded as no_target.
+	# Resolve the live target exactly once for the action-start transaction. A
+	# dynamic voxel edit can rebuild the physics shape between two immediate
+	# RayCast queries; resolving once and reusing that target prevents a valid
+	# first press from becoming target_lost before the harvest clock is created.
 	if not _refresh_interaction_ray():
 		_primary_action_held = false
 		_cancel_harvest("no_target")
@@ -90,7 +100,12 @@ func _start_primary_action() -> void:
 		_primary_action_held = false
 		_try_attack_entity(collider)
 		return
-	_advance_harvest(0.0)
+	var target := _harvest_target_from_current_ray()
+	if target.is_empty():
+		_primary_action_held = false
+		_cancel_harvest("no_target")
+		return
+	_advance_resolved_harvest(target, 0.0)
 
 
 func _try_attack_entity(_collider: Node) -> bool:
@@ -110,6 +125,10 @@ func _advance_harvest(delta: float) -> void:
 		_primary_action_held = false
 		_cancel_harvest("target_lost")
 		return
+	_advance_resolved_harvest(target, delta)
+
+
+func _advance_resolved_harvest(target: Dictionary, delta: float) -> void:
 	var result: Dictionary = harvest_service.call(
 		"advance",
 		world,
@@ -127,6 +146,12 @@ func _advance_harvest(delta: float) -> void:
 
 func _resolve_harvest_target() -> Dictionary:
 	if world == null or not _refresh_interaction_ray():
+		return {}
+	return _harvest_target_from_current_ray()
+
+
+func _harvest_target_from_current_ray() -> Dictionary:
+	if world == null or interaction_ray == null or not interaction_ray.is_colliding():
 		return {}
 	var collider = interaction_ray.get_collider()
 	if collider != null and collider.has_method("take_damage"):
