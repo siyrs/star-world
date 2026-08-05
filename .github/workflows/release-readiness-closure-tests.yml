@@ -23,6 +23,7 @@ on:
       - 'tests/qa/long_soak_journey.gd'
       - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
       - 'tests/qa/release_smoke_evidence_state_regression.gd'
+      - 'tests/qa/sky_islands_cautious_descent_regression.gd'
   push:
     branches:
       - master
@@ -47,6 +48,7 @@ on:
       - 'tests/qa/long_soak_journey.gd'
       - 'tests/qa/release_smoke_runtime_health_scope_regression.gd'
       - 'tests/qa/release_smoke_evidence_state_regression.gd'
+      - 'tests/qa/sky_islands_cautious_descent_regression.gd'
   workflow_dispatch:
 
 permissions:
@@ -60,7 +62,7 @@ jobs:
   content-and-contract:
     name: Cross-session content and release contracts
     runs-on: windows-latest
-    timeout-minutes: 55
+    timeout-minutes: 65
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,6 +89,10 @@ jobs:
       - name: Validate release smoke tutorial-free evidence state
         shell: pwsh
         run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/release_smoke_evidence_state_regression.gd'
+
+      - name: Validate sky-island cautious descent on the exact failing seed
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --rendering-method gl_compatibility --script res://tests/qa/sky_islands_cautious_descent_regression.gd' -TimeoutMilliseconds 900000
 
       - name: Tutorial interruption completion and double reload
         shell: pwsh
