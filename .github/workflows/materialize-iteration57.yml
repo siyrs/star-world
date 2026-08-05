@@ -41,6 +41,12 @@ jobs:
           set -euo pipefail
           patch --batch --forward -p1 < "$RUNNER_TEMP/iteration57.diff"
           rm -rf .iteration57-payload
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/PRODUCT_ROADMAP.md')
+          path.write_text(path.read_text(encoding='utf-8').rstrip('\n') + '\n', encoding='utf-8')
+          PY
           test ! -e .github/workflows/temporary-next-iteration-snapshot.yml
           test -e .github/workflows/combat-feedback-intensity-economy-tests.yml
           test -e src/combat/damage_direction_policy.gd
