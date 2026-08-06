@@ -29,6 +29,7 @@ const STAR_SPLASHES := [
 func _ready() -> void:
 	super._ready()
 	_rewire_primary_commands()
+	set_process_input(true)
 	set_process_unhandled_input(true)
 	call_deferred("_focus_primary_action")
 
@@ -127,6 +128,78 @@ func _show_panel(panel: Control) -> void:
 	super._show_panel(panel)
 	if panel != null and panel.visible:
 		call_deferred("_focus_first_interactive", panel)
+
+
+func _input(event: InputEvent) -> void:
+	if not visible or _loading:
+		return
+	if not (event is InputEventJoypadButton):
+		return
+	var button_event := event as InputEventJoypadButton
+	if not button_event.pressed:
+		return
+	var direction := 0
+	if button_event.button_index == JOY_BUTTON_DPAD_DOWN:
+		direction = 1
+	elif button_event.button_index == JOY_BUTTON_DPAD_UP:
+		direction = -1
+	if direction == 0:
+		return
+	if _move_controller_focus(direction):
+		get_viewport().set_input_as_handled()
+
+
+func _move_controller_focus(direction: int) -> bool:
+	var scope := _controller_focus_scope()
+	if scope == null:
+		return false
+	var focusables: Array[Control] = []
+	_collect_controller_focusables(scope, focusables)
+	if focusables.size() < 2:
+		return false
+	var current: Control = get_viewport().gui_get_focus_owner()
+	var current_index := focusables.find(current)
+	var target_index := 0
+	if current_index >= 0:
+		target_index = posmod(current_index + direction, focusables.size())
+	var target: Control = focusables[target_index]
+	if target == current:
+		return false
+	target.grab_focus()
+	_ensure_controller_focus_visible(target)
+	return get_viewport().gui_get_focus_owner() == target
+
+
+func _controller_focus_scope() -> Control:
+	for raw_panel: Variant in [_map_panel, _save_panel, _settings_panel, _update_panel]:
+		var panel := raw_panel as Control
+		if panel != null and is_instance_valid(panel) and panel.is_visible_in_tree():
+			return panel
+	if _main_panel != null and _main_panel.is_visible_in_tree():
+		return _main_panel
+	return null
+
+
+func _collect_controller_focusables(node: Node, result: Array[Control]) -> void:
+	if node == null:
+		return
+	if node is Control:
+		var control := node as Control
+		var disabled := false
+		if control is BaseButton:
+			disabled = (control as BaseButton).disabled
+		if control.is_visible_in_tree() and control.focus_mode != Control.FOCUS_NONE and not disabled:
+			result.append(control)
+	for child: Node in node.get_children():
+		_collect_controller_focusables(child, result)
+
+
+func _ensure_controller_focus_visible(control: Control) -> void:
+	var ancestor := control.get_parent()
+	while ancestor != null:
+		if ancestor is ScrollContainer:
+			(ancestor as ScrollContainer).ensure_control_visible(control)
+		ancestor = ancestor.get_parent()
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -83,6 +83,8 @@ func _run() -> void:
 		)
 		var settings_focus := root.gui_get_focus_owner() as Control
 		_check(settings_focus != null and settings_focus.visible, "settings workspace establishes a visible controller focus target")
+		if settings_focus != null:
+			_focus_route.append("settings-initial:%s" % _focus_label(settings_focus))
 		await _press_joy(JOY_BUTTON_DPAD_DOWN)
 		var next_settings_focus := root.gui_get_focus_owner() as Control
 		_check(

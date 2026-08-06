@@ -8,6 +8,7 @@ $paths = [ordered]@{
   long_test = Join-Path $root 'tests\qa\long_term_scale_recovery_regression.gd'
   churn_test = Join-Path $root 'tests\qa\long_term_structure_pickup_churn_regression.gd'
   desktop = Join-Path $root 'tests\qa\ultrawide_high_dpi_controller_focus_desktop_acceptance.gd'
+  navigation = Join-Path $root 'src\ui\protected_main_menu.gd'
   workflow = Join-Path $root '.github\workflows\long-term-scale-recovery-tests.yml'
   contract = Join-Path $root 'docs\LONG_TERM_SCALE_RECOVERY.md'
   testing = Join-Path $root 'docs\LONG_TERM_SCALE_RECOVERY_TESTING.md'
@@ -127,6 +128,21 @@ foreach ($phrase in @(
 )) {
   Assert-Match $text.desktop ([regex]::Escape($phrase)) "Desktop qualification is missing assertion: $phrase"
 }
+
+
+foreach ($token in @(
+  'set_process_input\(true\)',
+  'JOY_BUTTON_DPAD_DOWN',
+  'JOY_BUTTON_DPAD_UP',
+  'func\s+_move_controller_focus\s*\(',
+  'func\s+_controller_focus_scope\s*\(',
+  'func\s+_collect_controller_focusables\s*\(',
+  'ensure_control_visible',
+  'set_input_as_handled'
+)) {
+  Assert-Match $text.navigation $token "Production controller focus graph is missing: $token"
+}
+Assert-NoMatch $text.navigation 'Timer\.new|Thread\.new|get_nodes_in_group' 'Controller focus navigation must remain event-driven and tree-local'
 
 foreach ($token in @(
   'uses:\s*\./\.github/workflows/reusable-godot-quality-gate\.yml',
