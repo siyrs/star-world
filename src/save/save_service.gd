@@ -15,6 +15,7 @@ const WORLDS_DIR := "user://worlds"
 const SETTINGS_PATH := "user://settings.json"
 const WORLD_FILE_NAME := "world.json"
 const CATALOG_FILE_NAME := "catalog.json"
+const CATALOG_PENDING_FILE_NAME := "catalog.pending"
 const MAX_PRIMARY_REPAIRS_PER_LIST := 8
 const MAX_CATALOG_REBUILDS_PER_LIST := 16
 const MAX_AUTHORITATIVE_READS_PER_LIST := 32
@@ -28,6 +29,10 @@ var _catalog_hit_count := 0
 var _catalog_fallback_count := 0
 var _catalog_repair_count := 0
 var _catalog_write_failure_count := 0
+var _catalog_pending_marker_write_failure_count := 0
+var _catalog_pending_marker_clear_failure_count := 0
+var _catalog_pending_marker_detected_count := 0
+var _last_catalog_pending_marker_detected_count := 0
 var _last_catalog_world_count := 0
 var _last_catalog_hit_count := 0
 var _last_catalog_fallback_count := 0
@@ -148,8 +153,13 @@ func save_world(world_id: String, state: Dictionary) -> bool:
 	metadata["updated_at"] = Time.get_datetime_string_from_system()
 	payload["metadata"] = metadata
 	_strip_transient_world_state(payload)
+	var pending_marker_ready := _mark_catalog_pending(world_id)
+	if not pending_marker_ready:
+		_catalog_pending_marker_write_failure_count += 1
 	var world_path := _world_path(world_id)
 	if not _store.write_dictionary(world_path, payload):
+		if pending_marker_ready and not _clear_catalog_pending(world_id):
+			_catalog_pending_marker_clear_failure_count += 1
 		save_failed.emit(world_id, "write_failed")
 		return false
 	var save_bytes := _file_size(world_path)
@@ -177,6 +187,7 @@ func load_world(world_id: String) -> Dictionary:
 func list_worlds() -> Array:
 	_ensure_directory(WORLDS_DIR)
 	var started_at := Time.get_ticks_usec()
+	_last_catalog_pending_marker_detected_count = 0
 	var result: Array = []
 	var hit_count := 0
 	var fallback_count := 0
@@ -349,6 +360,18 @@ func get_catalog_diagnostics() -> Dictionary:
 		"fallback_count": _catalog_fallback_count,
 		"repair_count": _catalog_repair_count,
 		"write_failure_count": _catalog_write_failure_count,
+		"pending_marker_write_failure_count": (
+			_catalog_pending_marker_write_failure_count
+		),
+		"pending_marker_clear_failure_count": (
+			_catalog_pending_marker_clear_failure_count
+		),
+		"pending_marker_detected_count": (
+			_catalog_pending_marker_detected_count
+		),
+		"last_pending_marker_detected_count": (
+			_last_catalog_pending_marker_detected_count
+		),
 		"last_world_count": _last_catalog_world_count,
 		"last_hit_count": _last_catalog_hit_count,
 		"last_fallback_count": _last_catalog_fallback_count,
@@ -404,6 +427,10 @@ func reset_catalog_diagnostics() -> void:
 	_catalog_fallback_count = 0
 	_catalog_repair_count = 0
 	_catalog_write_failure_count = 0
+	_catalog_pending_marker_write_failure_count = 0
+	_catalog_pending_marker_clear_failure_count = 0
+	_catalog_pending_marker_detected_count = 0
+	_last_catalog_pending_marker_detected_count = 0
 	_last_catalog_world_count = 0
 	_last_catalog_hit_count = 0
 	_last_catalog_fallback_count = 0
@@ -600,6 +627,10 @@ func _record_recovery_result(
 func _read_catalog_entry(world_id: String) -> Dictionary:
 	if not _is_safe_id(world_id):
 		return {}
+	if _catalog_pending_exists(world_id):
+		_catalog_pending_marker_detected_count += 1
+		_last_catalog_pending_marker_detected_count += 1
+		return {}
 	var world_bytes := _file_size(_world_path(world_id))
 	if world_bytes <= 0:
 		return {}
@@ -658,6 +689,8 @@ func _write_catalog_value(
 	var written := _store.write_dictionary(_catalog_path(world_id), normalized)
 	if written:
 		_staged_catalog_entries.erase(world_id)
+		if not _clear_catalog_pending(world_id):
+			_catalog_pending_marker_clear_failure_count += 1
 	return written
 
 
@@ -858,6 +891,40 @@ func _world_path(world_id: String) -> String:
 
 func _catalog_path(world_id: String) -> String:
 	return "%s/%s" % [_world_directory(world_id), CATALOG_FILE_NAME]
+
+
+func _catalog_pending_path(world_id: String) -> String:
+	return "%s/%s" % [_world_directory(world_id), CATALOG_PENDING_FILE_NAME]
+
+
+func _catalog_pending_exists(world_id: String) -> bool:
+	return _is_safe_id(world_id) and FileAccess.file_exists(
+		_catalog_pending_path(world_id)
+	)
+
+
+func _mark_catalog_pending(world_id: String) -> bool:
+	if not _is_safe_id(world_id):
+		return false
+	_ensure_directory(_world_directory(world_id))
+	var path := _catalog_pending_path(world_id)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string("pending=%d\n" % Time.get_ticks_usec())
+	file.flush()
+	var write_error := file.get_error()
+	file.close()
+	return write_error == OK and FileAccess.file_exists(path)
+
+
+func _clear_catalog_pending(world_id: String) -> bool:
+	if not _is_safe_id(world_id):
+		return false
+	var path := _catalog_pending_path(world_id)
+	if not FileAccess.file_exists(path):
+		return true
+	return DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK
 
 
 func _file_size(path: String) -> int:

@@ -302,3 +302,20 @@ Game Runtime
 - [COMBAT_FEEDBACK_INTENSITY_ECONOMY.md](COMBAT_FEEDBACK_INTENSITY_ECONOMY.md)
 - [COMBAT_FEEDBACK_INTENSITY_ECONOMY_TESTING.md](COMBAT_FEEDBACK_INTENSITY_ECONOMY_TESTING.md)
 - [PRODUCT_ROADMAP_ITERATION_57.md](PRODUCT_ROADMAP_ITERATION_57.md)
+
+## Iteration 58 · 长期规模与恢复资格（2026-08-06）
+
+- `catalog.pending` 为 world 与派生 sidecar 建立跨文件崩溃边界；
+- 同字节长度 stale catalog 在进程重启后强制回读权威 world、预算内重建并恢复纯命中；
+- 24 小时、288 个五分钟窗口、三次失败退避突发和 6 次手动保存形成确定性资格；
+- 检查点历史持续保持 12 条，累计原因计数与五世界本次进入过滤保持精确；
+- 24 轮结构批处理与 5 轮满 128 掉落生命周期逐轮清零；
+- 连接形状、Chunk 热返回、多世界恢复和既有长稳进入同一永久门禁；
+- 3440×1440、2× 逻辑缩放和真实 Joypad 焦点路线输出 PNG/JSON 证据；
+- 商业发布继续 **HOLD**，等待独立 E4-H、真实目标硬件和 7,200 秒最终包 soak。
+
+合同见：
+
+- [LONG_TERM_SCALE_RECOVERY.md](LONG_TERM_SCALE_RECOVERY.md)
+- [LONG_TERM_SCALE_RECOVERY_TESTING.md](LONG_TERM_SCALE_RECOVERY_TESTING.md)
+- [PRODUCT_ROADMAP_ITERATION_58.md](PRODUCT_ROADMAP_ITERATION_58.md)
