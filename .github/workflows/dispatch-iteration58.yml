@@ -19,4 +19,4 @@ jobs:
       - name: Dispatch production integrator at current branch head
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run apply-iteration58.yml --ref agent/iteration-58-long-term-scale-recovery
+        run: gh workflow run apply-iteration58.yml -R siyrs/star-world --ref agent/iteration-58-long-term-scale-recovery
