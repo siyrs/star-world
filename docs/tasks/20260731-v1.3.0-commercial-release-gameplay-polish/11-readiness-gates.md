@@ -119,6 +119,6 @@ Repository readiness is complete. External execution is intentionally not marked
 
 ## Post-implementation reconciliation · Iterations 60-61
 
-The repository now includes the Iteration 60 semantic evidence contract and the Iteration 61 candidate chain-of-custody workflow. Repository implementation, parser checks, strict Godot import, portable reference assembly and deliberate tamper rejection are automatable and must remain green.
+The repository now includes the Iteration 60 semantic evidence contract and the Iteration 61 candidate chain-of-custody workflow. Repository implementation, parser checks, strict Godot import, a complete 19-file portable reference payload, referenced-report revalidation, hidden-file detection and six deliberate tamper rejections are automatable and must remain green.
 
 Commercial release remains **HOLD**. The independent E4-H review, minimum/recommended physical hardware runs, strict 7,200-second target-hardware soak, HDD/antivirus/power-loss experiments and release-owner approval remain external execution items and are not marked complete by CI.
