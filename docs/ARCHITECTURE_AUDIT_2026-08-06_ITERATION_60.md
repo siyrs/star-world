@@ -39,7 +39,7 @@ A high frame count is not a time qualification because render and simulation rat
 
 A single-process script cannot truthfully perform and verify a real power loss. Antivirus and HDD interference also require an operator-controlled external condition.
 
-**Resolution:** fault records are two phase. `prepare` writes world identity and pre-fault digest; `complete` runs after restart, verifies identity, records the post-fault digest and binds a recovery report.
+**Resolution:** fault records are two phase. `prepare` writes world identity, pre-fault digest and exact EXE/PCK hashes; `complete` runs after restart and refuses a changed package, operator or world identity before recording recovery evidence.
 
 ### A-60-06 · Experiential independence was not enforceable in repository data
 
@@ -47,23 +47,30 @@ The repository cannot prove a human identity, but it can reject obvious self-rev
 
 **Resolution:** the E4-H recorder requires distinct reviewer/implementer identifiers, explicit independence attestation, six completed checks and zero blockers. Documentation states that identity fields remain human attestations rather than cryptographic identity proof.
 
+### A-60-07 · Assembly-time checks alone did not protect stored JSON
+
+The first implementation verified cross-artifact hashes only while assembling the package. A later manual edit could replace a child record while leaving the top-level build unchanged, and a standalone validator would have accepted the structurally complete JSON.
+
+**Resolution:** schema v2 performs validation-time rebinding in both GDScript and PowerShell. Review commit/EXE/PCK, both hardware EXE/PCK pairs, soak EXE/PCK, all fault EXE/PCK pairs, child evidence class/reference flags and fault operator identity are rechecked every time. Regression tests assemble a valid package, mutate it, and require rejection.
+
 ## Architecture decision
 
-The new qualification domain is a diagnostics/evidence domain:
+The qualification domain is a diagnostics/evidence domain:
 
 - it reads build artifacts and external evidence;
-- it never writes gameplay state;
+- it never owns or writes gameplay state;
 - it does not alter `world.json`;
 - it reuses release-smoke, route and lifecycle contracts;
 - it emits deterministic JSON plus SHA-256 bindings;
+- it validates the same schema in GDScript and PowerShell;
 - it preserves a hard separation between repository mechanism validation and external acceptance.
 
 ## Test strategy
 
-- GDScript regression validates valid states and rejection cases.
-- PowerShell self-test independently implements and checks the JSON contract.
+- GDScript regression validates valid states and all material tampering cases.
+- PowerShell self-test independently implements and checks schema v2.
 - Static audit parses all scripts and checks anti-forgery invariants.
-- End-to-end fixture assembly binds synthetic artifacts and proves the result remains non-qualifying.
+- End-to-end fixture assembly binds synthetic artifacts, proves the result remains non-qualifying, mutates a child digest and proves standalone rejection.
 - Adjacent lifecycle, release-smoke and profile journey regressions prevent contract drift.
 - Real hardware, 7,200-second duration and physical fault injection are intentionally not simulated by CI.
 
