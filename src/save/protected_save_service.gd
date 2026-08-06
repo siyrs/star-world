@@ -96,6 +96,14 @@ func restore_trashed_world(trash_id: String) -> Dictionary:
 	if entry.is_empty():
 		return _trash_failure("restore", trash_id, "trash_missing_or_invalid")
 	if not bool(entry.get("valid", false)):
+		_restore_integrity_check_count += 1
+		_restore_integrity_failure_count += 1
+		_last_restore_source = str(
+			entry.get("integrity_source", "missing_or_invalid")
+		).left(32)
+		_last_restore_integrity_reason = str(
+			entry.get("reason", "world_payload_unrecoverable")
+		).left(64)
 		return _trash_failure(
 			"restore", trash_id, str(entry.get("reason", "trash_missing_or_invalid"))
 		)
