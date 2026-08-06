@@ -11,6 +11,14 @@ param(
     [Parameter(Mandatory = $true)][string]$HddFaultPath,
     [Parameter(Mandatory = $true)][string]$AntivirusFaultPath,
     [Parameter(Mandatory = $true)][string]$PowerLossFaultPath,
+    [Parameter(Mandatory = $true)][string]$MinimumJourneyMatrixPath,
+    [Parameter(Mandatory = $true)][string]$RecommendedJourneyMatrixPath,
+    [Parameter(Mandatory = $true)][string]$LifecycleReportPath,
+    [Parameter(Mandatory = $true)][string]$StrictSoakReportPath,
+    [Parameter(Mandatory = $true)][string]$StrictSoakProgressPath,
+    [Parameter(Mandatory = $true)][string]$HddRecoveryEvidencePath,
+    [Parameter(Mandatory = $true)][string]$AntivirusRecoveryEvidencePath,
+    [Parameter(Mandatory = $true)][string]$PowerLossRecoveryEvidencePath,
     [string]$OutputDirectory = 'build/external-qualification/chain-bundle',
     [switch]$RequireReleaseGate
 )
@@ -64,6 +72,14 @@ $soakPath = Resolve-RequiredFile $StrictSoakPath
 $hddPath = Resolve-RequiredFile $HddFaultPath
 $antivirusPath = Resolve-RequiredFile $AntivirusFaultPath
 $powerLossPath = Resolve-RequiredFile $PowerLossFaultPath
+$minimumMatrixPath = Resolve-RequiredFile $MinimumJourneyMatrixPath
+$recommendedMatrixPath = Resolve-RequiredFile $RecommendedJourneyMatrixPath
+$lifecyclePath = Resolve-RequiredFile $LifecycleReportPath
+$soakReportPath = Resolve-RequiredFile $StrictSoakReportPath
+$soakProgressPath = Resolve-RequiredFile $StrictSoakProgressPath
+$hddRecoveryPath = Resolve-RequiredFile $HddRecoveryEvidencePath
+$antivirusRecoveryPath = Resolve-RequiredFile $AntivirusRecoveryEvidencePath
+$powerLossRecoveryPath = Resolve-RequiredFile $PowerLossRecoveryEvidencePath
 $outputRoot = Resolve-ProjectPath $OutputDirectory
 if (Test-Path -LiteralPath $outputRoot) {
     if (@(Get-ChildItem -LiteralPath $outputRoot -Force).Count -gt 0) {
@@ -84,6 +100,12 @@ if ($RequireReleaseGate) {
 
 $candidate = Get-Content -LiteralPath $candidatePath -Raw | ConvertFrom-Json -Depth 30
 $package = Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json -Depth 100
+$minimum = Get-Content -LiteralPath $minimumPath -Raw | ConvertFrom-Json -Depth 50
+$recommended = Get-Content -LiteralPath $recommendedPath -Raw | ConvertFrom-Json -Depth 50
+$soak = Get-Content -LiteralPath $soakPath -Raw | ConvertFrom-Json -Depth 50
+$hdd = Get-Content -LiteralPath $hddPath -Raw | ConvertFrom-Json -Depth 50
+$antivirus = Get-Content -LiteralPath $antivirusPath -Raw | ConvertFrom-Json -Depth 50
+$powerLoss = Get-Content -LiteralPath $powerLossPath -Raw | ConvertFrom-Json -Depth 50
 Assert-Equal ([string]$candidate.build.commit_sha) ([string]$package.build.commit_sha) 'candidate/package commit'
 Assert-Equal ([string]$candidate.build.version) ([string]$package.build.version) 'candidate/package version'
 Assert-Equal ([string]$candidate.build.executable.sha256) ([string]$package.build.executable_sha256) 'candidate/package executable'
@@ -101,6 +123,14 @@ $sourceMap = [ordered]@{
 foreach ($entry in $sourceMap.GetEnumerator()) {
     Assert-Equal ([string]$package.artifact_manifest.($entry.Key)) (Get-Sha256 $entry.Value) "qualification package artifact $($entry.Key)"
 }
+Assert-Equal ([string]$minimum.journey_matrix.sha256) (Get-Sha256 $minimumMatrixPath) 'minimum journey matrix'
+Assert-Equal ([string]$recommended.journey_matrix.sha256) (Get-Sha256 $recommendedMatrixPath) 'recommended journey matrix'
+Assert-Equal ([string]$soak.lifecycle_report_sha256) (Get-Sha256 $lifecyclePath) 'soak lifecycle report'
+Assert-Equal ([string]$soak.soak_report_sha256) (Get-Sha256 $soakReportPath) 'soak cycles report'
+Assert-Equal ([string]$soak.progress_journal_sha256) (Get-Sha256 $soakProgressPath) 'soak progress journal'
+Assert-Equal ([string]$hdd.recovery_evidence_sha256) (Get-Sha256 $hddRecoveryPath) 'HDD recovery evidence'
+Assert-Equal ([string]$antivirus.recovery_evidence_sha256) (Get-Sha256 $antivirusRecoveryPath) 'antivirus recovery evidence'
+Assert-Equal ([string]$powerLoss.recovery_evidence_sha256) (Get-Sha256 $powerLossRecoveryPath) 'power-loss recovery evidence'
 
 $copyMap = [ordered]@{
     'release-candidate.json' = $candidatePath
@@ -114,6 +144,14 @@ $copyMap = [ordered]@{
     'evidence/fault-hdd.json' = $hddPath
     'evidence/fault-antivirus.json' = $antivirusPath
     'evidence/fault-power-loss.json' = $powerLossPath
+    'support/hardware-minimum-journey-matrix.json' = $minimumMatrixPath
+    'support/hardware-recommended-journey-matrix.json' = $recommendedMatrixPath
+    'support/release-lifecycle-report.json' = $lifecyclePath
+    'support/strict-soak-cycles.json' = $soakReportPath
+    'support/strict-soak.progress.jsonl' = $soakProgressPath
+    'support/fault-hdd-recovery.json' = $hddRecoveryPath
+    'support/fault-antivirus-recovery.json' = $antivirusRecoveryPath
+    'support/fault-power-loss-recovery.json' = $powerLossRecoveryPath
 }
 foreach ($entry in $copyMap.GetEnumerator()) { Copy-BundleFile -Source $entry.Value -RelativeDestination $entry.Key }
 
