@@ -40,6 +40,15 @@ if (-not [bool]$chainResult.valid) { throw 'Chain bundle must validate before a 
 $candidate = Get-Content -LiteralPath (Join-Path $chainRoot 'release-candidate.json') -Raw | ConvertFrom-Json -Depth 30
 $bundleManifest = Get-Content -LiteralPath (Join-Path $chainRoot 'bundle-manifest.json') -Raw | ConvertFrom-Json -Depth 50
 $package = Get-Content -LiteralPath (Join-Path $chainRoot 'qualification-package.json') -Raw | ConvertFrom-Json -Depth 100
+if (-not [bool]$package.reference_only) {
+    $attestation = $package.release_owner_attestation
+    if ($null -eq $attestation) { throw 'A real promotion requires the qualification package release-owner attestation.' }
+    $attestedOwner = ([string]$attestation.owner_id).Trim()
+    if ($attestedOwner -ne $owner) { throw "ReleaseOwnerId must match the real qualification package owner: expected $attestedOwner" }
+    if (-not [bool]$attestation.all_artifacts_attached -or -not [bool]$attestation.approved_for_release) {
+        throw 'A real promotion requires an approved release-owner attestation with all artifacts attached.'
+    }
+}
 $canonical = @(
     'star-world-release-promotion-pin-v1',
     "candidate_id=$($candidate.candidate_id)",
