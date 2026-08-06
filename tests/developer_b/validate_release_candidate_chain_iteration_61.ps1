@@ -50,6 +50,10 @@ Assert-ContainsAll $candidateValidator @(
 Assert-ContainsAll $bundleWriter @(
     'OutputDirectory must be absent or empty to prevent stale evidence',
     'qualification package artifact',
+    'MinimumJourneyMatrixPath',
+    'StrictSoakProgressPath',
+    'HddRecoveryEvidencePath',
+    'support/release-lifecycle-report.json',
     'star-world-qualification-chain-bundle-v1',
     'Copy-BundleFile',
     'validate_external_qualification_chain_bundle.ps1'
@@ -57,17 +61,24 @@ Assert-ContainsAll $bundleWriter @(
 Assert-ContainsAll $bundleValidator @(
     'Bundle must not contain symbolic links or reparse points',
     'Bundle contains missing or unexpected files',
+    'Get-ChildItem -LiteralPath $bundleRoot -Recurse -File -Force',
     'Unsafe bundle path',
     "-match '(^|/)\.\.(/|$)'",
+    'support/hardware-minimum-journey-matrix.json',
+    'support/strict-soak.progress.jsonl',
+    'support/fault-power-loss-recovery.json',
     'artifact manifest',
     'bundle_id'
 )
 Assert-ContainsAll $bundleTest @(
     'Evidence tamper',
+    'Supporting evidence tamper',
     'Candidate identity tamper',
     'Unexpected file injection',
+    'Hidden unexpected file injection',
     'Bundle path traversal',
-    'tamper_cases=4'
+    'file_count -ne 19',
+    'tamper_cases=6'
 )
 Assert-ContainsAll $workflow @(
     'Validate release candidate chain contract',
@@ -82,4 +93,4 @@ if ($bundleWriterText -match 'Compress-Archive') {
 }
 
 & $bundleTest
-Write-Host 'ITERATION 61 RELEASE CANDIDATE CHAIN PASS | manifest=immutable | bundle=portable | artifact-hashes=verified | tamper-cases=4'
+Write-Host 'ITERATION 61 RELEASE CANDIDATE CHAIN PASS | manifest=immutable | bundle=portable | payload-files=19 | artifact-hashes=verified | tamper-cases=6'
