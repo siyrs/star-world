@@ -77,12 +77,21 @@ func _run() -> void:
 	var settings_panel := main_menu.get("_settings_panel") as Control
 	_check(settings_panel != null and settings_panel.visible, "controller accept opens the production settings workspace")
 	if settings_panel != null:
-		_check(_all_visible_buttons_inside(settings_panel, visible_rect), "settings controls stay inside the ultrawide high-DPI viewport")
+		_check(
+			_rect_inside(settings_panel.get_global_rect(), visible_rect),
+			"settings workspace stays inside the ultrawide high-DPI viewport"
+		)
 		var settings_focus := root.gui_get_focus_owner() as Control
 		_check(settings_focus != null and settings_focus.visible, "settings workspace establishes a visible controller focus target")
 		await _press_joy(JOY_BUTTON_DPAD_DOWN)
 		var next_settings_focus := root.gui_get_focus_owner() as Control
-		_check(next_settings_focus != null and next_settings_focus.visible, "controller navigation remains live inside the scrolled settings workspace")
+		_check(
+			next_settings_focus != null
+			and next_settings_focus != settings_focus
+			and next_settings_focus.visible
+			and _rect_inside(next_settings_focus.get_global_rect(), visible_rect),
+			"real controller navigation moves to a visible in-viewport settings target"
+		)
 		if next_settings_focus != null:
 			_focus_route.append(_focus_label(next_settings_focus))
 		await _capture()
@@ -112,16 +121,27 @@ func _press_joy(button_index: JoyButton) -> void:
 	press.button_index = button_index
 	press.pressed = true
 	press.pressure = 1.0
-	root.push_input(press)
+	Input.parse_input_event(press)
 	await process_frame
 	var release := InputEventJoypadButton.new()
 	release.device = 0
 	release.button_index = button_index
 	release.pressed = false
 	release.pressure = 0.0
-	root.push_input(release)
+	Input.parse_input_event(release)
 	for _frame in 4:
 		await process_frame
+
+
+func _rect_inside(rect: Rect2, outer: Rect2) -> bool:
+	return (
+		rect.size.x > 0.0
+		and rect.size.y > 0.0
+		and rect.position.x >= outer.position.x - 1.0
+		and rect.position.y >= outer.position.y - 1.0
+		and rect.end.x <= outer.end.x + 1.0
+		and rect.end.y <= outer.end.y + 1.0
+	)
 
 
 func _all_visible_buttons_inside(node: Node, viewport_rect: Rect2) -> bool:
@@ -131,14 +151,7 @@ func _all_visible_buttons_inside(node: Node, viewport_rect: Rect2) -> bool:
 		return false
 	for button: Button in buttons:
 		var rect := button.get_global_rect()
-		if (
-			rect.size.x <= 0.0
-			or rect.size.y <= 0.0
-			or rect.position.x < viewport_rect.position.x - 1.0
-			or rect.position.y < viewport_rect.position.y - 1.0
-			or rect.end.x > viewport_rect.end.x + 1.0
-			or rect.end.y > viewport_rect.end.y + 1.0
-		):
+		if not _rect_inside(rect, viewport_rect):
 			return false
 	return true
 
