@@ -100,6 +100,10 @@ foreach ($pair in @(
         throw "Fault record is not complete: $($pair.Expected)"
     }
 }
+$faultOperators = @($hdd.operator_id, $antivirus.operator_id, $powerLoss.operator_id | Sort-Object -Unique)
+if ($faultOperators.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$faultOperators[0])) {
+    throw 'All fault-lab records must use one non-empty operator identity.'
+}
 
 $artifactReferenceFlags = @(
     [bool]$minimum.reference_only,
@@ -147,8 +151,8 @@ $package = [ordered]@{
     hardware_qualification = @($minimum, $recommended)
     strict_soak = $soak
     fault_lab = [ordered]@{
-        operator_id = [string]$hdd.operator_id
-        result = if (@($hdd, $antivirus, $powerLoss | Where-Object { [string]$_.result -ne 'pass' }).Count -eq 0) { 'pass' } else { 'fail' }
+        operator_id = [string]$faultOperators[0]
+        result = 'pass'
         scenarios = @($hdd, $antivirus, $powerLoss)
     }
     findings = @()
