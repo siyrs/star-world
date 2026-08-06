@@ -1,0 +1,88 @@
+name: Release candidate chain-of-custody quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-candidate-chain-iteration-61-tests.yml'
+      - 'tests/ci/new_release_candidate_manifest.ps1'
+      - 'tests/ci/validate_release_candidate_manifest.ps1'
+      - 'tests/ci/new_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/validate_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/test_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/test_external_qualification_package_assembler.ps1'
+      - 'tests/ci/validate_external_qualification_package.ps1'
+      - 'tests/developer_b/validate_release_candidate_chain_iteration_61.ps1'
+      - 'tests/fixtures/external_qualification/**'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_61.md'
+      - 'docs/RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_61.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-candidate-chain-iteration-61-tests.yml'
+      - 'tests/ci/new_release_candidate_manifest.ps1'
+      - 'tests/ci/validate_release_candidate_manifest.ps1'
+      - 'tests/ci/new_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/validate_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/test_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/test_external_qualification_package_assembler.ps1'
+      - 'tests/ci/validate_external_qualification_package.ps1'
+      - 'tests/developer_b/validate_release_candidate_chain_iteration_61.ps1'
+      - 'tests/fixtures/external_qualification/**'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_61.md'
+      - 'docs/RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_61.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chain-contract:
+    name: Immutable candidate manifest and portable evidence chain
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release candidate chain contract
+        shell: pwsh
+        run: .\tests\developer_b\validate_release_candidate_chain_iteration_61.ps1
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Re-run external qualification contract regression
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/external_qualification_contract_regression.gd'
+
+      - name: Upload candidate-chain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-chain-${{ github.run_number }}
+          path: |
+            build/release-candidate-chain-fixture/**
+            build/external-qualification-assembler-fixture/**
+          if-no-files-found: error
+          retention-days: 21
