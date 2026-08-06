@@ -37,6 +37,12 @@ function Assert-FileRecord {
     $actualHash = Get-Sha256 -Path $Path
     if ([string]$Record.sha256 -ne $actualHash) { throw "$Label SHA-256 does not match the file." }
 }
+function Assert-RepositoryContractPath {
+    param([object]$Record, [string]$ExpectedPath, [string]$Label)
+    if ([string]$Record.repository_path -ne $ExpectedPath) {
+        throw "$Label repository_path must equal $ExpectedPath."
+    }
+}
 
 $manifestPath = Resolve-ProjectPath $CandidateManifestPath
 $exePath = Resolve-ProjectPath $ReleaseExecutable
@@ -57,9 +63,12 @@ if ([string]::IsNullOrWhiteSpace([string]$manifest.build.version)) { throw 'buil
 
 Assert-FileRecord $manifest.build.executable $exePath 'StarWorld.exe'
 Assert-FileRecord $manifest.build.pck $pckPath 'StarWorld.pck'
-$policyPath = Join-Path $projectFullPath ([string]$manifest.contracts.release_qualification.repository_path)
-$projectFilePath = Join-Path $projectFullPath ([string]$manifest.contracts.project.repository_path)
-$exportPresetsPath = Join-Path $projectFullPath ([string]$manifest.contracts.export_presets.repository_path)
+Assert-RepositoryContractPath $manifest.contracts.release_qualification 'data/release_qualification.json' 'release qualification policy'
+Assert-RepositoryContractPath $manifest.contracts.project 'project.godot' 'project contract'
+Assert-RepositoryContractPath $manifest.contracts.export_presets 'export_presets.cfg' 'export presets contract'
+$policyPath = Join-Path $projectFullPath 'data\release_qualification.json'
+$projectFilePath = Join-Path $projectFullPath 'project.godot'
+$exportPresetsPath = Join-Path $projectFullPath 'export_presets.cfg'
 Assert-FileRecord $manifest.contracts.release_qualification $policyPath 'release qualification policy'
 Assert-FileRecord $manifest.contracts.project $projectFilePath 'project.godot'
 Assert-FileRecord $manifest.contracts.export_presets $exportPresetsPath 'export_presets.cfg'
