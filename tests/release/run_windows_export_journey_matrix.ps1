@@ -5,15 +5,14 @@ param(
     [int]$Seed = 112358,
     [ValidateSet('hosted-ci-reference', 'minimum', 'recommended')]
     [string]$QualificationTier = 'hosted-ci-reference',
-    [string]$Operator = ''
+    [string]$Operator = '',
+    [string]$ExistingExecutablePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-    throw 'PowerShell 7 (pwsh) or later is required.'
-}
-
+if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 (pwsh) or later is required.' }
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot $OutputDirectory))
 $binaryDirectory = Join-Path $outputRoot 'binary'
@@ -24,38 +23,38 @@ New-Item -ItemType Directory -Force -Path $binaryDirectory, $profilesDirectory |
 if ($QualificationTier -ne 'hosted-ci-reference' -and [string]::IsNullOrWhiteSpace($Operator)) {
     throw '-Operator is required for minimum/recommended hardware evidence.'
 }
+$profiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
+$reuseExisting = -not [string]::IsNullOrWhiteSpace($ExistingExecutablePath)
+if ($reuseExisting) {
+    $executable = [System.IO.Path]::GetFullPath($ExistingExecutablePath)
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw "Existing executable not found: $executable" }
+    $pckPath = Join-Path (Split-Path -Parent $executable) 'StarWorld.pck'
+    if (-not (Test-Path -LiteralPath $pckPath -PathType Leaf)) { throw "Existing PCK not found beside executable: $pckPath" }
+} else {
+    $executable = Join-Path $binaryDirectory 'StarWorld.exe'
+    $pckPath = Join-Path $binaryDirectory 'StarWorld.pck'
+}
 
-$profiles = @(
-    'star_continent',
-    'desert_ruins',
-    'frozen_wastes',
-    'sky_islands',
-    'abyss_world'
-)
-
+function Get-Sha256 {
+    param([string]$Path)
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 function Get-SafeCimValue {
     param([string]$ClassName, [string]$PropertyName)
     try {
-        $values = @(Get-CimInstance $ClassName -ErrorAction Stop | ForEach-Object { $_.$PropertyName } | Where-Object { $_ -ne $null })
-        return @($values | ForEach-Object { [string]$_ })
-    } catch {
-        return @()
-    }
+        return @(Get-CimInstance $ClassName -ErrorAction Stop | ForEach-Object { $_.$PropertyName } | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_ })
+    } catch { return @() }
 }
-
 function Get-HardwareSnapshot {
     $totalMemory = 0L
-    try {
-        $system = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop | Select-Object -First 1
-        $totalMemory = [long]$system.TotalPhysicalMemory
-    } catch {}
+    try { $totalMemory = [long](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop | Select-Object -First 1).TotalPhysicalMemory } catch {}
     return [ordered]@{
         captured_at = (Get-Date).ToString('o')
-        os = Get-SafeCimValue -ClassName Win32_OperatingSystem -PropertyName Caption
-        os_version = Get-SafeCimValue -ClassName Win32_OperatingSystem -PropertyName Version
-        cpu = Get-SafeCimValue -ClassName Win32_Processor -PropertyName Name
-        gpu = Get-SafeCimValue -ClassName Win32_VideoController -PropertyName Name
-        gpu_driver = Get-SafeCimValue -ClassName Win32_VideoController -PropertyName DriverVersion
+        os = Get-SafeCimValue Win32_OperatingSystem Caption
+        os_version = Get-SafeCimValue Win32_OperatingSystem Version
+        cpu = Get-SafeCimValue Win32_Processor Name
+        gpu = Get-SafeCimValue Win32_VideoController Name
+        gpu_driver = Get-SafeCimValue Win32_VideoController DriverVersion
         physical_memory_gib = if ($totalMemory -gt 0) { [math]::Round($totalMemory / 1GB, 1) } else { 0 }
         github_actions = [bool]($env:GITHUB_ACTIONS -eq 'true')
         runner_name = [string]$env:RUNNER_NAME
@@ -65,7 +64,6 @@ function Get-HardwareSnapshot {
 }
 
 $records = [System.Collections.Generic.List[object]]::new()
-$executable = Join-Path $binaryDirectory 'StarWorld.exe'
 for ($index = 0; $index -lt $profiles.Count; $index++) {
     $profile = $profiles[$index]
     $profileOutput = if ($index -eq 0) { $binaryDirectory } else { Join-Path $profilesDirectory $profile }
@@ -77,28 +75,24 @@ for ($index = 0; $index -lt $profiles.Count; $index++) {
         Seed = $Seed
         RouteProbe = $true
     }
-    if ($index -eq 0) {
-        $arguments['Godot'] = $Godot
-    } else {
+    if ($reuseExisting -or $index -gt 0) {
         $arguments['SkipExport'] = $true
         $arguments['ExecutablePath'] = $executable
+    } else {
+        $arguments['Godot'] = $Godot
     }
     & (Join-Path $PSScriptRoot 'run_windows_export_smoke.ps1') @arguments
 
     $reportPath = Join-Path $profileOutput 'release-smoke.json'
     $memoryPath = Join-Path $profileOutput 'release-smoke.memory.json'
     $screenshotPath = Join-Path $profileOutput 'release-smoke.png'
-    if (-not (Test-Path -LiteralPath $reportPath)) {
-        throw "Missing route report for $profile"
+    foreach ($path in @($reportPath, $memoryPath, $screenshotPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing route evidence for $profile`: $path" }
     }
-    $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
-    $memory = Get-Content -LiteralPath $memoryPath -Raw | ConvertFrom-Json
-    if (-not [bool]$report.ok -or -not [bool]$report.route.ok) {
-        throw "Exported route failed for $profile"
-    }
-    if (-not (Test-Path -LiteralPath $screenshotPath) -or (Get-Item $screenshotPath).Length -le 0) {
-        throw "Exported route screenshot missing for $profile"
-    }
+    $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json -Depth 30
+    $memory = Get-Content -LiteralPath $memoryPath -Raw | ConvertFrom-Json -Depth 30
+    if (-not [bool]$report.ok -or -not [bool]$report.route.ok) { throw "Exported route failed for $profile" }
+    if ((Get-Item $screenshotPath).Length -le 0) { throw "Exported route screenshot is empty for $profile" }
     $records.Add([pscustomobject][ordered]@{
         profile_id = $profile
         seed = $Seed
@@ -125,29 +119,35 @@ for ($index = 0; $index -lt $profiles.Count; $index++) {
     })
 }
 
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or -not (Test-Path -LiteralPath $pckPath -PathType Leaf)) {
+    throw 'The final executable or PCK disappeared during the route matrix.'
+}
 $summary = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     evidence_class = if ($QualificationTier -eq 'hosted-ci-reference') { 'hosted_ci_reference' } else { 'target_hardware_candidate' }
     qualification_tier = $QualificationTier
     operator = $Operator
     generated_at = (Get-Date).ToString('o')
     seed = $Seed
-    export_reused = $true
-    final_executable = 'binary/StarWorld.exe'
+    exact_existing_package_reused = $reuseExisting
+    single_package_reused_across_profiles = $true
+    final_executable = [System.IO.Path]::GetFileName($executable)
+    final_executable_sha256 = Get-Sha256 $executable
+    final_pck = [System.IO.Path]::GetFileName($pckPath)
+    final_pck_sha256 = Get-Sha256 $pckPath
     hardware = Get-HardwareSnapshot
     profiles = @($records)
     assertions = [ordered]@{
         profile_count = $records.Count
         all_profiles_present = $records.Count -eq 5
-        minimum_steps = [int](($records | Measure-Object -Property successful_steps -Minimum).Minimum)
-        minimum_displacement = [math]::Round([double](($records | Measure-Object -Property horizontal_displacement -Minimum).Minimum), 3)
-        minimum_unique_chunks = [int](($records | Measure-Object -Property unique_chunks -Minimum).Minimum)
+        minimum_steps = [int](($records | Measure-Object successful_steps -Minimum).Minimum)
+        minimum_displacement = [math]::Round([double](($records | Measure-Object horizontal_displacement -Minimum).Minimum), 3)
+        minimum_unique_chunks = [int](($records | Measure-Object unique_chunks -Minimum).Minimum)
         post_spawn_transport_count = @($records | Where-Object { $_.transport_after_spawn -or $_.player_transform_writes -ne 0 }).Count
         all_visual_checks_passed = @($records | Where-Object { -not $_.visual_ok }).Count -eq 0
         all_tutorial_overlays_hidden = @($records | Where-Object { -not $_.tutorial_hidden_for_evidence }).Count -eq 0
     }
 }
-
 if (-not $summary.assertions.all_profiles_present) { throw 'Five-profile export matrix is incomplete.' }
 if ($summary.assertions.minimum_steps -lt 20) { throw 'At least one exported route completed fewer than 20 steps.' }
 if ($summary.assertions.minimum_displacement -lt 14.0) { throw 'At least one exported route travelled less than 14 metres.' }
@@ -155,9 +155,6 @@ if ($summary.assertions.minimum_unique_chunks -lt 2) { throw 'At least one expor
 if ($summary.assertions.post_spawn_transport_count -ne 0) { throw 'Exported route matrix contains forbidden post-spawn transport.' }
 if (-not $summary.assertions.all_visual_checks_passed) { throw 'At least one exported screenshot failed visual acceptance.' }
 if (-not $summary.assertions.all_tutorial_overlays_hidden) { throw 'At least one exported map screenshot is still obscured by onboarding.' }
-
-$summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding utf8
-Write-Host "WINDOWS EXPORT JOURNEY MATRIX PASS | profiles=$($records.Count) | evidence=$summaryPath"
-if ($QualificationTier -eq 'hosted-ci-reference') {
-    Write-Host 'NOTE: hosted CI reference evidence is not target-hardware sign-off.'
-}
+$summary | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $summaryPath -Encoding utf8
+Write-Host "WINDOWS EXPORT JOURNEY MATRIX PASS | profiles=$($records.Count) | exact_existing_package=$reuseExisting | executable=$($summary.final_executable_sha256) | pck=$($summary.final_pck_sha256) | evidence=$summaryPath"
+if ($QualificationTier -eq 'hosted-ci-reference') { Write-Host 'NOTE: hosted CI reference evidence is not target-hardware sign-off.' }

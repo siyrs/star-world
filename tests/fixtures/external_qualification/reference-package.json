@@ -1,0 +1,149 @@
+{
+  "schema_version": 2,
+  "package_id": "iteration-60-reference-fixture",
+  "fixture_mode": true,
+  "reference_only": true,
+  "evidence_source": "fixture",
+  "hosted_runner": false,
+  "build": {
+    "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "version": "v1.3.0-fixture"
+  },
+  "experiential_review": {
+    "reviewer_id": "fixture-reviewer",
+    "implementer_id": "fixture-implementer",
+    "independent": true,
+    "signed_at_unix": 2000,
+    "result": "pass",
+    "blockers": [],
+    "checklist": {
+      "fresh_install": true,
+      "new_world": true,
+      "save_reload": true,
+      "five_profiles": true,
+      "input_and_ui": true,
+      "quit_and_restart": true
+    },
+    "build": {
+      "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "hardware_qualification": [
+    {
+      "tier": "minimum",
+      "evidence_source": "fixture",
+      "reference_only": true,
+      "operator_id": "fixture-operator-minimum",
+      "operator_attested": false,
+      "machine_fingerprint_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cpu": "fixture cpu",
+      "gpu": "fixture gpu",
+      "ram_gib": 16,
+      "os": "Windows fixture",
+      "storage": { "drive_type": "ssd", "model": "fixture storage" },
+      "profiles": ["star_continent", "desert_ruins", "frozen_wastes", "sky_islands", "abyss_world"],
+      "started_at_unix": 1000,
+      "completed_at_unix": 1050,
+      "result": "pass",
+      "build": {
+        "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    {
+      "tier": "recommended",
+      "evidence_source": "fixture",
+      "reference_only": true,
+      "operator_id": "fixture-operator-recommended",
+      "operator_attested": false,
+      "machine_fingerprint_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "cpu": "fixture cpu",
+      "gpu": "fixture gpu",
+      "ram_gib": 32,
+      "os": "Windows fixture",
+      "storage": { "drive_type": "nvme", "model": "fixture storage" },
+      "profiles": ["star_continent", "desert_ruins", "frozen_wastes", "sky_islands", "abyss_world"],
+      "started_at_unix": 1100,
+      "completed_at_unix": 1150,
+      "result": "pass",
+      "build": {
+        "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    }
+  ],
+  "strict_soak": {
+    "evidence_source": "fixture",
+    "reference_only": true,
+    "target_hardware": false,
+    "requested_seconds": 600,
+    "elapsed_seconds": 600,
+    "clean_exit": true,
+    "crash_count": 0,
+    "timed_out": false,
+    "result": "pass",
+    "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "lifecycle_report_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "soak_report_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "fault_lab": {
+    "operator_id": "fixture-fault-operator",
+    "result": "pass",
+    "scenarios": [
+      {
+        "type": "hdd",
+        "evidence_source": "fixture",
+        "reference_only": true,
+        "operator_id": "fixture-fault-operator",
+        "attested_real": false,
+        "interruption_observed": true,
+        "recovery_verified": true,
+        "world_integrity_verified": true,
+        "before_world_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "after_world_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "build": {
+          "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      },
+      {
+        "type": "antivirus",
+        "evidence_source": "fixture",
+        "reference_only": true,
+        "operator_id": "fixture-fault-operator",
+        "attested_real": false,
+        "interruption_observed": true,
+        "recovery_verified": true,
+        "world_integrity_verified": true,
+        "before_world_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "after_world_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "build": {
+          "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      },
+      {
+        "type": "power_loss",
+        "evidence_source": "fixture",
+        "reference_only": true,
+        "operator_id": "fixture-fault-operator",
+        "attested_real": false,
+        "interruption_observed": true,
+        "recovery_verified": true,
+        "world_integrity_verified": true,
+        "before_world_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "after_world_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "build": {
+          "executable_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "pck_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    ]
+  },
+  "findings": []
+}

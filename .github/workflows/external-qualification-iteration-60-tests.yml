@@ -1,0 +1,87 @@
+name: External qualification evidence contract gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'src/diagnostics/external_qualification_contract.gd'
+      - 'tests/qa/external_qualification_contract_regression.gd'
+      - 'tests/ci/validate_external_qualification_package.ps1'
+      - 'tests/ci/test_external_qualification_package_assembler.ps1'
+      - 'tests/ci/run_external_hardware_qualification.ps1'
+      - 'tests/ci/run_strict_target_hardware_soak.ps1'
+      - 'tests/ci/new_external_fault_lab_record.ps1'
+      - 'tests/ci/new_independent_experience_review.ps1'
+      - 'tests/ci/new_external_qualification_package.ps1'
+      - 'tests/developer_b/validate_external_qualification_iteration_60.ps1'
+      - 'tests/fixtures/external_qualification/**'
+      - 'tests/release/run_windows_export_journey_matrix.ps1'
+      - 'docs/EXTERNAL_QUALIFICATION_EVIDENCE_KIT.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_60.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_60.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+      - '.github/workflows/external-qualification-iteration-60-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/diagnostics/external_qualification_contract.gd'
+      - 'tests/qa/external_qualification_contract_regression.gd'
+      - 'tests/ci/validate_external_qualification_package.ps1'
+      - 'tests/ci/test_external_qualification_package_assembler.ps1'
+      - 'tests/ci/run_external_hardware_qualification.ps1'
+      - 'tests/ci/run_strict_target_hardware_soak.ps1'
+      - 'tests/ci/new_external_fault_lab_record.ps1'
+      - 'tests/ci/new_independent_experience_review.ps1'
+      - 'tests/ci/new_external_qualification_package.ps1'
+      - 'tests/developer_b/validate_external_qualification_iteration_60.ps1'
+      - 'tests/fixtures/external_qualification/**'
+      - 'tests/release/run_windows_export_journey_matrix.ps1'
+      - 'docs/EXTERNAL_QUALIFICATION_EVIDENCE_KIT.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_60.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_60.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+      - '.github/workflows/external-qualification-iteration-60-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-qualification-iteration-60-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Qualification schema, package binding and anti-forgery boundaries
+      domain_timeout_minutes: 100
+      static_validators: |
+        tests/developer_b/validate_external_qualification_iteration_60.ps1
+        tests/ci/test_external_qualification_package_assembler.ps1
+        tests/developer_b/validate_release_evidence_contract.ps1
+        tests/developer_b/validate_release_readiness_closure.ps1
+        tests/developer_b/validate_reusable_ci_workflows.ps1
+      primary_headless_script: res://tests/qa/external_qualification_contract_regression.gd
+      primary_headless_output_base: build\external-qualification-contract
+      primary_headless_timeout_milliseconds: 900000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/release_lifecycle_report_regression.gd
+        res://tests/qa/release_smoke_evidence_state_regression.gd
+        res://tests/qa/profile_release_journey_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: external-qualification-iteration-60-contract
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/external-qualification-contract.stdout.log
+        build/external-qualification-contract.stderr.log
+        build/external-qualification-assembler-fixture/**
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      retention_days: 21

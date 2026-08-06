@@ -99,8 +99,19 @@ Do not use `unknown`. Resolve all questions before setting `Implementation may s
 - Implementation may start: yes
 - Confirmed at: 2026-07-31 10:27 +08:00（用户在初始请求明确授权实施；PM 完成 A-001/D-001/QA-001 复审）
 
-## Post-implementation reconciliation · 2026-08-06
+## Post-implementation reconciliation · Iteration 59 · 2026-08-06
 
-The readiness decision remains historically valid, but implementation is no longer “not started.” Iterations 1-59 completed the repository-automatable scope, including the Iteration 59 `world_payload_unrecoverable` restore guard, `release-lifecycle-report` evidence and continuous cross-domain campaign.
+The readiness decision remains historically valid, but implementation is no longer “not started.” Iterations 1-59 completed the repository-automatable gameplay, persistence, lifecycle and release-integrity scope.
 
-Repository acceptance is complete. Commercial release remains **HOLD** for independent E4-H sign-off, real minimum/recommended target-hardware qualification and the strict 7,200-second final-package target-hardware soak.
+## Post-implementation reconciliation · Iteration 60 · 2026-08-06
+
+The repository now includes an auditable external-qualification kit:
+
+- independent E4-H review recorder;
+- exact-final-package minimum/recommended hardware collectors;
+- strict 7,200-second wall-clock final-package soak harness;
+- two-phase HDD, antivirus and power-loss experiment records;
+- one commit/EXE/PCK-bound package assembler;
+- fixture/hosted/target evidence separation and permanent anti-forgery CI.
+
+Repository readiness is complete. External execution is intentionally not marked complete: independent human review, two real hardware tiers, the real target-hardware soak and all three physical fault experiments must still be performed. Commercial release remains **HOLD** until the assembled package validates as `external_evidence_complete`.
