@@ -1,0 +1,73 @@
+name: Apply Iteration 57 follow-up fixes
+
+on:
+  push:
+    branches:
+      - agent/post-release-feature-iteration
+    paths:
+      - '.github/workflows/apply-iteration57-followup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-iteration-57-followup
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Strengthen legacy ranged validator for flint economy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/developer_b/validate_bounded_ranged_combat.ps1')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  "if ($rangedItems.Count -ne 2 -or $rangedRecipes.Count -ne 2 -or $profiles.Count -ne 1) {\n  throw 'Bow extension must remain exactly bow, arrow, two recipes and one profile'\n}",
+                  "if ($rangedItems.Count -ne 3 -or $rangedRecipes.Count -ne 2 -or $profiles.Count -ne 1) {\n  throw 'Bow extension must remain exactly bow, flint, arrow, two recipes and one profile'\n}",
+              ),
+              ("foreach ($required in @('bow','arrow'))", "foreach ($required in @('bow','flint','arrow'))"),
+              (
+                  "$bow = @($rangedItems | Where-Object { [string]$_.id -eq 'bow' })[0]\n$arrow = @($rangedItems | Where-Object { [string]$_.id -eq 'arrow' })[0]",
+                  "$bow = @($rangedItems | Where-Object { [string]$_.id -eq 'bow' })[0]\n$flint = @($rangedItems | Where-Object { [string]$_.id -eq 'flint' })[0]\n$arrow = @($rangedItems | Where-Object { [string]$_.id -eq 'arrow' })[0]",
+              ),
+              (
+                  "if ([string]$arrow.category -ne 'ammunition' -or [int]$arrow.max_stack -ne 64) { throw 'Arrow must remain bounded ammunition' }",
+                  "if ([string]$flint.category -ne 'material' -or [int]$flint.max_stack -ne 64) { throw 'Flint must remain bounded crafting material' }\nif ([string]$arrow.category -ne 'ammunition' -or [int]$arrow.max_stack -ne 64) { throw 'Arrow must remain bounded ammunition' }",
+              ),
+              (
+                  "foreach ($required in @('bow','arrows')) { if (-not $extensionRecipeIds.ContainsKey($required)) { throw \"Missing ranged recipe: $required\" } }\n$profile = $profiles[0]",
+                  "foreach ($required in @('bow','arrows')) { if (-not $extensionRecipeIds.ContainsKey($required)) { throw \"Missing ranged recipe: $required\" } }\n$arrowRecipe = @($rangedRecipes | Where-Object { [string]$_.id -eq 'arrows' })[0]\nif ([int]$arrowRecipe.ingredients.stick -ne 1 -or [int]$arrowRecipe.ingredients.feather -ne 1 -or [int]$arrowRecipe.ingredients.flint -ne 1) { throw 'Arrow recipe must consume one stick, one feather and one flint' }\nif ([string]$arrowRecipe.output.id -ne 'arrow' -or [int]$arrowRecipe.output.count -ne 4) { throw 'Arrow recipe must output exactly four arrows' }\n$profile = $profiles[0]",
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one validator contract occurrence, found {count}: {old[:80]}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Commit validator compatibility update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/developer_b/validate_bounded_ranged_combat.ps1
+          git commit -m 'test: validate flint-backed ranged crafting contract'
+          git push origin HEAD:agent/post-release-feature-iteration
