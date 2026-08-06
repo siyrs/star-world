@@ -1,0 +1,49 @@
+name: Fix Iteration 58 validator
+
+on:
+  push:
+    branches:
+      - agent/iteration-58-long-term-scale-recovery
+    paths:
+      - '.github/workflows/fix-iteration58-validator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Support multiline GDScript method signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/developer_b/validate_long_term_scale_recovery.ps1')
+          text = path.read_text(encoding='utf-8')
+          old = "$pattern = '(?ms)^func\\s+' + [regex]::Escape($MethodName) + '\\s*\\([^\\n]*\\).*?(?=^func\\s+|\\z)'"
+          new = "$pattern = '(?ms)^func\\s+' + [regex]::Escape($MethodName) + '\\s*\\(.*?(?=^func\\s+|\\z)'"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one method parser pattern, found {text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Commit validator fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/developer_b/validate_long_term_scale_recovery.ps1
+          git commit -m 'test: support multiline GDScript methods in scale validator'
+          git push origin HEAD:agent/iteration-58-long-term-scale-recovery
