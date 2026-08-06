@@ -34,22 +34,19 @@ if (-not $ReferenceOnly) {
 }
 
 function Resolve-RequiredFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param([string]$Path)
     $resolved = [System.IO.Path]::GetFullPath($Path)
     if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) { throw "Required file not found: $resolved" }
     return $resolved
 }
-
 function Read-JsonFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param([string]$Path)
     return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -Depth 100
 }
-
 function Get-Sha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param([string]$Path)
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
-
 function Assert-Equal {
     param([string]$Expected, [string]$Actual, [string]$Description)
     if ($Expected -ne $Actual) { throw "$Description mismatch: expected $Expected, got $Actual" }
@@ -100,8 +97,9 @@ foreach ($pair in @(
         throw "Fault record is not complete: $($pair.Expected)"
     }
 }
-$faultOperators = @($hdd.operator_id, $antivirus.operator_id, $powerLoss.operator_id | Sort-Object -Unique)
-if ($faultOperators.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$faultOperators[0])) {
+$faultOperator = ([string]$hdd.operator_id).Trim()
+if ([string]::IsNullOrWhiteSpace($faultOperator)) { throw 'Fault-lab operator identity must not be blank.' }
+if ($faultOperator -ne ([string]$antivirus.operator_id).Trim() -or $faultOperator -ne ([string]$powerLoss.operator_id).Trim()) {
     throw 'All fault-lab records must use one non-empty operator identity.'
 }
 
@@ -151,7 +149,7 @@ $package = [ordered]@{
     hardware_qualification = @($minimum, $recommended)
     strict_soak = $soak
     fault_lab = [ordered]@{
-        operator_id = [string]$faultOperators[0]
+        operator_id = $faultOperator
         result = 'pass'
         scenarios = @($hdd, $antivirus, $powerLoss)
     }
