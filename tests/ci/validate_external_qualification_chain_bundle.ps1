@@ -86,8 +86,8 @@ foreach ($entry in $entries) {
     $relativePath = ([string]$entry.path).Replace('\', '/')
     if ($seen.ContainsKey($relativePath)) { throw "Bundle manifest contains duplicate path: $relativePath" }
     $seen[$relativePath] = $true
-    if ($relativePath -notin $requiredPaths) { throw "Bundle manifest contains unexpected path: $relativePath" }
     $path = Get-BundlePath -RelativePath $relativePath
+    if ($relativePath -notin $requiredPaths) { throw "Bundle manifest contains unexpected path: $relativePath" }
     $item = Get-Item -LiteralPath $path
     $actualHash = Get-Sha256 -Path $path
     if ([string]$entry.sha256 -ne $actualHash) { throw "Bundle file hash mismatch: $relativePath" }
