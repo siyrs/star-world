@@ -2,10 +2,12 @@
 
 ## Repository implementation checklist
 
-- [x] Define one versioned evidence package schema.
+- [x] Define one schema v2 evidence package.
 - [x] Distinguish fixture, hosted reference and target-hardware evidence.
 - [x] Prevent hosted CI and fixtures from closing commercial release gates.
 - [x] Bind the package to one commit, one EXE SHA-256 and one PCK SHA-256.
+- [x] Revalidate every child binding after package assembly in both GDScript and PowerShell.
+- [x] Reject mixed commit, EXE, PCK, evidence-source, reference-flag and fault-operator records.
 - [x] Add an independent E4-H review recorder.
 - [x] Reject self-review, incomplete checklists and unresolved blockers.
 - [x] Reuse the exact final EXE/PCK across the five-profile route matrix.
@@ -16,11 +18,11 @@
 - [x] Rotate the strict soak across all five formal profiles.
 - [x] Preserve zero post-spawn transport and clean-cycle exits.
 - [x] Add resumable HDD, antivirus and power-loss experiment records.
-- [x] Preserve world identity plus pre/post-fault hashes.
+- [x] Preserve world identity, pre/post-fault hashes and exact EXE/PCK across both phases.
 - [x] Add package assembly with cross-artifact hash verification.
 - [x] Add strict package validation and `-RequireReleaseGate` mode.
-- [x] Add a retained non-qualifying reference fixture.
-- [x] Add end-to-end virtual package assembly regression.
+- [x] Add a retained non-qualifying schema v2 fixture.
+- [x] Add end-to-end assembly, mutation and rebinding-rejection regression.
 - [x] Add permanent Godot 4.7, PowerShell parser and anti-forgery CI.
 - [x] Document commands, evidence boundaries and commercial decision rules.
 
@@ -40,4 +42,4 @@ These items cannot be marked complete by repository automation:
 
 ## Acceptance rule
 
-Repository implementation is accepted when the Iteration 60 permanent workflow is green. Commercial release remains **HOLD** while any external execution item above is unchecked.
+Repository implementation is accepted when the Iteration 60 permanent workflow is green on the fixed PR head. Commercial release remains **HOLD** while any external execution item above is unchecked.
