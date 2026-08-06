@@ -102,6 +102,7 @@ function New-FaultRecord {
         before_world_sha256 = 'd' * 64
         after_world_sha256 = 'e' * 64
         recovery_evidence_sha256 = 'f' * 64
+        build = [ordered]@{ executable_sha256 = $exeHash; pck_sha256 = $pckHash }
         interruption_observed = $true
         recovery_verified = $true
         world_integrity_verified = $true
@@ -131,15 +132,36 @@ $outputPath = Join-Path $fixtureRoot 'qualification-package.json'
     -OutputPath $outputPath `
     -ReferenceOnly
 
-$resultText = (& (Join-Path $PSScriptRoot 'validate_external_qualification_package.ps1') -PackagePath $outputPath | Out-String).Trim()
+$validator = Join-Path $PSScriptRoot 'validate_external_qualification_package.ps1'
+$resultText = (& $validator -PackagePath $outputPath | Out-String).Trim()
 $result = $resultText | ConvertFrom-Json
 if (-not [bool]$result.contract_valid) { throw "Assembled reference package is invalid: $($result.errors -join '; ')" }
 if ([bool]$result.release_gate_passed -or [string]$result.status -ne 'reference_only') {
     throw "Assembled fixture incorrectly qualified: $($result.status)"
 }
 $package = Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json -Depth 100
+if ([int]$package.schema_version -ne 2) { throw 'Assembler did not emit schema version 2.' }
 if ([string]$package.build.executable_sha256 -ne $exeHash -or [string]$package.build.pck_sha256 -ne $pckHash) {
     throw 'Assembler did not bind the final executable and PCK digests.'
 }
 if ([string]$package.build.commit_sha -ne $commit) { throw 'Assembler did not bind the requested commit.' }
-Write-Host "EXTERNAL QUALIFICATION ASSEMBLER PASS | source=reference_only | gate=false | package=$outputPath"
+if ([string]$package.experiential_review.build.commit_sha -ne $commit) { throw 'Assembler omitted the E4-H build binding.' }
+foreach ($scenario in @($package.fault_lab.scenarios)) {
+    if ([string]$scenario.build.executable_sha256 -ne $exeHash -or [string]$scenario.build.pck_sha256 -ne $pckHash) {
+        throw "Assembler omitted the $($scenario.type) fault build binding."
+    }
+}
+
+$tamperedPath = Join-Path $fixtureRoot 'qualification-package-tampered.json'
+$tampered = $package | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100
+$tampered.hardware_qualification[0].build.executable_sha256 = 'f' * 64
+Write-Json $tamperedPath $tampered
+$rejected = $false
+try {
+    & $validator -PackagePath $tamperedPath | Out-Null
+} catch {
+    $rejected = $_.Exception.Message -match 'hardware minimum executable'
+}
+if (-not $rejected) { throw 'Standalone validator accepted a package with a rebound hardware executable.' }
+
+Write-Host "EXTERNAL QUALIFICATION ASSEMBLER PASS | schema=2 | source=reference_only | gate=false | rebinding-rejected=true | package=$outputPath"
