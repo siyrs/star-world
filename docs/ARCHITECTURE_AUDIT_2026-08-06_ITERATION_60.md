@@ -1,0 +1,72 @@
+# Architecture Audit · 2026-08-06 · Iteration 60
+
+## Scope reviewed
+
+- `docs/PRODUCT_ROADMAP.md`
+- Iteration 59 release integrity and lifecycle implementation
+- release readiness and evidence workflows
+- final Windows export journey matrix
+- hosted reference soak
+- commercial-release task status board
+
+## Findings
+
+### A-60-01 · External HOLD items existed only as prose
+
+The roadmap correctly preserved independent review, real hardware, 7,200-second soak and real fault-lab evidence as external. However, there was no canonical machine-readable package joining those items. This allowed evidence to be complete in separate folders while remaining impossible to validate as one final-build decision.
+
+**Resolution:** introduce one versioned qualification contract and strict package validator.
+
+### A-60-02 · Hosted reference evidence could be misread as acceptance
+
+Hosted CI already exercised Windows export, five profiles and a shorter soak mechanism. The documents stated the limitation, but no code-level gate prevented a future package from labelling hosted results as target hardware.
+
+**Resolution:** evidence source, `reference_only`, `hosted_runner` and `fixture_mode` are jointly validated. Hosted or fixture evidence can never set `release_gate_passed=true`.
+
+### A-60-03 · Hardware tiers needed immutable final-package identity
+
+Running an export separately on minimum and recommended hardware could produce two different artifacts. Passing both would not prove that one final candidate was qualified.
+
+**Resolution:** the existing five-profile matrix now supports exact prebuilt EXE/PCK reuse. Both hardware tier records, E4-H review, strict soak and the package assembler verify the same SHA-256 values.
+
+### A-60-04 · Soak duration needed a truthful clock
+
+A high frame count is not a time qualification because render and simulation rates vary by hardware. Sleeping for two hours would also prove nothing.
+
+**Resolution:** the strict harness repeatedly executes the same final package through the production release-smoke route and uses a monotonic `Stopwatch` wall clock. Each cycle must pass, exit cleanly, use real movement and preserve zero direct transform writes.
+
+### A-60-05 · Real interruption evidence must survive the interruption
+
+A single-process script cannot truthfully perform and verify a real power loss. Antivirus and HDD interference also require an operator-controlled external condition.
+
+**Resolution:** fault records are two phase. `prepare` writes world identity and pre-fault digest; `complete` runs after restart, verifies identity, records the post-fault digest and binds a recovery report.
+
+### A-60-06 · Experiential independence was not enforceable in repository data
+
+The repository cannot prove a human identity, but it can reject obvious self-review and incomplete review records.
+
+**Resolution:** the E4-H recorder requires distinct reviewer/implementer identifiers, explicit independence attestation, six completed checks and zero blockers. Documentation states that identity fields remain human attestations rather than cryptographic identity proof.
+
+## Architecture decision
+
+The new qualification domain is a diagnostics/evidence domain:
+
+- it reads build artifacts and external evidence;
+- it never writes gameplay state;
+- it does not alter `world.json`;
+- it reuses release-smoke, route and lifecycle contracts;
+- it emits deterministic JSON plus SHA-256 bindings;
+- it preserves a hard separation between repository mechanism validation and external acceptance.
+
+## Test strategy
+
+- GDScript regression validates valid states and rejection cases.
+- PowerShell self-test independently implements and checks the JSON contract.
+- Static audit parses all scripts and checks anti-forgery invariants.
+- End-to-end fixture assembly binds synthetic artifacts and proves the result remains non-qualifying.
+- Adjacent lifecycle, release-smoke and profile journey regressions prevent contract drift.
+- Real hardware, 7,200-second duration and physical fault injection are intentionally not simulated by CI.
+
+## Result
+
+No remaining repository architecture blocker was identified for the external qualification workflow. Commercial release remains **HOLD** because the real evidence package is not part of this architecture iteration.
