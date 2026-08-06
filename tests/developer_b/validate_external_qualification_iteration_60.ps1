@@ -10,6 +10,7 @@ $soakRunnerPath = Join-Path $root 'tests\ci\run_strict_target_hardware_soak.ps1'
 $faultRecorderPath = Join-Path $root 'tests\ci\new_external_fault_lab_record.ps1'
 $reviewRecorderPath = Join-Path $root 'tests\ci\new_independent_experience_review.ps1'
 $assemblerPath = Join-Path $root 'tests\ci\new_external_qualification_package.ps1'
+$assemblerTestPath = Join-Path $root 'tests\ci\test_external_qualification_package_assembler.ps1'
 $fixturePath = Join-Path $root 'tests\fixtures\external_qualification\reference-package.json'
 
 $requiredFiles = @(
@@ -21,6 +22,7 @@ $requiredFiles = @(
     $faultRecorderPath,
     $reviewRecorderPath,
     $assemblerPath,
+    $assemblerTestPath,
     $fixturePath
 )
 foreach ($path in $requiredFiles) {
@@ -34,7 +36,8 @@ foreach ($path in @(
     $soakRunnerPath,
     $faultRecorderPath,
     $reviewRecorderPath,
-    $assemblerPath
+    $assemblerPath,
+    $assemblerTestPath
 )) {
     $tokens = $null
     $parseErrors = $null
@@ -111,6 +114,11 @@ Assert-ContainsAll $assemblerPath @(
     'validate_external_qualification_package.ps1',
     '-RequireReleaseGate'
 )
+Assert-ContainsAll $assemblerTestPath @(
+    'EXTERNAL QUALIFICATION ASSEMBLER PASS',
+    'Assembler did not bind the final executable and PCK digests',
+    '-ReferenceOnly'
+)
 
 $soakText = Get-Content -LiteralPath $soakRunnerPath -Raw
 if ($soakText -match 'Start-Sleep\s+-Seconds\s+7200') {
@@ -122,6 +130,10 @@ if ($soakText -notmatch "star_continent.*desert_ruins.*frozen_wastes.*sky_island
 
 # Run the implementation-independent PowerShell validator self-test.
 & $packageValidatorPath
+
+# Run the package assembler with a retained synthetic binary pair. The output
+# must remain reference-only while binding one commit, EXE and PCK digest.
+& $assemblerTestPath
 
 # The retained fixture must be structurally complete but provably non-qualifying.
 $fixtureOutput = (& $packageValidatorPath -PackagePath $fixturePath | Out-String).Trim()
@@ -140,4 +152,4 @@ if ($null -ne $fixture.PSObject.Properties['release_owner_attestation']) {
     throw 'Reference fixture must not contain release-owner approval.'
 }
 
-Write-Host 'ITERATION 60 EXTERNAL QUALIFICATION CONTRACT PASS | powershell=6 | fixture=non-qualifying | anti-forgery=enabled | strict-soak=7200s'
+Write-Host 'ITERATION 60 EXTERNAL QUALIFICATION CONTRACT PASS | powershell=7 | assembler=bound | fixture=non-qualifying | anti-forgery=enabled | strict-soak=7200s'
