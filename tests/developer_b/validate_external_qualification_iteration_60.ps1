@@ -29,7 +29,6 @@ foreach ($path in $requiredFiles) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Iteration 60 file missing: $path" }
 }
 
-# Every PowerShell utility must parse independently before any semantic check.
 foreach ($path in @(
     $packageValidatorPath,
     $hardwareRunnerPath,
@@ -56,6 +55,7 @@ function Assert-ContainsAll {
 }
 
 Assert-ContainsAll $contractPath @(
+    'SCHEMA_VERSION := 2',
     'STRICT_SOAK_SECONDS := 7200',
     'target_hardware',
     'hosted_reference',
@@ -65,19 +65,35 @@ Assert-ContainsAll $contractPath @(
     'hardware qualification is missing tier',
     'target-hardware soak must run for at least 7200 seconds',
     'fault lab is missing scenario',
-    'release owner must explicitly approve'
+    'release owner must explicitly approve',
+    'review commit',
+    'strict soak PCK',
+    'evidence_source does not match package'
 )
 Assert-ContainsAll $regressionPath @(
     'fixture evidence never closes the commercial release gate',
     'hosted runner cannot impersonate target hardware',
     'short target soak is rejected',
     'self-review is rejected',
-    'all required real fault scenarios are required'
+    'all required real fault scenarios are required',
+    'E4-H review cannot be rebound to another commit',
+    'hardware evidence cannot be mixed from another executable',
+    'fault scenarios must retain one operator identity'
+)
+Assert-ContainsAll $packageValidatorPath @(
+    '$SchemaVersion = 2',
+    'review commit',
+    'hardware $tier executable',
+    'strict soak PCK',
+    'fault $scenarioType PCK',
+    'reference_only does not match package',
+    'rejection-cases=7'
 )
 Assert-ContainsAll $hardwareRunnerPath @(
     'run_windows_export_journey_matrix.ps1',
     'Release journey matrix did not validate exactly five formal profiles',
     'GitHub-hosted runners cannot create target-hardware qualification evidence',
+    'exact_existing_package_reused',
     'operator_attested',
     'executable_sha256',
     'pck_sha256'
@@ -95,6 +111,9 @@ Assert-ContainsAll $faultRecorderPath @(
     "ValidateSet('hdd', 'antivirus', 'power_loss')",
     "ValidateSet('prepare', 'complete')",
     'GitHub-hosted runners cannot create real HDD, antivirus or power-loss evidence',
+    'ReleaseExecutable',
+    'ReleasePck',
+    'Fault completion must use the exact EXE/PCK captured during prepare',
     'before_world_sha256',
     'after_world_sha256',
     'RecoveryEvidencePath'
@@ -107,16 +126,19 @@ Assert-ContainsAll $reviewRecorderPath @(
     'executable_sha256'
 )
 Assert-ContainsAll $assemblerPath @(
+    'schema_version = 2',
     'E4-H review commit',
     'hardware $($hardware.tier) executable',
+    'fault $($pair.Expected) executable',
     'strict soak executable',
-    'A target-hardware package cannot include reference-only',
+    'build = $review.build',
     'validate_external_qualification_package.ps1',
     '-RequireReleaseGate'
 )
 Assert-ContainsAll $assemblerTestPath @(
     'EXTERNAL QUALIFICATION ASSEMBLER PASS',
     'Assembler did not bind the final executable and PCK digests',
+    'Standalone validator accepted a package with a rebound hardware executable',
     '-ReferenceOnly'
 )
 
@@ -128,14 +150,9 @@ if ($soakText -notmatch "star_continent.*desert_ruins.*frozen_wastes.*sky_island
     throw 'Strict soak must rotate through all five formal profiles.'
 }
 
-# Run the implementation-independent PowerShell validator self-test.
 & $packageValidatorPath
-
-# Run the package assembler with a retained synthetic binary pair. The output
-# must remain reference-only while binding one commit, EXE and PCK digest.
 & $assemblerTestPath
 
-# The retained fixture must be structurally complete but provably non-qualifying.
 $fixtureOutput = (& $packageValidatorPath -PackagePath $fixturePath | Out-String).Trim()
 $fixtureResult = $fixtureOutput | ConvertFrom-Json
 if (-not [bool]$fixtureResult.contract_valid) { throw 'Reference fixture is not structurally valid.' }
@@ -145,6 +162,7 @@ if ([string]$fixtureResult.status -ne 'fixture_contract_complete') {
 }
 
 $fixture = Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json -Depth 100
+if ([int]$fixture.schema_version -ne 2) { throw 'Reference fixture must use schema version 2.' }
 if (-not [bool]$fixture.reference_only -or -not [bool]$fixture.fixture_mode -or [string]$fixture.evidence_source -ne 'fixture') {
     throw 'Reference fixture must remain explicitly fixture-only and reference-only.'
 }
@@ -152,4 +170,4 @@ if ($null -ne $fixture.PSObject.Properties['release_owner_attestation']) {
     throw 'Reference fixture must not contain release-owner approval.'
 }
 
-Write-Host 'ITERATION 60 EXTERNAL QUALIFICATION CONTRACT PASS | powershell=7 | assembler=bound | fixture=non-qualifying | anti-forgery=enabled | strict-soak=7200s'
+Write-Host 'ITERATION 60 EXTERNAL QUALIFICATION CONTRACT PASS | schema=2 | powershell=7 | assembler=bound | fixture=non-qualifying | anti-forgery=validation-time | strict-soak=7200s'
