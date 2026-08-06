@@ -267,12 +267,11 @@ func _run_hostile_reward_drop_cycle(
 	for member: FakeMember in members:
 		member.defeat({"rotten_flesh":1}, member.global_position)
 		member.defeat({"rotten_flesh":1}, member.global_position)
-	var rewarded := await _wait_until(
-		func() -> bool:
-			return int(reward_service.get_snapshot().get("reward_grant_count", 0))
-			== cycle + 1,
-		2000
-	)
+	var reward_ready := func() -> bool:
+		return int(
+			reward_service.get_snapshot().get("reward_grant_count", 0)
+		) == cycle + 1
+	var rewarded := await _wait_until(reward_ready, 2000)
 	_check(
 		rewarded,
 		"combat cycle %02d resolves one formal reward after the last death" % (cycle + 1)
@@ -392,10 +391,17 @@ func _run_chunk_connection_cycle(cycle: int, world: Node) -> void:
 		and bool(second_return.call("was_hydrated_from_snapshot")),
 		"stream cycle %02d performs a second bounded hot return" % (cycle + 1)
 	)
+	var rebuilt_neighbors := _connection_neighbors(world, global_position)
+	var rebuilt_mask := ConnectionPolicyScript.resolve_mask(
+		block_id, rebuilt_neighbors
+	)
 	_check(
-		ConnectionPolicyScript.resolve_mask(
-			block_id, _connection_neighbors(world, global_position)
-		) & ConnectionPolicyScript.EAST == 0,
+		not ConnectionPolicyScript.connected_face(
+			block_id,
+			rebuilt_mask,
+			0,
+			str(rebuilt_neighbors.get("east", "air"))
+		),
 		"stream cycle %02d rebuild removes the stale cross-chunk connection"
 		% (cycle + 1)
 	)
