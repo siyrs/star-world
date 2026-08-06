@@ -35,7 +35,7 @@ function Assert-NoMatch([string]$Text, [string]$Pattern, [string]$Message) {
 }
 
 function Get-MethodBody([string]$Text, [string]$MethodName) {
-  $pattern = '(?ms)^func\s+' + [regex]::Escape($MethodName) + '\s*\([^\n]*\).*?(?=^func\s+|\z)'
+  $pattern = '(?ms)^func\s+' + [regex]::Escape($MethodName) + '\s*\(.*?(?=^func\s+|\z)'
   $match = [regex]::Match($Text, $pattern)
   if (-not $match.Success) { throw "Unable to isolate method: $MethodName" }
   return $match.Value
