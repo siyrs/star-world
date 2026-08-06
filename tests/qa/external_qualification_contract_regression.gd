@@ -94,6 +94,34 @@ func _run() -> void:
 	duplicate_tier["hardware_qualification"][1]["tier"] = "minimum"
 	_check_invalid(contract, duplicate_tier, "duplicated", "hardware tiers cannot be duplicated")
 
+	var tampered_review := real.duplicate(true)
+	tampered_review["experiential_review"]["build"]["commit_sha"] = "f".repeat(40)
+	_check_invalid(contract, tampered_review, "review commit", "E4-H review cannot be rebound to another commit")
+
+	var tampered_hardware := real.duplicate(true)
+	tampered_hardware["hardware_qualification"][0]["build"]["executable_sha256"] = _hash_char("f")
+	_check_invalid(contract, tampered_hardware, "hardware minimum executable", "hardware evidence cannot be mixed from another executable")
+
+	var tampered_soak := real.duplicate(true)
+	tampered_soak["strict_soak"]["pck_sha256"] = _hash_char("f")
+	_check_invalid(contract, tampered_soak, "strict soak PCK", "soak evidence cannot be mixed from another PCK")
+
+	var tampered_fault := real.duplicate(true)
+	tampered_fault["fault_lab"]["scenarios"][0]["build"]["pck_sha256"] = _hash_char("f")
+	_check_invalid(contract, tampered_fault, "fault hdd PCK", "fault evidence cannot be mixed from another PCK")
+
+	var mixed_source := real.duplicate(true)
+	mixed_source["hardware_qualification"][0]["evidence_source"] = "hosted_reference"
+	_check_invalid(contract, mixed_source, "evidence_source does not match", "hosted evidence cannot be inserted into a target package")
+
+	var mixed_reference_flag := real.duplicate(true)
+	mixed_reference_flag["strict_soak"]["reference_only"] = true
+	_check_invalid(contract, mixed_reference_flag, "reference_only does not match", "child reference flags must match the package")
+
+	var mixed_fault_operator := real.duplicate(true)
+	mixed_fault_operator["fault_lab"]["scenarios"][0]["operator_id"] = "other-operator"
+	_check_invalid(contract, mixed_fault_operator, "operator does not match", "fault scenarios must retain one operator identity")
+
 	if failures.is_empty():
 		print("QA EXTERNAL QUALIFICATION CONTRACT PASS | checks=%d" % checks)
 		quit(0)
@@ -109,10 +137,15 @@ func _run() -> void:
 
 func _base_package(source: String, fixture_mode: bool, reference_only: bool) -> Dictionary:
 	var profiles: Array[String] = ContractScript.REQUIRED_PROFILES.duplicate()
+	var commit_sha := "a".repeat(40)
+	var executable_sha := _hash_char("1")
+	var pck_sha := _hash_char("2")
 	var hardware: Array[Dictionary] = []
 	for index: int in ContractScript.REQUIRED_TIERS.size():
 		hardware.append({
 			"tier": ContractScript.REQUIRED_TIERS[index],
+			"evidence_source": source,
+			"reference_only": reference_only,
 			"operator_id": "operator-%d" % index,
 			"operator_attested": false,
 			"machine_fingerprint_sha256": _hash_char("b" if index == 0 else "c"),
@@ -125,17 +158,28 @@ func _base_package(source: String, fixture_mode: bool, reference_only: bool) -> 
 			"started_at_unix": 1000 + index * 100,
 			"completed_at_unix": 1050 + index * 100,
 			"result": "pass",
+			"build": {
+				"executable_sha256": executable_sha,
+				"pck_sha256": pck_sha,
+			},
 		})
 	var scenarios: Array[Dictionary] = []
 	for scenario_type: String in ContractScript.REQUIRED_FAULT_SCENARIOS:
 		scenarios.append({
 			"type": scenario_type,
+			"evidence_source": source,
+			"reference_only": reference_only,
+			"operator_id": "fault-operator",
 			"attested_real": false,
 			"interruption_observed": true,
 			"recovery_verified": true,
 			"world_integrity_verified": true,
 			"before_world_sha256": _hash_char("d"),
 			"after_world_sha256": _hash_char("e"),
+			"build": {
+				"executable_sha256": executable_sha,
+				"pck_sha256": pck_sha,
+			},
 		})
 	return {
 		"schema_version": ContractScript.SCHEMA_VERSION,
@@ -145,9 +189,9 @@ func _base_package(source: String, fixture_mode: bool, reference_only: bool) -> 
 		"evidence_source": source,
 		"hosted_runner": source == "hosted_reference",
 		"build": {
-			"commit_sha": "a".repeat(40),
-			"executable_sha256": _hash_char("1"),
-			"pck_sha256": _hash_char("2"),
+			"commit_sha": commit_sha,
+			"executable_sha256": executable_sha,
+			"pck_sha256": pck_sha,
 			"version": "v1.3.0-fixture",
 		},
 		"experiential_review": {
@@ -165,17 +209,25 @@ func _base_package(source: String, fixture_mode: bool, reference_only: bool) -> 
 				"input_and_ui": true,
 				"quit_and_restart": true,
 			},
+			"build": {
+				"commit_sha": commit_sha,
+				"executable_sha256": executable_sha,
+				"pck_sha256": pck_sha,
+			},
 		},
 		"hardware_qualification": hardware,
 		"strict_soak": {
+			"evidence_source": source,
 			"requested_seconds": 600,
 			"elapsed_seconds": 600,
-			"reference_only": true,
+			"reference_only": reference_only,
 			"target_hardware": false,
 			"clean_exit": true,
 			"crash_count": 0,
 			"timed_out": false,
 			"result": "pass",
+			"executable_sha256": executable_sha,
+			"pck_sha256": pck_sha,
 			"lifecycle_report_sha256": _hash_char("3"),
 			"soak_report_sha256": _hash_char("4"),
 		},
@@ -189,14 +241,21 @@ func _base_package(source: String, fixture_mode: bool, reference_only: bool) -> 
 
 
 func _attest_real_package(package: Dictionary) -> void:
+	package["evidence_source"] = "target_hardware"
+	package["reference_only"] = false
 	package["hosted_runner"] = false
 	for entry: Dictionary in package["hardware_qualification"]:
+		entry["evidence_source"] = "target_hardware"
+		entry["reference_only"] = false
 		entry["operator_attested"] = true
+	package["strict_soak"]["evidence_source"] = "target_hardware"
 	package["strict_soak"]["requested_seconds"] = ContractScript.STRICT_SOAK_SECONDS
 	package["strict_soak"]["elapsed_seconds"] = ContractScript.STRICT_SOAK_SECONDS
 	package["strict_soak"]["reference_only"] = false
 	package["strict_soak"]["target_hardware"] = true
 	for scenario: Dictionary in package["fault_lab"]["scenarios"]:
+		scenario["evidence_source"] = "target_hardware"
+		scenario["reference_only"] = false
 		scenario["attested_real"] = true
 	package["release_owner_attestation"] = {
 		"owner_id": "release-owner",
