@@ -1,0 +1,82 @@
+name: Iteration 59 diagnostic follow-up
+
+on:
+  push:
+    branches:
+      - agent/iteration-59-release-integrity
+    paths:
+      - '.github/workflows/iteration-59-followup.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iteration-59-followup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fix-and-verify:
+    name: Count rejected restore integrity and verify 40 checks
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/iteration-59-release-integrity
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply focused production fix
+        shell: pwsh
+        run: python tools/iteration_59_followup.py
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Run focused restore-integrity regression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_headless_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/trash_restore_integrity_regression.gd' `
+            -OutputBasePath 'build\trash-restore-integrity-followup' `
+            -TimeoutMilliseconds 900000 `
+            -VerboseGodot
+
+      - name: Validate final focused diff
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath 'tools/iteration_59_followup.py') {
+            throw 'Focused helper survived cleanup'
+          }
+          .\tests\developer_b\validate_release_integrity_iteration_59.ps1
+          git diff --check
+
+      - name: Commit verified fix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix: count rejected trash restore integrity'
+          git push origin HEAD:agent/iteration-59-release-integrity
