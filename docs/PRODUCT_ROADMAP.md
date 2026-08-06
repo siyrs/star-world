@@ -363,3 +363,20 @@ The next work is external qualification, not another gameplay subsystem: indepen
 
 - [RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md](RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md)
 - [PRODUCT_ROADMAP_ITERATION_61.md](PRODUCT_ROADMAP_ITERATION_61.md)
+
+
+## Iteration 62 · 离线发布晋级与身份钉死（2026-08-07）
+
+- Promotion Pin 用稳定 `pin_id` 将发布所有者选择绑定到 candidate、chain bundle、package、commit、版本和最终 EXE/PCK；
+- 商业 `-RequireReleaseGate` 必须同时提供在 Promotion Bundle 之外保留的 `ExpectedPinId`，不再只依赖包内自洽；
+- 已验收的 Iteration 61 19 文件证据链保持不变，由独立 Promotion Bundle 外层封装；
+- Promotion Bundle 固化 `release_qualification.json`、`project.godot` 与 `export_presets.cfg`，接收端通过临时合成 contract root 离线复核，不依赖当前 checkout；
+- 外层清单继续拒绝缺失/额外/隐藏文件、哈希和长度漂移、reparse point、目录穿越与 promotion identity 漂移；
+- 接收端验证回执写在不可变 Promotion Bundle 之外，并记录 promotion/pin/candidate/bundle/package 身份、manifest 哈希和验证器哈希；
+- 永久门禁覆盖合同快照篡改、内层链篡改、错误 Pin、可见/隐藏注入、路径穿越、promotion ID 篡改和包内回执写入；
+- 商业发布继续 **HOLD**，离线晋级完整性不能替代真实 E4-H、物理硬件、7,200 秒 soak、故障实验或发行方签名体系。
+
+合同见：
+
+- [RELEASE_PROMOTION_OFFLINE_VALIDATION.md](RELEASE_PROMOTION_OFFLINE_VALIDATION.md)
+- [PRODUCT_ROADMAP_ITERATION_62.md](PRODUCT_ROADMAP_ITERATION_62.md)

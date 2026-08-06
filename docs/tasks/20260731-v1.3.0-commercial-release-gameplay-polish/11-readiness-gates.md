@@ -122,3 +122,10 @@ Repository readiness is complete. External execution is intentionally not marked
 The repository now includes the Iteration 60 semantic evidence contract and the Iteration 61 candidate chain-of-custody workflow. Repository implementation, parser checks, strict Godot import, a complete 19-file portable reference payload, referenced-report revalidation, hidden-file detection and six deliberate tamper rejections are automatable and must remain green.
 
 Commercial release remains **HOLD**. The independent E4-H review, minimum/recommended physical hardware runs, strict 7,200-second target-hardware soak, HDD/antivirus/power-loss experiments and release-owner approval remain external execution items and are not marked complete by CI.
+
+
+## Post-implementation reconciliation · Iteration 62 · 2026-08-07
+
+Repository-owned release promotion now adds an externally retained Promotion Pin, frozen release/project/export contract snapshots, offline nested-chain validation and immutable handoff receipts. `-RequireReleaseGate` must be paired with the expected pin ID so a different internally consistent candidate cannot be promoted accidentally.
+
+Commercial release remains **HOLD**. Independent E4-H review, minimum/recommended physical hardware, the real 7,200-second target-hardware soak, HDD/antivirus/power-loss experiments, release-owner selection and any publisher signing/timestamp authority remain external execution controls.

@@ -32,6 +32,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_release_integrity_iteration_59.ps1"
 & "$PSScriptRoot\developer_b\validate_external_qualification_iteration_60.ps1"
 & "$PSScriptRoot\developer_b\validate_release_candidate_chain_iteration_61.ps1"
+& "$PSScriptRoot\developer_b\validate_release_promotion_iteration_62.ps1"
 & "$PSScriptRoot\developer_b\validate_save_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_crash_safe_session_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"

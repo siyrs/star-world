@@ -1,0 +1,96 @@
+name: Release promotion offline validation quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-promotion-iteration-62-tests.yml'
+      - 'tests/ci/new_release_promotion_pin.ps1'
+      - 'tests/ci/validate_release_promotion_pin.ps1'
+      - 'tests/ci/new_release_promotion_bundle.ps1'
+      - 'tests/ci/validate_release_promotion_bundle.ps1'
+      - 'tests/ci/new_release_promotion_receipt.ps1'
+      - 'tests/ci/test_release_promotion_bundle.ps1'
+      - 'tests/ci/new_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/validate_external_qualification_chain_bundle.ps1'
+      - 'tests/developer_b/validate_release_promotion_iteration_62.ps1'
+      - 'data/release_qualification.json'
+      - 'project.godot'
+      - 'export_presets.cfg'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_62.md'
+      - 'docs/RELEASE_PROMOTION_OFFLINE_VALIDATION.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_62.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-promotion-iteration-62-tests.yml'
+      - 'tests/ci/new_release_promotion_pin.ps1'
+      - 'tests/ci/validate_release_promotion_pin.ps1'
+      - 'tests/ci/new_release_promotion_bundle.ps1'
+      - 'tests/ci/validate_release_promotion_bundle.ps1'
+      - 'tests/ci/new_release_promotion_receipt.ps1'
+      - 'tests/ci/test_release_promotion_bundle.ps1'
+      - 'tests/ci/new_external_qualification_chain_bundle.ps1'
+      - 'tests/ci/validate_external_qualification_chain_bundle.ps1'
+      - 'tests/developer_b/validate_release_promotion_iteration_62.ps1'
+      - 'data/release_qualification.json'
+      - 'project.godot'
+      - 'export_presets.cfg'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_62.md'
+      - 'docs/RELEASE_PROMOTION_OFFLINE_VALIDATION.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_62.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-promotion-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  promotion-contract:
+    name: Offline contract snapshots, external identity pin and immutable receipt
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate offline release promotion contract
+        shell: pwsh
+        run: .\tests\developer_b\validate_release_promotion_iteration_62.ps1
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Re-run external qualification contract regression
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/external_qualification_contract_regression.gd'
+
+      - name: Upload promotion validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-promotion-${{ github.run_number }}
+          path: |
+            build/release-promotion-bundle-fixture/**
+            build/release-promotion-pin-fixture/**
+            build/release-promotion-receipts/**
+            build/release-candidate-chain-fixture/**
+          if-no-files-found: error
+          retention-days: 21
