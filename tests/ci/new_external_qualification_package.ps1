@@ -72,14 +72,19 @@ $soak = Read-JsonFile $soakPath
 $hdd = Read-JsonFile $hddPath
 $antivirus = Read-JsonFile $antivirusPath
 $powerLoss = Read-JsonFile $powerLossPath
+$source = if ($ReferenceOnly) { 'hosted_reference' } else { 'target_hardware' }
 
 Assert-Equal $CommitSha ([string]$review.build.commit_sha) 'E4-H review commit'
 Assert-Equal $exeHash ([string]$review.build.executable_sha256) 'E4-H review executable'
 Assert-Equal $pckHash ([string]$review.build.pck_sha256) 'E4-H review PCK'
 foreach ($hardware in @($minimum, $recommended)) {
+    Assert-Equal $source ([string]$hardware.evidence_source) "hardware $($hardware.tier) evidence source"
+    Assert-Equal ([string][bool]$ReferenceOnly) ([string][bool]$hardware.reference_only) "hardware $($hardware.tier) reference flag"
     Assert-Equal $exeHash ([string]$hardware.build.executable_sha256) "hardware $($hardware.tier) executable"
     Assert-Equal $pckHash ([string]$hardware.build.pck_sha256) "hardware $($hardware.tier) PCK"
 }
+Assert-Equal $source ([string]$soak.evidence_source) 'strict soak evidence source'
+Assert-Equal ([string][bool]$ReferenceOnly) ([string][bool]$soak.reference_only) 'strict soak reference flag'
 Assert-Equal $exeHash ([string]$soak.executable_sha256) 'strict soak executable'
 Assert-Equal $pckHash ([string]$soak.pck_sha256) 'strict soak PCK'
 
@@ -90,12 +95,17 @@ foreach ($pair in @(
     @{ Expected = 'antivirus'; Record = $antivirus },
     @{ Expected = 'power_loss'; Record = $powerLoss }
 )) {
-    if ([string]$pair.Record.type -ne [string]$pair.Expected) {
-        throw "Fault record mismatch: expected $($pair.Expected), got $($pair.Record.type)"
+    $record = $pair.Record
+    if ([string]$record.type -ne [string]$pair.Expected) {
+        throw "Fault record mismatch: expected $($pair.Expected), got $($record.type)"
     }
-    if ([string]$pair.Record.phase -ne 'completed' -or [string]$pair.Record.result -ne 'pass') {
+    if ([string]$record.phase -ne 'completed' -or [string]$record.result -ne 'pass') {
         throw "Fault record is not complete: $($pair.Expected)"
     }
+    Assert-Equal $source ([string]$record.evidence_source) "fault $($pair.Expected) evidence source"
+    Assert-Equal ([string][bool]$ReferenceOnly) ([string][bool]$record.reference_only) "fault $($pair.Expected) reference flag"
+    Assert-Equal $exeHash ([string]$record.build.executable_sha256) "fault $($pair.Expected) executable"
+    Assert-Equal $pckHash ([string]$record.build.pck_sha256) "fault $($pair.Expected) PCK"
 }
 $faultOperator = ([string]$hdd.operator_id).Trim()
 if ([string]::IsNullOrWhiteSpace($faultOperator)) { throw 'Fault-lab operator identity must not be blank.' }
@@ -103,28 +113,11 @@ if ($faultOperator -ne ([string]$antivirus.operator_id).Trim() -or $faultOperato
     throw 'All fault-lab records must use one non-empty operator identity.'
 }
 
-$artifactReferenceFlags = @(
-    [bool]$minimum.reference_only,
-    [bool]$recommended.reference_only,
-    [bool]$soak.reference_only,
-    [bool]$hdd.reference_only,
-    [bool]$antivirus.reference_only,
-    [bool]$powerLoss.reference_only
-)
-$hasReferenceArtifact = @($artifactReferenceFlags | Where-Object { $_ }).Count -gt 0
-if (-not $ReferenceOnly -and $hasReferenceArtifact) {
-    throw 'A target-hardware package cannot include reference-only hardware, soak or fault evidence.'
-}
-if ($ReferenceOnly -and -not $hasReferenceArtifact) {
-    Write-Warning 'ReferenceOnly was requested even though all supplied artifacts claim real evidence.'
-}
-
 if ([string]::IsNullOrWhiteSpace($PackageId)) {
     $PackageId = "star-world-$Version-$($CommitSha.Substring(0, 12))"
 }
-$source = if ($ReferenceOnly) { 'hosted_reference' } else { 'target_hardware' }
 $package = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     package_id = $PackageId.Trim()
     fixture_mode = $false
     reference_only = [bool]$ReferenceOnly
@@ -144,6 +137,7 @@ $package = [ordered]@{
         result = [string]$review.result
         blockers = @($review.blockers)
         checklist = $review.checklist
+        build = $review.build
         evidence_sha256 = Get-Sha256 $reviewPath
     }
     hardware_qualification = @($minimum, $recommended)
@@ -181,4 +175,4 @@ if ($ReferenceOnly) {
 } else {
     & $validator -PackagePath $outputFullPath -RequireReleaseGate
 }
-Write-Host "EXTERNAL QUALIFICATION PACKAGE ASSEMBLED | source=$source | commit=$CommitSha | executable=$exeHash | pck=$pckHash | output=$outputFullPath"
+Write-Host "EXTERNAL QUALIFICATION PACKAGE ASSEMBLED | schema=2 | source=$source | commit=$CommitSha | executable=$exeHash | pck=$pckHash | output=$outputFullPath"
