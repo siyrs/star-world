@@ -43,7 +43,8 @@ Assert-ContainsAll $candidateWriter @(
 Assert-ContainsAll $candidateValidator @(
     'candidate_id does not match the candidate contents',
     'StarWorld.pck beside StarWorld.exe',
-    'Assert-FileRecord',
+    'Assert-RepositoryContractPath',
+    'data/release_qualification.json',
     'release qualification policy'
 )
 Assert-ContainsAll $bundleWriter @(
@@ -57,6 +58,7 @@ Assert-ContainsAll $bundleValidator @(
     'Bundle must not contain symbolic links or reparse points',
     'Bundle contains missing or unexpected files',
     'Unsafe bundle path',
+    "-match '(^|/)\.\.(/|$)'",
     'artifact manifest',
     'bundle_id'
 )
@@ -74,11 +76,8 @@ Assert-ContainsAll $workflow @(
     'release-candidate-chain-fixture'
 )
 
-$validatorText = Get-Content -LiteralPath $bundleValidator -Raw
-if ($validatorText -notmatch "\.\.\(/\|\$\)") {
-    throw 'Bundle validator must retain an explicit parent-path traversal rejection.'
-}
-if ($bundleWriterText = Get-Content -LiteralPath $bundleWriter -Raw; $bundleWriterText -match 'Compress-Archive') {
+$bundleWriterText = Get-Content -LiteralPath $bundleWriter -Raw
+if ($bundleWriterText -match 'Compress-Archive') {
     throw 'The canonical evidence chain must remain a directly inspectable directory, not an opaque ZIP-only artifact.'
 }
 
