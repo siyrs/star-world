@@ -45,3 +45,10 @@
 
 - `BLOCKER-GUI-001`：Computer Use 能启动并唯一识别 fresh EXE 窗口，但激活/捕获连续失败：`failed to activate captured window`，刷新后为 `GetCursorPos failed: 拒绝访问 (0x80070005)`。已停止盲输入；改用 production-scene desktop InputEvent 自动化。该阻塞不等同于游戏缺陷，也不把 E3 production-scene 证据冒充 export-EXE E4 人工输入。
 - `BLOCKER-PERF-CI-001`：GitHub Windows Runner 的 OpenGL 3.3 不可用，Godot 自动切换到 ANGLE + `Microsoft Basic Render Driver`；该 Job 只验证 schema、数据一致性、缓存遥测、外部内存链路和无崩溃，不能作为最低/推荐玩家硬件 FPS。
+
+## Iteration 58 · 长期规模与恢复资格
+
+- **已修复：同字节 stale catalog 崩溃窗口。** `world.json` 成功替换但 `catalog.json` 尚未写入时，旧 sidecar 仅凭相同字节数可能被误接受。现在保存前创建 `catalog.pending`，重启列表看到标记后拒绝旧 sidecar、按既有预算回读权威 world、重建并清除标记。
+- **已补齐：跨领域长期资格。** 新永久门禁在同一固定提交上组合 24 小时自动保存/检查点、五世界本次进入、24 轮结构、5×128 掉落、多世界恢复、连接形状和 Chunk 热返回。
+- **已补齐：超宽屏、高 DPI 与控制器焦点证据。** 3440×1440 物理窗口、1720×720 逻辑画布和真实 Joypad D-pad/A/B 输出 PNG 与 JSON。
+- **仍为外部 HOLD：** 独立 E4-H、真实最低/推荐硬件和严格 7,200 秒最终包目标硬件 soak 未由仓库自动化替代。

@@ -28,6 +28,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_catalog_integrity.ps1"
 & "$PSScriptRoot\developer_b\validate_reusable_ci_workflows.ps1"
 & "$PSScriptRoot\developer_b\validate_world_catalog.ps1"
+& "$PSScriptRoot\developer_b\validate_long_term_scale_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_save_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_crash_safe_session_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"
@@ -187,9 +188,12 @@ Invoke-GodotTest 'res://tests/qa/directional_ladder_regression.gd'
 Invoke-GodotTest 'res://tests/qa/structural_integrity_desktop_import_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_mutation_pre_flush_regression.gd'
 Invoke-GodotTest 'res://tests/qa/structural_integrity_batched_regression.gd'
+Invoke-GodotTest 'res://tests/qa/long_term_structure_pickup_churn_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_mutation_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/recent_chunk_snapshot_cache_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_catalog_regression.gd'
+Invoke-GodotTest 'res://tests/qa/catalog_transaction_marker_recovery_regression.gd' -UserDataDir 'catalog-transaction-marker'
+Invoke-GodotTest 'res://tests/qa/long_term_scale_recovery_regression.gd'
 Invoke-GodotTest 'res://tests/qa/save_recovery_regression.gd' -UserDataDir 'save-recovery'
 Invoke-GodotTest 'res://tests/qa/save_load_matrix_regression.gd' -UserDataDir 'save-matrix'
 Invoke-GodotTest 'res://tests/qa/water_lava_lifecycle_regression.gd'

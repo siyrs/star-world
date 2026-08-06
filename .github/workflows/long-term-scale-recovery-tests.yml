@@ -1,0 +1,109 @@
+name: Long-term scale and recovery quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'src/save/**'
+      - 'src/entity/**'
+      - 'src/interaction/**'
+      - 'src/ui/**'
+      - 'tests/qa/catalog_transaction_marker_recovery_regression.gd'
+      - 'tests/qa/long_term_scale_recovery_regression.gd'
+      - 'tests/qa/long_term_structure_pickup_churn_regression.gd'
+      - 'tests/qa/ultrawide_high_dpi_controller_focus_desktop_acceptance.gd'
+      - 'tests/developer_b/validate_long_term_scale_recovery.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/LONG_TERM_SCALE_RECOVERY.md'
+      - 'docs/LONG_TERM_SCALE_RECOVERY_TESTING.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_58.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_58.md'
+      - 'qa/issues-found.md'
+      - '.github/workflows/long-term-scale-recovery-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/save/**'
+      - 'src/entity/**'
+      - 'src/interaction/**'
+      - 'src/ui/**'
+      - 'tests/qa/catalog_transaction_marker_recovery_regression.gd'
+      - 'tests/qa/long_term_scale_recovery_regression.gd'
+      - 'tests/qa/long_term_structure_pickup_churn_regression.gd'
+      - 'tests/qa/ultrawide_high_dpi_controller_focus_desktop_acceptance.gd'
+      - 'tests/developer_b/validate_long_term_scale_recovery.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/LONG_TERM_SCALE_RECOVERY.md'
+      - 'docs/LONG_TERM_SCALE_RECOVERY_TESTING.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_58.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_58.md'
+      - 'qa/issues-found.md'
+      - '.github/workflows/long-term-scale-recovery-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: long-term-scale-recovery-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Cross-session catalog transactions, twenty-four-hour checkpoints and runtime churn
+      domain_timeout_minutes: 120
+      static_validators: |
+        tests/developer_b/validate_long_term_scale_recovery.ps1
+        tests/developer_b/validate_world_catalog.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_bounded_multi_world_recovery.ps1
+        tests/developer_b/validate_autosave_long_session.ps1
+        tests/developer_b/validate_save_checkpoint_timeline.ps1
+        tests/developer_b/validate_world_scoped_save_checkpoint_sessions.ps1
+        tests/developer_b/validate_pickup_shared_runtime.ps1
+        tests/developer_b/validate_structural_integrity.ps1
+        tests/developer_b/validate_structural_single_flush.ps1
+      primary_headless_script: res://tests/qa/catalog_transaction_marker_recovery_regression.gd
+      primary_headless_output_base: build\catalog-transaction-marker-recovery
+      primary_headless_timeout_milliseconds: 900000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/long_term_scale_recovery_regression.gd
+        res://tests/qa/long_term_structure_pickup_churn_regression.gd
+        res://tests/qa/bounded_multi_world_recovery_regression.gd
+        res://tests/qa/autosave_long_session_endurance_regression.gd
+        res://tests/qa/world_scoped_save_checkpoint_session_regression.gd
+        res://tests/qa/pickup_shared_runtime_regression.gd
+        res://tests/qa/structural_integrity_batched_regression.gd
+        res://tests/qa/connected_block_shapes_regression.gd
+        res://tests/qa/recent_chunk_snapshot_cache_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: long-term-scale-recovery-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/catalog-transaction-marker-recovery.stdout.log
+        build/catalog-transaction-marker-recovery.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      desktop_job_name: Ultrawide high-DPI and real-controller focus evidence
+      desktop_timeout_minutes: 45
+      desktop_script: res://tests/qa/ultrawide_high_dpi_controller_focus_desktop_acceptance.gd
+      desktop_output_path: build\ultrawide-high-dpi-controller-focus.png
+      desktop_timeout_milliseconds: 1200000
+      desktop_artifact_name: long-term-scale-recovery-desktop-evidence
+      desktop_artifact_paths: |
+        build/ultrawide-high-dpi-controller-focus.png
+        build/ultrawide-high-dpi-controller-focus-report.json
+        build/ultrawide-high-dpi-controller-focus.stdout.log
+        build/ultrawide-high-dpi-controller-focus.stderr.log
+      desktop_artifact_if_no_files: error
+      retention_days: 21
