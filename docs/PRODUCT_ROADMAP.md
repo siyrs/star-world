@@ -319,3 +319,16 @@ Game Runtime
 - [LONG_TERM_SCALE_RECOVERY.md](LONG_TERM_SCALE_RECOVERY.md)
 - [LONG_TERM_SCALE_RECOVERY_TESTING.md](LONG_TERM_SCALE_RECOVERY_TESTING.md)
 - [PRODUCT_ROADMAP_ITERATION_58.md](PRODUCT_ROADMAP_ITERATION_58.md)
+
+## Iteration 59 · Release Integrity and Lifecycle
+
+Iteration 59 closes the remaining repository-automatable integrity gaps after the 24-hour/scale qualification:
+
+- trash restore now validates and, when possible, repairs `world.json/.tmp/.bak` before promotion;
+- wrong-world and all-corrupt candidates fail with `world_payload_unrecoverable` and remain purgeable;
+- Release builds produce `user://diagnostics/release-lifecycle-report.json` from the real scene/world/save/quit boundaries;
+- an eight-cycle campaign combines 24 hostile deaths, unique rewards and drops, 16 Chunk hot returns, cross-Chunk pane/fence rebuilds and structural queue convergence;
+- the permanent workflow and full runner retain this contract;
+- the stale July feature board is reconciled with merged evidence.
+
+The next work is external qualification, not another gameplay subsystem: independent E4-H review, minimum/recommended real hardware, strict 7,200-second target-hardware soak, and real HDD/antivirus/power-loss laboratory evidence. Commercial release remains **HOLD** until those packages exist.

@@ -1,0 +1,105 @@
+name: Release integrity and lifecycle quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'src/save/**'
+      - 'src/diagnostics/**'
+      - 'src/core/batched_game.gd'
+      - 'src/entity/**'
+      - 'src/interaction/**'
+      - 'src/world/**'
+      - 'src/chunk/**'
+      - 'tests/qa/trash_restore_integrity_regression.gd'
+      - 'tests/qa/release_lifecycle_report_regression.gd'
+      - 'tests/qa/release_integrity_continuous_campaign_regression.gd'
+      - 'tests/developer_b/validate_release_integrity_iteration_59.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/RELEASE_INTEGRITY_AND_LIFECYCLE.md'
+      - 'docs/RELEASE_INTEGRITY_TESTING.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_59.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_59.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+      - 'qa/issues-found.md'
+      - '.github/workflows/release-integrity-iteration-59-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/save/**'
+      - 'src/diagnostics/**'
+      - 'src/core/batched_game.gd'
+      - 'src/entity/**'
+      - 'src/interaction/**'
+      - 'src/world/**'
+      - 'src/chunk/**'
+      - 'tests/qa/trash_restore_integrity_regression.gd'
+      - 'tests/qa/release_lifecycle_report_regression.gd'
+      - 'tests/qa/release_integrity_continuous_campaign_regression.gd'
+      - 'tests/developer_b/validate_release_integrity_iteration_59.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/RELEASE_INTEGRITY_AND_LIFECYCLE.md'
+      - 'docs/RELEASE_INTEGRITY_TESTING.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_59.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-06_ITERATION_59.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+      - 'qa/issues-found.md'
+      - '.github/workflows/release-integrity-iteration-59-tests.yml'
+      - '.github/workflows/reusable-godot-quality-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-integrity-iteration-59-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/reusable-godot-quality-gate.yml
+    with:
+      domain_job_name: Trash integrity, real release lifecycle and continuous cross-domain campaign
+      domain_timeout_minutes: 120
+      static_validators: |
+        tests/developer_b/validate_release_integrity_iteration_59.ps1
+        tests/developer_b/validate_protected_save_deletion.ps1
+        tests/developer_b/validate_bounded_trash_manager.ps1
+        tests/developer_b/validate_save_recovery.ps1
+        tests/developer_b/validate_runtime_health_report.ps1
+        tests/developer_b/validate_bounded_encounter_rewards.ps1
+        tests/developer_b/validate_pickup_shared_runtime.ps1
+        tests/developer_b/validate_connected_block_shapes.ps1
+        tests/developer_b/validate_recent_chunk_cache.ps1
+        tests/developer_b/validate_structural_integrity.ps1
+        tests/developer_b/validate_structural_single_flush.ps1
+      primary_headless_script: res://tests/qa/trash_restore_integrity_regression.gd
+      primary_headless_output_base: build\trash-restore-integrity
+      primary_headless_timeout_milliseconds: 900000
+      primary_headless_verbose: true
+      domain_scripts: |
+        res://tests/qa/release_lifecycle_report_regression.gd
+        res://tests/qa/release_integrity_continuous_campaign_regression.gd
+        res://tests/qa/graceful_application_quit_regression.gd
+        res://tests/qa/trash_manager_service_regression.gd
+        res://tests/qa/encounter_reward_economy_regression.gd
+        res://tests/qa/pickup_shared_runtime_regression.gd
+        res://tests/qa/connected_block_shapes_regression.gd
+        res://tests/qa/recent_chunk_snapshot_cache_regression.gd
+        res://tests/qa/structural_integrity_batched_regression.gd
+        res://tests/qa/mixed_combat_long_run_regression.gd
+      domain_scripts_verbose: true
+      domain_artifact_name: release-integrity-iteration-59-domain
+      domain_artifact_paths: |
+        build/reusable-ci-static-validators.log
+        build/trash-restore-integrity.stdout.log
+        build/trash-restore-integrity.stderr.log
+        build/reusable-ci-domain-*.stdout.log
+        build/reusable-ci-domain-*.stderr.log
+      domain_artifact_if_no_files: error
+      retention_days: 21

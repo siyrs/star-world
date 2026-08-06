@@ -52,3 +52,20 @@
 - **已补齐：跨领域长期资格。** 新永久门禁在同一固定提交上组合 24 小时自动保存/检查点、五世界本次进入、24 轮结构、5×128 掉落、多世界恢复、连接形状和 Chunk 热返回。
 - **已补齐：超宽屏、高 DPI 与控制器焦点证据。** 3440×1440 物理窗口、1720×720 逻辑画布和真实 Joypad D-pad/A/B 输出 PNG 与 JSON。
 - **仍为外部 HOLD：** 独立 E4-H、真实最低/推荐硬件和严格 7,200 秒最终包目标硬件 soak 未由仓库自动化替代。
+
+## Iteration 59 · Release Integrity and Lifecycle
+
+### Closed repository defects
+
+- **BUG-SAVE-TRASH-INTEGRITY-001** — a valid trash manifest could promote a corrupted or identity-mismatched world. Closed by validated primary/temp/backup selection, isolated repair, primary verification and derived-catalog invalidation.
+- **BUG-RELEASE-LIFECYCLE-REPORT-001** — startup, first playable world, first save and exit resources had no single production-bound report. Closed by the independent atomic Release lifecycle reporter.
+- **BUG-QA-CROSS-DOMAIN-CAMPAIGN-001** — hostile rewards/drops, Chunk hot return, connected shapes and structural convergence were adjacent tests rather than one continuous campaign. Closed by the eight-cycle permanent campaign.
+- **BUG-DOC-STATUS-DRIFT-001** — the July feature board contradicted the implemented and merged branch. Closed by evidence-graded reconciliation.
+
+### External HOLD remains
+
+- `BUG-QA-E4-SIGNOFF-001`: independent final-build experiential sign-off.
+- `BUG-PERF-002`: minimum/recommended real target-hardware qualification.
+- `BUG-SOAK-120-001`: strict 7,200-second final-package target-hardware soak.
+
+Hosted CI cannot close those external evidence packages.
