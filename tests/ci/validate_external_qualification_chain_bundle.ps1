@@ -52,7 +52,15 @@ $requiredPaths = @(
     'evidence/strict-soak.json',
     'evidence/fault-hdd.json',
     'evidence/fault-antivirus.json',
-    'evidence/fault-power-loss.json'
+    'evidence/fault-power-loss.json',
+    'support/hardware-minimum-journey-matrix.json',
+    'support/hardware-recommended-journey-matrix.json',
+    'support/release-lifecycle-report.json',
+    'support/strict-soak-cycles.json',
+    'support/strict-soak.progress.jsonl',
+    'support/fault-hdd-recovery.json',
+    'support/fault-antivirus-recovery.json',
+    'support/fault-power-loss-recovery.json'
 )
 $manifestPath = Join-Path $bundleRoot 'bundle-manifest.json'
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Bundle manifest not found: $manifestPath" }
@@ -64,7 +72,7 @@ $reparsePoints = @(Get-ChildItem -LiteralPath $bundleRoot -Recurse -Force | Wher
 if ($reparsePoints.Count -gt 0) { throw 'Bundle must not contain symbolic links or reparse points.' }
 
 $actualRelativeFiles = @(
-    Get-ChildItem -LiteralPath $bundleRoot -Recurse -File |
+    Get-ChildItem -LiteralPath $bundleRoot -Recurse -File -Force |
         ForEach-Object { [System.IO.Path]::GetRelativePath($bundleRoot, $_.FullName).Replace('\', '/') } |
         Where-Object { $_ -ne 'bundle-manifest.json' } |
         Sort-Object
@@ -88,7 +96,7 @@ foreach ($entry in $entries) {
     $seen[$relativePath] = $true
     $path = Get-BundlePath -RelativePath $relativePath
     if ($relativePath -notin $requiredPaths) { throw "Bundle manifest contains unexpected path: $relativePath" }
-    $item = Get-Item -LiteralPath $path
+    $item = Get-Item -LiteralPath $path -Force
     $actualHash = Get-Sha256 -Path $path
     if ([string]$entry.sha256 -ne $actualHash) { throw "Bundle file hash mismatch: $relativePath" }
     if ([long]$entry.length_bytes -ne [long]$item.Length) { throw "Bundle file length mismatch: $relativePath" }
@@ -113,6 +121,12 @@ if ($RequireReleaseGate) {
 
 $candidate = Get-Content -LiteralPath $candidatePath -Raw | ConvertFrom-Json -Depth 30
 $package = Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json -Depth 100
+$minimum = Get-Content -LiteralPath (Get-BundlePath 'evidence/hardware-minimum.json') -Raw | ConvertFrom-Json -Depth 50
+$recommended = Get-Content -LiteralPath (Get-BundlePath 'evidence/hardware-recommended.json') -Raw | ConvertFrom-Json -Depth 50
+$soak = Get-Content -LiteralPath (Get-BundlePath 'evidence/strict-soak.json') -Raw | ConvertFrom-Json -Depth 50
+$hdd = Get-Content -LiteralPath (Get-BundlePath 'evidence/fault-hdd.json') -Raw | ConvertFrom-Json -Depth 50
+$antivirus = Get-Content -LiteralPath (Get-BundlePath 'evidence/fault-antivirus.json') -Raw | ConvertFrom-Json -Depth 50
+$powerLoss = Get-Content -LiteralPath (Get-BundlePath 'evidence/fault-power-loss.json') -Raw | ConvertFrom-Json -Depth 50
 Assert-Equal ([string]$candidate.candidate_id) ([string]$bundleManifest.candidate_id) 'bundle candidate_id'
 Assert-Equal ([string]$package.package_id) ([string]$bundleManifest.package_id) 'bundle package_id'
 Assert-Equal ([string]$candidate.build.commit_sha) ([string]$package.build.commit_sha) 'package commit'
@@ -134,6 +148,20 @@ $artifactMap = [ordered]@{
 foreach ($property in $artifactMap.GetEnumerator()) {
     $path = Get-BundlePath -RelativePath $property.Value
     Assert-Equal ([string]$package.artifact_manifest.($property.Key)) (Get-Sha256 -Path $path) "artifact manifest $($property.Key)"
+}
+
+$supportMap = @(
+    @{ Label = 'minimum journey matrix'; Expected = [string]$minimum.journey_matrix.sha256; Path = 'support/hardware-minimum-journey-matrix.json' },
+    @{ Label = 'recommended journey matrix'; Expected = [string]$recommended.journey_matrix.sha256; Path = 'support/hardware-recommended-journey-matrix.json' },
+    @{ Label = 'soak lifecycle report'; Expected = [string]$soak.lifecycle_report_sha256; Path = 'support/release-lifecycle-report.json' },
+    @{ Label = 'soak cycles report'; Expected = [string]$soak.soak_report_sha256; Path = 'support/strict-soak-cycles.json' },
+    @{ Label = 'soak progress journal'; Expected = [string]$soak.progress_journal_sha256; Path = 'support/strict-soak.progress.jsonl' },
+    @{ Label = 'HDD recovery evidence'; Expected = [string]$hdd.recovery_evidence_sha256; Path = 'support/fault-hdd-recovery.json' },
+    @{ Label = 'antivirus recovery evidence'; Expected = [string]$antivirus.recovery_evidence_sha256; Path = 'support/fault-antivirus-recovery.json' },
+    @{ Label = 'power-loss recovery evidence'; Expected = [string]$powerLoss.recovery_evidence_sha256; Path = 'support/fault-power-loss-recovery.json' }
+)
+foreach ($support in $supportMap) {
+    Assert-Equal ([string]$support.Expected) (Get-Sha256 -Path (Get-BundlePath -RelativePath $support.Path)) ([string]$support.Label)
 }
 
 $packageHash = Get-Sha256 -Path $packagePath
