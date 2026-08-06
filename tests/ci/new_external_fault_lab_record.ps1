@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('hdd', 'antivirus', 'power_loss')][string]$Scenario,
     [Parameter(Mandatory = $true)][ValidateSet('prepare', 'complete')][string]$Phase,
     [Parameter(Mandatory = $true)][string]$WorldJsonPath,
+    [Parameter(Mandatory = $true)][string]$ReleaseExecutable,
+    [Parameter(Mandatory = $true)][string]$ReleasePck,
     [Parameter(Mandatory = $true)][string]$OperatorId,
     [Parameter(Mandatory = $true)][string]$RecordPath,
     [string]$RecoveryEvidencePath = '',
@@ -22,8 +24,14 @@ if (-not $ReferenceOnly -and $env:GITHUB_ACTIONS -eq 'true') {
 }
 
 $worldPath = [System.IO.Path]::GetFullPath($WorldJsonPath)
+$exePath = [System.IO.Path]::GetFullPath($ReleaseExecutable)
+$pckPath = [System.IO.Path]::GetFullPath($ReleasePck)
 $recordFullPath = [System.IO.Path]::GetFullPath($RecordPath)
-if (-not (Test-Path -LiteralPath $worldPath -PathType Leaf)) { throw "World file not found: $worldPath" }
+foreach ($path in @($worldPath, $exePath, $pckPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required fault-lab input not found: $path" }
+}
+$expectedPck = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $exePath) 'StarWorld.pck'))
+if ($pckPath -ne $expectedPck) { throw 'ReleasePck must be StarWorld.pck beside the supplied final executable.' }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $recordFullPath) | Out-Null
 
 function Get-Sha256 {
@@ -38,6 +46,9 @@ function Read-WorldIdentity {
     if ([string]::IsNullOrWhiteSpace($worldId)) { throw "World metadata.id is missing: $Path" }
     return $worldId
 }
+
+$exeHash = Get-Sha256 -Path $exePath
+$pckHash = Get-Sha256 -Path $pckPath
 
 if ($Phase -eq 'prepare') {
     if (Test-Path -LiteralPath $recordFullPath) {
@@ -55,14 +66,18 @@ if ($Phase -eq 'prepare') {
         prepared_at_unix = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         world_id = $worldId
         before_world_sha256 = Get-Sha256 -Path $worldPath
+        build = [ordered]@{
+            executable_sha256 = $exeHash
+            pck_sha256 = $pckHash
+        }
         interruption_observed = $false
         recovery_verified = $false
         world_integrity_verified = $false
         result = 'pending'
     }
     $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $recordFullPath -Encoding utf8
-    Write-Host "FAULT LAB PREPARED | scenario=$Scenario | world=$worldId | record=$recordFullPath"
-    Write-Host 'Perform the real external interruption now, restart the machine/application, then run -Phase complete.'
+    Write-Host "FAULT LAB PREPARED | scenario=$Scenario | world=$worldId | executable=$exeHash | pck=$pckHash | record=$recordFullPath"
+    Write-Host 'Perform the real external interruption now, restart the machine/application, then run -Phase complete with the same EXE/PCK.'
     return
 }
 
@@ -85,6 +100,9 @@ if ([string]$record.type -ne $Scenario -or [string]$record.phase -ne 'prepared')
 if ([string]$record.operator_id -ne $OperatorId.Trim()) {
     throw 'Fault record operator does not match the completing operator.'
 }
+if ([string]$record.build.executable_sha256 -ne $exeHash -or [string]$record.build.pck_sha256 -ne $pckHash) {
+    throw 'Fault completion must use the exact EXE/PCK captured during prepare.'
+}
 $worldId = Read-WorldIdentity -Path $worldPath
 if ($worldId -ne [string]$record.world_id) {
     throw "Recovered world identity changed: expected $($record.world_id), got $worldId"
@@ -104,10 +122,14 @@ $completed = [ordered]@{
     before_world_sha256 = [string]$record.before_world_sha256
     after_world_sha256 = Get-Sha256 -Path $worldPath
     recovery_evidence_sha256 = Get-Sha256 -Path $recoveryPath
+    build = [ordered]@{
+        executable_sha256 = $exeHash
+        pck_sha256 = $pckHash
+    }
     interruption_observed = $true
     recovery_verified = $true
     world_integrity_verified = $true
     result = 'pass'
 }
 $completed | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $recordFullPath -Encoding utf8
-Write-Host "FAULT LAB COMPLETE | scenario=$Scenario | world=$worldId | before=$($completed.before_world_sha256) | after=$($completed.after_world_sha256) | record=$recordFullPath"
+Write-Host "FAULT LAB COMPLETE | scenario=$Scenario | world=$worldId | before=$($completed.before_world_sha256) | after=$($completed.after_world_sha256) | executable=$exeHash | pck=$pckHash | record=$recordFullPath"
