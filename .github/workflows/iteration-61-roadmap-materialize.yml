@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Patch roadmap and full runner
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
 
