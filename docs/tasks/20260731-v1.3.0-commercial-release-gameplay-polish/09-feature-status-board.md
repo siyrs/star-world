@@ -20,9 +20,9 @@ This board was reconciled on 2026-08-06 after Iteration 61. Historical July prep
 | FP-006 | complete | passed | accepted-repository | water/lava lifecycle, survival and save/reload regressions | 2026-08-06 | repository-automatable water state is covered |
 | FP-007 | complete | passed | accepted-repository | save recovery, session recovery, trash integrity, death/respawn and world switching | 2026-08-06 | wrong-id/all-corrupt trash candidates fail with world_payload_unrecoverable |
 | FP-008 | complete | passed | accepted-repository | UI, accessibility, controller, high-DPI, audio and settings matrices | 2026-08-06 | production focus graph and 3440×1440 evidence are permanent |
-| FP-009 | complete | passed | qualification-kit-ready / external-hold | exact-package hardware collectors, strict soak harness, immutable candidate ID and portable evidence bundle | 2026-08-06 | real minimum/recommended machines and real 7,200-second target soak remain external |
-| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-06 | includes cross-domain campaigns, qualification anti-forgery and transport-integrity gates |
-| FP-011 | complete | passed | qualification-kit-ready / external-hold | E4-H recorder, fault-lab recorder, package assembler, chain-of-custody validator, audits and decision boundary | 2026-08-06 | independent human sign-off and real HDD/antivirus/power-loss evidence remain external |
+| FP-009 | complete | passed | qualification-kit-ready / external-hold | exact-package hardware collectors, strict soak harness, immutable candidate ID and complete 19-file evidence payload | 2026-08-06 | real minimum/recommended machines and real 7,200-second target soak remain external |
+| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-06 | includes cross-domain campaigns, qualification anti-forgery and visible/hidden transport-integrity gates |
+| FP-011 | complete | passed | qualification-kit-ready / external-hold | E4-H recorder, fault-lab recorder, package assembler, supporting-report chain validator, audits and decision boundary | 2026-08-06 | independent human sign-off and real HDD/antivirus/power-loss evidence remain external |
 
 ## Iteration 59 closure
 
@@ -43,10 +43,11 @@ This board was reconciled on 2026-08-06 after Iteration 61. Historical July prep
 
 - One deterministic `candidate_id` binds commit, version, EXE, PCK and the governing repository contracts before external testing starts.
 - Candidate identity excludes absolute paths, so the same bytes keep one identity after cross-machine transfer.
-- A canonical directory bundles the final binary, candidate manifest, qualification package and all seven source evidence records.
-- The bundle rejects stale destinations, missing or extra files, hash/length changes, reparse points and parent-path traversal.
-- The validator rechecks the physical evidence files against the Iteration 60 `artifact_manifest` and derives a deterministic `bundle_id`.
-- Retained tests deliberately modify evidence, candidate identity, file inventory and manifest paths; every mutation fails closed.
+- A canonical directory bundles the final binary, candidate manifest, qualification package, seven summary records and eight supporting reports.
+- The bundle rejects stale destinations, missing files, visible or hidden extra files, hash/length changes, reparse points and unsafe paths.
+- The validator rechecks summary evidence against the Iteration 60 `artifact_manifest` and all supporting reports against their source-record hashes.
+- The complete sorted 19-file payload derives one deterministic `bundle_id`.
+- Retained tests deliberately modify summary evidence, supporting evidence, candidate identity, visible/hidden inventory and manifest paths; all six mutations fail closed.
 
 ## Commercial decision
 
