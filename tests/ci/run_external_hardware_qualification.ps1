@@ -1,6 +1,7 @@
 param(
-    [Parameter(Mandatory = $true)][string]$Godot,
     [string]$ProjectRoot = '.',
+    [Parameter(Mandatory = $true)][string]$ReleaseExecutable,
+    [Parameter(Mandatory = $true)][string]$ReleasePck,
     [Parameter(Mandatory = $true)][ValidateSet('minimum', 'recommended')][string]$Tier,
     [Parameter(Mandatory = $true)][string]$OperatorId,
     [string]$OutputDirectory = 'build/external-qualification/hardware',
@@ -20,39 +21,41 @@ if (-not $ReferenceOnly -and $env:GITHUB_ACTIONS -eq 'true') {
 }
 
 $projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
+$exeFullPath = [System.IO.Path]::GetFullPath($ReleaseExecutable)
+$pckFullPath = [System.IO.Path]::GetFullPath($ReleasePck)
 $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputDirectory))
-if (-not (Test-Path -LiteralPath $Godot -PathType Leaf)) { throw "Godot executable not found: $Godot" }
+foreach ($path in @($exeFullPath, $pckFullPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Final package file not found: $path" }
+}
+$expectedPck = Join-Path (Split-Path -Parent $exeFullPath) 'StarWorld.pck'
+if ($pckFullPath -ne [System.IO.Path]::GetFullPath($expectedPck)) {
+    throw 'ReleasePck must be StarWorld.pck beside the supplied final executable.'
+}
 New-Item -ItemType Directory -Force -Path $outputFullPath | Out-Null
 
 function Get-Sha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param([string]$Path)
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
-
 function Get-StringSha256 {
-    param([Parameter(Mandatory = $true)][string]$Value)
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-    $hash = [System.Security.Cryptography.SHA256]::HashData($bytes)
+    param([string]$Value)
+    $hash = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($Value))
     return [Convert]::ToHexString($hash).ToLowerInvariant()
 }
 
 $startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$matrixRelative = [System.IO.Path]::GetRelativePath($projectFullPath, (Join-Path $outputFullPath 'release-journey-matrix'))
+$matrixRoot = Join-Path $outputFullPath 'release-journey-matrix'
+$matrixRelative = [System.IO.Path]::GetRelativePath($projectFullPath, $matrixRoot)
 $matrixTier = if ($ReferenceOnly) { 'hosted-ci-reference' } else { $Tier }
 & (Join-Path $projectFullPath 'tests/release/run_windows_export_journey_matrix.ps1') `
-    -Godot $Godot `
     -OutputDirectory $matrixRelative `
     -QualificationTier $matrixTier `
-    -Operator $OperatorId
+    -Operator $OperatorId `
+    -ExistingExecutablePath $exeFullPath
 
-$matrixRoot = Join-Path $outputFullPath 'release-journey-matrix'
 $matrixPath = Join-Path $matrixRoot 'release-journey-matrix.json'
-$exeFullPath = Join-Path $matrixRoot 'binary/StarWorld.exe'
-$pckFullPath = Join-Path $matrixRoot 'binary/StarWorld.pck'
-foreach ($path in @($matrixPath, $exeFullPath, $pckFullPath)) {
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Release journey evidence missing: $path" }
-}
-$matrix = Get-Content -LiteralPath $matrixPath -Raw | ConvertFrom-Json -Depth 20
+if (-not (Test-Path -LiteralPath $matrixPath -PathType Leaf)) { throw "Release journey matrix missing: $matrixPath" }
+$matrix = Get-Content -LiteralPath $matrixPath -Raw | ConvertFrom-Json -Depth 30
 $profileIds = @($matrix.profiles | ForEach-Object { [string]$_.profile_id } | Sort-Object -Unique)
 $requiredProfiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
 foreach ($profile in $requiredProfiles) {
@@ -60,6 +63,14 @@ foreach ($profile in $requiredProfiles) {
 }
 if ($profileIds.Count -ne 5 -or -not [bool]$matrix.assertions.all_profiles_present) {
     throw 'Release journey matrix did not validate exactly five formal profiles.'
+}
+if (-not [bool]$matrix.exact_existing_package_reused) {
+    throw 'Release journey matrix did not reuse the supplied exact final package.'
+}
+$exeHash = Get-Sha256 $exeFullPath
+$pckHash = Get-Sha256 $pckFullPath
+if ([string]$matrix.final_executable_sha256 -ne $exeHash -or [string]$matrix.final_pck_sha256 -ne $pckHash) {
+    throw 'Release journey matrix hashes do not match the supplied final package.'
 }
 if ([int]$matrix.assertions.post_spawn_transport_count -ne 0) {
     throw 'Release journey matrix contains forbidden post-spawn transport.'
@@ -80,7 +91,6 @@ if ($null -ne $physicalDisk) {
     elseif ($bus -eq 'nvme') { $driveType = 'nvme' }
     elseif ($media -eq 'ssd') { $driveType = 'ssd' }
 }
-
 $hardwareIdentity = [ordered]@{
     cpu = [string]$cpu.Name
     gpu = @($gpus)
@@ -90,7 +100,7 @@ $hardwareIdentity = [ordered]@{
     storage_model = $storageModel
     storage_type = $driveType
 }
-$machineFingerprint = Get-StringSha256 -Value ($hardwareIdentity | ConvertTo-Json -Depth 5 -Compress)
+$machineFingerprint = Get-StringSha256 ($hardwareIdentity | ConvertTo-Json -Depth 5 -Compress)
 $completedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $evidence = [ordered]@{
     schema_version = 1
@@ -110,21 +120,21 @@ $evidence = [ordered]@{
     completed_at_unix = $completedAt
     result = 'pass'
     build = [ordered]@{
-        executable_path = [System.IO.Path]::GetRelativePath($outputFullPath, $exeFullPath).Replace('\', '/')
-        executable_sha256 = Get-Sha256 -Path $exeFullPath
-        pck_path = [System.IO.Path]::GetRelativePath($outputFullPath, $pckFullPath).Replace('\', '/')
-        pck_sha256 = Get-Sha256 -Path $pckFullPath
+        executable_path = $exeFullPath
+        executable_sha256 = $exeHash
+        pck_path = $pckFullPath
+        pck_sha256 = $pckHash
     }
     journey_matrix = [ordered]@{
         path = [System.IO.Path]::GetRelativePath($outputFullPath, $matrixPath).Replace('\', '/')
-        sha256 = Get-Sha256 -Path $matrixPath
+        sha256 = Get-Sha256 $matrixPath
+        exact_existing_package_reused = [bool]$matrix.exact_existing_package_reused
         profile_count = $profileIds.Count
         minimum_steps = [int]$matrix.assertions.minimum_steps
         minimum_displacement = [double]$matrix.assertions.minimum_displacement
         minimum_unique_chunks = [int]$matrix.assertions.minimum_unique_chunks
     }
 }
-
 $outputPath = Join-Path $outputFullPath "hardware-$Tier.json"
 $evidence | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $outputPath -Encoding utf8
-Write-Host "EXTERNAL HARDWARE QUALIFICATION CAPTURE PASS | tier=$Tier | reference_only=$([bool]$ReferenceOnly) | profiles=$($profileIds.Count) | fingerprint=$machineFingerprint | evidence=$outputPath"
+Write-Host "EXTERNAL HARDWARE QUALIFICATION CAPTURE PASS | tier=$Tier | reference_only=$([bool]$ReferenceOnly) | profiles=$($profileIds.Count) | executable=$exeHash | pck=$pckHash | fingerprint=$machineFingerprint | evidence=$outputPath"
