@@ -1,6 +1,11 @@
 name: Iteration 62 integration materializer
 
 on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/iteration-62-integration-materialize.yml'
   push:
     branches:
       - agent/iteration-62-offline-release-promotion
@@ -12,6 +17,7 @@ permissions:
 
 jobs:
   materialize:
+    if: github.event_name == 'push' || github.head_ref == 'agent/iteration-62-offline-release-promotion'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
