@@ -25,10 +25,6 @@ function Write-Json {
     param([string]$Path, [object]$Value)
     $Value | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $Path -Encoding utf8
 }
-function Get-Sha256 {
-    param([string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
 function New-TestPromotionBundle {
     Remove-Item -LiteralPath $promotionRoot -Recurse -Force -ErrorAction SilentlyContinue
     & (Join-Path $PSScriptRoot 'new_release_promotion_bundle.ps1') `
@@ -61,6 +57,25 @@ Remove-Item -LiteralPath $receiptRoot -Recurse -Force -ErrorAction SilentlyConti
     -OutputPath $receiptPath
 $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json -Depth 30
 if ([string]$receipt.result -ne 'pass' -or [string]$receipt.pin_id -ne $expectedPinId -or -not [bool]$receipt.offline_contract_validation) { throw 'Promotion receipt did not retain validated identity.' }
+
+# Prove the receiver does not trust the current checkout for release/project/export contract data.
+$checkoutContractPaths = @(
+    (Join-Path $root 'data\release_qualification.json'),
+    (Join-Path $root 'project.godot'),
+    (Join-Path $root 'export_presets.cfg')
+)
+$checkoutBackups = @{}
+foreach ($path in $checkoutContractPaths) { $checkoutBackups[$path] = [System.IO.File]::ReadAllBytes($path) }
+try {
+    Set-Content -LiteralPath $checkoutContractPaths[0] -Value '{"checkout_drift":true}' -Encoding utf8
+    Set-Content -LiteralPath $checkoutContractPaths[1] -Value 'checkout drift must not be trusted by promotion validation' -Encoding utf8
+    Set-Content -LiteralPath $checkoutContractPaths[2] -Value 'checkout drift must not be trusted by promotion validation' -Encoding utf8
+    $driftResultText = (& (Join-Path $PSScriptRoot 'validate_release_promotion_bundle.ps1') -PromotionBundleDirectory $promotionRoot -ExpectedPinId $expectedPinId | Out-String).Trim()
+    $driftResult = $driftResultText | ConvertFrom-Json
+    if (-not [bool]$driftResult.valid -or -not [bool]$driftResult.offline_contract_validation) { throw 'Promotion validation incorrectly depended on the current checkout contracts.' }
+} finally {
+    foreach ($path in $checkoutContractPaths) { [System.IO.File]::WriteAllBytes($path, [byte[]]$checkoutBackups[$path]) }
+}
 
 New-TestPromotionBundle
 Add-Content -LiteralPath (Join-Path $promotionRoot 'contracts\project.godot') -Value '# tampered contract snapshot'
@@ -121,4 +136,4 @@ Assert-Rejected -Name 'Receipt mutation inside immutable bundle' -Expected 'outs
 }
 
 New-TestPromotionBundle
-Write-Host "RELEASE PROMOTION BUNDLE PASS | promotion=$($result.promotion_id) | pin=$expectedPinId | files=24 | negative_cases=8 | receipt=$receiptPath"
+Write-Host "RELEASE PROMOTION BUNDLE PASS | promotion=$($result.promotion_id) | pin=$expectedPinId | files=24 | checkout_drift=pass | negative_cases=8 | receipt=$receiptPath"
