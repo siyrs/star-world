@@ -23,7 +23,7 @@ The repository ships the schema, recorders, collectors, package assembler and an
 
 Invalid packages return `invalid`. Only `external_evidence_complete` sets `release_gate_passed=true`.
 
-## Immutable build binding
+## Schema v2 immutable binding
 
 Every accepted package is bound to:
 
@@ -32,7 +32,12 @@ Every accepted package is bound to:
 - one final `StarWorld.pck` SHA-256;
 - one version string.
 
-The E4-H review, both hardware tiers and strict soak must reference the same executable and PCK. The package assembler rejects mixed-build evidence.
+Schema v2 enforces this twice:
+
+1. the assembler checks every source record before creating the package;
+2. both the GDScript and standalone PowerShell validators re-check every child record after the package exists.
+
+The E4-H review, both hardware tiers, strict soak and all three fault records must reference the same build. Child `evidence_source`, `reference_only` and fault-operator identity must also match the package. Editing an assembled JSON file to mix evidence from another commit, EXE, PCK, hosted run or operator is rejected.
 
 ## 1. Independent E4-H review
 
@@ -103,7 +108,7 @@ The script refuses a real run shorter than 7,200 seconds and refuses real mode o
 
 ## 4. HDD, antivirus and power-loss laboratory records
 
-Each fault scenario is two phase so the pre-interruption digest survives the real restart.
+Each fault scenario is two phase so the pre-interruption world and build digests survive the real restart. Both phases must receive the same final EXE/PCK.
 
 Prepare:
 
@@ -111,6 +116,8 @@ Prepare:
 pwsh -NoProfile -File tests/ci/new_external_fault_lab_record.ps1 `
   -Scenario power_loss -Phase prepare `
   -WorldJsonPath <world.json> `
+  -ReleaseExecutable C:\candidate\StarWorld.exe `
+  -ReleasePck C:\candidate\StarWorld.pck `
   -OperatorId fault-operator `
   -RecordPath evidence/fault-power-loss.json `
   -AttestedReal
@@ -122,6 +129,8 @@ After the real interruption, restart and recovery verification:
 pwsh -NoProfile -File tests/ci/new_external_fault_lab_record.ps1 `
   -Scenario power_loss -Phase complete `
   -WorldJsonPath <recovered-world.json> `
+  -ReleaseExecutable C:\candidate\StarWorld.exe `
+  -ReleasePck C:\candidate\StarWorld.pck `
   -RecoveryEvidencePath <recovery-log-or-report> `
   -OperatorId fault-operator `
   -RecordPath evidence/fault-power-loss.json `
@@ -129,7 +138,7 @@ pwsh -NoProfile -File tests/ci/new_external_fault_lab_record.ps1 `
   -InterruptionObserved -RecoveryVerified -WorldIntegrityVerified
 ```
 
-Repeat for `hdd` and `antivirus`. The recorder preserves the world ID and before/after hashes and refuses real hosted-runner claims.
+Repeat for `hdd` and `antivirus`. The recorder preserves the world ID, before/after world hashes and exact EXE/PCK hashes. Completion fails if a different package or operator is supplied.
 
 ## 5. Assemble and validate the package
 
@@ -151,7 +160,7 @@ pwsh -NoProfile -File tests/ci/new_external_qualification_package.ps1 `
   -OutputPath evidence/external-qualification-package.json
 ```
 
-The assembler verifies all build hashes before writing the package and invokes:
+The assembler verifies all build/source/reference/operator bindings before writing schema v2 and invokes:
 
 ```powershell
 pwsh -NoProfile -File tests/ci/validate_external_qualification_package.ps1 `
@@ -159,15 +168,19 @@ pwsh -NoProfile -File tests/ci/validate_external_qualification_package.ps1 `
   -RequireReleaseGate
 ```
 
+The standalone validator re-checks the complete package; successful assembly alone is not treated as proof.
+
 ## Permanent repository evidence
 
 The workflow `.github/workflows/external-qualification-iteration-60-tests.yml` validates:
 
-- strict Godot 4.7 import and the GDScript contract;
+- strict Godot 4.7 import and GDScript/PowerShell contract parity;
 - fixture and hosted-reference non-qualification;
 - self-review, hosted-target and short-soak rejection;
+- commit/EXE/PCK rebinding rejection after package assembly;
+- child source/reference and fault-operator mismatch rejection;
 - PowerShell parser correctness for all collectors;
-- an end-to-end reference package assembly;
+- an end-to-end reference package assembly and deliberate tampering attempt;
 - adjacent release lifecycle, release-smoke and profile journey contracts.
 
 A green workflow proves that the qualification kit is ready. It does not prove that the physical external evidence has been collected.
