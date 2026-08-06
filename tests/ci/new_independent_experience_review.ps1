@@ -42,7 +42,7 @@ if ($failedChecks.Count -gt 0) { throw "E4-H checklist is incomplete: $($failedC
 if ($Blockers.Count -gt 0) { throw "E4-H review has unresolved blockers: $($Blockers -join ' | ')" }
 
 $record = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     evidence_class = 'e4_h_independent_experience_review'
     reviewer_id = $reviewer
     implementer_id = $implementer
@@ -60,4 +60,4 @@ $record = [ordered]@{
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $resolvedOutput) | Out-Null
 $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $resolvedOutput -Encoding utf8
-Write-Host "E4-H INDEPENDENT REVIEW RECORDED | reviewer=$reviewer | commit=$CommitSha | evidence=$resolvedOutput"
+Write-Host "E4-H INDEPENDENT REVIEW RECORDED | schema=2 | reviewer=$reviewer | commit=$CommitSha | evidence=$resolvedOutput"
