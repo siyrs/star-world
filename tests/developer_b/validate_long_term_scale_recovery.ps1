@@ -115,6 +115,7 @@ foreach ($token in @(
   'JOY_BUTTON_DPAD_UP',
   'JOY_BUTTON_A',
   'JOY_BUTTON_B',
+  '_controller_focus_target\.call\("_input",\s*press\)',
   'has_theme_stylebox\("focus"\)',
   'ultrawide-high-dpi-controller-focus-report\.json'
 )) {

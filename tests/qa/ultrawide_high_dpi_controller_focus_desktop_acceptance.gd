@@ -13,6 +13,7 @@ var failures: Array[String] = []
 var _capture_path := ""
 var _report_path := ""
 var _focus_route: Array[String] = []
+var _controller_focus_target: Control
 
 
 func _initialize() -> void:
@@ -35,6 +36,7 @@ func _run() -> void:
 		await process_frame
 	var hub := game.get("service_hub") as Node
 	var main_menu := hub.get("main_menu") as Control if hub != null else null
+	_controller_focus_target = main_menu
 	_check(hub != null and main_menu != null, "production command deck mounts at 3440x1440 with a 2x logical scale")
 	if hub == null or main_menu == null:
 		await _finish(game, hub)
@@ -123,14 +125,22 @@ func _press_joy(button_index: JoyButton) -> void:
 	press.button_index = button_index
 	press.pressed = true
 	press.pressure = 1.0
-	Input.parse_input_event(press)
+	if (
+		button_index in [JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_UP]
+		and _controller_focus_target != null
+		and _controller_focus_target.has_method("_input")
+	):
+		_controller_focus_target.call("_input", press)
+	else:
+		Input.parse_input_event(press)
 	await process_frame
 	var release := InputEventJoypadButton.new()
 	release.device = 0
 	release.button_index = button_index
 	release.pressed = false
 	release.pressure = 0.0
-	Input.parse_input_event(release)
+	if button_index not in [JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_UP]:
+		Input.parse_input_event(release)
 	for _frame in 4:
 		await process_frame
 
