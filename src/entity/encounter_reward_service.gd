@@ -13,6 +13,8 @@ const MAX_ACTIVE_LEDGERS := 2
 const MAX_PENDING_REWARDS := 8
 const MAX_CLAIM_HISTORY := 256
 const AMMO_ITEM_IDS: Array[String] = ["arrow", "light_round", "shotgun_shell"]
+const FINISHED_AMMUNITION_IDS: Array[String] = ["arrow", "light_round", "shotgun_shell"]
+const ALLOWED_REWARD_ITEM_IDS: Array[String] = ["flint", "gunpowder"]
 
 @export var auto_bind_parent := true
 
@@ -138,6 +140,8 @@ func get_snapshot() -> Dictionary:
 		"ammo_spent_total":_ammo_spent_total.duplicate(true),
 		"rewards_granted_total":_rewards_granted_total.duplicate(true),
 		"net_ammo_total":_net_ammo(_rewards_granted_total, _ammo_spent_total),
+		"finished_ammunition_reward_ids":FINISHED_AMMUNITION_IDS.duplicate(),
+		"allowed_reward_item_ids":ALLOWED_REWARD_ITEM_IDS.duplicate(),
 		"ledgers":ledgers,
 		"pending_rewards":pending,
 		"last_result":_last_result.duplicate(true),
@@ -157,6 +161,16 @@ func retry_pending_rewards() -> int:
 	for raw_id: Variant in ids:
 		var encounter_id := str(raw_id)
 		var pending: Dictionary = _pending_rewards.get(encounter_id, {})
+		if _contains_finished_ammunition(pending.get("rewards", {})):
+			_pending_rewards.erase(encounter_id)
+			_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+			_reject("finished_ammunition_reward", pending)
+			continue
+		if _contains_unsupported_reward_items(pending.get("rewards", {})):
+			_pending_rewards.erase(encounter_id)
+			_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+			_reject("unsupported_reward_item", pending)
+			continue
 		var transaction: Dictionary = inventory.call(
 			"transact_items", {}, _reward_additions(pending.get("rewards", {}))
 		)
@@ -472,6 +486,14 @@ func _attempt_reward(encounter_id: String) -> Dictionary:
 		_record_claim(encounter_id, bool(ledger.get("completion_seen", false)))
 		_ledgers.erase(encounter_id)
 		return _reject("reward_profile_missing", ledger)
+	if _contains_finished_ammunition(reward.get("rewards", {})):
+		_record_claim(encounter_id, bool(ledger.get("completion_seen", false)))
+		_ledgers.erase(encounter_id)
+		return _reject("finished_ammunition_reward", reward)
+	if _contains_unsupported_reward_items(reward.get("rewards", {})):
+		_record_claim(encounter_id, bool(ledger.get("completion_seen", false)))
+		_ledgers.erase(encounter_id)
+		return _reject("unsupported_reward_item", reward)
 	var pending := {
 		"encounter_id":encounter_id,
 		"profile_id":str(ledger.get("profile_id", "")),
@@ -501,6 +523,14 @@ func _attempt_reward(encounter_id: String) -> Dictionary:
 
 
 func _queue_pending(encounter_id: String, pending: Dictionary, reason: String) -> Dictionary:
+	if _contains_finished_ammunition(pending.get("rewards", {})):
+		_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+		_ledgers.erase(encounter_id)
+		return _reject("finished_ammunition_reward", pending)
+	if _contains_unsupported_reward_items(pending.get("rewards", {})):
+		_record_claim(encounter_id, bool(pending.get("completion_seen", false)))
+		_ledgers.erase(encounter_id)
+		return _reject("unsupported_reward_item", pending)
 	if _pending_rewards.has(encounter_id):
 		return {"success":false, "reason":reason, "pending":true}
 	if _pending_rewards.size() >= MAX_PENDING_REWARDS:
@@ -618,10 +648,30 @@ func _reward_additions(raw_rewards: Variant) -> Array[Dictionary]:
 	var ids: Array = raw_rewards.keys()
 	ids.sort()
 	for raw_item_id: Variant in ids:
+		var item_id := str(raw_item_id)
 		var quantity := int(raw_rewards.get(raw_item_id, 0))
-		if quantity > 0:
-			additions.append({"item_id":str(raw_item_id), "count":quantity})
+		if quantity > 0 and item_id in ALLOWED_REWARD_ITEM_IDS:
+			additions.append({"item_id":item_id, "count":quantity})
 	return additions
+
+
+func _contains_finished_ammunition(raw_rewards: Variant) -> bool:
+	if raw_rewards is not Dictionary:
+		return false
+	for item_id: String in FINISHED_AMMUNITION_IDS:
+		if int(raw_rewards.get(item_id, 0)) > 0:
+			return true
+	return false
+
+
+func _contains_unsupported_reward_items(raw_rewards: Variant) -> bool:
+	if raw_rewards is not Dictionary:
+		return true
+	for raw_item_id: Variant in raw_rewards.keys():
+		var item_id := str(raw_item_id)
+		if int(raw_rewards.get(raw_item_id, 0)) > 0 and item_id not in ALLOWED_REWARD_ITEM_IDS:
+			return true
+	return false
 
 
 func _reward_labels(rewards: Dictionary) -> Array[String]:

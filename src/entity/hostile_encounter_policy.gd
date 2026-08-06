@@ -56,7 +56,10 @@ static func is_profile_eligible(profile: Dictionary, context: Dictionary) -> boo
 		return false
 	if existing_pressure < float(profile.get("minimum_existing_pressure", 0.0)):
 		return false
-	if existing_pressure > float(profile.get("maximum_existing_pressure", INF)):
+	var intensity_profile: Dictionary = context.get("intensity_profile", {})
+	if existing_pressure > effective_pressure_limit(
+		float(profile.get("maximum_existing_pressure", INF)), intensity_profile
+	):
 		return false
 	var member_count := maxi(0, int(profile.get("member_count", 0)))
 	if member_count <= 0 or existing_count + member_count > hostile_cap:
@@ -64,9 +67,30 @@ static func is_profile_eligible(profile: Dictionary, context: Dictionary) -> boo
 	if tracked_members + member_count > MAX_TRACKED_MEMBERS:
 		return false
 	var encounter_pressure := estimate_pressure(profile)
-	return existing_pressure + encounter_pressure <= float(
-		profile.get("maximum_total_pressure", 0.0)
+	return existing_pressure + encounter_pressure <= effective_pressure_limit(
+		float(profile.get("maximum_total_pressure", 0.0)), intensity_profile
 	) + 0.0001
+
+
+static func effective_cooldown_seconds(
+	profile: Dictionary, intensity_profile: Dictionary
+) -> float:
+	var base_seconds := maxf(0.1, float(profile.get("cooldown_seconds", 30.0)))
+	var multiplier := clampf(
+		float(intensity_profile.get("cooldown_multiplier", 1.0)), 0.5, 2.0
+	)
+	return base_seconds * multiplier
+
+
+static func effective_pressure_limit(
+	base_limit: float, intensity_profile: Dictionary
+) -> float:
+	if not is_finite(base_limit):
+		return base_limit
+	var multiplier := clampf(
+		float(intensity_profile.get("danger_pressure_multiplier", 1.0)), 0.5, 1.5
+	)
+	return maxf(0.0, base_limit) * multiplier
 
 
 static func expand_members(profile: Dictionary) -> Array[Dictionary]:

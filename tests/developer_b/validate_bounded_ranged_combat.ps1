@@ -40,8 +40,8 @@ $rangedItems = @($ranged.items)
 $rangedRecipes = @($ranged.recipes)
 $profiles = @($ranged.profiles)
 if ([int]$ranged.schema_version -ne 1) { throw 'Ranged combat schema must remain version 1' }
-if ($rangedItems.Count -ne 2 -or $rangedRecipes.Count -ne 2 -or $profiles.Count -ne 1) {
-  throw 'Bow extension must remain exactly bow, arrow, two recipes and one profile'
+if ($rangedItems.Count -ne 3 -or $rangedRecipes.Count -ne 2 -or $profiles.Count -ne 1) {
+  throw 'Bow extension must remain exactly bow, flint, arrow, two recipes and one profile'
 }
 $baseItemIds = @{}; foreach ($item in $baseItems) { $baseItemIds[[string]$item.id] = $true }
 $extensionItemIds = @{}
@@ -50,11 +50,13 @@ foreach ($item in $rangedItems) {
   if ([string]::IsNullOrWhiteSpace($id) -or $extensionItemIds.ContainsKey($id) -or $baseItemIds.ContainsKey($id)) { throw "Duplicate ranged item id: $id" }
   $extensionItemIds[$id] = $true
 }
-foreach ($required in @('bow','arrow')) { if (-not $extensionItemIds.ContainsKey($required)) { throw "Missing ranged item: $required" } }
+foreach ($required in @('bow','flint','arrow')) { if (-not $extensionItemIds.ContainsKey($required)) { throw "Missing ranged item: $required" } }
 $bow = @($rangedItems | Where-Object { [string]$_.id -eq 'bow' })[0]
+$flint = @($rangedItems | Where-Object { [string]$_.id -eq 'flint' })[0]
 $arrow = @($rangedItems | Where-Object { [string]$_.id -eq 'arrow' })[0]
 if ([string]$bow.category -ne 'weapon' -or [string]$bow.tool_type -ne 'bow' -or [int]$bow.max_stack -ne 1 -or [int]$bow.durability -le 0) { throw 'Bow must remain a durable main-hand weapon' }
 if ([string]$bow.equipment.slot -ne 'main_hand') { throw 'Bow must reuse main_hand' }
+if ([string]$flint.category -ne 'material' -or [int]$flint.max_stack -ne 64) { throw 'Flint must remain bounded crafting material' }
 if ([string]$arrow.category -ne 'ammunition' -or [int]$arrow.max_stack -ne 64) { throw 'Arrow must remain bounded ammunition' }
 $baseRecipeIds = @{}; foreach ($recipe in $baseRecipes) { $baseRecipeIds[[string]$recipe.id] = $true }
 $extensionRecipeIds = @{}
@@ -65,6 +67,9 @@ foreach ($recipe in $rangedRecipes) {
   $extensionRecipeIds[$id] = $true
 }
 foreach ($required in @('bow','arrows')) { if (-not $extensionRecipeIds.ContainsKey($required)) { throw "Missing ranged recipe: $required" } }
+$arrowRecipe = @($rangedRecipes | Where-Object { [string]$_.id -eq 'arrows' })[0]
+if ([int]$arrowRecipe.ingredients.stick -ne 1 -or [int]$arrowRecipe.ingredients.feather -ne 1 -or [int]$arrowRecipe.ingredients.flint -ne 1) { throw 'Arrow recipe must consume one stick, one feather and one flint' }
+if ([string]$arrowRecipe.output.id -ne 'arrow' -or [int]$arrowRecipe.output.count -ne 4) { throw 'Arrow recipe must output exactly four arrows' }
 $profile = $profiles[0]
 if ([string]$profile.id -ne 'bow' -or [string]$profile.weapon_item_id -ne 'bow' -or [string]$profile.ammo_item_id -ne 'arrow') { throw 'Bow profile identity is inconsistent' }
 if ([double]$profile.draw_seconds -le 0 -or [double]$profile.draw_seconds -gt 5) { throw 'Invalid draw duration' }

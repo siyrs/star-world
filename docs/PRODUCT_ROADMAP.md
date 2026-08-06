@@ -286,3 +286,19 @@ Game Runtime
 5. 领域回归测试；
 6. 真实桌面交互测试；
 7. Windows Release 验收；
+
+## Iteration 57 · 战斗反馈、强度与弹药经济（2026-08-06）
+
+- 方向受击共享权威 Combat 结果，提供前/右/后/左、近战/深渊弹/环境、最终伤害和护甲吸收；
+- 方向脉冲固定四槽，可关闭视觉效果并保留文字；相机冲击为本地有界设置；
+- 休闲、标准和高危只缩放 Encounter 冷却与危险预算，不修改正式编组或存档；
+- Encounter 奖励只提供燧石和火药，注册表与运行时事务拒绝成品弹药；
+- 箭矢正式消耗燧石，完成奖励输入到制造输出的闭环；
+- 2 射手 + 4 僵尸 + 1 重击者的 3,600 秒确定性长稳纳入永久门禁；
+- 商业发布继续 **HOLD**，等待 E4-H 与真实目标硬件 7,200 秒资格。
+
+合同见：
+
+- [COMBAT_FEEDBACK_INTENSITY_ECONOMY.md](COMBAT_FEEDBACK_INTENSITY_ECONOMY.md)
+- [COMBAT_FEEDBACK_INTENSITY_ECONOMY_TESTING.md](COMBAT_FEEDBACK_INTENSITY_ECONOMY_TESTING.md)
+- [PRODUCT_ROADMAP_ITERATION_57.md](PRODUCT_ROADMAP_ITERATION_57.md)

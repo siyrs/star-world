@@ -4,6 +4,9 @@ extends Control
 const ThemeFactory = preload("res://src/ui/theme_factory.gd")
 const Tokens = preload("res://src/ui/design_tokens.gd")
 const UiInputPolicy = preload("res://src/ui/ui_input_policy.gd")
+const DamageDirectionPolicy = preload("res://src/combat/damage_direction_policy.gd")
+const DIRECTION_PULSE_SECONDS := 0.7
+const INCOMING_TEXT_SECONDS := 1.35
 
 var combat_service: Node
 var ranged_combat_service: Node
@@ -21,6 +24,18 @@ var _hit_label: Label
 var _last_cooldown: Dictionary = {}
 var _last_ranged: Dictionary = {}
 var _last_result: Dictionary = {}
+var _last_incoming: Dictionary = {}
+var _incoming_panel: PanelContainer
+var _incoming_label: Label
+var _incoming_remaining := 0.0
+var _direction_indicators: Dictionary = {}
+var _direction_remaining := {
+	"front": 0.0,
+	"right": 0.0,
+	"rear": 0.0,
+	"left": 0.0,
+}
+var _show_direction_pulses := true
 
 
 func _ready() -> void:
@@ -30,6 +45,8 @@ func _ready() -> void:
 	_build_cooldown_panel()
 	_build_ranged_panel()
 	_build_hit_panel()
+	_build_incoming_panel()
+	_build_direction_indicators()
 	UiInputPolicy.make_passthrough_tree(self)
 	_refresh_visibility()
 
@@ -42,6 +59,10 @@ func setup(p_combat_service: Node, p_ranged_combat_service: Node = null) -> void
 		if combat_service.has_signal("outgoing_attack_resolved"):
 			combat_service.connect(
 				"outgoing_attack_resolved", Callable(self, "_on_attack_resolved")
+			)
+		if combat_service.has_signal("incoming_damage_resolved"):
+			combat_service.connect(
+				"incoming_damage_resolved", Callable(self, "_on_incoming_damage_resolved")
 			)
 		if combat_service.has_signal("attack_rejected"):
 			combat_service.connect("attack_rejected", Callable(self, "_on_attack_rejected"))
@@ -89,6 +110,11 @@ func set_blocked(value: bool) -> void:
 	_refresh_visibility()
 
 
+func apply_settings(settings: Dictionary) -> void:
+	_show_direction_pulses = bool(settings.get("show_damage_direction_pulses", true))
+	_refresh_visibility()
+
+
 func get_snapshot() -> Dictionary:
 	return {
 		"active": _active,
@@ -96,6 +122,12 @@ func get_snapshot() -> Dictionary:
 		"cooldown": _last_cooldown.duplicate(true),
 		"ranged": _last_ranged.duplicate(true),
 		"last_result": _last_result.duplicate(true),
+		"last_incoming": _last_incoming.duplicate(true),
+		"direction_pulses_enabled": _show_direction_pulses,
+		"direction_indicator_pool_size": _direction_indicators.size(),
+		"active_damage_directions": _active_damage_directions(),
+		"incoming_visible": _incoming_panel.visible if _incoming_panel != null else false,
+		"incoming_text": _incoming_label.text if _incoming_label != null else "",
 		"cooldown_visible": _cooldown_panel.visible if _cooldown_panel != null else false,
 		"ranged_visible": _ranged_panel.visible if _ranged_panel != null else false,
 		"hit_visible": _hit_panel.visible if _hit_panel != null else false,
@@ -105,10 +137,18 @@ func get_snapshot() -> Dictionary:
 
 
 func _process(delta: float) -> void:
+	var safe_delta := maxf(0.0, delta)
 	if _hit_remaining > 0.0:
-		_hit_remaining = maxf(0.0, _hit_remaining - maxf(0.0, delta))
+		_hit_remaining = maxf(0.0, _hit_remaining - safe_delta)
 		if _hit_remaining <= 0.0 and _hit_panel != null:
 			_hit_panel.visible = false
+	if _incoming_remaining > 0.0:
+		_incoming_remaining = maxf(0.0, _incoming_remaining - safe_delta)
+	for direction: String in DamageDirectionPolicy.DIRECTIONS:
+		_direction_remaining[direction] = maxf(
+			0.0, float(_direction_remaining.get(direction, 0.0)) - safe_delta
+		)
+	_refresh_visibility()
 	if combat_service != null and combat_service.has_method("get_cooldown_snapshot"):
 		_on_cooldown_changed(combat_service.call("get_cooldown_snapshot"))
 	if ranged_combat_service != null and ranged_combat_service.has_method("get_snapshot"):
@@ -117,6 +157,26 @@ func _process(delta: float) -> void:
 
 func _exit_tree() -> void:
 	_disconnect_services()
+
+
+func _on_incoming_damage_resolved(result: Dictionary) -> void:
+	var final_damage := maxf(0.0, float(result.get("final_damage", 0.0)))
+	if final_damage <= 0.0:
+		return
+	_last_incoming = result.duplicate(true)
+	var direction := DamageDirectionPolicy.normalize_direction(
+		result.get("damage_direction", "front")
+	)
+	var absorbed := maxf(0.0, float(result.get("absorbed", 0.0)))
+	var absorbed_text := "" if absorbed <= 0.0 else " · 护甲吸收 %.1f" % absorbed
+	var source_label := DamageDirectionPolicy.localized_source_label(result.get("source", "damage"))
+	_incoming_label.text = "受到 %.1f 伤害 · %s%s%s" % [
+		final_damage, DamageDirectionPolicy.localized_label(direction), source_label, absorbed_text,
+	]
+	_incoming_label.modulate = Tokens.color(Tokens.COLOR_DANGER)
+	_incoming_remaining = INCOMING_TEXT_SECONDS
+	_direction_remaining[direction] = DIRECTION_PULSE_SECONDS
+	_refresh_visibility()
 
 
 func _on_attack_resolved(result: Dictionary) -> void:
@@ -251,6 +311,16 @@ func _refresh_visibility() -> void:
 		_ranged_panel.visible = can_show and bool(_last_ranged.get("equipped", false))
 	if _hit_panel != null:
 		_hit_panel.visible = can_show and _hit_remaining > 0.0
+	if _incoming_panel != null:
+		_incoming_panel.visible = can_show and _incoming_remaining > 0.0
+	for direction: String in DamageDirectionPolicy.DIRECTIONS:
+		var indicator: Label = _direction_indicators.get(direction) as Label
+		if indicator != null:
+			indicator.visible = (
+				can_show
+				and _show_direction_pulses
+				and float(_direction_remaining.get(direction, 0.0)) > 0.0
+			)
 
 
 func _build_cooldown_panel() -> void:
@@ -332,10 +402,95 @@ func _build_hit_panel() -> void:
 	_hit_panel.add_child(_hit_label)
 
 
+func _build_incoming_panel() -> void:
+	_incoming_panel = PanelContainer.new()
+	_incoming_panel.name = "IncomingDamagePanel"
+	_incoming_panel.anchor_left = 0.5
+	_incoming_panel.anchor_right = 0.5
+	_incoming_panel.anchor_top = 0.0
+	_incoming_panel.anchor_bottom = 0.0
+	_incoming_panel.offset_left = -220.0
+	_incoming_panel.offset_right = 220.0
+	_incoming_panel.offset_top = 82.0
+	_incoming_panel.offset_bottom = 122.0
+	_incoming_panel.add_theme_stylebox_override(
+		"panel", Tokens.bevel_style("#220907D9", Tokens.COLOR_DANGER, 2, 6.0)
+	)
+	add_child(_incoming_panel)
+	_incoming_label = Label.new()
+	_incoming_label.name = "IncomingDamageText"
+	_incoming_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_incoming_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_incoming_label.add_theme_font_size_override("font_size", Tokens.FONT_BODY)
+	_incoming_panel.add_child(_incoming_label)
+
+
+func _build_direction_indicators() -> void:
+	for direction: String in DamageDirectionPolicy.DIRECTIONS:
+		var indicator := Label.new()
+		indicator.name = "DamageDirection%s" % direction.capitalize()
+		indicator.text = str({
+			"front":"▼", "right":"◀", "rear":"▲", "left":"▶",
+		}.get(direction, "◆"))
+		indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		indicator.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		indicator.add_theme_font_size_override("font_size", 42)
+		indicator.modulate = Tokens.color(Tokens.COLOR_DANGER)
+		indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_apply_direction_indicator_layout(indicator, direction)
+		add_child(indicator)
+		_direction_indicators[direction] = indicator
+
+
+func _apply_direction_indicator_layout(indicator: Label, direction: String) -> void:
+	match direction:
+		"front":
+			indicator.anchor_left = 0.5
+			indicator.anchor_right = 0.5
+			indicator.offset_left = -40.0
+			indicator.offset_right = 40.0
+			indicator.offset_top = 132.0
+			indicator.offset_bottom = 188.0
+		"right":
+			indicator.anchor_left = 1.0
+			indicator.anchor_right = 1.0
+			indicator.anchor_top = 0.5
+			indicator.anchor_bottom = 0.5
+			indicator.offset_left = -96.0
+			indicator.offset_right = -16.0
+			indicator.offset_top = -30.0
+			indicator.offset_bottom = 30.0
+		"rear":
+			indicator.anchor_left = 0.5
+			indicator.anchor_right = 0.5
+			indicator.anchor_top = 1.0
+			indicator.anchor_bottom = 1.0
+			indicator.offset_left = -40.0
+			indicator.offset_right = 40.0
+			indicator.offset_top = -116.0
+			indicator.offset_bottom = -56.0
+		_:
+			indicator.anchor_top = 0.5
+			indicator.anchor_bottom = 0.5
+			indicator.offset_left = 16.0
+			indicator.offset_right = 96.0
+			indicator.offset_top = -30.0
+			indicator.offset_bottom = 30.0
+
+
+func _active_damage_directions() -> Array[String]:
+	var active_directions: Array[String] = []
+	for direction: String in DamageDirectionPolicy.DIRECTIONS:
+		if float(_direction_remaining.get(direction, 0.0)) > 0.0:
+			active_directions.append(direction)
+	return active_directions
+
+
 func _disconnect_services() -> void:
 	if combat_service != null:
 		for binding: Array in [
 			["outgoing_attack_resolved", "_on_attack_resolved"],
+			["incoming_damage_resolved", "_on_incoming_damage_resolved"],
 			["attack_rejected", "_on_attack_rejected"],
 			["cooldown_changed", "_on_cooldown_changed"],
 		]:

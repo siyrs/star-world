@@ -3,9 +3,12 @@ extends RefCounted
 
 const DEFAULT_DATA_PATH := "res://data/encounter_rewards.json"
 const SUPPORTED_SCHEMA_VERSIONS: Array[int] = [1]
-const ALLOWED_REWARD_ITEMS: Array[String] = [
-	"arrow",
+const ALLOWED_REWARD_ITEM_IDS: Array[String] = [
+	"flint",
 	"gunpowder",
+]
+const FINISHED_AMMUNITION_IDS: Array[String] = [
+	"arrow",
 	"light_round",
 	"shotgun_shell",
 ]
@@ -177,7 +180,7 @@ func _normalize_reward_map(
 	for raw_item_id: Variant in raw_rewards.keys():
 		var item_id := str(raw_item_id).strip_edges()
 		var quantity := int(raw_rewards.get(raw_item_id, 0))
-		if item_id not in ALLOWED_REWARD_ITEMS:
+		if item_id not in ALLOWED_REWARD_ITEM_IDS:
 			errors.append("Encounter reward contains unsupported item %s: %s" % [item_id, profile_id])
 			continue
 		if quantity <= 0 or quantity > MAX_REWARD_PER_ITEM:
@@ -199,26 +202,26 @@ func _install_fallback() -> void:
 		"continent_night_patrol": {
 			"encounter_profile_id":"continent_night_patrol",
 			"display_name":"夜行巡猎补给",
-			"base_rewards":{"light_round":1},
+			"base_rewards":{"flint":1},
 			"efficient_shot_limit":3,
-			"efficient_bonus":{"light_round":1},
+			"efficient_bonus":{"flint":1},
 			"maximum_total_reward_quantity":2,
 		},
 		"abyss_skirmish": {
 			"encounter_profile_id":"abyss_skirmish",
 			"display_name":"深渊游猎补给",
-			"base_rewards":{"gunpowder":1, "light_round":3},
+			"base_rewards":{"flint":1, "gunpowder":1},
 			"efficient_shot_limit":5,
-			"efficient_bonus":{"light_round":2},
-			"maximum_total_reward_quantity":6,
+			"efficient_bonus":{"gunpowder":1},
+			"maximum_total_reward_quantity":3,
 		},
 		"abyss_assault": {
 			"encounter_profile_id":"abyss_assault",
 			"display_name":"深渊突袭补给",
-			"base_rewards":{"gunpowder":2, "light_round":4, "shotgun_shell":1},
+			"base_rewards":{"flint":2, "gunpowder":3},
 			"efficient_shot_limit":7,
-			"efficient_bonus":{"light_round":2},
-			"maximum_total_reward_quantity":9,
+			"efficient_bonus":{"gunpowder":1},
+			"maximum_total_reward_quantity":6,
 		},
 	}
 	schema_version = 1

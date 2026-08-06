@@ -179,9 +179,15 @@ func resolve_outgoing_attack(defender_attributes: Dictionary = {}) -> Dictionary
 
 
 func resolve_incoming_damage(
-	raw_damage: float, source: String = "damage", consume_armor_durability: bool = true
+	raw_damage: float,
+	source: String = "damage",
+	consume_armor_durability: bool = true,
+	context: Dictionary = {}
 ) -> Dictionary:
 	var result: Dictionary = calculator.calculate_raw(raw_damage, _attribute_snapshot(), source)
+	for raw_key: Variant in context.keys():
+		result[raw_key] = context[raw_key]
+	result["source"] = source
 	if (
 		consume_armor_durability
 		and float(result.get("absorbed", 0.0)) > 0.0
@@ -253,15 +259,42 @@ func _resolve_hostile_projectile_hit(
 		"target_name": _target_name(target) if target_available else "",
 	}
 	_copy_projectile_facts(shot, result)
-	if not target_available or not target.has_method("take_hostile_damage"):
+	if (
+		not target_available
+		or (
+			not target.has_method("take_hostile_damage_with_context")
+			and not target.has_method("take_hostile_damage")
+		)
+	):
 		attack_rejected.emit(result.duplicate(true))
 		return result
-	var raw_applied: Variant = target.call(
-		"take_hostile_damage",
-		float(result.get("raw_damage", 0.0)),
-		source_id,
-		attacker_id
+	var source_position := (
+		attacker.global_position
+		if attacker != null and is_instance_valid(attacker)
+		else _vector3_from_array(shot.get("source_position", []), Vector3.ZERO)
 	)
+	result["source_position"] = [source_position.x, source_position.y, source_position.z]
+	var raw_applied: Variant = null
+	if target.has_method("take_hostile_damage_with_context"):
+		raw_applied = target.call(
+			"take_hostile_damage_with_context",
+			float(result.get("raw_damage", 0.0)),
+			source_id,
+			attacker_id,
+			{
+				"source_position": result["source_position"],
+				"impact_position": result.get("impact_position", []),
+				"impact_velocity": result.get("impact_velocity", []),
+				"attack_kind": result.get("attack_kind", "hostile_ranged"),
+			}
+		)
+	else:
+		raw_applied = target.call(
+			"take_hostile_damage",
+			float(result.get("raw_damage", 0.0)),
+			source_id,
+			attacker_id
+		)
 	if raw_applied is Dictionary:
 		result.merge(raw_applied, true)
 	else:
