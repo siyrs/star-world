@@ -1,7 +1,7 @@
 class_name ExternalQualificationContract
 extends RefCounted
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const STRICT_SOAK_SECONDS := 7200
 const MAX_TEXT_LENGTH := 256
 const REQUIRED_PROFILES: Array[String] = [
@@ -51,26 +51,26 @@ func validate_package(package: Dictionary) -> Dictionary:
 	if fixture_mode != (source == "fixture"):
 		errors.append("fixture_mode and fixture evidence_source must be used together")
 
-	_validate_build(_dictionary(package.get("build", {})), errors)
-	_validate_review(_dictionary(package.get("experiential_review", {})), errors)
-	_validate_hardware(
-		_array(package.get("hardware_qualification", [])), errors, source == "target_hardware"
-	)
-	_validate_soak(
-		_dictionary(package.get("strict_soak", {})),
-		errors,
-		warnings,
-		source == "target_hardware"
-	)
-	_validate_fault_lab(
-		_dictionary(package.get("fault_lab", {})), errors, source == "target_hardware"
-	)
+	var build := _dictionary(package.get("build", {}))
+	var review := _dictionary(package.get("experiential_review", {}))
+	var hardware := _array(package.get("hardware_qualification", []))
+	var soak := _dictionary(package.get("strict_soak", {}))
+	var fault_lab := _dictionary(package.get("fault_lab", {}))
+	var require_real := source == "target_hardware"
+
+	_validate_build(build, errors)
+	_validate_review(review, errors)
+	_validate_hardware(hardware, errors, require_real)
+	_validate_soak(soak, errors, warnings, require_real)
+	_validate_fault_lab(fault_lab, errors, require_real)
 	_validate_findings(_array(package.get("findings", [])), errors)
 	_validate_release_owner(
-		_dictionary(package.get("release_owner_attestation", {})),
-		errors,
-		source == "target_hardware"
+		_dictionary(package.get("release_owner_attestation", {})), errors, require_real
 	)
+	_validate_evidence_consistency(
+		source, reference_only, hardware, soak, fault_lab, errors
+	)
+	_validate_build_bindings(build, review, hardware, soak, fault_lab, errors)
 
 	if source == "hosted_reference":
 		warnings.append("hosted reference evidence cannot close commercial release gates")
@@ -213,6 +213,7 @@ func _validate_soak(
 
 func _validate_fault_lab(fault_lab: Dictionary, errors: Array[String], require_real: bool) -> void:
 	_require_text(errors, fault_lab, "operator_id")
+	var operator_id := str(fault_lab.get("operator_id", "")).strip_edges()
 	if str(fault_lab.get("result", "")) != "pass":
 		errors.append("fault lab result must be pass")
 	var seen: Dictionary = {}
@@ -228,6 +229,9 @@ func _validate_fault_lab(fault_lab: Dictionary, errors: Array[String], require_r
 		if seen.has(scenario_type):
 			errors.append("fault scenario is duplicated: %s" % scenario_type)
 		seen[scenario_type] = true
+		_require_text(errors, scenario, "operator_id")
+		if str(scenario.get("operator_id", "")).strip_edges() != operator_id:
+			errors.append("fault scenario operator does not match fault lab: %s" % scenario_type)
 		if not bool(scenario.get("interruption_observed", false)):
 			errors.append("fault scenario did not observe interruption: %s" % scenario_type)
 		if not bool(scenario.get("recovery_verified", false)):
@@ -241,6 +245,98 @@ func _validate_fault_lab(fault_lab: Dictionary, errors: Array[String], require_r
 	for scenario_type: String in REQUIRED_FAULT_SCENARIOS:
 		if not seen.has(scenario_type):
 			errors.append("fault lab is missing scenario: %s" % scenario_type)
+
+
+func _validate_evidence_consistency(
+	source: String,
+	reference_only: bool,
+	hardware: Array,
+	soak: Dictionary,
+	fault_lab: Dictionary,
+	errors: Array[String]
+) -> void:
+	for value: Variant in hardware:
+		if value is Dictionary:
+			_validate_child_source(value, source, reference_only, "hardware", errors)
+	_validate_child_source(soak, source, reference_only, "strict soak", errors)
+	for value: Variant in _array(fault_lab.get("scenarios", [])):
+		if value is Dictionary:
+			_validate_child_source(value, source, reference_only, "fault scenario", errors)
+
+
+func _validate_child_source(
+	child: Dictionary,
+	source: String,
+	reference_only: bool,
+	label: String,
+	errors: Array[String]
+) -> void:
+	if str(child.get("evidence_source", "")) != source:
+		errors.append("%s evidence_source does not match package" % label)
+	if bool(child.get("reference_only", not reference_only)) != reference_only:
+		errors.append("%s reference_only does not match package" % label)
+
+
+func _validate_build_bindings(
+	build: Dictionary,
+	review: Dictionary,
+	hardware: Array,
+	soak: Dictionary,
+	fault_lab: Dictionary,
+	errors: Array[String]
+) -> void:
+	var commit_sha := str(build.get("commit_sha", ""))
+	var executable_sha := str(build.get("executable_sha256", ""))
+	var pck_sha := str(build.get("pck_sha256", ""))
+	var review_build := _dictionary(review.get("build", {}))
+	_expect_equal(errors, str(review_build.get("commit_sha", "")), commit_sha, "review commit")
+	_expect_equal(
+		errors,
+		str(review_build.get("executable_sha256", "")),
+		executable_sha,
+		"review executable"
+	)
+	_expect_equal(errors, str(review_build.get("pck_sha256", "")), pck_sha, "review PCK")
+	for value: Variant in hardware:
+		if not value is Dictionary:
+			continue
+		var entry: Dictionary = value
+		var tier := str(entry.get("tier", "unknown"))
+		var entry_build := _dictionary(entry.get("build", {}))
+		_expect_equal(
+			errors,
+			str(entry_build.get("executable_sha256", "")),
+			executable_sha,
+			"hardware %s executable" % tier
+		)
+		_expect_equal(
+			errors,
+			str(entry_build.get("pck_sha256", "")),
+			pck_sha,
+			"hardware %s PCK" % tier
+		)
+	_expect_equal(
+		errors, str(soak.get("executable_sha256", "")), executable_sha, "strict soak executable"
+	)
+	_expect_equal(errors, str(soak.get("pck_sha256", "")), pck_sha, "strict soak PCK")
+	for value: Variant in _array(fault_lab.get("scenarios", [])):
+		if not value is Dictionary:
+			continue
+		var scenario: Dictionary = value
+		var scenario_type := str(scenario.get("type", "unknown"))
+		var scenario_build := _dictionary(scenario.get("build", {}))
+		_expect_equal(
+			errors,
+			str(scenario_build.get("executable_sha256", "")),
+			executable_sha,
+			"fault %s executable" % scenario_type
+		)
+		_expect_equal(
+			errors,
+			str(scenario_build.get("pck_sha256", "")),
+			pck_sha,
+			"fault %s PCK" % scenario_type
+		)
 
 
 func _validate_findings(findings: Array, errors: Array[String]) -> void:
@@ -266,6 +362,11 @@ func _validate_release_owner(attestation: Dictionary, errors: Array[String], req
 		errors.append("release owner must attest that all artifacts are attached")
 	if not bool(attestation.get("approved_for_release", false)):
 		errors.append("release owner must explicitly approve the evidence package")
+
+
+func _expect_equal(errors: Array[String], actual: String, expected: String, label: String) -> void:
+	if actual != expected or actual.is_empty():
+		errors.append("%s does not match package build" % label)
 
 
 func _require_text(errors: Array[String], source: Dictionary, key: String) -> void:
