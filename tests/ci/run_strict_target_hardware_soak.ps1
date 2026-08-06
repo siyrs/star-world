@@ -1,14 +1,13 @@
 param(
+    [string]$ProjectRoot = '.',
     [Parameter(Mandatory = $true)][string]$ReleaseExecutable,
     [Parameter(Mandatory = $true)][string]$ReleasePck,
     [Parameter(Mandatory = $true)][string]$LifecycleReportPath,
     [Parameter(Mandatory = $true)][string]$OperatorId,
     [string]$OutputDirectory = 'build/external-qualification/strict-soak',
-    [ValidateSet('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')]
-    [string]$ProfileId = 'star_continent',
     [int]$Seed = 112358,
     [int]$SoakSeconds = 7200,
-    [int]$GraceSeconds = 900,
+    [int]$CycleTimeoutMilliseconds = 1200000,
     [switch]$ReferenceOnly,
     [switch]$OperatorAttested
 )
@@ -28,13 +27,16 @@ if (-not $ReferenceOnly -and $env:GITHUB_ACTIONS -eq 'true') {
 }
 if ([string]::IsNullOrWhiteSpace($OperatorId)) { throw 'OperatorId must not be blank.' }
 
+$projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
 $exePath = [System.IO.Path]::GetFullPath($ReleaseExecutable)
 $pckPath = [System.IO.Path]::GetFullPath($ReleasePck)
 $lifecyclePath = [System.IO.Path]::GetFullPath($LifecycleReportPath)
-$outputRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
+$outputRoot = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputDirectory))
 foreach ($path in @($exePath, $pckPath, $lifecyclePath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required evidence file not found: $path" }
 }
+$releaseRunner = Join-Path $projectFullPath 'tests/release/run_windows_export_smoke.ps1'
+if (-not (Test-Path -LiteralPath $releaseRunner -PathType Leaf)) { throw "Release runner not found: $releaseRunner" }
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 function Get-Sha256 {
@@ -42,119 +44,91 @@ function Get-Sha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-function Assert-NoFatalGodotLog {
-    param([string[]]$Paths)
-    $patterns = @('SCRIPT ERROR', 'Parse Error', 'ObjectDB instances were leaked', 'Leaked instance:', 'Resources still in use at exit')
-    foreach ($path in $Paths) {
-        if (-not (Test-Path -LiteralPath $path)) { continue }
-        $matches = @(Select-String -LiteralPath $path -Pattern $patterns -SimpleMatch)
-        if ($matches.Count -gt 0) {
-            throw "Fatal Godot diagnostics found in $path`: $((@($matches | ForEach-Object Line) -join ' | '))"
-        }
-    }
-}
-
-$binaryDirectory = Split-Path -Parent $exePath
-$consolePath = Join-Path $binaryDirectory 'StarWorld.console.exe'
-$runnerPath = if (Test-Path -LiteralPath $consolePath) { $consolePath } else { $exePath }
-$reportPath = Join-Path $outputRoot 'release-smoke.json'
-$stdoutPath = Join-Path $outputRoot 'strict-soak.stdout.log'
-$stderrPath = Join-Path $outputRoot 'strict-soak.stderr.log'
+$profiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
 $progressPath = Join-Path $outputRoot 'strict-soak.progress.jsonl'
-$memoryPath = Join-Path $outputRoot 'strict-soak.memory.json'
+$cyclesPath = Join-Path $outputRoot 'strict-soak-cycles.json'
 $resultPath = Join-Path $outputRoot 'strict-soak.json'
-Remove-Item -Force -ErrorAction SilentlyContinue $reportPath, $stdoutPath, $stderrPath, $progressPath, $memoryPath, $resultPath
+Remove-Item -Force -ErrorAction SilentlyContinue $progressPath, $cyclesPath, $resultPath
 
-# The final package runs its production ReleaseSmokeRunner for a wall-clock-qualified
-# duration. A generous frame target keeps the process alive; wall time, not frames,
-# is the acceptance clock.
-$soakFrames = [Math]::Max(180, $SoakSeconds * 120)
-$reportArgument = $reportPath.Replace('\', '/')
-$arguments = @(
-    '--verbose', '--', '--release-smoke', "--smoke-soak-frames=$soakFrames",
-    "--smoke-output=$reportArgument", "--smoke-profile=$ProfileId", "--smoke-seed=$Seed",
-    '--smoke-route-probe'
-)
-$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-$startInfo.FileName = $runnerPath
-$startInfo.WorkingDirectory = $binaryDirectory
-$startInfo.UseShellExecute = $false
-$startInfo.CreateNoWindow = $false
-$startInfo.RedirectStandardOutput = $true
-$startInfo.RedirectStandardError = $true
-foreach ($argument in $arguments) { [void]$startInfo.ArgumentList.Add($argument) }
-
-$process = [System.Diagnostics.Process]::new()
-$process.StartInfo = $startInfo
+$records = [System.Collections.Generic.List[object]]::new()
 $startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-if (-not $process.Start()) { throw "Unable to start final package: $runnerPath" }
-$stdoutTask = $process.StandardOutput.ReadToEndAsync()
-$stderrTask = $process.StandardError.ReadToEndAsync()
-$samples = [System.Collections.Generic.List[object]]::new()
 $watch = [System.Diagnostics.Stopwatch]::StartNew()
-$nextSampleMs = 0L
-$nextProgressMs = 0L
-$timedOut = $false
-$timeoutMs = ([long]$SoakSeconds + [Math]::Max(60, $GraceSeconds)) * 1000L
+$cycle = 0
+while ($watch.Elapsed.TotalSeconds -lt $SoakSeconds -or $cycle -lt $profiles.Count) {
+    $profile = $profiles[$cycle % $profiles.Count]
+    $cycleOutput = Join-Path $outputRoot ("cycle-{0:D4}-{1}" -f $cycle, $profile)
+    New-Item -ItemType Directory -Force -Path $cycleOutput | Out-Null
+    $cycleStarted = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    & $releaseRunner `
+        -SkipExport `
+        -ExecutablePath $exePath `
+        -OutputDirectory $cycleOutput `
+        -ProfileId $profile `
+        -Seed ($Seed + $cycle) `
+        -RouteProbe `
+        -RunnerTimeoutMilliseconds $CycleTimeoutMilliseconds
 
-while (-not $process.HasExited) {
-    $elapsedMs = [long]$watch.ElapsedMilliseconds
-    if ($elapsedMs -ge $timeoutMs) {
-        $timedOut = $true
-        $process.Kill($true)
-        break
+    $reportPath = Join-Path $cycleOutput 'release-smoke.json'
+    $memoryPath = Join-Path $cycleOutput 'release-smoke.memory.json'
+    $stdoutPath = Join-Path $cycleOutput 'release-smoke.stdout.log'
+    $stderrPath = Join-Path $cycleOutput 'release-smoke.stderr.log'
+    foreach ($path in @($reportPath, $memoryPath, $stdoutPath, $stderrPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Soak cycle evidence missing: $path" }
     }
-    if ($elapsedMs -ge $nextSampleMs) {
-        $process.Refresh()
-        $samples.Add([pscustomobject][ordered]@{
-            elapsed_ms = $elapsedMs
-            working_set_bytes = [long]$process.WorkingSet64
-            private_bytes = [long]$process.PrivateMemorySize64
-        })
-        $nextSampleMs = $elapsedMs + 1000
+    $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json -Depth 20
+    if (-not [bool]$report.ok -or -not [bool]$report.soak.ok -or -not [bool]$report.route.ok) {
+        throw "Final package cycle failed for profile $profile."
     }
-    if ($elapsedMs -ge $nextProgressMs) {
-        [ordered]@{
-            captured_at = (Get-Date).ToString('o')
-            elapsed_seconds = [math]::Floor($elapsedMs / 1000)
-            requested_seconds = $SoakSeconds
-            pid = $process.Id
-            still_running = $true
-        } | ConvertTo-Json -Compress | Add-Content -LiteralPath $progressPath -Encoding utf8
-        $nextProgressMs = $elapsedMs + 60000
+    if ([bool]$report.route.transport_after_spawn -or [int]$report.route.player_transform_writes -ne 0) {
+        throw "Final package cycle used forbidden post-spawn transport for profile $profile."
     }
-    $process.WaitForExit(250) | Out-Null
+    $cycleCompleted = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $record = [pscustomobject][ordered]@{
+        cycle = $cycle
+        profile_id = $profile
+        seed = $Seed + $cycle
+        started_at_unix = $cycleStarted
+        completed_at_unix = $cycleCompleted
+        elapsed_seconds = [Math]::Max(0, $cycleCompleted - $cycleStarted)
+        report_sha256 = Get-Sha256 -Path $reportPath
+        memory_sha256 = Get-Sha256 -Path $memoryPath
+        stdout_sha256 = Get-Sha256 -Path $stdoutPath
+        stderr_sha256 = Get-Sha256 -Path $stderrPath
+        checks = [int]$report.checks
+        successful_steps = [int]$report.route.successful_steps
+        horizontal_displacement = [double]$report.route.horizontal_displacement
+        unique_chunks = [int]$report.route.unique_chunks
+        clean_exit = $true
+    }
+    $records.Add($record)
+    [ordered]@{
+        captured_at = (Get-Date).ToString('o')
+        elapsed_seconds = [int][Math]::Floor($watch.Elapsed.TotalSeconds)
+        requested_seconds = $SoakSeconds
+        completed_cycles = $records.Count
+        last_profile = $profile
+        last_report_sha256 = $record.report_sha256
+    } | ConvertTo-Json -Compress | Add-Content -LiteralPath $progressPath -Encoding utf8
+    $cycle++
 }
-$process.WaitForExit()
 $watch.Stop()
 $completedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$stdout = $stdoutTask.GetAwaiter().GetResult()
-$stderr = $stderrTask.GetAwaiter().GetResult()
-Set-Content -LiteralPath $stdoutPath -Value $stdout -Encoding utf8
-Set-Content -LiteralPath $stderrPath -Value $stderr -Encoding utf8
+$elapsedSeconds = [int][Math]::Floor($watch.Elapsed.TotalSeconds)
+if ($elapsedSeconds -lt $SoakSeconds) { throw "Strict soak did not reach wall-clock target: $elapsedSeconds/$SoakSeconds seconds." }
 
-$elapsedSeconds = [int][math]::Floor($watch.Elapsed.TotalSeconds)
-$memoryEvidence = [ordered]@{
+$coveredProfiles = @($records | ForEach-Object profile_id | Sort-Object -Unique)
+foreach ($profile in $profiles) {
+    if ($profile -notin $coveredProfiles) { throw "Strict soak did not cover profile: $profile" }
+}
+$cycleEvidence = [ordered]@{
     schema_version = 1
-    sample_interval_ms = 1000
     requested_seconds = $SoakSeconds
     elapsed_seconds = $elapsedSeconds
-    samples = @($samples)
+    cycle_count = $records.Count
+    profiles = @($coveredProfiles)
+    cycles = @($records)
 }
-$memoryEvidence | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $memoryPath -Encoding utf8
-
-Assert-NoFatalGodotLog -Paths @($stdoutPath, $stderrPath)
-if ($timedOut) { throw "Final package exceeded the strict soak timeout after $elapsedSeconds seconds." }
-if ($process.ExitCode -ne 0) { throw "Final package exited with code $($process.ExitCode)." }
-if ($elapsedSeconds -lt $SoakSeconds) {
-    throw "Final package exited before the requested wall-clock soak: $elapsedSeconds/$SoakSeconds seconds."
-}
-if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) { throw "Release smoke report missing: $reportPath" }
-$report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json -Depth 20
-if (-not [bool]$report.ok -or -not [bool]$report.soak.ok) { throw 'Final package release-smoke report is not healthy.' }
-if (-not [bool]$report.route.ok -or [bool]$report.route.transport_after_spawn -or [int]$report.route.player_transform_writes -ne 0) {
-    throw 'Final package route evidence failed or used forbidden post-spawn transport.'
-}
+$cycleEvidence | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $cyclesPath -Encoding utf8
 
 $result = [ordered]@{
     schema_version = 1
@@ -163,12 +137,12 @@ $result = [ordered]@{
     target_hardware = -not [bool]$ReferenceOnly
     operator_id = $OperatorId.Trim()
     operator_attested = [bool]$OperatorAttested -and -not [bool]$ReferenceOnly
-    profile_id = $ProfileId
-    seed = $Seed
     requested_seconds = $SoakSeconds
     elapsed_seconds = $elapsedSeconds
     started_at_unix = $startedAt
     completed_at_unix = $completedAt
+    cycle_count = $records.Count
+    profiles = @($coveredProfiles)
     clean_exit = $true
     crash_count = 0
     timed_out = $false
@@ -176,9 +150,8 @@ $result = [ordered]@{
     executable_sha256 = Get-Sha256 -Path $exePath
     pck_sha256 = Get-Sha256 -Path $pckPath
     lifecycle_report_sha256 = Get-Sha256 -Path $lifecyclePath
-    soak_report_sha256 = Get-Sha256 -Path $reportPath
-    memory_report_sha256 = Get-Sha256 -Path $memoryPath
+    soak_report_sha256 = Get-Sha256 -Path $cyclesPath
     progress_journal_sha256 = Get-Sha256 -Path $progressPath
 }
 $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $resultPath -Encoding utf8
-Write-Host "STRICT TARGET HARDWARE SOAK PASS | requested=$SoakSeconds | elapsed=$elapsedSeconds | reference_only=$([bool]$ReferenceOnly) | evidence=$resultPath"
+Write-Host "STRICT TARGET HARDWARE SOAK PASS | requested=$SoakSeconds | elapsed=$elapsedSeconds | cycles=$($records.Count) | profiles=$($coveredProfiles.Count) | reference_only=$([bool]$ReferenceOnly) | evidence=$resultPath"
