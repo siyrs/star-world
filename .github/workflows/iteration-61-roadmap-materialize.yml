@@ -1,0 +1,102 @@
+name: Iteration 61 roadmap materializer
+
+on:
+  push:
+    branches:
+      - agent/iteration-61-release-candidate-chain
+    paths:
+      - '.github/workflows/iteration-61-roadmap-materialize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/iteration-61-release-candidate-chain
+          fetch-depth: 0
+
+      - name: Patch roadmap and full runner
+        shell: python
+        run: |
+          from pathlib import Path
+
+          roadmap = Path('docs/PRODUCT_ROADMAP.md')
+          text = roadmap.read_text(encoding='utf-8')
+          if '## Iteration 60 · 可审计外部资格证据' not in text:
+              text += '''
+
+## Iteration 60 · 可审计外部资格证据（2026-08-06）
+
+- `fixture`、`hosted_reference` 与 `target_hardware` 使用明确且互斥的证据类别；
+- 独立 E4-H、最低/推荐硬件、严格 7,200 秒 soak 与三类故障实验绑定同一 commit、EXE 和 PCK；
+- 最低与推荐硬件复用同一最终包，不允许每台机器重新导出不同候选；
+- GDScript 与 PowerShell 双验证器在组包后重新核对全部子证据，拒绝手工 JSON 重绑定；
+- GitHub Hosted Runner 与 retained fixture 永远不能产生商业发布通过状态；
+- 商业发布继续 **HOLD**，等待真实人员与物理机器执行证据。
+
+合同见：
+
+- [EXTERNAL_QUALIFICATION_EVIDENCE_KIT.md](EXTERNAL_QUALIFICATION_EVIDENCE_KIT.md)
+- [PRODUCT_ROADMAP_ITERATION_60.md](PRODUCT_ROADMAP_ITERATION_60.md)
+
+## Iteration 61 · 最终候选证据链（2026-08-06）
+
+- 最终 EXE/PCK 在外部测试前生成稳定 `candidate_id`，绑定 commit、版本、字节长度、SHA-256 与发布合同；
+- 候选身份不包含绝对路径，同一字节跨机器复制后保持同一身份；
+- 最终二进制、资格包和七份源证据形成可直接检查的规范目录；
+- 目录严格拒绝旧文件合并、缺失/额外文件、哈希变化、reparse point 和父路径穿越；
+- `artifact_manifest` 与物理 JSON 文件重新核对，并从排序后的完整文件清单派生稳定 `bundle_id`；
+- 永久门禁覆盖证据篡改、候选身份篡改、额外文件注入和目录穿越；
+- 商业发布继续 **HOLD**，证据链完整性不能替代真实 E4-H、硬件、soak 或故障实验。
+
+合同见：
+
+- [RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md](RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md)
+- [PRODUCT_ROADMAP_ITERATION_61.md](PRODUCT_ROADMAP_ITERATION_61.md)
+'''
+              roadmap.write_text(text, encoding='utf-8')
+
+          runner = Path('tests/run_all.ps1')
+          text = runner.read_text(encoding='utf-8')
+          anchor = '& "$PSScriptRoot\\developer_b\\validate_release_integrity_iteration_59.ps1"'
+          additions = [
+              '& "$PSScriptRoot\\developer_b\\validate_external_qualification_iteration_60.ps1"',
+              '& "$PSScriptRoot\\developer_b\\validate_release_candidate_chain_iteration_61.ps1"',
+          ]
+          if anchor not in text:
+              raise SystemExit('run_all insertion anchor is missing')
+          missing = [line for line in additions if line not in text]
+          if missing:
+              text = text.replace(anchor, anchor + '\n' + '\n'.join(missing), 1)
+              runner.write_text(text, encoding='utf-8')
+
+          readiness = Path('docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/11-readiness-gates.md')
+          text = readiness.read_text(encoding='utf-8')
+          marker = '## Post-implementation reconciliation · Iterations 60-61'
+          if marker not in text:
+              text += '''
+
+## Post-implementation reconciliation · Iterations 60-61
+
+The repository now includes the Iteration 60 semantic evidence contract and the Iteration 61 candidate chain-of-custody workflow. Repository implementation, parser checks, strict Godot import, portable reference assembly and deliberate tamper rejection are automatable and must remain green.
+
+Commercial release remains **HOLD**. The independent E4-H review, minimum/recommended physical hardware runs, strict 7,200-second target-hardware soak, HDD/antivirus/power-loss experiments and release-owner approval remain external execution items and are not marked complete by CI.
+'''
+              readiness.write_text(text, encoding='utf-8')
+
+          Path('.github/workflows/iteration-61-roadmap-materialize.yml').unlink()
+
+      - name: Commit materialized integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/PRODUCT_ROADMAP.md tests/run_all.ps1 docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/11-readiness-gates.md .github/workflows/iteration-61-roadmap-materialize.yml
+          git commit -m "docs: reconcile roadmap through iteration 61"
+          git push origin HEAD:agent/iteration-61-release-candidate-chain
