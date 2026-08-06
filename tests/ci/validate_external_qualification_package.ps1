@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$SchemaVersion = 1
+$SchemaVersion = 2
 $StrictSoakSeconds = 7200
 $RequiredProfiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
 $RequiredTiers = @('minimum', 'recommended')
@@ -38,7 +38,7 @@ function Add-RequiredTextError {
         [object]$Object,
         [string]$Name
     )
-    $value = [string](Get-Field $Object $Name '')
+    $value = ([string](Get-Field $Object $Name '')).Trim()
     if ([string]::IsNullOrWhiteSpace($value)) {
         $Errors.Add("$Name is required")
     } elseif ($value.Length -gt 256) {
@@ -56,6 +56,34 @@ function Add-RequiredHashError {
     $value = ([string](Get-Field $Object $Name '')).Trim().ToLowerInvariant()
     if (-not (Test-HexDigest -Value $value -Length $Length)) {
         $Errors.Add("$Name must be a $Length-character hexadecimal digest")
+    }
+}
+
+function Add-ExpectedValueError {
+    param(
+        [System.Collections.Generic.List[string]]$Errors,
+        [string]$Actual,
+        [string]$Expected,
+        [string]$Label
+    )
+    if ([string]::IsNullOrWhiteSpace($Actual) -or $Actual -ne $Expected) {
+        $Errors.Add("$Label does not match package build")
+    }
+}
+
+function Add-ChildConsistencyErrors {
+    param(
+        [System.Collections.Generic.List[string]]$Errors,
+        [object]$Child,
+        [string]$Source,
+        [bool]$ReferenceOnly,
+        [string]$Label
+    )
+    if ([string](Get-Field $Child 'evidence_source' '') -ne $Source) {
+        $Errors.Add("$Label evidence_source does not match package")
+    }
+    if ([bool](Get-Field $Child 'reference_only' (-not $ReferenceOnly)) -ne $ReferenceOnly) {
+        $Errors.Add("$Label reference_only does not match package")
     }
 }
 
@@ -93,6 +121,9 @@ function Test-ExternalQualificationPackage {
     Add-RequiredHashError -Errors $errors -Object $build -Name 'executable_sha256' -Length 64
     Add-RequiredHashError -Errors $errors -Object $build -Name 'pck_sha256' -Length 64
     Add-RequiredTextError -Errors $errors -Object $build -Name 'version'
+    $commitSha = ([string](Get-Field $build 'commit_sha' '')).Trim().ToLowerInvariant()
+    $executableSha = ([string](Get-Field $build 'executable_sha256' '')).Trim().ToLowerInvariant()
+    $pckSha = ([string](Get-Field $build 'pck_sha256' '')).Trim().ToLowerInvariant()
 
     $review = Get-Field $Package 'experiential_review' $null
     Add-RequiredTextError -Errors $errors -Object $review -Name 'reviewer_id'
@@ -120,10 +151,15 @@ function Test-ExternalQualificationPackage {
     if (@(Get-Field $review 'blockers' @()).Count -ne 0) {
         $errors.Add('experiential review contains unresolved blockers')
     }
+    $reviewBuild = Get-Field $review 'build' $null
+    Add-ExpectedValueError $errors ([string](Get-Field $reviewBuild 'commit_sha' '')) $commitSha 'review commit'
+    Add-ExpectedValueError $errors ([string](Get-Field $reviewBuild 'executable_sha256' '')) $executableSha 'review executable'
+    Add-ExpectedValueError $errors ([string](Get-Field $reviewBuild 'pck_sha256' '')) $pckSha 'review PCK'
 
     $requireReal = $source -eq 'target_hardware'
+    $hardwareEntries = @(Get-Field $Package 'hardware_qualification' @())
     $seenTiers = @{}
-    foreach ($entry in @(Get-Field $Package 'hardware_qualification' @())) {
+    foreach ($entry in $hardwareEntries) {
         $tier = [string](Get-Field $entry 'tier' '')
         if ($tier -notin $RequiredTiers) {
             $errors.Add("hardware tier is unsupported: $tier")
@@ -131,11 +167,12 @@ function Test-ExternalQualificationPackage {
         }
         if ($seenTiers.ContainsKey($tier)) { $errors.Add("hardware tier is duplicated: $tier") }
         $seenTiers[$tier] = $true
-        Add-RequiredTextError -Errors $errors -Object $entry -Name 'operator_id'
-        Add-RequiredHashError -Errors $errors -Object $entry -Name 'machine_fingerprint_sha256' -Length 64
-        Add-RequiredTextError -Errors $errors -Object $entry -Name 'cpu'
-        Add-RequiredTextError -Errors $errors -Object $entry -Name 'gpu'
-        Add-RequiredTextError -Errors $errors -Object $entry -Name 'os'
+        Add-ChildConsistencyErrors $errors $entry $source $referenceOnly 'hardware'
+        Add-RequiredTextError $errors $entry 'operator_id'
+        Add-RequiredHashError $errors $entry 'machine_fingerprint_sha256' 64
+        Add-RequiredTextError $errors $entry 'cpu'
+        Add-RequiredTextError $errors $entry 'gpu'
+        Add-RequiredTextError $errors $entry 'os'
         if ([double](Get-Field $entry 'ram_gib' 0) -le 0) { $errors.Add("hardware $tier ram_gib must be positive") }
         $started = [long](Get-Field $entry 'started_at_unix' 0)
         $completed = [long](Get-Field $entry 'completed_at_unix' 0)
@@ -148,18 +185,22 @@ function Test-ExternalQualificationPackage {
         if ([string](Get-Field $storage 'drive_type' '') -notin $AllowedStorageTypes) {
             $errors.Add("hardware $tier storage drive_type is invalid")
         }
-        Add-RequiredTextError -Errors $errors -Object $storage -Name 'model'
+        Add-RequiredTextError $errors $storage 'model'
         $profiles = @{}
         foreach ($profile in @(Get-Field $entry 'profiles' @())) { $profiles[[string]$profile] = $true }
         foreach ($profile in $RequiredProfiles) {
             if (-not $profiles.ContainsKey($profile)) { $errors.Add("hardware $tier is missing profile $profile") }
         }
+        $entryBuild = Get-Field $entry 'build' $null
+        Add-ExpectedValueError $errors ([string](Get-Field $entryBuild 'executable_sha256' '')) $executableSha "hardware $tier executable"
+        Add-ExpectedValueError $errors ([string](Get-Field $entryBuild 'pck_sha256' '')) $pckSha "hardware $tier PCK"
     }
     foreach ($tier in $RequiredTiers) {
         if (-not $seenTiers.ContainsKey($tier)) { $errors.Add("hardware qualification is missing tier: $tier") }
     }
 
     $soak = Get-Field $Package 'strict_soak' $null
+    Add-ChildConsistencyErrors $errors $soak $source $referenceOnly 'strict soak'
     $requested = [long](Get-Field $soak 'requested_seconds' 0)
     $elapsed = [long](Get-Field $soak 'elapsed_seconds' 0)
     $soakReference = [bool](Get-Field $soak 'reference_only' $false)
@@ -179,11 +220,14 @@ function Test-ExternalQualificationPackage {
     if ([int](Get-Field $soak 'crash_count' -1) -ne 0) { $errors.Add('strict soak crash_count must be zero') }
     if ([bool](Get-Field $soak 'timed_out' $true)) { $errors.Add('strict soak must not time out') }
     if ([string](Get-Field $soak 'result' '') -ne 'pass') { $errors.Add('strict soak result must be pass') }
-    Add-RequiredHashError -Errors $errors -Object $soak -Name 'lifecycle_report_sha256' -Length 64
-    Add-RequiredHashError -Errors $errors -Object $soak -Name 'soak_report_sha256' -Length 64
+    Add-RequiredHashError $errors $soak 'lifecycle_report_sha256' 64
+    Add-RequiredHashError $errors $soak 'soak_report_sha256' 64
+    Add-ExpectedValueError $errors ([string](Get-Field $soak 'executable_sha256' '')) $executableSha 'strict soak executable'
+    Add-ExpectedValueError $errors ([string](Get-Field $soak 'pck_sha256' '')) $pckSha 'strict soak PCK'
 
     $faultLab = Get-Field $Package 'fault_lab' $null
-    Add-RequiredTextError -Errors $errors -Object $faultLab -Name 'operator_id'
+    Add-RequiredTextError $errors $faultLab 'operator_id'
+    $faultOperator = ([string](Get-Field $faultLab 'operator_id' '')).Trim()
     if ([string](Get-Field $faultLab 'result' '') -ne 'pass') { $errors.Add('fault lab result must be pass') }
     $seenScenarios = @{}
     foreach ($scenario in @(Get-Field $faultLab 'scenarios' @())) {
@@ -194,6 +238,11 @@ function Test-ExternalQualificationPackage {
         }
         if ($seenScenarios.ContainsKey($scenarioType)) { $errors.Add("fault scenario is duplicated: $scenarioType") }
         $seenScenarios[$scenarioType] = $true
+        Add-ChildConsistencyErrors $errors $scenario $source $referenceOnly 'fault scenario'
+        Add-RequiredTextError $errors $scenario 'operator_id'
+        if (([string](Get-Field $scenario 'operator_id' '')).Trim() -ne $faultOperator) {
+            $errors.Add("fault scenario operator does not match fault lab: $scenarioType")
+        }
         if (-not [bool](Get-Field $scenario 'interruption_observed' $false)) {
             $errors.Add("fault scenario did not observe interruption: $scenarioType")
         }
@@ -206,8 +255,11 @@ function Test-ExternalQualificationPackage {
         if ($requireReal -and -not [bool](Get-Field $scenario 'attested_real' $false)) {
             $errors.Add("fault scenario requires real attestation: $scenarioType")
         }
-        Add-RequiredHashError -Errors $errors -Object $scenario -Name 'before_world_sha256' -Length 64
-        Add-RequiredHashError -Errors $errors -Object $scenario -Name 'after_world_sha256' -Length 64
+        Add-RequiredHashError $errors $scenario 'before_world_sha256' 64
+        Add-RequiredHashError $errors $scenario 'after_world_sha256' 64
+        $scenarioBuild = Get-Field $scenario 'build' $null
+        Add-ExpectedValueError $errors ([string](Get-Field $scenarioBuild 'executable_sha256' '')) $executableSha "fault $scenarioType executable"
+        Add-ExpectedValueError $errors ([string](Get-Field $scenarioBuild 'pck_sha256' '')) $pckSha "fault $scenarioType PCK"
     }
     foreach ($scenarioType in $RequiredFaultScenarios) {
         if (-not $seenScenarios.ContainsKey($scenarioType)) { $errors.Add("fault lab is missing scenario: $scenarioType") }
@@ -221,7 +273,7 @@ function Test-ExternalQualificationPackage {
 
     $owner = Get-Field $Package 'release_owner_attestation' $null
     if ($requireReal -or $null -ne $owner) {
-        Add-RequiredTextError -Errors $errors -Object $owner -Name 'owner_id'
+        Add-RequiredTextError $errors $owner 'owner_id'
         if ([long](Get-Field $owner 'signed_at_unix' 0) -le 0) { $errors.Add('release owner signed_at_unix must be positive') }
         if (-not [bool](Get-Field $owner 'all_artifacts_attached' $false)) {
             $errors.Add('release owner must attest that all artifacts are attached')
@@ -251,76 +303,50 @@ function Test-ExternalQualificationPackage {
 
 function New-FixturePackage {
     param([string]$Source = 'fixture', [bool]$FixtureMode = $true, [bool]$ReferenceOnly = $true)
-    $profiles = @($RequiredProfiles)
+    $commit = 'a' * 40
+    $exe = '1' * 64
+    $pck = '2' * 64
     $hardware = foreach ($tier in $RequiredTiers) {
         [pscustomobject]@{
-            tier = $tier
-            operator_id = "operator-$tier"
-            operator_attested = $false
-            machine_fingerprint_sha256 = ('b' * 64)
-            cpu = 'fixture cpu'
-            gpu = 'fixture gpu'
-            ram_gib = 16
-            os = 'Windows fixture'
+            tier = $tier; evidence_source = $Source; reference_only = $ReferenceOnly
+            operator_id = "operator-$tier"; operator_attested = $false
+            machine_fingerprint_sha256 = 'b' * 64; cpu = 'fixture cpu'; gpu = 'fixture gpu'
+            ram_gib = 16; os = 'Windows fixture'
             storage = [pscustomobject]@{ drive_type = 'ssd'; model = 'fixture storage' }
-            profiles = @($profiles)
-            started_at_unix = 1000
-            completed_at_unix = 1050
-            result = 'pass'
+            profiles = @($RequiredProfiles); started_at_unix = 1000; completed_at_unix = 1050; result = 'pass'
+            build = [pscustomobject]@{ executable_sha256 = $exe; pck_sha256 = $pck }
         }
     }
     $scenarios = foreach ($scenarioType in $RequiredFaultScenarios) {
         [pscustomobject]@{
-            type = $scenarioType
-            attested_real = $false
-            interruption_observed = $true
-            recovery_verified = $true
-            world_integrity_verified = $true
-            before_world_sha256 = ('d' * 64)
-            after_world_sha256 = ('e' * 64)
+            type = $scenarioType; evidence_source = $Source; reference_only = $ReferenceOnly
+            operator_id = 'fault-operator'; attested_real = $false
+            interruption_observed = $true; recovery_verified = $true; world_integrity_verified = $true
+            before_world_sha256 = 'd' * 64; after_world_sha256 = 'e' * 64
+            build = [pscustomobject]@{ executable_sha256 = $exe; pck_sha256 = $pck }
         }
     }
     return [pscustomobject]@{
-        schema_version = 1
-        package_id = 'qualification-fixture'
-        fixture_mode = $FixtureMode
-        reference_only = $ReferenceOnly
-        evidence_source = $Source
-        hosted_runner = $Source -eq 'hosted_reference'
-        build = [pscustomobject]@{
-            commit_sha = ('a' * 40)
-            executable_sha256 = ('1' * 64)
-            pck_sha256 = ('2' * 64)
-            version = 'v1.3.0-fixture'
-        }
+        schema_version = $SchemaVersion; package_id = 'qualification-fixture'
+        fixture_mode = $FixtureMode; reference_only = $ReferenceOnly
+        evidence_source = $Source; hosted_runner = $Source -eq 'hosted_reference'
+        build = [pscustomobject]@{ commit_sha = $commit; executable_sha256 = $exe; pck_sha256 = $pck; version = 'fixture' }
         experiential_review = [pscustomobject]@{
-            reviewer_id = 'reviewer-b'
-            implementer_id = 'implementer-a'
-            independent = $true
-            signed_at_unix = 2000
-            result = 'pass'
-            blockers = @()
+            reviewer_id = 'reviewer-b'; implementer_id = 'implementer-a'; independent = $true
+            signed_at_unix = 2000; result = 'pass'; blockers = @()
             checklist = [pscustomobject]@{
-                fresh_install = $true
-                new_world = $true
-                save_reload = $true
-                five_profiles = $true
-                input_and_ui = $true
-                quit_and_restart = $true
+                fresh_install = $true; new_world = $true; save_reload = $true
+                five_profiles = $true; input_and_ui = $true; quit_and_restart = $true
             }
+            build = [pscustomobject]@{ commit_sha = $commit; executable_sha256 = $exe; pck_sha256 = $pck }
         }
         hardware_qualification = @($hardware)
         strict_soak = [pscustomobject]@{
-            requested_seconds = 600
-            elapsed_seconds = 600
-            reference_only = $true
-            target_hardware = $false
-            clean_exit = $true
-            crash_count = 0
-            timed_out = $false
-            result = 'pass'
-            lifecycle_report_sha256 = ('3' * 64)
-            soak_report_sha256 = ('4' * 64)
+            evidence_source = $Source; reference_only = $ReferenceOnly; target_hardware = $false
+            requested_seconds = 600; elapsed_seconds = 600; clean_exit = $true
+            crash_count = 0; timed_out = $false; result = 'pass'
+            executable_sha256 = $exe; pck_sha256 = $pck
+            lifecycle_report_sha256 = '3' * 64; soak_report_sha256 = '4' * 64
         }
         fault_lab = [pscustomobject]@{ operator_id = 'fault-operator'; result = 'pass'; scenarios = @($scenarios) }
         findings = @()
@@ -328,56 +354,67 @@ function New-FixturePackage {
 }
 
 function ConvertTo-RealPackage {
-    param([Parameter(Mandatory = $true)][object]$Package)
-    $Package.evidence_source = 'target_hardware'
-    $Package.fixture_mode = $false
-    $Package.reference_only = $false
-    $Package.hosted_runner = $false
-    foreach ($entry in @($Package.hardware_qualification)) { $entry.operator_attested = $true }
-    $Package.strict_soak.requested_seconds = 7200
-    $Package.strict_soak.elapsed_seconds = 7200
-    $Package.strict_soak.reference_only = $false
-    $Package.strict_soak.target_hardware = $true
-    foreach ($scenario in @($Package.fault_lab.scenarios)) { $scenario.attested_real = $true }
+    param([object]$Package)
+    $Package.evidence_source = 'target_hardware'; $Package.reference_only = $false; $Package.fixture_mode = $false; $Package.hosted_runner = $false
+    foreach ($entry in @($Package.hardware_qualification)) {
+        $entry.evidence_source = 'target_hardware'; $entry.reference_only = $false; $entry.operator_attested = $true
+    }
+    $Package.strict_soak.evidence_source = 'target_hardware'; $Package.strict_soak.reference_only = $false
+    $Package.strict_soak.target_hardware = $true; $Package.strict_soak.requested_seconds = 7200; $Package.strict_soak.elapsed_seconds = 7200
+    foreach ($scenario in @($Package.fault_lab.scenarios)) {
+        $scenario.evidence_source = 'target_hardware'; $scenario.reference_only = $false; $scenario.attested_real = $true
+    }
     $Package | Add-Member -NotePropertyName release_owner_attestation -NotePropertyValue ([pscustomobject]@{
-        owner_id = 'release-owner'
-        signed_at_unix = 3000
-        all_artifacts_attached = $true
-        approved_for_release = $true
+        owner_id = 'release-owner'; signed_at_unix = 3000
+        all_artifacts_attached = $true; approved_for_release = $true
     }) -Force
+}
+
+function Assert-Invalid {
+    param([object]$Package, [string]$Fragment, [string]$Name)
+    $result = Test-ExternalQualificationPackage $Package
+    if ($result.contract_valid -or (($result.errors -join ' | ') -notmatch [regex]::Escape($Fragment))) {
+        throw "$Name rejection self-test failed: $($result.errors -join '; ')"
+    }
 }
 
 function Invoke-SelfTest {
     $fixture = New-FixturePackage
-    $fixtureResult = Test-ExternalQualificationPackage -Package $fixture
+    $fixtureResult = Test-ExternalQualificationPackage $fixture
     if (-not $fixtureResult.contract_valid -or $fixtureResult.release_gate_passed) { throw 'Fixture contract self-test failed.' }
 
     $hosted = New-FixturePackage -Source 'hosted_reference' -FixtureMode $false -ReferenceOnly $true
-    $hostedResult = Test-ExternalQualificationPackage -Package $hosted
+    $hostedResult = Test-ExternalQualificationPackage $hosted
     if (-not $hostedResult.contract_valid -or $hostedResult.release_gate_passed) { throw 'Hosted reference self-test failed.' }
 
     $real = New-FixturePackage
-    ConvertTo-RealPackage -Package $real
-    $realResult = Test-ExternalQualificationPackage -Package $real
-    if (-not $realResult.contract_valid -or -not $realResult.release_gate_passed) { throw "Real-package algorithm self-test failed: $($realResult.errors -join '; ')" }
+    ConvertTo-RealPackage $real
+    $realResult = Test-ExternalQualificationPackage $real
+    if (-not $realResult.contract_valid -or -not $realResult.release_gate_passed) { throw "Real-package self-test failed: $($realResult.errors -join '; ')" }
 
-    $selfReview = $real | ConvertTo-Json -Depth 12 | ConvertFrom-Json
-    $selfReview.experiential_review.reviewer_id = $selfReview.experiential_review.implementer_id
-    $invalid = Test-ExternalQualificationPackage -Package $selfReview
-    if ($invalid.contract_valid -or (($invalid.errors -join ' | ') -notmatch 'independent')) { throw 'Self-review rejection self-test failed.' }
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.experiential_review.reviewer_id = $copy.experiential_review.implementer_id
+    Assert-Invalid $copy 'independent' 'self-review'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.strict_soak.requested_seconds = 600; $copy.strict_soak.elapsed_seconds = 600
+    Assert-Invalid $copy '7200' 'short-soak'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.hosted_runner = $true
+    Assert-Invalid $copy 'hosted runner' 'hosted-target'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.experiential_review.build.commit_sha = 'f' * 40
+    Assert-Invalid $copy 'review commit' 'tampered-review'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.hardware_qualification[0].build.executable_sha256 = 'f' * 64
+    Assert-Invalid $copy 'hardware minimum executable' 'tampered-hardware'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.strict_soak.reference_only = $true
+    Assert-Invalid $copy 'reference_only does not match' 'mixed-reference'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.fault_lab.scenarios[0].operator_id = 'another-operator'
+    Assert-Invalid $copy 'operator does not match' 'mixed-fault-operator'
 
-    $shortSoak = $real | ConvertTo-Json -Depth 12 | ConvertFrom-Json
-    $shortSoak.strict_soak.requested_seconds = 600
-    $shortSoak.strict_soak.elapsed_seconds = 600
-    $invalid = Test-ExternalQualificationPackage -Package $shortSoak
-    if ($invalid.contract_valid -or (($invalid.errors -join ' | ') -notmatch '7200')) { throw 'Short-soak rejection self-test failed.' }
-
-    $hostedTarget = $real | ConvertTo-Json -Depth 12 | ConvertFrom-Json
-    $hostedTarget.hosted_runner = $true
-    $invalid = Test-ExternalQualificationPackage -Package $hostedTarget
-    if ($invalid.contract_valid -or (($invalid.errors -join ' | ') -notmatch 'hosted runner')) { throw 'Hosted-target rejection self-test failed.' }
-
-    Write-Host 'EXTERNAL QUALIFICATION PACKAGE VALIDATOR PASS | fixture=reference-only | real-algorithm=pass | rejection-cases=3'
+    Write-Host 'EXTERNAL QUALIFICATION PACKAGE VALIDATOR PASS | schema=2 | fixture=reference-only | real-algorithm=pass | rejection-cases=7'
 }
 
 if ([string]::IsNullOrWhiteSpace($PackagePath)) {
@@ -387,9 +424,9 @@ if ([string]::IsNullOrWhiteSpace($PackagePath)) {
 
 $resolvedPath = [System.IO.Path]::GetFullPath($PackagePath)
 if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) { throw "Package not found: $resolvedPath" }
-$package = Get-Content -LiteralPath $resolvedPath -Raw | ConvertFrom-Json -Depth 20
-$result = Test-ExternalQualificationPackage -Package $package
-$result | ConvertTo-Json -Depth 8
+$package = Get-Content -LiteralPath $resolvedPath -Raw | ConvertFrom-Json -Depth 100
+$result = Test-ExternalQualificationPackage $package
+$result | ConvertTo-Json -Depth 10
 if (-not $result.contract_valid) { throw "Qualification package is invalid: $($result.errors -join '; ')" }
 if ($RequireReleaseGate -and -not $result.release_gate_passed) {
     throw "Qualification package is valid but non-qualifying: $($result.status)"
