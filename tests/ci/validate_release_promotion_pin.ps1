@@ -29,9 +29,11 @@ Assert-Hex ([string]$pin.commit_sha) 40 'commit_sha'
 Assert-Hex ([string]$pin.executable_sha256) 64 'executable_sha256'
 Assert-Hex ([string]$pin.pck_sha256) 64 'pck_sha256'
 if ([long]$pin.created_at_unix -le 0) { throw 'Promotion pin created_at_unix must be positive.' }
+$channel = ([string]$pin.release_channel).Trim()
+$owner = ([string]$pin.release_owner_id).Trim()
+if ($channel -cnotmatch '^[a-z0-9][a-z0-9._-]{0,63}$') { throw 'release_channel contains unsupported characters.' }
+if ([string]::IsNullOrWhiteSpace($owner) -or $owner.Length -gt 128) { throw 'release_owner_id must contain 1-128 characters.' }
 foreach ($pair in @(
-    @{ Label = 'release_channel'; Value = [string]$pin.release_channel },
-    @{ Label = 'release_owner_id'; Value = [string]$pin.release_owner_id },
     @{ Label = 'package_id'; Value = [string]$pin.package_id },
     @{ Label = 'version'; Value = [string]$pin.version }
 )) {
@@ -46,8 +48,8 @@ $canonical = @(
     "version=$($pin.version)",
     "exe_sha256=$($pin.executable_sha256)",
     "pck_sha256=$($pin.pck_sha256)",
-    "channel=$($pin.release_channel)",
-    "owner=$($pin.release_owner_id)"
+    "channel=$channel",
+    "owner=$owner"
 ) -join "`n"
 $expected = Get-StringSha256 -Value $canonical
 if ([string]$pin.pin_id -ne $expected) { throw "pin_id does not match the promotion identity: expected $expected" }
