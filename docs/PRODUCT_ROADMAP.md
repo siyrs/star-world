@@ -332,3 +332,33 @@ Iteration 59 closes the remaining repository-automatable integrity gaps after th
 - the stale July feature board is reconciled with merged evidence.
 
 The next work is external qualification, not another gameplay subsystem: independent E4-H review, minimum/recommended real hardware, strict 7,200-second target-hardware soak, and real HDD/antivirus/power-loss laboratory evidence. Commercial release remains **HOLD** until those packages exist.
+
+
+## Iteration 60 · 可审计外部资格证据（2026-08-06）
+
+- `fixture`、`hosted_reference` 与 `target_hardware` 使用明确且互斥的证据类别；
+- 独立 E4-H、最低/推荐硬件、严格 7,200 秒 soak 与三类故障实验绑定同一 commit、EXE 和 PCK；
+- 最低与推荐硬件复用同一最终包，不允许每台机器重新导出不同候选；
+- GDScript 与 PowerShell 双验证器在组包后重新核对全部子证据，拒绝手工 JSON 重绑定；
+- GitHub Hosted Runner 与 retained fixture 永远不能产生商业发布通过状态；
+- 商业发布继续 **HOLD**，等待真实人员与物理机器执行证据。
+
+合同见：
+
+- [EXTERNAL_QUALIFICATION_EVIDENCE_KIT.md](EXTERNAL_QUALIFICATION_EVIDENCE_KIT.md)
+- [PRODUCT_ROADMAP_ITERATION_60.md](PRODUCT_ROADMAP_ITERATION_60.md)
+
+## Iteration 61 · 最终候选证据链（2026-08-06）
+
+- 最终 EXE/PCK 在外部测试前生成稳定 `candidate_id`，绑定 commit、版本、奷节长度、SHA-256 与发布合同；
+- 候选身份不包含绝对路径，同一字节跨机器复制后保持同一身份；
+- 最终二进制、资格包和七份源证据形成可直接检查的规范目录；
+- 目录严格拒绝旧文件合并、缺失/额外文件、哈希变化、reparse point 和父路径穿越；
+- `artifact_manifest` 与物理 JSON 文件重新核对，并从排序后的完整文件清单派生稳定 `bundle_id`；
+- 永久门禁覆盖证据篡改、候选身份篡改、额外文件注入和目录穿越；
+- 商业发布继续 **HOLD**，证据链完整性不能替代真实 E4-H、硬件、soak 或故障实验。
+
+合同见：
+
+- [RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md](RELEASE_CANDIDATE_CHAIN_OF_CUSTODY.md)
+- [PRODUCT_ROADMAP_ITERATION_61.md](PRODUCT_ROADMAP_ITERATION_61.md)

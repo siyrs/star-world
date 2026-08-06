@@ -115,3 +115,10 @@ The repository now includes an auditable external-qualification kit:
 - fixture/hosted/target evidence separation and permanent anti-forgery CI.
 
 Repository readiness is complete. External execution is intentionally not marked complete: independent human review, two real hardware tiers, the real target-hardware soak and all three physical fault experiments must still be performed. Commercial release remains **HOLD** until the assembled package validates as `external_evidence_complete`.
+
+
+## Post-implementation reconciliation · Iterations 60-61
+
+The repository now includes the Iteration 60 semantic evidence contract and the Iteration 61 candidate chain-of-custody workflow. Repository implementation, parser checks, strict Godot import, portable reference assembly and deliberate tamper rejection are automatable and must remain green.
+
+Commercial release remains **HOLD**. The independent E4-H review, minimum/recommended physical hardware runs, strict 7,200-second target-hardware soak, HDD/antivirus/power-loss experiments and release-owner approval remain external execution items and are not marked complete by CI.
