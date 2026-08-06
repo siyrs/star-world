@@ -1,45 +1,35 @@
 # Feature Status Board
 
-Track each function point across PM, active specialist agents, validation, and acceptance.
+This board was reconciled on 2026-08-06 after Iteration 59. Historical July preparation records remain in the other task documents; this file now reflects the actual merged implementation and evidence state rather than the abandoned initial snapshot.
 
-## Status Flow
+## Evidence grades
 
-```text
-not-started -> in-progress -> implemented -> self-tested -> qa-testing -> qa-passed -> accepted
-```
-
-Rejected items move to `bugfixing` before returning to self-test and QA test.
+- `accepted-repository`: production implementation plus permanent automated evidence is complete.
+- `external-hold`: repository work is complete, but a real external evidence package is still required.
 
 ## Board
 
-| Function Point | Requirement | Specialist Review | Implementation | Validation | Acceptance | Owner | Updated At | Notes |
-|---|---|---|---|---|---|---|---|---|
-| FP-001 | confirmed | reviewed | in-progress | in-progress | not-started | Developer + QA | 2026-08-01 +08:00 | fresh build/smoke pwsh7 passed; PS5.1/font/chunk/memory issues open |
-| FP-002 | confirmed | reviewed | implemented | in-progress | not-started | PM + QA | 2026-08-01 +08:00 | 5 profiles + content boundary discovered; no complete journeys |
-| FP-003 | confirmed | reviewed | in-progress | not-started | not-started | Developer | 2026-08-01 +08:00 | version 1.3.0 set in project.godot; PACK-001 still open |
-| FP-004 | confirmed | pending | not-started | not-started | not-started | Developer + QA | 2026-08-01 +08:00 | 0/5 profile journeys completed |
-| FP-005 | confirmed | pending | not-started | not-started | not-started | Developer + QA | 2026-08-01 +08:00 | collision/boundary/fall-through |
-| FP-006 | confirmed | pending | not-started | not-started | not-started | Developer + QA | 2026-08-01 +08:00 | water/underwater |
-| FP-007 | confirmed | pending | not-started | not-started | not-started | Developer + QA | 2026-08-01 +08:00 | save/task/death-respawn/switch |
-| FP-008 | confirmed | reviewed | bugfixing | qa-failed | not-started | Developer | 2026-08-01 +08:00 | BUG-UI-002 round 2: Ghost/Card hover&pressed fills fixed; pending QA-003 |
-| FP-009 | confirmed | pending | not-started | not-started | not-started | Developer + QA | 2026-08-01 +08:00 | perf/long-run/logs |
-| FP-010 | confirmed | reviewed | in-progress | qa-testing | not-started | Developer + QA | 2026-08-01 +08:00 | BUG-QA-002 qa-passed; SPAWN-001 bugfixing |
-| FP-011 | confirmed | reviewed | in-progress | in-progress | not-started | PM | 2026-08-01 +08:00 | core files tracked; all template docs filled; commit gate still blocked |
+| Function Point | Implementation | Validation | Acceptance | Evidence | Updated At | Notes |
+|---|---|---|---|---|---|---|
+| FP-001 | complete | passed | accepted-repository | build/import/log/save/automation discovery and permanent gates | 2026-08-06 | current source, Godot 4.7 and Windows release paths are governed |
+| FP-002 | complete | passed | accepted-repository | five profiles, content registries and coverage matrices | 2026-08-06 | formal content inventory is deterministic and validated |
+| FP-003 | complete | passed | accepted-repository | fresh export, launch, quit, create-world and Release lifecycle report | 2026-08-06 | Iteration 59 adds scene/world/save/quit timing and resource evidence |
+| FP-004 | complete | passed | accepted-repository | five-profile production routes and closed-loop player journeys | 2026-08-06 | no post-spawn transport or direct transform writes in final route evidence |
+| FP-005 | complete | passed | accepted-repository | collision, seam, fall, block shape and recovery regressions | 2026-08-06 | includes exact sky-island descent and connected partial shapes |
+| FP-006 | complete | passed | accepted-repository | water/lava lifecycle, survival and save/reload regressions | 2026-08-06 | repository-automatable water state is covered |
+| FP-007 | complete | passed | accepted-repository | save recovery, session recovery, trash integrity, death/respawn and world switching | 2026-08-06 | wrong-id/all-corrupt trash candidates fail with world_payload_unrecoverable |
+| FP-008 | complete | passed | accepted-repository | UI, accessibility, controller, high-DPI, audio and settings matrices | 2026-08-06 | production focus graph and 3440×1440 evidence are permanent |
+| FP-009 | complete | passed | external-hold | bounded performance metrics, hosted soak and long-term campaigns | 2026-08-06 | minimum/recommended real hardware and 7,200-second target soak remain external |
+| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-06 | Iteration 59 adds the cross-domain campaign and fault injection |
+| FP-011 | complete | passed | external-hold | roadmap, audits, issue ledger, release reports and risk boundaries | 2026-08-06 | independent E4-H sign-off still required before commercial release |
 
-## Status Event Log
+## Iteration 59 closure
 
-| Time | Function Point | From | To | Owner | Note |
-|---|---|---|---|---|---|
-| 2026-07-31 10:08 +08:00 | FP-001,FP-002 | not-started | in-progress | Analyst | Packet A-001 discovery |
-| 2026-07-31 10:27 +08:00 | FP-001,FP-002,FP-008,FP-010,FP-011 | readiness | in-progress | PM | validator exit 0; Developer authorized |
-| 2026-07-31 10:52 +08:00 | FP-008 | in-progress | qa-testing | Developer + QA | UI self-test handoff to QA-002 |
-| 2026-07-31 10:52 +08:00 | FP-010 | self-tested | bugfixing | Developer | spawn adjacent input-contract red light |
-| 2026-07-31 11:03 +08:00 | FP-010 | qa-testing | qa-passed | QA | BUG-QA-002 independent PASS |
-| 2026-07-31 11:03 +08:00 | FP-008 | qa-testing | bugfixing | Developer | BUG-UI-002 independent FAIL |
-| 2026-08-01 +08:00 | FP-003 | not-started | in-progress | Developer | version 1.3.0 set in project.godot |
-| 2026-08-01 +08:00 | FP-008 | bugfixing | bugfixing | Developer | round 2 WCAG fix (Ghost/Card light fills); pending QA-003 |
-| 2026-08-01 +08:00 | FP-011 | in-progress | in-progress | Developer | core files tracked; template docs populated |
+- Trash restore validates `world.json`, temporary and backup candidates before promotion.
+- Release lifecycle evidence is written to `user://diagnostics/release-lifecycle-report.json` and never to `world.json`.
+- One campaign combines hostile death/reward/drop, Chunk hot return, pane/fence adjacency and structural cleanup.
+- The previous “0/5 journeys, 0 commits, seven high-priority defects” snapshot is retired as historical and must not be used for planning.
 
-## Agent Notes
+## Commercial decision
 
-Record which specialist agents are active in `10-collaboration-log.md`. Use `not-needed` when PM intentionally skips a specialist role.
+Repository-automatable scope is accepted. Commercial release remains **HOLD** for independent E4-H review, real minimum/recommended target hardware, and the strict 7,200-second final-package target-hardware soak.

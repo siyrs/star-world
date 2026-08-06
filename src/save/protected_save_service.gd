@@ -28,6 +28,13 @@ var _last_trash_reason := ""
 var _last_trash_world_id := ""
 var _last_trash_id := ""
 var _last_trash_entry: Dictionary = {}
+var _restore_integrity_check_count := 0
+var _restore_integrity_failure_count := 0
+var _restore_repair_attempt_count := 0
+var _restore_repair_success_count := 0
+var _restore_repair_failure_count := 0
+var _last_restore_source := ""
+var _last_restore_integrity_reason := ""
 
 
 func _ready() -> void:
@@ -88,6 +95,10 @@ func restore_trashed_world(trash_id: String) -> Dictionary:
 	var entry := _read_trash_entry(trash_id)
 	if entry.is_empty():
 		return _trash_failure("restore", trash_id, "trash_missing_or_invalid")
+	if not bool(entry.get("valid", false)):
+		return _trash_failure(
+			"restore", trash_id, str(entry.get("reason", "trash_missing_or_invalid"))
+		)
 	var world_id := str(entry.get("world_id", ""))
 	if not _is_safe_id(world_id):
 		return _trash_failure("restore", trash_id, "invalid_world_id")
@@ -95,6 +106,11 @@ func restore_trashed_world(trash_id: String) -> Dictionary:
 		ProjectSettings.globalize_path(_world_directory(world_id))
 	):
 		return _trash_failure("restore", trash_id, "world_exists")
+	var prepared := _prepare_trash_restore(trash_id, world_id)
+	if not bool(prepared.get("ok", false)):
+		return _trash_failure(
+			"restore", trash_id, str(prepared.get("reason", "world_payload_unrecoverable"))
+		)
 	_ensure_directory(WORLDS_DIR)
 	var trash_absolute := ProjectSettings.globalize_path(_trash_directory(trash_id))
 	var world_absolute := ProjectSettings.globalize_path(_world_directory(world_id))
@@ -114,6 +130,8 @@ func restore_trashed_world(trash_id: String) -> Dictionary:
 		"reason": "ok",
 		"world_id": world_id,
 		"trash_id": trash_id,
+		"recovery_source": str(prepared.get("source", "primary")),
+		"repaired_primary": bool(prepared.get("repaired_primary", false)),
 		"entry": entry.duplicate(true),
 	}
 
@@ -122,7 +140,8 @@ func purge_trashed_world(trash_id: String) -> bool:
 	if not _is_safe_id(trash_id):
 		_trash_failure("purge", trash_id, "invalid_trash_id")
 		return false
-	if _read_trash_entry(trash_id).is_empty():
+	var entry := _read_trash_entry(trash_id)
+	if entry.is_empty() or not bool(entry.get("valid", false)):
 		_trash_failure("purge", trash_id, "trash_missing_or_invalid")
 		return false
 	return purge_trash_slot(trash_id)
@@ -137,7 +156,7 @@ func purge_trash_slot(trash_id: String) -> bool:
 		_trash_failure("purge_slot", trash_id, "trash_missing")
 		return false
 	var entry := _read_trash_entry(trash_id)
-	var was_valid := not entry.is_empty()
+	var was_valid := not entry.is_empty() and bool(entry.get("valid", false))
 	var world_id := str(entry.get("world_id", "")) if was_valid else ""
 	if not _remove_directory_recursive(trash_absolute):
 		_trash_failure("purge_slot", trash_id, "remove_failed")
@@ -168,13 +187,14 @@ func list_trash_slots(limit: int = MAX_TRASH_ENTRIES) -> Array:
 		var entry := _read_trash_entry(trash_id)
 		if entry.is_empty():
 			entry = _invalid_trash_slot(trash_id)
-			invalid_count += 1
-		else:
+		if bool(entry.get("valid", false)):
 			valid_count += 1
 			latest_deleted_usec = maxi(
 				latest_deleted_usec,
 				int(entry.get("deleted_unix_usec", 0))
 			)
+		else:
+			invalid_count += 1
 		result.append(entry)
 	result.sort_custom(Callable(self, "_sort_trash_slots"))
 	_record_trash_scan(
@@ -216,6 +236,13 @@ func get_trash_diagnostics() -> Dictionary:
 		"scan_count": _trash_scan_count,
 		"trash_success_count": _trash_success_count,
 		"restore_success_count": _trash_restore_count,
+		"restore_integrity_check_count": _restore_integrity_check_count,
+		"restore_integrity_failure_count": _restore_integrity_failure_count,
+		"restore_repair_attempt_count": _restore_repair_attempt_count,
+		"restore_repair_success_count": _restore_repair_success_count,
+		"restore_repair_failure_count": _restore_repair_failure_count,
+		"last_restore_source": _last_restore_source,
+		"last_restore_integrity_reason": _last_restore_integrity_reason,
 		"purge_success_count": _trash_purge_count,
 		"failure_count": _trash_failure_count,
 		"last_operation": _last_trash_operation,
@@ -232,6 +259,13 @@ func reset_trash_diagnostics() -> void:
 	_trash_restore_count = 0
 	_trash_purge_count = 0
 	_trash_failure_count = 0
+	_restore_integrity_check_count = 0
+	_restore_integrity_failure_count = 0
+	_restore_repair_attempt_count = 0
+	_restore_repair_success_count = 0
+	_restore_repair_failure_count = 0
+	_last_restore_source = ""
+	_last_restore_integrity_reason = ""
 	_last_trash_operation = ""
 	_last_trash_reason = ""
 
@@ -289,22 +323,130 @@ func _read_trash_entry(trash_id: String) -> Dictionary:
 		deleted_unix * 1000000,
 		int(entry.get("deleted_unix_usec", 0))
 	)
-	return {
+	var integrity := _read_trash_world_integrity(trash_id, world_id)
+	var projected := {
 		"version": TRASH_VERSION,
 		"trash_id": trash_id,
 		"world_id": world_id,
 		"name": str(entry.get("name", world_id)).left(128),
 		"map_id": str(entry.get("map_id", "")).left(64),
 		"seed": int(entry.get("seed", 0)),
-		"save_bytes": maxi(0, int(entry.get("save_bytes", 0))),
+		"save_bytes": maxi(
+			maxi(0, int(entry.get("save_bytes", 0))),
+			maxi(0, int(integrity.get("candidate_bytes", 0)))
+		),
 		"deleted_unix": deleted_unix,
 		"deleted_unix_usec": deleted_unix_usec,
 		"deleted_at": str(entry.get("deleted_at", "")).left(64),
-		"valid": true,
-		"restorable": true,
+		"valid": bool(integrity.get("ok", false)),
+		"restorable": bool(integrity.get("ok", false)),
 		"purgeable": true,
-		"reason": "ok",
+		"reason": str(integrity.get("reason", "world_payload_unrecoverable")),
+		"integrity_source": str(integrity.get("source", "missing_or_invalid")),
+		"requires_primary_repair": (
+			bool(integrity.get("ok", false))
+			and str(integrity.get("source", "")) != "primary"
+		),
+		"rejected_sources": integrity.get("rejected_sources", []).duplicate(),
 	}
+	if bool(projected.get("valid", false)):
+		projected["reason"] = "ok"
+	return projected
+
+
+func _read_trash_world_integrity(trash_id: String, world_id: String) -> Dictionary:
+	var world_path := "%s/%s" % [_trash_directory(trash_id), WORLD_FILE_NAME]
+	var validator := func(payload: Dictionary) -> bool:
+		return _is_valid_world_payload(payload, world_id)
+	var result: Dictionary = _store.read_dictionary_validated(
+		world_path, validator, false
+	)
+	if not bool(result.get("ok", false)):
+		return {
+			"ok": false,
+			"reason": "world_payload_unrecoverable",
+			"source": str(result.get("source", "missing_or_invalid")),
+			"candidate_bytes": maxi(0, int(result.get("candidate_bytes", 0))),
+			"rejected_sources": result.get("rejected_sources", []).duplicate(),
+			"payload": {},
+		}
+	return {
+		"ok": true,
+		"reason": "ok",
+		"source": str(result.get("source", "primary")),
+		"candidate_bytes": maxi(0, int(result.get("candidate_bytes", 0))),
+		"rejected_sources": result.get("rejected_sources", []).duplicate(),
+		"payload": (result.get("data", {}) as Dictionary).duplicate(true),
+	}
+
+
+func _prepare_trash_restore(trash_id: String, world_id: String) -> Dictionary:
+	_restore_integrity_check_count += 1
+	var integrity := _read_trash_world_integrity(trash_id, world_id)
+	_last_restore_source = str(integrity.get("source", "missing_or_invalid")).left(32)
+	if not bool(integrity.get("ok", false)):
+		_restore_integrity_failure_count += 1
+		_last_restore_integrity_reason = str(
+			integrity.get("reason", "world_payload_unrecoverable")
+		).left(64)
+		return integrity
+	if _last_restore_source == "primary":
+		_last_restore_integrity_reason = "ok"
+		return {
+			"ok": true,
+			"reason": "ok",
+			"source": "primary",
+			"repaired_primary": false,
+		}
+	_restore_repair_attempt_count += 1
+	var world_path := "%s/%s" % [_trash_directory(trash_id), WORLD_FILE_NAME]
+	var repair: Dictionary = _store.repair_dictionary(
+		world_path, integrity.get("payload", {})
+	)
+	if not bool(repair.get("ok", false)):
+		_restore_integrity_failure_count += 1
+		_restore_repair_failure_count += 1
+		_last_restore_integrity_reason = str(
+			repair.get("reason", "primary_repair_failed")
+		).left(64)
+		return {
+			"ok": false,
+			"reason": "primary_repair_failed",
+			"source": _last_restore_source,
+			"repaired_primary": false,
+		}
+	var verified := _read_trash_world_integrity(trash_id, world_id)
+	if (
+		not bool(verified.get("ok", false))
+		or str(verified.get("source", "")) != "primary"
+	):
+		_restore_integrity_failure_count += 1
+		_restore_repair_failure_count += 1
+		_last_restore_integrity_reason = "primary_repair_verification_failed"
+		return {
+			"ok": false,
+			"reason": "primary_repair_verification_failed",
+			"source": _last_restore_source,
+			"repaired_primary": false,
+		}
+	_restore_repair_success_count += 1
+	_last_restore_integrity_reason = "ok"
+	_remove_trash_catalog_artifacts(trash_id)
+	return {
+		"ok": true,
+		"reason": "ok",
+		"source": _last_restore_source,
+		"repaired_primary": true,
+	}
+
+
+func _remove_trash_catalog_artifacts(trash_id: String) -> void:
+	var directory_path := _trash_directory(trash_id)
+	for file_name: String in [CATALOG_FILE_NAME, CATALOG_PENDING_FILE_NAME]:
+		for suffix: String in ["", ".tmp", ".bak", ".recover", ".corrupt"]:
+			var path := "%s/%s%s" % [directory_path, file_name, suffix]
+			if FileAccess.file_exists(path):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _invalid_trash_slot(trash_id: String) -> Dictionary:

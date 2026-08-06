@@ -29,6 +29,7 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_reusable_ci_workflows.ps1"
 & "$PSScriptRoot\developer_b\validate_world_catalog.ps1"
 & "$PSScriptRoot\developer_b\validate_long_term_scale_recovery.ps1"
+& "$PSScriptRoot\developer_b\validate_release_integrity_iteration_59.ps1"
 & "$PSScriptRoot\developer_b\validate_save_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_crash_safe_session_recovery.ps1"
 & "$PSScriptRoot\developer_b\validate_bounded_multi_world_recovery.ps1"
@@ -176,6 +177,7 @@ Invoke-GodotTest 'res://tests/qa/save_checkpoint_timeline_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_scoped_save_checkpoint_session_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_session_recovery_regression.gd'
 Invoke-GodotTest 'res://tests/qa/graceful_application_quit_regression.gd'
+Invoke-GodotTest 'res://tests/qa/release_lifecycle_report_regression.gd' -UserDataDir 'release-lifecycle-report'
 Invoke-GodotTest 'res://tests/qa/session_recovery_ui_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_scale_batch_regression.gd'
@@ -208,6 +210,7 @@ Invoke-GodotTest 'res://tests/qa/indexed_save_browser_regression.gd'
 Invoke-GodotTest 'res://tests/qa/protected_save_service_regression.gd'
 Invoke-GodotTest 'res://tests/qa/protected_save_browser_regression.gd'
 Invoke-GodotTest 'res://tests/qa/trash_manager_service_regression.gd'
+Invoke-GodotTest 'res://tests/qa/trash_restore_integrity_regression.gd' -UserDataDir 'trash-restore-integrity'
 Invoke-GodotTest 'res://tests/qa/trash_manager_panel_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_texture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/non_cube_block_geometry_regression.gd'
@@ -228,6 +231,7 @@ Invoke-GodotTest 'res://tests/qa/hostile_encounter_director_regression.gd'
 Invoke-GodotTest 'res://tests/qa/encounter_reward_economy_regression.gd'
 Invoke-GodotTest 'res://tests/qa/combat_feedback_intensity_economy_regression.gd'
 Invoke-GodotTest 'res://tests/qa/mixed_combat_long_run_regression.gd'
+Invoke-GodotTest 'res://tests/qa/release_integrity_continuous_campaign_regression.gd'
 Invoke-GodotTest 'res://tests/qa/abyss_elite_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_regression.gd'
 Invoke-GodotTest 'res://tests/qa/irrigation_multicrop_regression.gd'
