@@ -145,6 +145,14 @@ Assert-Equal ([string]$pin.executable_sha256) ([string]$candidate.build.executab
 Assert-Equal ([string]$pin.pck_sha256) ([string]$candidate.build.pck.sha256) 'pin PCK'
 Assert-Equal ([string]$package.evidence_source) ([string]$manifest.evidence_source) 'promotion evidence source'
 Assert-Equal ([string][bool]$package.reference_only) ([string][bool]$manifest.reference_only) 'promotion reference flag'
+if (-not [bool]$package.reference_only) {
+    $attestation = $package.release_owner_attestation
+    if ($null -eq $attestation) { throw 'Real promotion package is missing release-owner attestation.' }
+    Assert-Equal (([string]$attestation.owner_id).Trim()) (([string]$pin.release_owner_id).Trim()) 'promotion release owner'
+    if (-not [bool]$attestation.all_artifacts_attached -or -not [bool]$attestation.approved_for_release) {
+        throw 'Real promotion package release-owner attestation is not approved.'
+    }
+}
 
 $canonical = @(
     'star-world-release-promotion-bundle-v1',
