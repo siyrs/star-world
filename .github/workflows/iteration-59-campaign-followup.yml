@@ -1,0 +1,82 @@
+name: Iteration 59 campaign parse follow-up
+
+on:
+  push:
+    branches:
+      - agent/iteration-59-release-integrity
+    paths:
+      - '.github/workflows/iteration-59-campaign-followup.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iteration-59-campaign-followup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fix-and-verify:
+    name: Parse and execute continuous release-integrity campaign
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/iteration-59-release-integrity
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply focused campaign fix
+        shell: pwsh
+        run: python tools/iteration_59_campaign_followup.py
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Run continuous campaign regression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_headless_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/release_integrity_continuous_campaign_regression.gd' `
+            -OutputBasePath 'build\release-integrity-continuous-campaign-followup' `
+            -TimeoutMilliseconds 900000 `
+            -VerboseGodot
+
+      - name: Validate final focused diff
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath 'tools/iteration_59_campaign_followup.py') {
+            throw 'Campaign helper survived cleanup'
+          }
+          .\tests\developer_b\validate_release_integrity_iteration_59.ps1
+          git diff --check
+
+      - name: Commit verified campaign fix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix: parse continuous release integrity campaign'
+          git push origin HEAD:agent/iteration-59-release-integrity
