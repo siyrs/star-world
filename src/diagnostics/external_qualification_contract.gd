@@ -6,10 +6,10 @@ const STRICT_SOAK_SECONDS := 7200
 const MAX_TEXT_LENGTH := 256
 const REQUIRED_PROFILES: Array[String] = [
 	"star_continent",
-	"sky_island",
-	"lava_basin",
-	"ice_field",
 	"desert_ruins",
+	"frozen_wastes",
+	"sky_islands",
+	"abyss_world",
 ]
 const REQUIRED_TIERS: Array[String] = ["minimum", "recommended"]
 const REQUIRED_FAULT_SCENARIOS: Array[String] = ["hdd", "antivirus", "power_loss"]
@@ -32,63 +32,50 @@ const REQUIRED_REVIEW_CHECKS: Array[String] = [
 func validate_package(package: Dictionary) -> Dictionary:
 	var errors: Array[String] = []
 	var warnings: Array[String] = []
-	var schema_version := int(package.get("schema_version", 0))
-	if schema_version != SCHEMA_VERSION:
+	if int(package.get("schema_version", 0)) != SCHEMA_VERSION:
 		errors.append("schema_version must equal %d" % SCHEMA_VERSION)
 	_require_text(errors, package, "package_id")
 
 	var fixture_mode := bool(package.get("fixture_mode", false))
 	var reference_only := bool(package.get("reference_only", false))
 	var source := str(package.get("evidence_source", "")).strip_edges()
+	var hosted_runner := bool(package.get("hosted_runner", false))
 	if not ALLOWED_EVIDENCE_SOURCES.has(source):
 		errors.append("evidence_source is unsupported")
-	var hosted_runner := bool(package.get("hosted_runner", false))
 	if source == "target_hardware" and hosted_runner:
 		errors.append("target_hardware evidence cannot be produced by a hosted runner")
 	if source == "target_hardware" and reference_only:
 		errors.append("target_hardware evidence cannot be reference_only")
 	if source != "target_hardware" and not reference_only:
 		errors.append("non-target evidence must be reference_only")
-	if fixture_mode and source != "fixture":
-		errors.append("fixture_mode packages must use the fixture evidence source")
-	if source == "fixture" and not fixture_mode:
-		errors.append("fixture evidence must set fixture_mode")
+	if fixture_mode != (source == "fixture"):
+		errors.append("fixture_mode and fixture evidence_source must be used together")
 
-	_validate_build(_as_dictionary(package.get("build", {})), errors)
-	_validate_experiential_review(
-		_as_dictionary(package.get("experiential_review", {})), errors
-	)
-	_validate_hardware_qualification(
-		_as_array(package.get("hardware_qualification", [])),
-		errors,
-		source == "target_hardware"
+	_validate_build(_dictionary(package.get("build", {})), errors)
+	_validate_review(_dictionary(package.get("experiential_review", {})), errors)
+	_validate_hardware(
+		_array(package.get("hardware_qualification", [])), errors, source == "target_hardware"
 	)
 	_validate_soak(
-		_as_dictionary(package.get("strict_soak", {})),
+		_dictionary(package.get("strict_soak", {})),
 		errors,
 		warnings,
 		source == "target_hardware"
 	)
 	_validate_fault_lab(
-		_as_dictionary(package.get("fault_lab", {})),
-		errors,
-		source == "target_hardware"
+		_dictionary(package.get("fault_lab", {})), errors, source == "target_hardware"
 	)
-	_validate_findings(_as_array(package.get("findings", [])), errors)
+	_validate_findings(_array(package.get("findings", [])), errors)
 	_validate_release_owner(
-		_as_dictionary(package.get("release_owner_attestation", {})),
+		_dictionary(package.get("release_owner_attestation", {})),
 		errors,
 		source == "target_hardware"
 	)
 
 	if source == "hosted_reference":
-		warnings.append(
-			"hosted reference evidence validates the mechanism only and cannot close release gates"
-		)
+		warnings.append("hosted reference evidence cannot close commercial release gates")
 	if fixture_mode:
-		warnings.append(
-			"fixture evidence exercises the contract only and cannot close release gates"
-		)
+		warnings.append("fixture evidence exercises the contract only")
 
 	var contract_valid := errors.is_empty()
 	var release_gate_passed := (
@@ -124,34 +111,29 @@ func _validate_build(build: Dictionary, errors: Array[String]) -> void:
 	_require_text(errors, build, "version")
 
 
-func _validate_experiential_review(review: Dictionary, errors: Array[String]) -> void:
+func _validate_review(review: Dictionary, errors: Array[String]) -> void:
 	_require_text(errors, review, "reviewer_id")
 	_require_text(errors, review, "implementer_id")
-	var reviewer_id := str(review.get("reviewer_id", "")).strip_edges()
-	var implementer_id := str(review.get("implementer_id", "")).strip_edges()
-	if not reviewer_id.is_empty() and reviewer_id == implementer_id:
+	var reviewer := str(review.get("reviewer_id", "")).strip_edges()
+	var implementer := str(review.get("implementer_id", "")).strip_edges()
+	if not reviewer.is_empty() and reviewer == implementer:
 		errors.append("experiential reviewer must be independent from the implementer")
 	if not bool(review.get("independent", false)):
-		errors.append("experiential review must explicitly attest independence")
+		errors.append("experiential review must attest independence")
 	if int(review.get("signed_at_unix", 0)) <= 0:
 		errors.append("experiential review signed_at_unix must be positive")
 	if str(review.get("result", "")) != "pass":
 		errors.append("experiential review result must be pass")
-	var checklist := _as_dictionary(review.get("checklist", {}))
+	var checklist := _dictionary(review.get("checklist", {}))
 	for key: String in REQUIRED_REVIEW_CHECKS:
 		if not bool(checklist.get(key, false)):
 			errors.append("experiential review checklist is incomplete: %s" % key)
-	var blockers := _as_array(review.get("blockers", []))
-	if not blockers.is_empty():
+	if not _array(review.get("blockers", [])).is_empty():
 		errors.append("experiential review contains unresolved blockers")
 
 
-func _validate_hardware_qualification(
-	entries: Array,
-	errors: Array[String],
-	require_real_attestation: bool
-) -> void:
-	var seen_tiers: Dictionary = {}
+func _validate_hardware(entries: Array, errors: Array[String], require_real: bool) -> void:
+	var seen: Dictionary = {}
 	for value: Variant in entries:
 		if not value is Dictionary:
 			errors.append("hardware qualification entries must be dictionaries")
@@ -161,9 +143,9 @@ func _validate_hardware_qualification(
 		if not REQUIRED_TIERS.has(tier):
 			errors.append("hardware tier is unsupported: %s" % tier)
 			continue
-		if seen_tiers.has(tier):
+		if seen.has(tier):
 			errors.append("hardware tier is duplicated: %s" % tier)
-		seen_tiers[tier] = true
+		seen[tier] = true
 		_require_text(errors, entry, "operator_id")
 		_require_hash(errors, entry, "machine_fingerprint_sha256", 64)
 		_require_text(errors, entry, "cpu")
@@ -177,18 +159,18 @@ func _validate_hardware_qualification(
 			errors.append("hardware %s timestamps are invalid" % tier)
 		if str(entry.get("result", "")) != "pass":
 			errors.append("hardware %s result must be pass" % tier)
-		if require_real_attestation and not bool(entry.get("operator_attested", false)):
+		if require_real and not bool(entry.get("operator_attested", false)):
 			errors.append("hardware %s requires real operator attestation" % tier)
-		var storage := _as_dictionary(entry.get("storage", {}))
+		var storage := _dictionary(entry.get("storage", {}))
 		if not ALLOWED_STORAGE_TYPES.has(str(storage.get("drive_type", ""))):
 			errors.append("hardware %s storage drive_type is invalid" % tier)
 		_require_text(errors, storage, "model")
-		var profiles := _string_set(_as_array(entry.get("profiles", [])))
+		var profiles := _string_set(_array(entry.get("profiles", [])))
 		for profile_id: String in REQUIRED_PROFILES:
 			if not profiles.has(profile_id):
 				errors.append("hardware %s is missing profile %s" % [tier, profile_id])
 	for tier: String in REQUIRED_TIERS:
-		if not seen_tiers.has(tier):
+		if not seen.has(tier):
 			errors.append("hardware qualification is missing tier: %s" % tier)
 
 
@@ -196,24 +178,24 @@ func _validate_soak(
 	soak: Dictionary,
 	errors: Array[String],
 	warnings: Array[String],
-	require_strict_target: bool
+	require_target: bool
 ) -> void:
 	var requested := int(soak.get("requested_seconds", 0))
 	var elapsed := int(soak.get("elapsed_seconds", 0))
-	var soak_reference_only := bool(soak.get("reference_only", false))
+	var reference_only := bool(soak.get("reference_only", false))
 	if requested <= 0 or elapsed <= 0:
 		errors.append("strict soak durations must be positive")
 	if elapsed > requested + 600:
 		errors.append("strict soak elapsed_seconds exceeds the requested window unexpectedly")
-	if require_strict_target:
+	if require_target:
 		if requested < STRICT_SOAK_SECONDS or elapsed < STRICT_SOAK_SECONDS:
 			errors.append("target-hardware soak must run for at least 7200 seconds")
-		if soak_reference_only:
+		if reference_only:
 			errors.append("target-hardware soak cannot be reference_only")
 		if not bool(soak.get("target_hardware", false)):
 			errors.append("strict soak must attest target_hardware")
 	else:
-		if not soak_reference_only:
+		if not reference_only:
 			errors.append("non-target soak must be reference_only")
 		if requested < STRICT_SOAK_SECONDS:
 			warnings.append("reference soak is shorter than the commercial 7200-second gate")
@@ -229,16 +211,12 @@ func _validate_soak(
 	_require_hash(errors, soak, "soak_report_sha256", 64)
 
 
-func _validate_fault_lab(
-	fault_lab: Dictionary,
-	errors: Array[String],
-	require_real_attestation: bool
-) -> void:
+func _validate_fault_lab(fault_lab: Dictionary, errors: Array[String], require_real: bool) -> void:
 	_require_text(errors, fault_lab, "operator_id")
 	if str(fault_lab.get("result", "")) != "pass":
 		errors.append("fault lab result must be pass")
 	var seen: Dictionary = {}
-	for value: Variant in _as_array(fault_lab.get("scenarios", [])):
+	for value: Variant in _array(fault_lab.get("scenarios", [])):
 		if not value is Dictionary:
 			errors.append("fault lab scenarios must be dictionaries")
 			continue
@@ -256,7 +234,7 @@ func _validate_fault_lab(
 			errors.append("fault scenario did not verify recovery: %s" % scenario_type)
 		if not bool(scenario.get("world_integrity_verified", false)):
 			errors.append("fault scenario did not verify world integrity: %s" % scenario_type)
-		if require_real_attestation and not bool(scenario.get("attested_real", false)):
+		if require_real and not bool(scenario.get("attested_real", false)):
 			errors.append("fault scenario requires real attestation: %s" % scenario_type)
 		_require_hash(errors, scenario, "before_world_sha256", 64)
 		_require_hash(errors, scenario, "after_world_sha256", 64)
@@ -278,11 +256,7 @@ func _validate_findings(findings: Array, errors: Array[String]) -> void:
 			errors.append("qualification package contains an unresolved blocker")
 
 
-func _validate_release_owner(
-	attestation: Dictionary,
-	errors: Array[String],
-	required: bool
-) -> void:
+func _validate_release_owner(attestation: Dictionary, errors: Array[String], required: bool) -> void:
 	if not required and attestation.is_empty():
 		return
 	_require_text(errors, attestation, "owner_id")
@@ -306,8 +280,15 @@ func _require_hash(
 	errors: Array[String], source: Dictionary, key: String, expected_length: int
 ) -> void:
 	var value := str(source.get(key, "")).strip_edges().to_lower()
-	if value.length() != expected_length or not value.is_valid_hex_number(false):
+	if value.length() != expected_length or not _is_hex(value):
 		errors.append("%s must be a %d-character hexadecimal digest" % [key, expected_length])
+
+
+func _is_hex(value: String) -> bool:
+	for index: int in value.length():
+		if not "0123456789abcdef".contains(value[index]):
+			return false
+	return true
 
 
 func _string_set(values: Array) -> Dictionary:
@@ -319,9 +300,9 @@ func _string_set(values: Array) -> Dictionary:
 	return result
 
 
-func _as_dictionary(value: Variant) -> Dictionary:
+func _dictionary(value: Variant) -> Dictionary:
 	return value if value is Dictionary else {}
 
 
-func _as_array(value: Variant) -> Array:
+func _array(value: Variant) -> Array:
 	return value if value is Array else []
