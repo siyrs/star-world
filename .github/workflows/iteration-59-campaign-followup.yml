@@ -1,4 +1,4 @@
-name: Iteration 59 campaign parse follow-up
+name: Iteration 59 campaign contract follow-up
 
 on:
   push:
@@ -78,5 +78,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git diff --cached --check
-          git commit -m 'fix: parse continuous release integrity campaign'
+          git commit -m 'fix: validate live connected faces in continuous campaign'
           git push origin HEAD:agent/iteration-59-release-integrity
