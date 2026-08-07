@@ -3,12 +3,32 @@ Set-StrictMode -Version Latest
 
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $helper = Join-Path $root 'src\update\windows_update_helper.ps1'
+$trustValidator = Join-Path $root 'src\update\windows_update_trust_validator.ps1'
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("starworld-updater-" + [Guid]::NewGuid().ToString('N'))
 $install = Join-Path $testRoot 'StarWorld'
 $payload = Join-Path $testRoot 'payload'
 $package = Join-Path $testRoot 'StarWorld-Windows-x86_64.zip'
 $result = Join-Path $testRoot 'install-result.json'
 $failureEvidence = Join-Path $root 'build\windows-update-helper-failure.txt'
+$referencePolicy = [ordered]@{
+    schema_version = 1
+    max_active_pins = 4
+    manifest_signature = [ordered]@{
+        required_for_release = $true
+        format = 'cms-detached'
+        digest = 'sha256'
+        code_signing_eku_oid = '1.3.6.1.5.5.7.3.3'
+        trusted_signer_certificate_sha256 = @()
+    }
+    executable_authenticode = [ordered]@{
+        required_for_release = $true
+        require_trusted_timestamp = $true
+        code_signing_eku_oid = '1.3.6.1.5.5.7.3.3'
+        timestamp_eku_oid = '1.3.6.1.5.5.7.3.8'
+        trusted_publisher_certificate_sha256 = @()
+    }
+}
+$referencePolicyBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($referencePolicy | ConvertTo-Json -Depth 8 -Compress)))
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
@@ -133,6 +153,9 @@ function Invoke-UpdaterHelper([string]$PackagePath, [string]$PackageHash, [int]$
         '-ExecutableName', 'StarWorld.exe',
         '-TargetVersion', '1.1.0',
         '-ResultPath', $result,
+        '-TrustValidatorPath', $trustValidator,
+        '-TrustPolicyBase64', $referencePolicyBase64,
+        '-AllowUnsignedReference',
         '-AckTimeoutSeconds', [string]$AckTimeoutSeconds
     )
     $powershellPath = (Get-Command powershell.exe -ErrorAction Stop).Source
@@ -142,9 +165,7 @@ function Invoke-UpdaterHelper([string]$PackagePath, [string]$PackageHash, [int]$
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
-    foreach ($argument in $arguments) {
-        [void]$startInfo.ArgumentList.Add([string]$argument)
-    }
+    foreach ($argument in $arguments) { [void]$startInfo.ArgumentList.Add([string]$argument) }
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     if (-not $process.Start()) { throw 'Unable to launch updater helper process.' }
@@ -175,6 +196,7 @@ try {
     }
     $success = $successRun.Result | ConvertFrom-Json
     if (-not [bool]$success.success -or [string]$success.phase -ne 'completed') { throw 'Updater did not report completed success' }
+    if ([bool]$success.publisher_authenticated) { throw 'Reference-only helper fixture incorrectly claimed publisher authentication.' }
     if ((Get-Content -Raw $install\StarWorld.pck).Trim() -ne 'new-pck-content') { throw 'New PCK was not installed' }
     if (Test-Path $install\old-only.txt) { throw 'Directory swap retained stale old files' }
     if (-not (Test-Path $install\relaunch-marker.txt)) { throw 'Updated executable was not automatically relaunched' }
@@ -198,7 +220,7 @@ try {
     }
     if ((Get-Content -Raw $install\StarWorld.pck).Trim() -ne 'rollback-pck') { throw 'Rollback did not restore the original install' }
 
-    Write-Host 'PASS windows_update_helper swap=1 relaunch=1 ack=1 rollback=1'
+    Write-Host 'PASS windows_update_helper swap=1 relaunch=1 ack=1 rollback=1 trust=reference-only'
 }
 catch {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $failureEvidence) | Out-Null
