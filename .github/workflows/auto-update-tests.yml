@@ -11,9 +11,9 @@ concurrency:
 
 jobs:
   updater-regression:
-    name: Release policy, resume state, package integrity and helper acceptance
+    name: Release policy, resume state, publisher trust, package integrity and helper acceptance
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,6 +42,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Exercise publisher-pinned CMS and Authenticode trust
+        shell: pwsh
+        run: .\tests\qa\windows_update_publisher_trust_acceptance.ps1
+
       - name: Setup Godot
         uses: chickensoft-games/setup-godot@v2
         with:
@@ -51,13 +55,11 @@ jobs:
 
       - name: Validate strict project import
         shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
 
       - name: Run release, resume and package regressions
         shell: pwsh
-        run: |
-          .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/auto_update_regression.gd -- --disable-update-check'
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/auto_update_regression.gd -- --disable-update-check'
 
       - name: Exercise real interrupted HTTP Range resume
         shell: pwsh
@@ -77,16 +79,12 @@ jobs:
           ) -PassThru -NoNewWindow
           try {
             $deadline = [DateTime]::UtcNow.AddSeconds(15)
-            while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $deadline) {
-              Start-Sleep -Milliseconds 100
-            }
+            while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
             if (-not (Test-Path -LiteralPath $ready)) { throw 'Local Range server did not become ready' }
             $download = Join-Path $work 'download'
             .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script res://tests/qa/resumable_download_acceptance.gd -- --disable-update-check --range-ready=$ready --range-work-dir=$download"
           } finally {
-            if ($null -ne $server -and -not $server.HasExited) {
-              Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
-            }
+            if ($null -ne $server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
           }
 
       - name: Exercise real Windows directory swap, relaunch and rollback
