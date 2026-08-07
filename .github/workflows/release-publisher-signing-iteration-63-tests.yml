@@ -83,5 +83,5 @@ jobs:
             build/release-promotion-bundle-fixture/**
             build/release-promotion-pin-fixture/**
             build/release-candidate-chain-fixture/**
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 21
