@@ -1,0 +1,30 @@
+name: Iteration 64 CMS tamper fix
+
+on:
+  push:
+    branches:
+      - agent/iteration-64-publisher-pinned-auto-update
+    paths:
+      - 'tools/_iteration64_fix_signature_tamper.py'
+      - '.github/workflows/iteration-64-fix-signature-tamper.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/iteration-64-publisher-pinned-auto-update
+      - run: python tools/_iteration64_fix_signature_tamper.py
+      - name: Commit and self-delete
+        shell: bash
+        run: |
+          rm -f tools/_iteration64_fix_signature_tamper.py .github/workflows/iteration-64-fix-signature-tamper.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/qa/windows_update_publisher_trust_acceptance.ps1 tools/_iteration64_fix_signature_tamper.py .github/workflows/iteration-64-fix-signature-tamper.yml
+          git commit -m 'test: make CMS signature tamper deterministic'
+          git push origin HEAD:agent/iteration-64-publisher-pinned-auto-update
