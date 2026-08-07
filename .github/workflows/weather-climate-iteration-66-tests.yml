@@ -133,6 +133,16 @@ jobs:
         shell: pwsh
         run: .\tests\ci\run_iteration_66_full_regression.ps1 -Godot (Get-Command godot).Source
 
+      - name: Upload full regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-climate-full-regression-${{ github.run_number }}
+          path: |
+            build/iteration66-full-regression/*.log
+          if-no-files-found: warn
+          retention-days: 21
+
   release-smoke:
     name: Export and run Windows release
     needs: full-regression
