@@ -272,6 +272,7 @@ func _test_production_composition() -> void:
 	var ranch_participant: Node = hub.get("ranch_runtime_participant") as Node
 	var exploration_participant: Node = hub.get("exploration_runtime_participant") as Node
 	var journal_participant: Node = hub.get("exploration_journal_reward_participant") as Node
+	var weather_participant: Node = hub.get("weather_runtime_participant") as Node
 	var autosave_participant: Node = hub.get("autosave_runtime_participant") as Node
 	var participant_ids := [
 		&"machine_runtime",
@@ -280,13 +281,14 @@ func _test_production_composition() -> void:
 		&"ranch_runtime",
 		&"exploration_runtime",
 		&"exploration_journal_rewards",
+		&"weather_runtime",
 		&"autosave_runtime",
 	]
 	var all_registered := coordinator != null
 	if coordinator != null:
 		for participant_id: StringName in participant_ids:
 			all_registered = all_registered and coordinator.has_participant(participant_id)
-	_check(all_registered, "production hub registers all seven lifecycle participants")
+	_check(all_registered, "production hub registers all eight lifecycle participants")
 	_check(
 		machine_participant != null
 		and agriculture_participant != null
@@ -294,8 +296,9 @@ func _test_production_composition() -> void:
 		and ranch_participant != null
 		and exploration_participant != null
 		and journal_participant != null
+		and weather_participant != null
 		and autosave_participant != null,
-		"production hub exposes all seven participants for diagnostics"
+		"production hub exposes all eight participants for diagnostics"
 	)
 	_check(
 		coordinator.get_participant_dependencies(&"ranch_runtime")
@@ -314,7 +317,7 @@ func _test_production_composition() -> void:
 			"exploration_runtime",
 			"exploration_journal_rewards",
 		],
-		"autosave explicitly depends on every persisted gameplay participant"
+		"autosave keeps its explicit dependency set while weather is ordered immediately before it"
 	)
 
 	var agriculture: Node = hub.get("agriculture_service") as Node
@@ -324,6 +327,7 @@ func _test_production_composition() -> void:
 	var prospecting: Node = hub.get("prospecting_service") as Node
 	var danger: Node = hub.get("exploration_danger_service") as Node
 	var machine_runtime: Node = hub.get("machine_runtime") as Node
+	var weather: Node = hub.get("weather_service") as Node
 	_check(
 		agriculture != null
 		and husbandry_interaction != null
@@ -331,8 +335,9 @@ func _test_production_composition() -> void:
 		and journal != null
 		and prospecting != null
 		and danger != null
-		and machine_runtime != null,
-		"legacy public service fields remain available"
+		and machine_runtime != null
+		and weather != null,
+		"legacy public service fields remain available and weather is added without replacement"
 	)
 
 	var state: Dictionary = hub.save_service.create_world(
@@ -358,6 +363,7 @@ func _test_production_composition() -> void:
 	coordinator.call("attach_game", fake_world, fake_player)
 	coordinator.call("activate")
 	autosave_participant.set_process(false)
+	weather.set_process(false)
 	_check(
 		fake_player.entity_interaction_service == husbandry_interaction
 		and fake_player.prospecting_service == prospecting,
@@ -369,6 +375,7 @@ func _test_production_composition() -> void:
 			"active", false
 		))
 		and bool(danger.get("active"))
+		and bool(weather.call("get_snapshot").get("active", false))
 		and bool(autosave_participant.call("get_snapshot").get("active", false)),
 		"all scheduled production runtimes activate together"
 	)
@@ -395,7 +402,8 @@ func _test_production_composition() -> void:
 		and loaded.has("husbandry")
 		and loaded.has("animal_products")
 		and loaded.has("exploration")
-		and loaded.has("exploration_rewards"),
+		and loaded.has("exploration_rewards")
+		and loaded.has("weather"),
 		"all persistent gameplay participants retain their compatible save domains"
 	)
 	_check(
@@ -410,14 +418,15 @@ func _test_production_composition() -> void:
 		and character_snapshot.has("animal_products")
 		and character_snapshot.has("exploration")
 		and character_snapshot.has("exploration_rewards")
+		and character_snapshot.has("weather")
 		and character_snapshot.has("autosave"),
-		"all seven participants contribute bounded production diagnostics"
+		"all eight participants contribute bounded production diagnostics"
 	)
 	_check(
 		int(character_snapshot.get("feature_lifecycle", {}).get(
 			"participant_count", 0
-		)) == 7,
-		"character diagnostics expose all seven lifecycle participants"
+		)) == 8,
+		"character diagnostics expose all eight lifecycle participants"
 	)
 
 	hub.call("return_to_menu")
@@ -426,6 +435,7 @@ func _test_production_composition() -> void:
 		and fake_player.entity_interaction_service == null
 		and fake_player.prospecting_service == null
 		and not machine_runtime.call("is_active")
+		and weather.call("get_snapshot").is_empty()
 		and not bool(autosave_participant.call("get_snapshot").get("active", true)),
 		"reverse cleanup releases player ports and every scheduled runtime"
 	)
@@ -433,19 +443,24 @@ func _test_production_composition() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
+			"autosave_runtime,weather_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
-		"clear history records complete seven-participant reverse dependency order"
+		"clear history records complete eight-participant reverse order"
 	)
 
 	hub.call("_begin_world", loaded)
 	coordinator.call("attach_game", fake_world, fake_player)
 	coordinator.call("activate")
 	autosave_participant.set_process(false)
+	weather.set_process(false)
 	await process_frame
 	_check(
 		rewards.call("is_claimed", "first_discovery"),
 		"world reload restores claimed rewards through the dependent begin phase"
+	)
+	_check(
+		str(weather.call("get_snapshot").get("map_id", "")) == "star_continent",
+		"world reload restores weather through the same begin phase"
 	)
 	hub.call("handle_world_start_failed", "qa_simulated_failure")
 	_check(
@@ -453,8 +468,9 @@ func _test_production_composition() -> void:
 		and fake_player.entity_interaction_service == null
 		and fake_player.prospecting_service == null
 		and not machine_runtime.call("is_active")
+		and weather.call("get_snapshot").is_empty()
 		and not bool(autosave_participant.call("get_snapshot").get("active", true)),
-		"world-start failure clears all seven participants deterministically"
+		"world-start failure clears all eight participants deterministically"
 	)
 
 	if not world_id.is_empty():
