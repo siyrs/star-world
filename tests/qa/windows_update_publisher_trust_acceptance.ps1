@@ -175,7 +175,7 @@ try {
     }
     [IO.File]::WriteAllBytes($manifestPath, $manifestBytes)
     $signatureBytes = [IO.File]::ReadAllBytes($signaturePath)
-    $signatureBytes[[Math]::Min(32, $signatureBytes.Length - 1)] = $signatureBytes[[Math]::Min(32, $signatureBytes.Length - 1)] -bxor 0x01
+    $signatureBytes[0] = $signatureBytes[0] -bxor 0x01
     [IO.File]::WriteAllBytes($signaturePath, $signatureBytes)
     Assert-Rejected -Name 'Detached signature tamper' -Action {
         & $trustValidator -ManifestPath $manifestPath -SignaturePath $signaturePath -ExecutablePath (Join-Path $payload 'StarWorld.exe') -TrustPolicyBase64 $policyBase64 | Out-Null
