@@ -11,10 +11,12 @@ signal update_install_started(version: String)
 const AppVersion = preload("res://src/update/app_version.gd")
 const ReleasePolicy = preload("res://src/update/github_release_policy.gd")
 const PackagePolicy = preload("res://src/update/update_package_policy.gd")
+const TrustPolicy = preload("res://src/update/update_trust_policy.gd")
 const DownloaderScript = preload("res://src/update/resumable_http_downloader.gd")
 
 const UPDATE_DIRECTORY := "user://updates"
 const HELPER_RESOURCE_PATH := "res://src/update/windows_update_helper.ps1"
+const TRUST_VALIDATOR_RESOURCE_PATH := "res://src/update/windows_update_trust_validator.ps1"
 const MAX_METADATA_BYTES := 1024 * 1024
 
 var current_version := AppVersion.CURRENT_VERSION
@@ -26,6 +28,8 @@ var test_install_directory := ""
 var test_launch_executable := ""
 var test_launch_arguments: Array[String] = []
 var test_keep_process_alive := false
+var test_allow_unsigned_reference_update := false
+var test_trust_policy_override: Dictionary = {}
 
 var _release_request: HTTPRequest
 var _checksum_request: HTTPRequest
@@ -40,13 +44,15 @@ var _last_error := ""
 var _check_count := 0
 var _download_start_count := 0
 var _install_launch_count := 0
+var _trust_ready := false
+var _trust_reason := "not_checked"
 
 
 static func _release_api_headers() -> PackedStringArray:
 	return PackedStringArray([
 		"Accept: application/vnd.github+json",
 		"X-GitHub-Api-Version: 2022-11-28",
-		"User-Agent: StarWorldUpdater/1",
+		"User-Agent: StarWorldUpdater/2",
 		"Cache-Control: no-cache",
 	])
 
@@ -130,6 +136,8 @@ func ingest_release_payload(payload: Dictionary) -> Dictionary:
 func download_and_install() -> bool:
 	if _state not in [&"available", &"failed", &"ready"] or _current_release.is_empty():
 		return false
+	if not _validate_current_install_trust():
+		return false
 	if _state == &"ready" and FileAccess.file_exists(_package_path):
 		return install_downloaded_update()
 	var checksum_asset: Dictionary = _current_release.get("checksum_asset", {})
@@ -143,7 +151,7 @@ func download_and_install() -> bool:
 		checksum_url,
 		PackedStringArray([
 			"Accept: text/plain",
-			"User-Agent: StarWorldUpdater/1",
+			"User-Agent: StarWorldUpdater/2",
 			"Cache-Control: no-cache",
 		]),
 		HTTPClient.METHOD_GET
@@ -158,10 +166,15 @@ func install_downloaded_update() -> bool:
 	if _current_release.is_empty() or _package_path.is_empty() or not FileAccess.file_exists(_package_path):
 		_fail("package_not_ready", "更新包尚未准备完成。")
 		return false
+	if not _validate_current_install_trust():
+		return false
 	var version := str(_current_release.get("version", ""))
 	var inspection := PackagePolicy.inspect_package(_package_path, version)
 	if not bool(inspection.get("success", false)):
 		_fail(str(inspection.get("reason", "package_invalid")), "更新包结构校验失败。")
+		return false
+	if not test_allow_unsigned_reference_update and not bool(inspection.get("publisher_signed_manifest", false)):
+		_fail("publisher_manifest_required", "正式更新包缺少发行者签名的完整载荷清单。")
 		return false
 	if OS.get_name() != "Windows":
 		_fail("unsupported_platform", "自动更新当前仅支持 Windows 发行包。")
@@ -173,21 +186,22 @@ func install_downloaded_update() -> bool:
 	var helper_path := ProjectSettings.globalize_path(
 		"%s/starworld-update-helper.ps1" % UPDATE_DIRECTORY
 	)
-	var helper_source := FileAccess.get_file_as_string(HELPER_RESOURCE_PATH)
-	if helper_source.is_empty():
-		_fail("update_helper_missing", "发行包缺少更新安装助手。")
+	var trust_validator_path := ProjectSettings.globalize_path(
+		"%s/starworld-update-trust-validator.ps1" % UPDATE_DIRECTORY
+	)
+	if not _copy_embedded_text_file(HELPER_RESOURCE_PATH, helper_path, "update_helper"):
 		return false
-	var helper_file := FileAccess.open(helper_path, FileAccess.WRITE)
-	if helper_file == null:
-		_fail("update_helper_write_failed", "无法准备更新安装助手。")
+	if not _copy_embedded_text_file(TRUST_VALIDATOR_RESOURCE_PATH, trust_validator_path, "update_trust_validator"):
 		return false
-	helper_file.store_string(helper_source)
-	helper_file.flush()
 	var result_path := ProjectSettings.globalize_path(
 		"%s/install-result.json" % UPDATE_DIRECTORY
 	)
 	var launch_args_base64 := Marshalls.utf8_to_base64(
 		JSON.stringify(test_launch_arguments)
+	)
+	var policy := _current_trust_policy()
+	var trust_payload_base64 := Marshalls.utf8_to_base64(
+		JSON.stringify(TrustPolicy.helper_payload(policy))
 	)
 	var arguments := PackedStringArray([
 		"-NoProfile",
@@ -200,8 +214,12 @@ func install_downloaded_update() -> bool:
 		"-ExecutableName", AppVersion.EXECUTABLE_NAME,
 		"-TargetVersion", version,
 		"-ResultPath", result_path,
+		"-TrustValidatorPath", trust_validator_path,
+		"-TrustPolicyBase64", trust_payload_base64,
 		"-LaunchArgumentsBase64", launch_args_base64,
 	])
+	if test_allow_unsigned_reference_update:
+		arguments.append("-AllowUnsignedReference")
 	if not test_launch_executable.is_empty():
 		arguments.append("-LaunchExecutable")
 		arguments.append(test_launch_executable)
@@ -210,7 +228,7 @@ func install_downloaded_update() -> bool:
 		_fail("helper_launch_failed", "无法启动更新安装助手。")
 		return false
 	_install_launch_count += 1
-	_set_state(&"installing", "更新包已验证，正在退出并安装 v%s…" % version)
+	_set_state(&"installing", "更新包已完成发行者认证，正在退出并安装 v%s…" % version)
 	update_install_started.emit(version)
 	if not test_keep_process_alive:
 		get_tree().quit()
@@ -244,6 +262,8 @@ func get_snapshot() -> Dictionary:
 		"check_count": _check_count,
 		"download_start_count": _download_start_count,
 		"install_launch_count": _install_launch_count,
+		"publisher_trust_ready": _trust_ready,
+		"publisher_trust_reason": _trust_reason,
 		"downloader": _downloader.get_snapshot() if _downloader != null else {},
 		"startup_notice": _startup_notice,
 	}
@@ -328,7 +348,10 @@ func _on_download_completed(path: String, sha256: String) -> void:
 	if not bool(inspection.get("success", false)):
 		_fail(str(inspection.get("reason", "package_invalid")), "下载完成，但更新包结构不可信。")
 		return
-	_set_state(&"ready", "下载与校验完成，正在准备安装…")
+	if not test_allow_unsigned_reference_update and not bool(inspection.get("publisher_signed_manifest", false)):
+		_fail("publisher_manifest_required", "下载完成，但正式更新包缺少发行者签名清单。")
+		return
+	_set_state(&"ready", "下载与结构校验完成；安装前将再次验证发行者身份。")
 	update_ready.emit(_current_release.duplicate(true), path)
 	if automatic_install_enabled:
 		call_deferred("install_downloaded_update")
@@ -377,6 +400,42 @@ func _resolve_install_directory() -> String:
 	probe.close()
 	DirAccess.remove_absolute(probe_path)
 	return directory
+
+
+func _current_trust_policy() -> Dictionary:
+	if not test_trust_policy_override.is_empty():
+		return TrustPolicy.normalize_policy(test_trust_policy_override)
+	return TrustPolicy.load_policy()
+
+
+func _validate_current_install_trust() -> bool:
+	if test_allow_unsigned_reference_update:
+		_trust_ready = true
+		_trust_reason = "reference_override"
+		return true
+	var policy := _current_trust_policy()
+	var validation := TrustPolicy.validate_release_ready(policy)
+	_trust_ready = bool(validation.get("success", false))
+	_trust_reason = "ready" if _trust_ready else str(validation.get("reason", "trust_policy_invalid"))
+	if not _trust_ready:
+		_fail(_trust_reason, "当前安装版本尚未配置可信发行者身份，已拒绝自动更新。")
+		return false
+	return true
+
+
+func _copy_embedded_text_file(resource_path: String, output_path: String, label: String) -> bool:
+	var source := FileAccess.get_file_as_string(resource_path)
+	if source.is_empty():
+		_fail("%s_missing" % label, "发行包缺少更新信任组件。")
+		return false
+	var output := FileAccess.open(output_path, FileAccess.WRITE)
+	if output == null:
+		_fail("%s_write_failed" % label, "无法准备更新信任组件。")
+		return false
+	output.store_string(source)
+	output.flush()
+	output.close()
+	return true
 
 
 func _acknowledge_update_relaunch() -> void:
