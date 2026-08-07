@@ -380,3 +380,20 @@ The next work is external qualification, not another gameplay subsystem: indepen
 
 - [RELEASE_PROMOTION_OFFLINE_VALIDATION.md](RELEASE_PROMOTION_OFFLINE_VALIDATION.md)
 - [PRODUCT_ROADMAP_ITERATION_62.md](PRODUCT_ROADMAP_ITERATION_62.md)
+
+
+## Iteration 63 · 发行签名与最终分发门禁（2026-08-07）
+
+- 商业候选必须先完成 Authenticode 签名与可信时间戳，再生成 candidate_id 和开始硬件/soak 资格；验收后重新签名被明确禁止；
+- Windows 验签复用系统 Authenticode 信任引擎，并要求 Code Signing EKU；商业门禁同时要求可信时间戳与 Time Stamping EKU；
+- 最终发行者身份不依赖 Subject 文本或 SHA-1 thumbprint，而由 Promotion Bundle 外部保留的发行证书 DER SHA-256 钉死；
+- Distribution Gate 同时验证 Iteration 62 Promotion Pin、Promotion Bundle、已资格 EXE 哈希、发行证书 SHA-256 与可信时间戳；
+- 已签名 EXE 必须与 candidate-chain 中已资格 EXE 的 SHA-256 完全一致，从而证明签名发生在资格验证之前；
+- Distribution Receipt 写在不可变 Promotion Bundle 之外，并记录发行证书、时间戳证书和验证器哈希；
+- Windows CI 使用临时自签 Code Signing 证书验证真实 Authenticode 路径，但因为没有真实 TSA 时间戳，商业模式必须 fail-close；
+- 商业发布继续 **HOLD**，真实发行私钥、CA 证书、可信 TSA、真实外部资格和最终发行操作仍由外部安全环境产生。
+
+合同见：
+
+- [RELEASE_PUBLISHER_SIGNING_GATE.md](RELEASE_PUBLISHER_SIGNING_GATE.md)
+- [PRODUCT_ROADMAP_ITERATION_63.md](PRODUCT_ROADMAP_ITERATION_63.md)

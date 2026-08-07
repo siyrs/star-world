@@ -1,11 +1,11 @@
 # Feature Status Board
 
-This board was reconciled on 2026-08-07 after Iteration 62. Historical July preparation records remain in the other task documents; this file reflects the current implementation, repository evidence and external commercial-release state.
+This board was reconciled on 2026-08-07 after Iteration 63. Historical July preparation records remain in the other task documents; this file reflects the current implementation, repository evidence and external commercial-release state.
 
 ## Evidence grades
 
 - `accepted-repository`: production implementation plus permanent automated evidence is complete.
-- `qualification-kit-ready`: the repository-owned collector, schema, chain-of-custody, offline promotion and anti-forgery workflows are complete, but humans and physical machines must still produce the evidence.
+- `qualification-kit-ready`: the repository-owned collector, schema, chain-of-custody, offline promotion, publisher-signing validation and anti-forgery workflows are complete, but humans and physical machines must still produce the evidence.
 - `external-hold`: a real external evidence package is still required before commercial release.
 
 ## Board
@@ -20,9 +20,9 @@ This board was reconciled on 2026-08-07 after Iteration 62. Historical July prep
 | FP-006 | complete | passed | accepted-repository | water/lava lifecycle, survival and save/reload regressions | 2026-08-07 | repository-automatable water state is covered |
 | FP-007 | complete | passed | accepted-repository | save recovery, session recovery, trash integrity, death/respawn and world switching | 2026-08-07 | wrong-id/all-corrupt trash candidates fail with world_payload_unrecoverable |
 | FP-008 | complete | passed | accepted-repository | UI, accessibility, controller, high-DPI, audio and settings matrices | 2026-08-07 | production focus graph and 3440×1440 evidence are permanent |
-| FP-009 | complete | passed | qualification-kit-ready / external-hold | exact-package hardware collectors, strict soak harness, immutable candidate ID, 19-file chain and offline Promotion Bundle | 2026-08-07 | real minimum/recommended machines and real 7,200-second target soak remain external |
-| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-07 | includes cross-domain campaigns, qualification anti-forgery, transport-integrity and offline promotion gates |
-| FP-011 | complete | passed | qualification-kit-ready / external-hold | E4-H recorder, fault-lab recorder, package assembler, supporting-report chain validator, Promotion Pin/receipt and decision boundary | 2026-08-07 | independent human sign-off and real HDD/antivirus/power-loss evidence remain external |
+| FP-009 | complete | passed | qualification-kit-ready / external-hold | exact-package hardware collectors, strict soak harness, immutable candidate ID, 19-file chain, offline Promotion Bundle and publisher Distribution Gate | 2026-08-07 | real minimum/recommended machines, real 7,200-second target soak and real trusted publisher signing/timestamp remain external |
+| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-07 | includes cross-domain campaigns, qualification anti-forgery, transport-integrity, offline promotion and publisher-signing gates |
+| FP-011 | complete | passed | qualification-kit-ready / external-hold | E4-H recorder, fault-lab recorder, package assembler, supporting-report chain validator, Promotion Pin/receipt, Distribution Gate/receipt and decision boundary | 2026-08-07 | independent human sign-off and real HDD/antivirus/power-loss evidence remain external |
 
 ## Iteration 59 closure
 
@@ -59,6 +59,15 @@ This board was reconciled on 2026-08-07 after Iteration 62. Historical July prep
 - Handoff receipts are written outside the immutable Promotion Bundle and retain the validated IDs, promotion-manifest hash and validator hashes.
 - Retained tests cover contract tamper, nested-chain tamper, wrong expected pin, visible/hidden file injection, path traversal, promotion-ID tamper and receipt-in-bundle mutation.
 
+## Iteration 63 closure
+
+- Commercial policy requires Authenticode signing and trusted timestamping before candidate identity and qualification are generated.
+- Distribution validation uses Windows Authenticode trust, Code Signing EKU and an externally retained SHA-256 of the publisher certificate.
+- A trusted timestamp and Time Stamping EKU are mandatory for the commercial gate.
+- The signed executable must still equal the candidate-chain executable SHA-256, proving no post-qualification signing mutation.
+- Distribution Receipts remain external to the immutable Promotion Bundle and retain publisher/timestamp certificate and validator hashes.
+- CI signs a real fixture with an ephemeral locally trusted Code Signing certificate, but the intentionally missing real TSA timestamp keeps the commercial gate closed.
+
 ## Commercial decision
 
-Repository implementation, the external qualification kit, candidate chain of custody and offline release-promotion workflow are accepted. Commercial release remains **HOLD** until real external evidence is collected, the release owner retains the intended `pin_id` independently, and the final Promotion Bundle passes `-RequireReleaseGate -ExpectedPinId <retained-pin>`.
+Repository implementation, external qualification, candidate chain of custody, offline promotion and publisher-signing validation are accepted. Commercial release remains **HOLD** until real external evidence is collected, the release owner independently retains the intended `pin_id` and publisher-certificate SHA-256, the final EXE is signed and trusted-timestamped before qualification, and the final Distribution Gate passes with both external identity pins.

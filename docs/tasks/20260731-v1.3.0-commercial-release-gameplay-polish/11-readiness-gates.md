@@ -129,3 +129,10 @@ Commercial release remains **HOLD**. The independent E4-H review, minimum/recomm
 Repository-owned release promotion now adds an externally retained Promotion Pin, frozen release/project/export contract snapshots, offline nested-chain validation and immutable handoff receipts. `-RequireReleaseGate` must be paired with the expected pin ID so a different internally consistent candidate cannot be promoted accidentally.
 
 Commercial release remains **HOLD**. Independent E4-H review, minimum/recommended physical hardware, the real 7,200-second target-hardware soak, HDD/antivirus/power-loss experiments, release-owner selection and any publisher signing/timestamp authority remain external execution controls.
+
+
+## Post-implementation reconciliation · Iteration 63 · 2026-08-07
+
+Repository-owned final distribution validation now requires sign-before-qualification, Windows Authenticode verification, an externally retained publisher-certificate SHA-256 and a trusted timestamp for the commercial gate. The Distribution Gate composes the Iteration 62 Promotion Pin with the exact qualified executable hash, and Distribution Receipts remain outside the immutable Promotion Bundle.
+
+CI uses an ephemeral self-signed Code Signing certificate only to exercise the Windows trust path. It deliberately cannot satisfy the trusted-TSA commercial condition. Commercial release remains **HOLD** pending the real publisher certificate/private-key operation, trusted timestamp, independent E4-H review, minimum/recommended physical hardware, real 7,200-second soak and physical HDD/antivirus/power-loss evidence.
