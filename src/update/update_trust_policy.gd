@@ -30,6 +30,10 @@ static func normalize_policy(raw: Dictionary) -> Dictionary:
 		return manifest_pins
 	if not bool(publisher_pins.get("success", false)):
 		return publisher_pins
+	var rotation := {}
+	var raw_rotation: Variant = raw.get("rotation", {})
+	if raw_rotation is Dictionary:
+		rotation = raw_rotation.duplicate(true)
 	var normalized := {
 		"success": true,
 		"schema_version": 1,
@@ -48,9 +52,10 @@ static func normalize_policy(raw: Dictionary) -> Dictionary:
 			"timestamp_eku_oid": str(executable_raw.get("timestamp_eku_oid", "1.3.6.1.5.5.7.3.8")),
 			"trusted_publisher_certificate_sha256": publisher_pins.get("pins", []),
 		},
-		"rotation": raw.get("rotation", {}).duplicate(true) if raw.get("rotation", {}) is Dictionary else {},
+		"rotation": rotation,
 	}
-	if normalized.manifest_signature.format != "cms-detached" or normalized.manifest_signature.digest != "sha256":
+	var manifest_section: Dictionary = normalized.get("manifest_signature", {})
+	if str(manifest_section.get("format", "")) != "cms-detached" or str(manifest_section.get("digest", "")) != "sha256":
 		return _failure("trust_policy_manifest_algorithm")
 	return normalized
 
@@ -60,9 +65,11 @@ static func validate_release_ready(policy: Dictionary) -> Dictionary:
 		return policy
 	var manifest: Dictionary = policy.get("manifest_signature", {})
 	var executable: Dictionary = policy.get("executable_authenticode", {})
-	if bool(manifest.get("required_for_release", true)) and Array(manifest.get("trusted_signer_certificate_sha256", [])).is_empty():
+	var manifest_pins: Array = manifest.get("trusted_signer_certificate_sha256", [])
+	var publisher_pins: Array = executable.get("trusted_publisher_certificate_sha256", [])
+	if bool(manifest.get("required_for_release", true)) and manifest_pins.is_empty():
 		return _failure("manifest_signer_pin_missing")
-	if bool(executable.get("required_for_release", true)) and Array(executable.get("trusted_publisher_certificate_sha256", [])).is_empty():
+	if bool(executable.get("required_for_release", true)) and publisher_pins.is_empty():
 		return _failure("publisher_pin_missing")
 	if str(manifest.get("code_signing_eku_oid", "")) != "1.3.6.1.5.5.7.3.3":
 		return _failure("manifest_eku_drift")
