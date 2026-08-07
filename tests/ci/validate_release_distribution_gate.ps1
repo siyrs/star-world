@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 (pwsh) or later is required.' }
-if (-not $IsWindows) { throw 'Release distribution validation requires Windows because Authenticode is a Windows trust contract.' }
+if (-not $IsWindows) { throw 'Release distribution validation requires Windows because the commercial Authenticode trust contract is Windows-specific.' }
 
 $promotionRoot = [System.IO.Path]::GetFullPath($PromotionBundleDirectory)
 if (-not (Test-Path -LiteralPath $promotionRoot -PathType Container)) { throw "Promotion bundle directory not found: $promotionRoot" }
@@ -35,9 +35,7 @@ function Assert-PolicyFlag {
 }
 
 $promotionValidator = Join-Path $PSScriptRoot 'validate_release_promotion_bundle.ps1'
-$promotionArgs = @{
-    PromotionBundleDirectory = $promotionRoot
-}
+$promotionArgs = @{ PromotionBundleDirectory = $promotionRoot }
 if (-not [string]::IsNullOrWhiteSpace($ExpectedPinId)) { $promotionArgs.ExpectedPinId = $ExpectedPinId }
 if ($RequireReleaseGate) { $promotionArgs.RequireReleaseGate = $true }
 $promotionText = (& $promotionValidator @promotionArgs | Out-String).Trim()
@@ -58,6 +56,7 @@ if ($RequireReleaseGate) {
     if ($null -eq $signingPolicy) { throw 'Release qualification policy is missing publisher_signing.' }
     Assert-PolicyFlag $signingPolicy 'required_for_commercial'
     Assert-PolicyFlag $signingPolicy 'sign_before_qualification'
+    Assert-PolicyFlag $signingPolicy 'post_qualification_signing_forbidden'
     Assert-PolicyFlag $signingPolicy 'authenticode_required'
     Assert-PolicyFlag $signingPolicy 'trusted_timestamp_required'
     Assert-PolicyFlag $signingPolicy 'publisher_certificate_sha256_external'
@@ -69,27 +68,40 @@ if ($actualExeHash -ne $candidateExeHash) {
     throw "Distribution executable no longer matches the qualified candidate: expected $candidateExeHash, got $actualExeHash"
 }
 
-$signatureValidator = Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1'
-$signatureArgs = @{ FilePath = $exePath }
-if (-not [string]::IsNullOrWhiteSpace($ExpectedPublisherCertificateSha256)) {
-    $signatureArgs.ExpectedPublisherCertificateSha256 = $ExpectedPublisherCertificateSha256
-    $signatureArgs.RequireSignature = $true
+$signatureRequired = $RequireReleaseGate -or -not [string]::IsNullOrWhiteSpace($ExpectedPublisherCertificateSha256)
+if ($signatureRequired) {
+    $signatureValidator = Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1'
+    $signatureArgs = @{ FilePath = $exePath; RequireSignature = $true }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedPublisherCertificateSha256)) {
+        $signatureArgs.ExpectedPublisherCertificateSha256 = $ExpectedPublisherCertificateSha256
+    }
+    if ($RequireReleaseGate) { $signatureArgs.RequireTrustedTimestamp = $true }
+    $signatureText = (& $signatureValidator @signatureArgs | Out-String).Trim()
+    $signature = $signatureText | ConvertFrom-Json
+} else {
+    # Reference fixtures intentionally carry unsigned placeholder bytes. Do not send them through
+    # the Windows Authenticode parser; reference mode does not claim publisher authenticity.
+    $signature = [pscustomobject]@{
+        signature_present = $false
+        signature_status = 'not_required_reference'
+        trusted = $false
+        signer = $null
+        timestamp = [pscustomobject]@{
+            present = $false
+            certificate_sha256 = ''
+            timestamp_eku = $false
+        }
+    }
 }
-if ($RequireReleaseGate) {
-    $signatureArgs.RequireSignature = $true
-    $signatureArgs.RequireTrustedTimestamp = $true
-}
-$signatureText = (& $signatureValidator @signatureArgs | Out-String).Trim()
-$signature = $signatureText | ConvertFrom-Json
 
-$publisherMatchesExternalPin = -not [string]::IsNullOrWhiteSpace($ExpectedPublisherCertificateSha256) -and 
-    [bool]$signature.signature_present -and 
+$publisherMatchesExternalPin = -not [string]::IsNullOrWhiteSpace($ExpectedPublisherCertificateSha256) -and
+    [bool]$signature.signature_present -and
     ([string]$signature.signer.certificate_sha256 -eq $ExpectedPublisherCertificateSha256.Trim().ToLowerInvariant())
-$releaseGatePassed = [bool]$promotion.release_gate_passed -and 
-    [bool]$signature.signature_present -and 
-    [bool]$signature.trusted -and 
-    [bool]$signature.timestamp.present -and 
-    [bool]$signature.timestamp.timestamp_eku -and 
+$releaseGatePassed = [bool]$promotion.release_gate_passed -and
+    [bool]$signature.signature_present -and
+    [bool]$signature.trusted -and
+    [bool]$signature.timestamp.present -and
+    [bool]$signature.timestamp.timestamp_eku -and
     $publisherMatchesExternalPin
 
 if ($RequireReleaseGate -and -not $releaseGatePassed) {
