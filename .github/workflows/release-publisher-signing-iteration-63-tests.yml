@@ -1,0 +1,87 @@
+name: Release publisher signing quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-publisher-signing-iteration-63-tests.yml'
+      - 'data/release_qualification.json'
+      - 'tests/ci/validate_windows_publisher_signature.ps1'
+      - 'tests/ci/validate_release_distribution_gate.ps1'
+      - 'tests/ci/new_release_distribution_receipt.ps1'
+      - 'tests/ci/test_release_distribution_signing.ps1'
+      - 'tests/developer_b/validate_publisher_signing_iteration_63.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_63.md'
+      - 'docs/RELEASE_PUBLISHER_SIGNING_GATE.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_63.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/release-publisher-signing-iteration-63-tests.yml'
+      - 'data/release_qualification.json'
+      - 'tests/ci/validate_windows_publisher_signature.ps1'
+      - 'tests/ci/validate_release_distribution_gate.ps1'
+      - 'tests/ci/new_release_distribution_receipt.ps1'
+      - 'tests/ci/test_release_distribution_signing.ps1'
+      - 'tests/developer_b/validate_publisher_signing_iteration_63.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_63.md'
+      - 'docs/RELEASE_PUBLISHER_SIGNING_GATE.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_63.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publisher-signing-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publisher-signing-contract:
+    name: Sign-before-qualification, Authenticode trust and timestamp boundary
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate publisher signing and distribution contract
+        shell: pwsh
+        run: .\tests\developer_b\validate_publisher_signing_iteration_63.ps1
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Re-run external qualification contract regression
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/external_qualification_contract_regression.gd'
+
+      - name: Upload publisher-signing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-publisher-signing-${{ github.run_number }}
+          path: |
+            build/release-distribution-signing-fixture/**
+            build/release-distribution-receipts/**
+            build/release-promotion-bundle-fixture/**
+            build/release-promotion-pin-fixture/**
+            build/release-candidate-chain-fixture/**
+          if-no-files-found: error
+          retention-days: 21
