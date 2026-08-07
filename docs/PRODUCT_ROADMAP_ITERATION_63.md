@@ -26,11 +26,12 @@ Authenticode signing changes the executable bytes. Therefore signing after quali
 Repository acceptance requires:
 
 - PowerShell 7 parser success;
-- real Windows Authenticode fixture signing with an ephemeral Code Signing certificate;
-- trusted local fixture signature validation;
+- real Windows Authenticode verification against a trusted, timestamped binary already present on the hosted Windows runner;
+- correct publisher-certificate SHA-256 pin acceptance;
+- trusted timestamp and Time Stamping EKU acceptance;
 - wrong external publisher certificate rejection;
+- tampered signed artifact rejection;
 - unsigned artifact rejection when a signature is required;
-- commercial mode rejecting the fixture because it has no real trusted timestamp;
 - unsigned reference Promotion Bundle remaining reference-only rather than falsely failing compatibility checks;
 - distribution receipts remaining outside the immutable Promotion Bundle;
 - strict Godot 4.7 project import;
@@ -39,6 +40,6 @@ Repository acceptance requires:
 
 ## External boundary
 
-The repository never creates or stores the real publisher private key. It also does not claim that the fixture self-signed certificate or an untimestamped CI signature is a commercial signature.
+The repository never creates or stores the real publisher private key and the CI fixture does not sign Star World. The trusted runner binary exists only to prove that the verification code correctly recognizes a real trusted Authenticode signer and trusted timestamp.
 
 Commercial release remains **HOLD** until the real final EXE is signed before qualification by the publisher certificate, timestamped by a trusted TSA, all external qualification evidence is collected, and the final Distribution Gate passes with both the externally retained Promotion Pin and publisher-certificate SHA-256.
