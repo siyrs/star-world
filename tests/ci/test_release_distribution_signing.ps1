@@ -27,6 +27,24 @@ function Assert-Rejected {
     }
     if (-not $rejected) { throw "$Name was not rejected." }
 }
+function Find-TrustedTimestampedFixture {
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($null -ne $pwsh) { $candidates.Add($pwsh.Source) }
+    $candidates.Add((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'))
+    $candidates.Add((Join-Path $env:SystemRoot 'System32\notepad.exe'))
+    $candidates.Add((Join-Path $env:SystemRoot 'System32\cmd.exe'))
+    $observed = [System.Collections.Generic.List[string]]::new()
+    foreach ($candidate in $candidates) {
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+        $signature = Get-AuthenticodeSignature -LiteralPath $candidate
+        $observed.Add("$candidate=$($signature.Status):timestamp=$($null -ne $signature.TimeStamperCertificate)")
+        if ([string]$signature.Status -eq 'Valid' -and $null -ne $signature.SignerCertificate -and $null -ne $signature.TimeStamperCertificate) {
+            return [pscustomobject]@{ Path = $candidate; Signature = $signature }
+        }
+    }
+    throw "No trusted timestamped Authenticode fixture is available on the Windows runner. Observed: $($observed -join ' | ')"
+}
 
 Write-Host 'SIGNING FIXTURE PHASE | reference-promotion'
 if (-not (Test-Path -LiteralPath $promotionRoot -PathType Container)) { throw 'Promotion fixture was not materialized by the preceding workflow step.' }
@@ -39,12 +57,8 @@ $referenceText = (& (Join-Path $PSScriptRoot 'validate_release_distribution_gate
     -ExpectedPinId $expectedPinId | Out-String).Trim()
 $reference = $referenceText | ConvertFrom-Json
 if (-not [bool]$reference.valid) { throw 'Reference distribution gate did not validate.' }
-if ([bool]$reference.signature_present -or [bool]$reference.release_gate_passed) {
-    throw 'Unsigned reference promotion incorrectly behaved as a signed commercial distribution.'
-}
-if ([bool]$reference.sign_before_qualification_proven) {
-    throw 'Unsigned reference promotion incorrectly proved sign-before-qualification.'
-}
+if ([bool]$reference.signature_present -or [bool]$reference.release_gate_passed) { throw 'Unsigned reference promotion incorrectly behaved as a signed commercial distribution.' }
+if ([bool]$reference.sign_before_qualification_proven) { throw 'Unsigned reference promotion incorrectly proved sign-before-qualification.' }
 
 Write-Host 'SIGNING FIXTURE PHASE | reference-receipt'
 Remove-Item -LiteralPath $receiptRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -71,80 +85,52 @@ Assert-Rejected -Name 'Commercial gate without publisher pin' -Expected 'Expecte
         -RequireReleaseGate | Out-Null
 }
 
-Write-Host 'SIGNING FIXTURE PHASE | certificate-create'
+Write-Host 'SIGNING FIXTURE PHASE | trusted-timestamped-fixture'
 Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
-$signedScript = Join-Path $fixtureRoot 'publisher-fixture.ps1'
+$trustedSource = Find-TrustedTimestampedFixture
+$trustedFixture = Join-Path $fixtureRoot 'trusted-publisher-fixture.exe'
+$tamperedFixture = Join-Path $fixtureRoot 'tampered-publisher-fixture.exe'
 $unsignedScript = Join-Path $fixtureRoot 'unsigned-fixture.ps1'
-$certificatePath = Join-Path $fixtureRoot 'publisher-fixture.cer'
-Set-Content -LiteralPath $signedScript -Value "Write-Output 'Star World publisher signing fixture'" -Encoding utf8
+Copy-Item -LiteralPath $trustedSource.Path -Destination $trustedFixture
+Copy-Item -LiteralPath $trustedSource.Path -Destination $tamperedFixture
 Set-Content -LiteralPath $unsignedScript -Value "Write-Output 'unsigned fixture'" -Encoding utf8
 
-$certificate = $null
-$rootCertificate = $null
-$publisherCertificate = $null
-try {
-    $certificate = New-SelfSignedCertificate `
-        -Type CodeSigningCert `
-        -Subject 'CN=Star World Fixture Publisher' `
-        -CertStoreLocation 'Cert:\CurrentUser\My' `
-        -KeyAlgorithm RSA `
-        -KeyLength 2048 `
-        -HashAlgorithm SHA256 `
-        -NotAfter (Get-Date).AddDays(2)
+$publisherSha256 = Get-CertificateSha256 $trustedSource.Signature.SignerCertificate
+$signatureText = (& (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
+    -FilePath $trustedFixture `
+    -ExpectedPublisherCertificateSha256 $publisherSha256 `
+    -RequireSignature `
+    -RequireTrustedTimestamp | Out-String).Trim()
+$signatureResult = $signatureText | ConvertFrom-Json
+if (-not [bool]$signatureResult.signature_present -or -not [bool]$signatureResult.trusted) { throw 'Trusted publisher fixture signature did not validate.' }
+if (-not [bool]$signatureResult.signer.code_signing_eku) { throw 'Trusted signer did not expose the Code Signing EKU.' }
+if (-not [bool]$signatureResult.timestamp.present -or -not [bool]$signatureResult.timestamp.timestamp_eku) { throw 'Trusted fixture did not expose a valid timestamp certificate and EKU.' }
 
-    Write-Host 'SIGNING FIXTURE PHASE | certificate-trust'
-    Export-Certificate -Cert $certificate -FilePath $certificatePath | Out-Null
-    $rootCertificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\CurrentUser\Root'
-    $publisherCertificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher'
-
-    Write-Host 'SIGNING FIXTURE PHASE | authenticode-sign'
-    $signature = Set-AuthenticodeSignature -FilePath $signedScript -Certificate $certificate -HashAlgorithm SHA256
-    if ([string]$signature.Status -ne 'Valid') {
-        throw "Fixture Authenticode signing did not become trusted: status=$($signature.Status) message=$($signature.StatusMessage)"
-    }
-
-    Write-Host 'SIGNING FIXTURE PHASE | authenticode-validate'
-    $publisherSha256 = Get-CertificateSha256 $certificate
-    $signatureText = (& (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
-        -FilePath $signedScript `
-        -ExpectedPublisherCertificateSha256 $publisherSha256 `
-        -RequireSignature | Out-String).Trim()
-    $signatureResult = $signatureText | ConvertFrom-Json
-    if (-not [bool]$signatureResult.signature_present -or -not [bool]$signatureResult.trusted) {
-        throw 'Trusted publisher fixture signature did not validate.'
-    }
-    if (-not [bool]$signatureResult.signer.code_signing_eku) { throw 'Fixture signer did not expose the Code Signing EKU.' }
-    if ([bool]$signatureResult.timestamp.present) { throw 'Local fixture unexpectedly contains a trusted external timestamp.' }
-
-    Write-Host 'SIGNING FIXTURE PHASE | negative-cases'
-    Assert-Rejected -Name 'Wrong publisher certificate pin' -Expected 'Publisher certificate SHA-256 mismatch' -Action {
-        & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
-            -FilePath $signedScript `
-            -ExpectedPublisherCertificateSha256 ('f' * 64) `
-            -RequireSignature | Out-Null
-    }
-    Assert-Rejected -Name 'Missing trusted timestamp' -Expected 'trusted Authenticode timestamp' -Action {
-        & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
-            -FilePath $signedScript `
-            -ExpectedPublisherCertificateSha256 $publisherSha256 `
-            -RequireSignature `
-            -RequireTrustedTimestamp | Out-Null
-    }
-    Assert-Rejected -Name 'Unsigned publisher artifact' -Expected 'Publisher Authenticode signature is required' -Action {
-        & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
-            -FilePath $unsignedScript `
-            -RequireSignature | Out-Null
-    }
-} finally {
-    Write-Host 'SIGNING FIXTURE PHASE | certificate-cleanup'
-    $storePaths = [System.Collections.Generic.List[string]]::new()
-    if ($null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\My\$($certificate.Thumbprint)") }
-    if ($null -ne $rootCertificate -and $null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\Root\$($certificate.Thumbprint)") }
-    if ($null -ne $publisherCertificate -and $null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\TrustedPublisher\$($certificate.Thumbprint)") }
-    foreach ($storePath in $storePaths) {
-        if (Test-Path -LiteralPath $storePath) { Remove-Item -LiteralPath $storePath -Force }
-    }
+Write-Host 'SIGNING FIXTURE PHASE | negative-cases'
+Assert-Rejected -Name 'Wrong publisher certificate pin' -Expected 'Publisher certificate SHA-256 mismatch' -Action {
+    & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
+        -FilePath $trustedFixture `
+        -ExpectedPublisherCertificateSha256 ('f' * 64) `
+        -RequireSignature `
+        -RequireTrustedTimestamp | Out-Null
 }
 
-Write-Host "RELEASE PUBLISHER SIGNING PASS | reference_unsigned=true | signed_fixture=trusted | timestamp_fixture=external-only | negative_cases=5 | receipt=$receiptPath"
+$bytes = [System.IO.File]::ReadAllBytes($tamperedFixture)
+if ($bytes.Length -lt 512) { throw 'Trusted fixture is unexpectedly too small for tamper testing.' }
+$offset = [Math]::Min(4096, [Math]::Max(256, [int]($bytes.Length / 3)))
+$bytes[$offset] = $bytes[$offset] -bxor 0x01
+[System.IO.File]::WriteAllBytes($tamperedFixture, $bytes)
+Assert-Rejected -Name 'Tampered signed artifact' -Expected 'not trusted and valid' -Action {
+    & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
+        -FilePath $tamperedFixture `
+        -ExpectedPublisherCertificateSha256 $publisherSha256 `
+        -RequireSignature | Out-Null
+}
+Assert-Rejected -Name 'Unsigned publisher artifact' -Expected 'Publisher Authenticode signature is required' -Action {
+    & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
+        -FilePath $unsignedScript `
+        -RequireSignature | Out-Null
+}
+
+Write-Host "RELEASE PUBLISHER SIGNING PASS | reference_unsigned=true | trusted_timestamp_fixture=$($trustedSource.Path) | publisher_cert=$publisherSha256 | negative_cases=5 | receipt=$receiptPath"
