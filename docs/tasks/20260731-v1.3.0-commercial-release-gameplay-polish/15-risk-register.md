@@ -1,22 +1,39 @@
 # Risk Register
 
-Track delivery, product, architecture, implementation, QA, release, and coordination risks.
+Track delivery, product, architecture, implementation, QA, release and coordination risks without confusing historical repository risks with current external commercial gates.
 
-## Risks
+## Current Risk Summary
+- Reconciled at: 2026-08-07 (Iteration 65)
+- Repository implementation blockers: 0
+- Open repository P0/P1 bugs: 0
+- Commercial release risks remain external
+- Canonical status: `16-current-status.json`
 
-| Risk ID | Time | Category | Description | Probability | Impact | Mitigation | Owner | Status | Closed At | Notes |
-|---|---|---|---|---|---|---|---|---|---|---|
-| RISK-001 | 2026-07-31 10:08 +08:00 | qa | 动态/程序化世界使地图与兴趣点清单遗漏 | high | high | 从 scenes/data/src/menu/save/teleport/tests 多源交叉发现；未知默认按正式内容 | Analyst + PM | mitigating |  | Packet A-001 |
-| RISK-002 | 2026-07-31 10:08 +08:00 | release | 旧 `build/StarWorld.exe` 导致把历史行为误判为当前源码 | high | high | 使用独立目录 fresh export；记录 HEAD、哈希、时间戳 | Developer | mitigating |  | DEC-002 |
-| RISK-003 | 2026-07-31 10:08 +08:00 | qa | Windows GUI 自动化只观察到画面但无法证明内部状态 | medium | high | 截图/窗口状态与游戏内 JSON、日志、存档或测试断言交叉证据 | Developer + QA | open |  |  |
-| RISK-004 | 2026-07-31 10:08 +08:00 | development | QA/性能工具污染正式发布逻辑或泄露调试入口 | medium | high | 独立 tests/tools/qa、显式参数和 release 默认关闭；增加合同测试 | Developer | open |  |  |
-| RISK-005 | 2026-07-31 10:08 +08:00 | qa | 实际操作污染用户已有存档 | medium | high | 先发现存档位置，备份并使用唯一 QA 世界/隔离目录；任何破坏前做只读解析 | Developer + QA | open |  |  |
-| RISK-006 | 2026-07-31 10:08 +08:00 | qa | 性能数据受 VSync/窗口/场景/采样工具漂移影响 | high | medium | 固定硬件、分辨率、渲染器、场景、Seed、时长和采样方式；保留原始数据 | QA | open |  |  |
-| RISK-007 | 2026-07-31 10:08 +08:00 | development | 广泛修复引入存档/API/玩法回归 | medium | high | 小提交、focused + 相邻回归、旧存档兼容、QA bugfix 重测 | Developer + QA | open |  |  |
-| RISK-008 | 2026-07-31 10:08 +08:00 | coordination | 长任务中断导致重复教程测试或遗漏断点 | medium | high | 每个重要步骤更新 `qa/session-state.md`，以矩阵和问题状态恢复 | PM | mitigating |  |  |
+## Historical Repository Risks
+| Risk ID | Original Category | Description | Current Status | Closure / Mitigation Evidence |
+|---|---|---|---|---|
+| RISK-001 | qa | Dynamic/procedural content discovery could omit formal content | closed | deterministic five-profile/content registries and coverage matrices |
+| RISK-002 | release | stale build could be mistaken for current source | closed | fresh export, exact candidate hashes and immutable candidate identity |
+| RISK-003 | qa | GUI observation alone could not prove internal state | closed | screenshots plus in-game JSON/log/save assertions and desktop acceptance runners |
+| RISK-004 | development | QA/performance tooling could leak into release logic/package | closed | isolated tests/tools, package contracts and release workflows |
+| RISK-005 | qa | testing could contaminate existing user saves | closed | isolated user-data directories, save/catalog recovery and protected deletion gates |
+| RISK-006 | qa | performance evidence could drift with environment/sampling | closed for repository scope | exact-package collectors, immutable candidate identity and fixed evidence schema; real target hardware remains external below |
+| RISK-007 | development | broad fixes could regress saves/APIs/gameplay | closed | focused + adjacent + full permanent regressions across persistence and gameplay |
+| RISK-008 | coordination | long work could lose checkpoints/evidence continuity | closed for repository scope | machine-readable candidate/package/promotion/distribution receipts and permanent CI |
+
+## Current External Commercial Risks
+| Risk ID | Category | Description | Probability | Impact | Mitigation / Required Evidence | Owner | Status |
+|---|---|---|---|---|---|---|---|
+| RISK-009 | independent-qa | Hosted CI cannot perform independent E4-H human acceptance | medium | high | independent reviewer completes signed evidence against exact candidate | Release Owner + Independent QA | external-open |
+| RISK-010 | hardware | Hosted runners cannot prove minimum/recommended physical-machine behavior or real 7,200-second target soak | medium | high | run exact final EXE/PCK on both physical tiers and complete strict target soak | QA / Release Owner | external-open |
+| RISK-011 | fault-qualification | HDD, antivirus interference and power-loss behavior require physical experiments | medium | high | execute two-phase prepare/complete fault-lab records and assemble them into the external package | QA / Release Owner | external-open |
+| RISK-012 | promotion-identity | An internally consistent but unintended candidate could be promoted | low | critical | release owner independently retains and checks intended Promotion Pin before gate execution | Release Owner | external-open |
+| RISK-013 | publisher-signing | Repository/hosted CI must not possess or simulate the production publisher private key or trusted timestamp | medium | critical | sign exact final EXE externally, trusted-timestamp it, retain publisher certificate SHA-256, then run Distribution Gate | Release Owner / Signing Operator | external-open |
+| RISK-014 | update-bootstrap | First production install needs real manifest/publisher pins and signed publication without allowing target content to choose trust roots | medium | critical | bootstrap pins from trusted signed baseline, create detached CMS manifest externally and publish signed assets from signing environment | Release Owner / Signing Operator | external-open |
 
 ## Risk Review Rules
-
-- P0/P1 risks must have an owner and mitigation before implementation starts.
-- Closed risks must include evidence or rationale in Notes.
-- Accepted risks must be explicitly accepted by PM and visible in the stage user report.
+- Repository P0/P1 blockers must be zero before repository acceptance/delivery.
+- External commercial gates are not converted into fake repository test passes.
+- Every external-open risk must retain evidence outside the immutable candidate where the release contracts require independent retention.
+- Commercial GO requires all eight `remaining_external_gates` in `16-current-status.json` to be satisfied against the same immutable candidate.
+- Any change to source, EXE/PCK identity, qualification contract, publisher identity or trust pins invalidates the affected downstream evidence and requires requalification.
