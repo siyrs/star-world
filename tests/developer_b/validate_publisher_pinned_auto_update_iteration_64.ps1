@@ -48,6 +48,7 @@ Assert-ContainsAll 'src\update\windows_update_trust_validator.ps1' @(
     'CheckSignature',
     'Get-AuthenticodeSignature',
     'TimeStamperCertificate',
+    'Microsoft.PowerShell.Security',
     'Detached update manifest signer certificate is not pinned by the current install.',
     'Updated executable publisher certificate is not pinned by the current install.'
 )
@@ -64,7 +65,11 @@ Assert-ContainsAll '.github\workflows\publisher-pinned-auto-update-iteration-64-
     'Exercise real publisher-pinned updater cryptography',
     'Exercise reference swap, ACK and rollback',
     'Validate strict project import',
-    'Run updater protocol regression'
+    'Run updater protocol regression',
+    'Real interrupted HTTP Range resume under pinned updater',
+    'resumable_download_acceptance.gd',
+    'Real first-start update prompt and retry UI under pinned updater',
+    'auto_update_desktop_acceptance.gd'
 )
 Assert-ContainsAll 'docs\PUBLISHER_PINNED_AUTO_UPDATE.md' @(
     'target package cannot change the pins',
@@ -82,4 +87,4 @@ if ([int]$policy.max_active_pins -ne 4) { throw 'Updater certificate rotation bu
 $publishWorkflow = Get-Content -Raw -Encoding UTF8 (Join-Path $root '.github\workflows\publish-windows-release.yml')
 if ($publishWorkflow -match 'contents:\s*write' -or $publishWorkflow -match 'gh release (create|upload)') { throw 'Hosted reference workflow regained unsigned GitHub Release publication capability.' }
 
-Write-Host 'ITERATION 64 PUBLISHER-PINNED AUTO UPDATE PASS | current-install-pins=true | cms-manifest=true | authenticode=true | trusted-timestamp=true | pre-swap=true | rotation-budget=4 | hosted-publish=blocked'
+Write-Host 'ITERATION 64 PUBLISHER-PINNED AUTO UPDATE PASS | current-install-pins=true | cms-manifest=true | authenticode=true | trusted-timestamp=true | pre-swap=true | range-resume=true | desktop-ui=true | rotation-budget=4 | hosted-publish=blocked'
