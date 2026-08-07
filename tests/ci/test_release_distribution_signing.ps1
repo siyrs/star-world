@@ -28,8 +28,9 @@ function Assert-Rejected {
     if (-not $rejected) { throw "$Name was not rejected." }
 }
 
-& (Join-Path $PSScriptRoot 'test_release_promotion_bundle.ps1')
-if (-not (Test-Path -LiteralPath $promotionRoot -PathType Container)) { throw 'Promotion fixture was not materialized.' }
+Write-Host 'SIGNING FIXTURE PHASE | reference-promotion'
+if (-not (Test-Path -LiteralPath $promotionRoot -PathType Container)) { throw 'Promotion fixture was not materialized by the preceding workflow step.' }
+if (-not (Test-Path -LiteralPath $pinPath -PathType Leaf)) { throw 'Promotion pin fixture was not materialized by the preceding workflow step.' }
 $pin = Get-Content -LiteralPath $pinPath -Raw | ConvertFrom-Json -Depth 30
 $expectedPinId = [string]$pin.pin_id
 
@@ -45,6 +46,7 @@ if ([bool]$reference.sign_before_qualification_proven) {
     throw 'Unsigned reference promotion incorrectly proved sign-before-qualification.'
 }
 
+Write-Host 'SIGNING FIXTURE PHASE | reference-receipt'
 Remove-Item -LiteralPath $receiptRoot -Recurse -Force -ErrorAction SilentlyContinue
 & (Join-Path $PSScriptRoot 'new_release_distribution_receipt.ps1') `
     -PromotionBundleDirectory $promotionRoot `
@@ -69,6 +71,7 @@ Assert-Rejected -Name 'Commercial gate without publisher pin' -Expected 'Expecte
         -RequireReleaseGate | Out-Null
 }
 
+Write-Host 'SIGNING FIXTURE PHASE | certificate-create'
 Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
 $signedScript = Join-Path $fixtureRoot 'publisher-fixture.ps1'
@@ -89,14 +92,19 @@ try {
         -KeyLength 2048 `
         -HashAlgorithm SHA256 `
         -NotAfter (Get-Date).AddDays(2)
+
+    Write-Host 'SIGNING FIXTURE PHASE | certificate-trust'
     Export-Certificate -Cert $certificate -FilePath $certificatePath | Out-Null
     $rootCertificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\CurrentUser\Root'
     $publisherCertificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher'
+
+    Write-Host 'SIGNING FIXTURE PHASE | authenticode-sign'
     $signature = Set-AuthenticodeSignature -FilePath $signedScript -Certificate $certificate -HashAlgorithm SHA256
     if ([string]$signature.Status -ne 'Valid') {
         throw "Fixture Authenticode signing did not become trusted: status=$($signature.Status) message=$($signature.StatusMessage)"
     }
 
+    Write-Host 'SIGNING FIXTURE PHASE | authenticode-validate'
     $publisherSha256 = Get-CertificateSha256 $certificate
     $signatureText = (& (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
         -FilePath $signedScript `
@@ -109,6 +117,7 @@ try {
     if (-not [bool]$signatureResult.signer.code_signing_eku) { throw 'Fixture signer did not expose the Code Signing EKU.' }
     if ([bool]$signatureResult.timestamp.present) { throw 'Local fixture unexpectedly contains a trusted external timestamp.' }
 
+    Write-Host 'SIGNING FIXTURE PHASE | negative-cases'
     Assert-Rejected -Name 'Wrong publisher certificate pin' -Expected 'Publisher certificate SHA-256 mismatch' -Action {
         & (Join-Path $PSScriptRoot 'validate_windows_publisher_signature.ps1') `
             -FilePath $signedScript `
@@ -128,6 +137,7 @@ try {
             -RequireSignature | Out-Null
     }
 } finally {
+    Write-Host 'SIGNING FIXTURE PHASE | certificate-cleanup'
     $storePaths = [System.Collections.Generic.List[string]]::new()
     if ($null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\My\$($certificate.Thumbprint)") }
     if ($null -ne $rootCertificate -and $null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\Root\$($certificate.Thumbprint)") }
