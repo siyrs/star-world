@@ -21,6 +21,8 @@ static func inspect_package(package_path: String, expected_version: String) -> D
 		reader.close()
 		return _failure("manifest_invalid")
 	var result := validate_manifest(parsed, expected_version, files)
+	if bool(result.get("success", false)):
+		result["manifest_bytes"] = manifest_bytes
 	reader.close()
 	return result
 
@@ -30,18 +32,36 @@ static func validate_manifest(
 	expected_version: String,
 	archive_files: PackedStringArray = PackedStringArray()
 ) -> Dictionary:
-	if int(manifest.get("schema_version", 0)) != 1:
+	var schema_version := int(manifest.get("schema_version", 0))
+	if schema_version not in [1, 2]:
 		return _failure("manifest_schema")
 	if str(manifest.get("platform", "")) != "windows-x86_64":
 		return _failure("manifest_platform")
-	if int(manifest.get("updater_protocol", 0)) > AppVersion.UPDATER_PROTOCOL_VERSION:
+	var updater_protocol := int(manifest.get("updater_protocol", 0))
+	if updater_protocol <= 0 or updater_protocol > AppVersion.UPDATER_PROTOCOL_VERSION:
 		return _failure("updater_too_old")
+	if schema_version == 2 and updater_protocol != 2:
+		return _failure("manifest_protocol")
 	var version := str(manifest.get("version", "")).strip_edges()
 	if version != expected_version.strip_edges():
 		return _failure("manifest_version")
 	var executable := str(manifest.get("executable", "")).strip_edges()
 	if executable != AppVersion.EXECUTABLE_NAME:
 		return _failure("manifest_executable")
+	var signature := {}
+	if schema_version == 2:
+		var raw_signature: Variant = manifest.get("signature", {})
+		if raw_signature is not Dictionary:
+			return _failure("manifest_signature")
+		signature = raw_signature.duplicate(true)
+		if str(signature.get("format", "")) != "cms-detached":
+			return _failure("manifest_signature_format")
+		if str(signature.get("digest", "")) != "sha256":
+			return _failure("manifest_signature_digest")
+		if str(signature.get("path", "")) != AppVersion.UPDATE_MANIFEST_SIGNATURE_NAME:
+			return _failure("manifest_signature_path")
+		if not archive_files.is_empty() and AppVersion.UPDATE_MANIFEST_SIGNATURE_NAME not in archive_files:
+			return _failure("manifest_signature_missing")
 	var raw_files: Variant = manifest.get("files", [])
 	if raw_files is not Array or raw_files.is_empty() or raw_files.size() > 64:
 		return _failure("manifest_files")
@@ -55,6 +75,8 @@ static func validate_manifest(
 		var size := int(raw_file.get("size", -1))
 		if not _is_safe_relative_path(path) or seen.has(path):
 			return _failure("manifest_file_path")
+		if path in [AppVersion.UPDATE_MANIFEST_NAME, AppVersion.UPDATE_MANIFEST_SIGNATURE_NAME]:
+			return _failure("manifest_metadata_listed")
 		if not _is_sha256(digest) or size < 0:
 			return _failure("manifest_file_hash")
 		if not archive_files.is_empty() and path not in archive_files:
@@ -68,15 +90,19 @@ static func validate_manifest(
 			var archive_path := raw_archive_path.replace("\\", "/").strip_edges()
 			if archive_path.is_empty() or archive_path.ends_with("/"):
 				continue
-			if archive_path == AppVersion.UPDATE_MANIFEST_NAME:
+			if archive_path in [AppVersion.UPDATE_MANIFEST_NAME, AppVersion.UPDATE_MANIFEST_SIGNATURE_NAME]:
 				continue
 			if not seen.has(archive_path):
 				return _failure("manifest_unlisted_file")
 	return {
 		"success": true,
+		"schema_version": schema_version,
+		"updater_protocol": updater_protocol,
 		"version": version,
 		"executable": executable,
 		"files": required,
+		"signature": signature,
+		"publisher_signed_manifest": schema_version == 2,
 	}
 
 

@@ -6,10 +6,13 @@ param(
     [Parameter(Mandatory = $true)][string]$ExecutableName,
     [Parameter(Mandatory = $true)][string]$TargetVersion,
     [Parameter(Mandatory = $true)][string]$ResultPath,
+    [Parameter(Mandatory = $true)][string]$TrustValidatorPath,
+    [Parameter(Mandatory = $true)][string]$TrustPolicyBase64,
     [string]$LaunchExecutable = '',
     [string]$LaunchArgumentsBase64 = '',
     [int]$WaitForExitSeconds = 120,
-    [int]$AckTimeoutSeconds = 45
+    [int]$AckTimeoutSeconds = 45,
+    [switch]$AllowUnsignedReference
 )
 
 $ErrorActionPreference = 'Stop'
@@ -92,6 +95,7 @@ $backupDirectory = Join-Path $parentDirectory ".starworld-backup-$transactionId"
 $ackPath = Join-Path (Split-Path -Parent $ResultPath) "update-ack-$transactionId.json"
 $swapped = $false
 $launchedProcess = $null
+$trustEvidence = $null
 
 try {
     Write-ResultFile @{
@@ -115,6 +119,12 @@ try {
     if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) {
         throw 'Downloaded update package is missing.'
     }
+    if (-not (Test-Path -LiteralPath $TrustValidatorPath -PathType Leaf)) {
+        throw 'Current-install updater trust validator is missing.'
+    }
+    if ([string]::IsNullOrWhiteSpace($TrustPolicyBase64)) {
+        throw 'Current-install updater trust policy is missing.'
+    }
     $actualPackageHash = Get-Sha256 $PackagePath
     if ($actualPackageHash -ne $ExpectedPackageSha256.ToLowerInvariant()) {
         throw 'Downloaded update package checksum does not match.'
@@ -123,11 +133,22 @@ try {
     Remove-Tree $stagingDirectory
     Expand-SafeArchive -ArchivePath $PackagePath -Destination $stagingDirectory
     $manifestPath = Join-Path $stagingDirectory 'update-manifest.json'
+    $signaturePath = Join-Path $stagingDirectory 'update-manifest.p7s'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         throw 'Update manifest is missing from package.'
     }
     $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath | ConvertFrom-Json
-    if ([int]$manifest.schema_version -ne 1) { throw 'Unsupported update manifest schema.' }
+    $schemaVersion = [int]$manifest.schema_version
+    if ($schemaVersion -ne 1 -and $schemaVersion -ne 2) { throw 'Unsupported update manifest schema.' }
+    if (-not $AllowUnsignedReference -and $schemaVersion -ne 2) { throw 'Publisher-signed update manifest schema is required.' }
+    if ($schemaVersion -eq 2) {
+        if ([int]$manifest.updater_protocol -ne 2) { throw 'Signed updater protocol mismatch.' }
+        if ($null -eq $manifest.signature) { throw 'Signed update manifest declaration is missing.' }
+        if ([string]$manifest.signature.format -ne 'cms-detached') { throw 'Update manifest signature format mismatch.' }
+        if ([string]$manifest.signature.digest -ne 'sha256') { throw 'Update manifest signature digest mismatch.' }
+        if ([string]$manifest.signature.path -ne 'update-manifest.p7s') { throw 'Update manifest signature path mismatch.' }
+        if (-not (Test-Path -LiteralPath $signaturePath -PathType Leaf)) { throw 'Detached update manifest signature is missing.' }
+    }
     if ([string]$manifest.platform -ne 'windows-x86_64') { throw 'Update package platform mismatch.' }
     if ([string]$manifest.version -ne $TargetVersion) { throw 'Update package version mismatch.' }
     if ([string]$manifest.executable -ne $ExecutableName) { throw 'Update executable name mismatch.' }
@@ -139,6 +160,9 @@ try {
         $manifestKey = $manifestRelative.ToLowerInvariant()
         if ([string]::IsNullOrWhiteSpace($manifestRelative) -or $manifestPaths.ContainsKey($manifestKey)) {
             throw "Duplicate or empty manifest path: $manifestRelative"
+        }
+        if ($manifestRelative -eq 'update-manifest.json' -or $manifestRelative -eq 'update-manifest.p7s') {
+            throw "Manifest metadata cannot list itself as payload: $manifestRelative"
         }
         $relative = $manifestRelative.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
         $candidate = [System.IO.Path]::GetFullPath((Join-Path $stagingDirectory $relative))
@@ -156,19 +180,21 @@ try {
         }
         $manifestPaths[$manifestKey] = $true
     }
-    foreach ($stagedFile in @(Get-ChildItem -LiteralPath $stagingDirectory -File -Recurse)) {
+    foreach ($stagedFile in @(Get-ChildItem -LiteralPath $stagingDirectory -File -Recurse -Force)) {
         $fullStagedPath = [System.IO.Path]::GetFullPath($stagedFile.FullName)
         if (-not $fullStagedPath.StartsWith($stageRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Staged file escapes staging directory: $fullStagedPath"
         }
         $stagedRelative = $fullStagedPath.Substring($stageRoot.Length).Replace('\', '/')
         if ($stagedRelative -eq 'update-manifest.json') { continue }
+        if ($stagedRelative -eq 'update-manifest.p7s' -and $schemaVersion -eq 2) { continue }
         if (-not $manifestPaths.ContainsKey($stagedRelative.ToLowerInvariant())) {
             throw "Archive contains an unlisted payload file: $stagedRelative"
         }
     }
 
-    if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $ExecutableName) -PathType Leaf)) {
+    $stagedExecutable = Join-Path $stagingDirectory $ExecutableName
+    if (-not (Test-Path -LiteralPath $stagedExecutable -PathType Leaf)) {
         throw 'Staged executable is missing.'
     }
     if (-not (Test-Path -LiteralPath $installFull -PathType Container)) {
@@ -177,10 +203,33 @@ try {
 
     Write-ResultFile @{
         success = $false
+        phase = 'authenticating_publisher'
+        target_version = $TargetVersion
+    }
+    $trustArguments = @{
+        ManifestPath = $manifestPath
+        SignaturePath = $signaturePath
+        ExecutablePath = $stagedExecutable
+        TrustPolicyBase64 = $TrustPolicyBase64
+    }
+    if ($AllowUnsignedReference) { $trustArguments['AllowUnsignedReference'] = $true }
+    $trustText = (& $TrustValidatorPath @trustArguments | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($trustText)) { throw 'Updater trust validator returned no evidence.' }
+    $trustEvidence = $trustText | ConvertFrom-Json
+    if (-not [bool]$trustEvidence.valid) { throw 'Updater publisher trust validation failed.' }
+    if (-not $AllowUnsignedReference -and [bool]$trustEvidence.reference_only) {
+        throw 'Reference-only updater trust evidence cannot authorize an install.'
+    }
+
+    Write-ResultFile @{
+        success = $false
         phase = 'switching'
         target_version = $TargetVersion
         staging_path = $stagingDirectory
         backup_path = $backupDirectory
+        publisher_authenticated = -not [bool]$trustEvidence.reference_only
+        manifest_signer_certificate_sha256 = [string]$trustEvidence.manifest_signer_certificate_sha256
+        publisher_certificate_sha256 = [string]$trustEvidence.publisher_certificate_sha256
     }
 
     Move-Item -LiteralPath $installFull -Destination $backupDirectory
@@ -229,6 +278,10 @@ try {
         phase = 'completed'
         target_version = $TargetVersion
         launched_pid = $launchedProcess.Id
+        publisher_authenticated = -not [bool]$trustEvidence.reference_only
+        manifest_signer_certificate_sha256 = [string]$trustEvidence.manifest_signer_certificate_sha256
+        publisher_certificate_sha256 = [string]$trustEvidence.publisher_certificate_sha256
+        trusted_timestamp_present = [bool]$trustEvidence.trusted_timestamp_present
     }
     exit 0
 }

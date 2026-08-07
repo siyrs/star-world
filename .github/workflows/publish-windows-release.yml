@@ -1,4 +1,4 @@
-name: Publish Windows GitHub Release
+name: Build Windows Release Reference Assets
 
 on:
   push:
@@ -7,20 +7,20 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing vX.Y.Z tag to publish
+        description: Existing vX.Y.Z tag to validate
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: publish-windows-release-${{ github.ref }}-${{ inputs.tag }}
+  group: build-windows-reference-${{ github.ref }}-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Export, validate and publish resumable update assets
+  build-reference:
+    name: Export and validate unsigned reference assets
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -51,8 +51,6 @@ jobs:
           $versionText = Get-Content -Raw -Encoding UTF8 .\src\update\app_version.gd
           if ($versionText -notmatch 'CURRENT_VERSION\s*:=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') { throw 'Unable to read CURRENT_VERSION' }
           if ($Matches[1] -ne '${{ steps.version.outputs.version }}') { throw "Tag/version mismatch: tag=${{ steps.version.outputs.version }} app=$($Matches[1])" }
-          # Windows Godot editor is a GUI-subsystem binary: pwsh does not wait for it and
-          # $LASTEXITCODE stays stale. Use Start-Process -Wait and check the real ExitCode.
           $proc = Start-Process -FilePath godot -ArgumentList '--headless --path . --editor --quit' -Wait -PassThru -NoNewWindow `
             -RedirectStandardOutput godot-editor.out.log -RedirectStandardError godot-editor.err.log
           if ($proc.ExitCode -ne 0) {
@@ -61,7 +59,7 @@ jobs:
           }
           .\tests\developer_b\validate_auto_update.ps1
 
-      - name: Export Windows release
+      - name: Export Windows reference build
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build\release | Out-Null
@@ -72,24 +70,18 @@ jobs:
           if (-not (Test-Path build\release\StarWorld.exe)) { throw 'StarWorld.exe was not exported' }
           if (-not (Test-Path build\release\StarWorld.pck)) { throw 'StarWorld.pck was not exported' }
 
-      - name: Build signed-by-checksum update package
+      - name: Build reference-only update package
         shell: pwsh
         run: |
           .\tools\build_update_release.ps1 `
             -BuildDirectory build\release `
             -Version '${{ steps.version.outputs.version }}' `
             -OutputDirectory build\release-assets
+          'REFERENCE_ONLY=true' | Set-Content -LiteralPath build\release-assets\REFERENCE-ONLY.txt -Encoding ascii
 
       - name: Smoke exported release without network update check
         shell: pwsh
         run: |
-          # windows-latest runners have no GPU and no OpenGL 3.3 driver for the default
-          # native WGL path. Godot ships statically-linked ANGLE, which renders over
-          # D3D11 and falls back to WARP (software) on GPU-less runners.
-          # (Mesa's opengl32.dll was tried and breaks Godot's native GL window creation.)
-          # Game reads OS.get_cmdline_user_args(): everything must follow a literal `--`.
-          # The report path must be absolute: the exported game's working directory
-          # differs from the step's, so a relative path lands somewhere unexpected.
           $reportPath = ($PWD -replace '\\', '/') + '/build/release-smoke.json'
           $arguments = "--rendering-driver opengl3_angle -- --disable-update-check --release-smoke --smoke-soak-frames=60 --smoke-output=$reportPath"
           $process = Start-Process -FilePath build\release\StarWorld.exe -ArgumentList $arguments -PassThru -NoNewWindow `
@@ -106,30 +98,19 @@ jobs:
           Get-Content build\smoke.out.log, build\smoke.err.log -ErrorAction SilentlyContinue
           if ($failure) { throw "Release smoke failed: $failure" }
 
-      - name: Upload release evidence
+      - name: Assert CI cannot publish commercial update assets
+        shell: pwsh
+        run: |
+          if ('${{ github.token }}'.Length -le 0) { throw 'GitHub token was unexpectedly unavailable.' }
+          Write-Host 'REFERENCE_ONLY_PUBLICATION_BLOCKED=true'
+          Write-Host 'Commercial GitHub Release assets must be created with tools/publish_signed_update_release.ps1 from the external signing environment.'
+
+      - name: Upload reference release evidence
         uses: actions/upload-artifact@v4
         with:
-          name: starworld-windows-release-${{ steps.version.outputs.tag }}
+          name: starworld-windows-reference-${{ steps.version.outputs.tag }}
           path: |
             build/release-assets/*
             build/release-smoke.json
           if-no-files-found: error
           retention-days: 14
-
-      - name: Create or update GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = '${{ steps.version.outputs.tag }}'
-          $assets = @(
-            'build/release-assets/StarWorld-Windows-x86_64.zip',
-            'build/release-assets/StarWorld-Windows-x86_64.zip.sha256'
-          )
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
-          } else {
-            gh release create $tag @assets --generate-notes --title "星的世界 $tag" --repo $env:GITHUB_REPOSITORY
-          }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

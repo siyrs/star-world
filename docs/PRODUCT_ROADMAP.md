@@ -397,3 +397,22 @@ The next work is external qualification, not another gameplay subsystem: indepen
 
 - [RELEASE_PUBLISHER_SIGNING_GATE.md](RELEASE_PUBLISHER_SIGNING_GATE.md)
 - [PRODUCT_ROADMAP_ITERATION_63.md](PRODUCT_ROADMAP_ITERATION_63.md)
+
+
+## Iteration 64 · 发行者钉死自动更新（2026-08-07）
+
+- 自动更新不再把同源 GitHub Release ZIP、`.sha256` 与未签名 Manifest 视为独立发行身份；
+- `update-manifest.json` 升级到 schema/protocol 2，并由 detached CMS `update-manifest.p7s` 绑定 EXE、PCK 与全部载荷哈希；
+- staged EXE 同时验证 Windows Authenticode、Code Signing EKU、当前安装 Publisher Certificate SHA-256 Pin、可信 TSA 与 Time Stamping EKU；
+- Manifest signer 与 EXE publisher 使用当前安装版本携带的独立证书 SHA-256 Pin，目标包不能决定本次认证使用的信任根；
+- 每个信任域最多四个 Pin，证书轮换必须先部署 old+new overlap，再移除旧 Pin；
+- helper 在任何安装目录 `Move-Item` 之前完成逐文件哈希、CMS 与 Authenticode 认证，原有 ACK/rollback 事务保持不变；
+- Hosted CI 只生成 `REFERENCE-ONLY` 更新资产，不再直接创建未签名商业 GitHub Release；真实上传由外部签名工作站工具在验证 EXE/TSA、CMS 与双 Pin 后执行；
+- 仓库默认真实 Pin 为空并 fail-close，首次生产启用必须通过已信任/手动渠道部署带真实 Pin 的基线版本；
+- 商业发布继续 **HOLD**，真实发行/Manifest 私钥、证书 Pin 与 Iterations 60-63 的真实外部资格仍由外部安全环境产生。
+
+合同见：
+
+- [GITHUB_RELEASE_AUTO_UPDATE.md](GITHUB_RELEASE_AUTO_UPDATE.md)
+- [PUBLISHER_PINNED_AUTO_UPDATE.md](PUBLISHER_PINNED_AUTO_UPDATE.md)
+- [PRODUCT_ROADMAP_ITERATION_64.md](PRODUCT_ROADMAP_ITERATION_64.md)

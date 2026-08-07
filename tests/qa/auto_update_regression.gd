@@ -4,6 +4,7 @@ const SemVer = preload("res://src/update/semantic_version_policy.gd")
 const ReleasePolicy = preload("res://src/update/github_release_policy.gd")
 const ResumePolicy = preload("res://src/update/resumable_download_policy.gd")
 const PackagePolicy = preload("res://src/update/update_package_policy.gd")
+const TrustPolicy = preload("res://src/update/update_trust_policy.gd")
 const UpdateServiceScript = preload("res://src/update/update_service.gd")
 const UpdatePanelScript = preload("res://src/ui/update_prompt_panel.gd")
 const AppVersion = preload("res://src/update/app_version.gd")
@@ -21,6 +22,7 @@ func _run() -> void:
 	_test_release_selection()
 	_test_resume_policy()
 	_test_package_manifest()
+	_test_trust_policy()
 	await _test_service_and_prompt()
 	if failures.is_empty():
 		print("QA AUTO UPDATE PASS | checks=%d" % checks)
@@ -102,6 +104,8 @@ func _test_package_manifest() -> void:
 	DirAccess.make_dir_recursive_absolute(directory)
 	var package_path := directory.path_join("fixture.zip")
 	var malicious_path := directory.path_join("fixture-with-extra-file.zip")
+	var signed_path := directory.path_join("signed-fixture.zip")
+	var missing_signature_path := directory.path_join("signed-fixture-missing-signature.zip")
 	var exe_bytes := "new-executable".to_utf8_buffer()
 	var pck_bytes := "new-resource-pack".to_utf8_buffer()
 	var manifest := {
@@ -122,7 +126,37 @@ func _test_package_manifest() -> void:
 	_packer_add(packer, AppVersion.UPDATE_MANIFEST_NAME, JSON.stringify(manifest).to_utf8_buffer())
 	packer.close()
 	var inspection := PackagePolicy.inspect_package(package_path, "1.1.0")
-	_check(bool(inspection.get("success", false)), "strict package manifest accepts EXE and PCK")
+	_check(bool(inspection.get("success", false)), "legacy reference manifest remains structurally readable")
+	_check(not bool(inspection.get("publisher_signed_manifest", true)), "legacy reference manifest is never marked publisher-signed")
+
+	var signed_manifest := manifest.duplicate(true)
+	signed_manifest["schema_version"] = 2
+	signed_manifest["updater_protocol"] = 2
+	signed_manifest["signature"] = {
+		"format":"cms-detached",
+		"digest":"sha256",
+		"path":AppVersion.UPDATE_MANIFEST_SIGNATURE_NAME,
+	}
+	packer = ZIPPacker.new()
+	_check(packer.open(signed_path) == OK, "signed package fixture opens")
+	_packer_add(packer, AppVersion.EXECUTABLE_NAME, exe_bytes)
+	_packer_add(packer, "StarWorld.pck", pck_bytes)
+	_packer_add(packer, AppVersion.UPDATE_MANIFEST_NAME, JSON.stringify(signed_manifest).to_utf8_buffer())
+	_packer_add(packer, AppVersion.UPDATE_MANIFEST_SIGNATURE_NAME, "cms-placeholder".to_utf8_buffer())
+	packer.close()
+	var signed_inspection := PackagePolicy.inspect_package(signed_path, "1.1.0")
+	_check(bool(signed_inspection.get("success", false)), "schema v2 signed-manifest package is structurally accepted")
+	_check(bool(signed_inspection.get("publisher_signed_manifest", false)), "schema v2 exposes publisher-signed manifest boundary")
+
+	packer = ZIPPacker.new()
+	_check(packer.open(missing_signature_path) == OK, "missing-signature package fixture opens")
+	_packer_add(packer, AppVersion.EXECUTABLE_NAME, exe_bytes)
+	_packer_add(packer, "StarWorld.pck", pck_bytes)
+	_packer_add(packer, AppVersion.UPDATE_MANIFEST_NAME, JSON.stringify(signed_manifest).to_utf8_buffer())
+	packer.close()
+	var missing_signature := PackagePolicy.inspect_package(missing_signature_path, "1.1.0")
+	_check(str(missing_signature.get("reason", "")) == "manifest_signature_missing", "schema v2 requires detached signature asset")
+
 	packer = ZIPPacker.new()
 	_check(packer.open(malicious_path) == OK, "extra-file package fixture opens")
 	_packer_add(packer, AppVersion.EXECUTABLE_NAME, exe_bytes)
@@ -134,8 +168,51 @@ func _test_package_manifest() -> void:
 	_check(str(malicious_inspection.get("reason", "")) == "manifest_unlisted_file", "archive files not covered by the manifest are rejected")
 	manifest["version"] = "9.9.9"
 	_check(str(PackagePolicy.validate_manifest(manifest, "1.1.0").get("reason", "")) == "manifest_version", "package version mismatch is rejected")
-	DirAccess.remove_absolute(package_path)
-	DirAccess.remove_absolute(malicious_path)
+	for path in [package_path, malicious_path, signed_path, missing_signature_path]:
+		DirAccess.remove_absolute(path)
+
+
+func _test_trust_policy() -> void:
+	var default_policy := TrustPolicy.load_policy()
+	_check(bool(default_policy.get("success", false)), "repository updater trust policy parses")
+	var release_ready := TrustPolicy.validate_release_ready(default_policy)
+	_check(str(release_ready.get("reason", "")) == "manifest_signer_pin_missing", "empty repository pins fail closed before commercial auto-update")
+	var pin := "a".repeat(64)
+	var publisher_pin := "b".repeat(64)
+	var normalized := TrustPolicy.normalize_policy({
+		"schema_version":1,
+		"max_active_pins":4,
+		"manifest_signature":{
+			"required_for_release":true,
+			"format":"cms-detached",
+			"digest":"sha256",
+			"code_signing_eku_oid":"1.3.6.1.5.5.7.3.3",
+			"trusted_signer_certificate_sha256":[pin.to_upper(), pin],
+		},
+		"executable_authenticode":{
+			"required_for_release":true,
+			"require_trusted_timestamp":true,
+			"code_signing_eku_oid":"1.3.6.1.5.5.7.3.3",
+			"timestamp_eku_oid":"1.3.6.1.5.5.7.3.8",
+			"trusted_publisher_certificate_sha256":[publisher_pin],
+		},
+		"rotation":{
+			"overlap_required":true,
+			"target_package_cannot_add_trust":true,
+			"pins_are_loaded_from_current_install":true,
+		},
+	})
+	_check(bool(normalized.get("success", false)), "bounded certificate rotation policy normalizes")
+	var manifest_section: Dictionary = normalized.get("manifest_signature", {})
+	var manifest_pins: Array = manifest_section.get("trusted_signer_certificate_sha256", [])
+	_check(manifest_pins.size() == 1 and str(manifest_pins[0]) == pin, "duplicate and uppercase manifest pins normalize to one SHA-256")
+	_check(bool(TrustPolicy.validate_release_ready(normalized).get("success", false)), "fully pinned trust policy is release-ready")
+	var too_many := []
+	for index in 5:
+		too_many.append(("%064x" % (index + 1)))
+	var overflow := normalized.duplicate(true)
+	overflow["manifest_signature"]["trusted_signer_certificate_sha256"] = too_many
+	_check(str(TrustPolicy.normalize_policy(overflow).get("reason", "")) == "trust_policy_pin_budget", "certificate rotation is bounded")
 
 
 func _test_service_and_prompt() -> void:

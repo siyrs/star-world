@@ -1,0 +1,201 @@
+name: Publisher-pinned auto-update quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/publisher-pinned-auto-update-iteration-64-tests.yml'
+      - '.github/workflows/auto-update-tests.yml'
+      - '.github/workflows/publish-windows-release.yml'
+      - 'data/update_trust_policy.json'
+      - 'src/update/**'
+      - 'tools/build_update_release.ps1'
+      - 'tools/new_update_manifest.ps1'
+      - 'tools/sign_update_manifest.ps1'
+      - 'tools/publish_signed_update_release.ps1'
+      - 'tests/developer_b/validate_auto_update.ps1'
+      - 'tests/developer_b/validate_publisher_pinned_auto_update_iteration_64.ps1'
+      - 'tests/qa/auto_update_regression.gd'
+      - 'tests/qa/windows_update_helper_acceptance.ps1'
+      - 'tests/qa/windows_update_publisher_trust_acceptance.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/GITHUB_RELEASE_AUTO_UPDATE.md'
+      - 'docs/PUBLISHER_PINNED_AUTO_UPDATE.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_64.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_64.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/publisher-pinned-auto-update-iteration-64-tests.yml'
+      - '.github/workflows/auto-update-tests.yml'
+      - '.github/workflows/publish-windows-release.yml'
+      - 'data/update_trust_policy.json'
+      - 'src/update/**'
+      - 'tools/build_update_release.ps1'
+      - 'tools/new_update_manifest.ps1'
+      - 'tools/sign_update_manifest.ps1'
+      - 'tools/publish_signed_update_release.ps1'
+      - 'tests/developer_b/validate_auto_update.ps1'
+      - 'tests/developer_b/validate_publisher_pinned_auto_update_iteration_64.ps1'
+      - 'tests/qa/auto_update_regression.gd'
+      - 'tests/qa/windows_update_helper_acceptance.ps1'
+      - 'tests/qa/windows_update_publisher_trust_acceptance.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/GITHUB_RELEASE_AUTO_UPDATE.md'
+      - 'docs/PUBLISHER_PINNED_AUTO_UPDATE.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_64.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_64.md'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publisher-pinned-auto-update-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publisher-pinned-updater:
+    name: Current-install trust, signed manifest and pre-swap authentication
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate publisher-pinned updater contract
+        shell: pwsh
+        run: .\tests\developer_b\validate_publisher_pinned_auto_update_iteration_64.ps1
+
+      - name: Exercise real publisher-pinned updater cryptography
+        shell: pwsh
+        run: .\tests\qa\windows_update_publisher_trust_acceptance.ps1
+
+      - name: Exercise reference swap, ACK and rollback
+        shell: pwsh
+        run: .\tests\qa\windows_update_helper_acceptance.ps1
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Run updater protocol regression
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/auto_update_regression.gd -- --disable-update-check'
+
+      - name: Upload updater trust evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publisher-pinned-auto-update-${{ github.run_number }}
+          path: |
+            build/auto-update-static-failure.txt
+            build/windows-update-helper-failure.txt
+          if-no-files-found: ignore
+          retention-days: 21
+
+  range-resume:
+    name: Real interrupted HTTP Range resume under pinned updater
+    needs: publisher-pinned-updater
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise real interrupted HTTP Range resume
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\range-resume | Out-Null
+          $work = (Resolve-Path build\range-resume).Path
+          $fixture = Join-Path $work 'release-fixture.bin'
+          $ready = Join-Path $work 'server-ready.json'
+          $log = Join-Path $work 'server-log.jsonl'
+          $python = (Get-Command python).Source
+          $server = Start-Process -FilePath $python -ArgumentList @(
+            'tests/ci/resumable_range_server.py',
+            '--file', $fixture,
+            '--ready-file', $ready,
+            '--log-file', $log,
+            '--port', '0'
+          ) -PassThru -NoNewWindow
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(15)
+            while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+            if (-not (Test-Path -LiteralPath $ready)) { throw 'Local Range server did not become ready' }
+            $download = Join-Path $work 'download'
+            .\tests\ci\Invoke-Godot.ps1 -Arguments "--headless --path . --script res://tests/qa/resumable_download_acceptance.gd -- --disable-update-check --range-ready=$ready --range-work-dir=$download"
+          } finally {
+            if ($null -ne $server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Upload Range resume evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publisher-pinned-range-resume-${{ github.run_number }}
+          path: |
+            build/range-resume/server-ready.json
+            build/range-resume/server-log.jsonl
+            build/range-resume/download/download-state.json
+            build/range-resume/download/*.part
+          if-no-files-found: ignore
+          retention-days: 21
+
+  updater-desktop:
+    name: Real first-start update prompt and retry UI under pinned updater
+    needs: publisher-pinned-updater
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Exercise production first-start update experience
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/auto_update_desktop_acceptance.gd' `
+            -OutputPath 'build\auto-update-desktop.png' `
+            -TimeoutMilliseconds 100000
+
+      - name: Upload update prompt evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publisher-pinned-auto-update-desktop-${{ github.run_number }}
+          path: |
+            build/auto-update-*.png
+            build/auto-update-*.log
+          if-no-files-found: error
+          retention-days: 21
