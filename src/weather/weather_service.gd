@@ -23,6 +23,7 @@ var remaining_seconds := 0.0
 var transition_index := 0
 var active := false
 var _installed := false
+var _world_bound := false
 var _exposure_elapsed := 0.0
 var _transition_count := 0
 var _exposure_application_count := 0
@@ -54,11 +55,16 @@ func begin_world(p_map_id: String, p_world_seed: int, saved_state: Dictionary = 
 		remaining_seconds = registry.duration_for_state(
 			map_id, current_state_id, world_seed, transition_index
 		)
+	_world_bound = true
 	_apply_current_state(true)
 
 
 func activate() -> void:
-	if not _installed or registry.get_state(map_id, current_state_id).is_empty():
+	if (
+		not _installed
+		or not _world_bound
+		or registry.get_state(map_id, current_state_id).is_empty()
+	):
 		return
 	active = true
 	_apply_current_state(true)
@@ -66,6 +72,7 @@ func activate() -> void:
 
 func clear() -> void:
 	active = false
+	_world_bound = false
 	map_id = "star_continent"
 	world_seed = 0
 	current_state_id = "clear"
@@ -85,13 +92,13 @@ func shutdown() -> void:
 
 
 func _process(delta: float) -> void:
-	if not active:
+	if not active or not _world_bound:
 		return
 	advance(minf(maxf(0.0, delta), MAX_PROCESS_DELTA_SECONDS))
 
 
 func advance(delta: float) -> void:
-	if not active or delta <= 0.0:
+	if not active or not _world_bound or delta <= 0.0:
 		return
 	var remaining_delta := minf(delta, MAX_ADVANCE_SECONDS)
 	var transitions := 0
@@ -114,6 +121,8 @@ func advance(delta: float) -> void:
 
 
 func force_weather_state(state_id: String, duration_seconds: float = -1.0) -> bool:
+	if not _world_bound:
+		return false
 	var state := registry.get_state(map_id, state_id)
 	if state.is_empty():
 		return false
@@ -132,6 +141,8 @@ func force_weather_state(state_id: String, duration_seconds: float = -1.0) -> bo
 
 
 func get_snapshot() -> Dictionary:
+	if not _world_bound:
+		return {}
 	var state := registry.get_state(map_id, current_state_id)
 	if state.is_empty():
 		return {}
@@ -147,6 +158,7 @@ func get_snapshot() -> Dictionary:
 			"exposure_application_count": _exposure_application_count,
 			"exhaustion_total": _exhaustion_total,
 			"active": active,
+			"world_bound": true,
 		},
 		true
 	)
@@ -154,6 +166,8 @@ func get_snapshot() -> Dictionary:
 
 
 func serialize() -> Dictionary:
+	if not _world_bound:
+		return {}
 	return {
 		"version": SERIAL_VERSION,
 		"map_id": map_id,
