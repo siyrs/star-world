@@ -25,7 +25,9 @@ if ([string]::IsNullOrWhiteSpace($Godot)) {
 }
 if ([string]::IsNullOrWhiteSpace($Godot)) { throw 'Godot executable not found for Iteration 65 full regression.' }
 
-& $runAll -Godot $Godot
-if ($LASTEXITCODE -ne 0) { throw "Repository full regression failed with exit code $LASTEXITCODE." }
+$pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+& $pwsh -NoLogo -NoProfile -File $runAll -Godot $Godot
+$runAllExit = $LASTEXITCODE
+if ($runAllExit -ne 0) { throw "Repository full regression failed with exit code $runAllExit." }
 
 Write-Host 'ITERATION 65 FULL REGRESSION PASS | governance=true | run_all=true'
