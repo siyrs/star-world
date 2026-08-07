@@ -22,6 +22,24 @@ if ($null -eq ('System.Security.Cryptography.Pkcs.SignedCms' -as [type]) -or
     throw 'CMS/PKCS#7 support is unavailable in this PowerShell runtime.'
 }
 
+# A helper launched from pwsh can inherit a PSModulePath that does not prioritize
+# the inbox Windows PowerShell modules. Import the security module from this
+# process' own PSHOME so Get-AuthenticodeSignature always comes from the runtime
+# that is executing the validator rather than from inherited module discovery.
+$securityModuleManifest = Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1'
+try {
+    if (Test-Path -LiteralPath $securityModuleManifest -PathType Leaf) {
+        Import-Module -Name $securityModuleManifest -Force -ErrorAction Stop
+    } else {
+        Import-Module -Name Microsoft.PowerShell.Security -Force -ErrorAction Stop
+    }
+} catch {
+    throw "Windows Authenticode support is unavailable in this PowerShell runtime: $($_.Exception.Message)"
+}
+if ($null -eq (Get-Command -Name Get-AuthenticodeSignature -CommandType Cmdlet -ErrorAction SilentlyContinue)) {
+    throw 'Get-AuthenticodeSignature is unavailable after loading Microsoft.PowerShell.Security.'
+}
+
 function Get-ByteSha256 {
     param([Parameter(Mandatory = $true)][byte[]]$Bytes)
     $sha = [System.Security.Cryptography.SHA256]::Create()
