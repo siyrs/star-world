@@ -79,6 +79,8 @@ This composes:
 
 Because the candidate-chain manifest still hashes `StarWorld.exe`, a passing signed distribution proves that the signature was already present when the candidate identity and external qualification evidence were generated.
 
+Reference-only fixtures do not claim publisher authenticity. When neither a publisher-certificate pin nor the commercial gate is requested, the Distribution Gate validates the Promotion chain and returns an explicit unsigned reference state instead of sending placeholder fixture bytes through the Windows Authenticode parser.
+
 ## 5. Record a distribution receipt
 
 ```powershell
@@ -97,9 +99,11 @@ The receipt must remain outside the immutable Promotion Bundle.
 
 ## CI boundary
 
-The permanent Windows workflow creates an ephemeral self-signed Code Signing certificate only to prove that the operating-system Authenticode path and certificate pin logic work. It adds that certificate to the job-local current-user trust stores and deletes it afterward.
+The permanent Windows workflow does not create a publisher signing key and does not sign Star World. It discovers a real trusted, timestamped Authenticode binary already present on the hosted Windows image (`pwsh` or a Microsoft system binary), copies it into the test evidence directory, derives its signer-certificate SHA-256, and verifies it with the same production validator.
 
-The fixture is deliberately not timestamped. Commercial timestamp enforcement must therefore reject it. This prevents CI from generating a false commercial-release pass.
+The fixture proves operating-system trust, Code Signing EKU handling, external certificate-pin matching, trusted timestamp presence and Time Stamping EKU handling. Negative tests deliberately use a wrong certificate pin, mutate a signed binary byte and supply unsigned content; all must fail closed.
+
+The trusted runner binary is not a Star World release artifact, and the surrounding Promotion Bundle remains reference-only. Therefore this fixture can prove verifier correctness but can never close the commercial Distribution Gate.
 
 ## Security boundary
 
