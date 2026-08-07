@@ -1,0 +1,70 @@
+name: Task workspace governance quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/task-workspace-governance-iteration-65-tests.yml'
+      - 'tests/developer_b/validate_task_workspace_governance_iteration_65.ps1'
+      - 'tests/ci/run_iteration_65_full_regression.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_65.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_65.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/task-workspace-governance-iteration-65-tests.yml'
+      - 'tests/developer_b/validate_task_workspace_governance_iteration_65.ps1'
+      - 'tests/ci/run_iteration_65_full_regression.ps1'
+      - 'tests/run_all.ps1'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_65.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_65.md'
+      - 'docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-workspace-governance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  governance-contract:
+    name: Validate canonical task workspace state
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate canonical task workspace state
+        shell: pwsh
+        run: .\tests\developer_b\validate_task_workspace_governance_iteration_65.ps1
+
+  full-regression:
+    name: Run complete repository regression
+    needs: governance-contract
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Run complete repository regression
+        shell: pwsh
+        run: .\tests\ci\run_iteration_65_full_regression.ps1 -Godot (Get-Command godot).Source
