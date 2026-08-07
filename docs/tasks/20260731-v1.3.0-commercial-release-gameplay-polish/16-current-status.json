@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "task_id": "20260731-v1.3.0-commercial-release-gameplay-polish",
+  "version": "v1.3.0",
+  "reconciled_at": "2026-08-07",
+  "repository_implementation": "complete",
+  "repository_qa": "passed",
+  "repository_acceptance": "accepted",
+  "repository_delivery": "delivered",
+  "function_points": {
+    "planned": 11,
+    "complete": 11,
+    "accepted_repository": 9,
+    "external_hold": 2
+  },
+  "open_repository_p0_p1_bugs": 0,
+  "commercial_release": "hold",
+  "commercial_hold_scope": "external-qualification-and-production-signing",
+  "remaining_external_gates": [
+    "independent-e4h-review",
+    "minimum-hardware-final-package-run",
+    "recommended-hardware-final-package-run",
+    "target-hardware-7200-second-soak",
+    "physical-hdd-antivirus-power-loss-evidence",
+    "release-owner-promotion-pin-retention",
+    "production-publisher-certificate-and-trusted-timestamp",
+    "production-update-trust-pins-bootstrap-and-signed-publication"
+  ],
+  "authoritative_documents": [
+    "09-feature-status-board.md",
+    "11-readiness-gates.md"
+  ],
+  "historical_snapshot_documents": [
+    "01-product-requirement.md",
+    "02-development-plan.md",
+    "03-implementation-notes.md",
+    "04-test-plan.md",
+    "10-collaboration-log.md",
+    "12-stage-user-report.md",
+    "13-decision-log.md",
+    "14-change-request-log.md"
+  ]
+}
