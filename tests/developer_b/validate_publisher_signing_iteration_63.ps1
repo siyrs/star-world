@@ -29,9 +29,9 @@ function Assert-ContainsAll {
     }
 }
 Assert-ContainsAll $signatureValidator @('Get-AuthenticodeSignature', 'ExpectedPublisherCertificateSha256', 'Code Signing EKU', 'trusted Authenticode timestamp', 'Time Stamping EKU')
-Assert-ContainsAll $distributionGate @('sign_before_qualification', 'ExpectedPublisherCertificateSha256', 'sign_before_qualification_proven', 'validate_release_promotion_bundle.ps1', 'validate_windows_publisher_signature.ps1')
+Assert-ContainsAll $distributionGate @('sign_before_qualification', 'post_qualification_signing_forbidden', 'ExpectedPublisherCertificateSha256', 'sign_before_qualification_proven', 'not_required_reference', 'validate_release_promotion_bundle.ps1', 'validate_windows_publisher_signature.ps1')
 Assert-ContainsAll $receiptWriter @('outside the immutable promotion bundle', 'publisher_certificate_sha256', 'timestamp_certificate_sha256', 'distribution_gate_sha256')
-Assert-ContainsAll $distributionTest @('New-SelfSignedCertificate', 'Wrong publisher certificate pin', 'Missing trusted timestamp', 'Unsigned publisher artifact', 'negative_cases=5')
+Assert-ContainsAll $distributionTest @('Find-TrustedTimestampedFixture', 'Wrong publisher certificate pin', 'Tampered signed artifact', 'Unsigned publisher artifact', 'negative_cases=5')
 Assert-ContainsAll $workflow @('Validate publisher signing static contract', 'Materialize promotion reference fixture', 'Exercise Authenticode and distribution gate', 'Validate strict project import')
 
 $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json -Depth 30
@@ -43,4 +43,4 @@ foreach ($name in @('required_for_commercial', 'sign_before_qualification', 'pos
 if ([string]$signing.code_signing_eku_oid -ne '1.3.6.1.5.5.7.3.3') { throw 'Code Signing EKU OID drifted.' }
 if ([string]$signing.timestamp_eku_oid -ne '1.3.6.1.5.5.7.3.8') { throw 'Time Stamping EKU OID drifted.' }
 
-Write-Host 'ITERATION 63 PUBLISHER SIGNING STATIC PASS | sign-before-qualification=true | external-publisher-pin=true | authenticode=true | trusted-timestamp=external'
+Write-Host 'ITERATION 63 PUBLISHER SIGNING STATIC PASS | sign-before-qualification=true | external-publisher-pin=true | authenticode=true | trusted-timestamp=required'
