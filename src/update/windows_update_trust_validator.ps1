@@ -9,6 +9,19 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# The updater helper intentionally runs under inbox Windows PowerShell 5.1 for
+# broad installed-machine compatibility. In .NET Framework the PKCS#7 types
+# live in System.Security.dll, while pwsh/.NET may expose a dedicated assembly.
+# Load whichever runtime representation is available before referencing types.
+foreach ($assemblyName in @('System.Security', 'System.Security.Cryptography.Pkcs')) {
+    if ($null -ne ('System.Security.Cryptography.Pkcs.SignedCms' -as [type])) { break }
+    try { Add-Type -AssemblyName $assemblyName -ErrorAction Stop } catch { }
+}
+if ($null -eq ('System.Security.Cryptography.Pkcs.SignedCms' -as [type]) -or
+    $null -eq ('System.Security.Cryptography.Pkcs.ContentInfo' -as [type])) {
+    throw 'CMS/PKCS#7 support is unavailable in this PowerShell runtime.'
+}
+
 function Get-ByteSha256 {
     param([Parameter(Mandatory = $true)][byte[]]$Bytes)
     $sha = [System.Security.Cryptography.SHA256]::Create()
