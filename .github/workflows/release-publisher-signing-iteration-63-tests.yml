@@ -48,14 +48,22 @@ jobs:
   publisher-signing-contract:
     name: Sign-before-qualification, Authenticode trust and timestamp boundary
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate publisher signing and distribution contract
+      - name: Validate publisher signing static contract
         shell: pwsh
         run: .\tests\developer_b\validate_publisher_signing_iteration_63.ps1
+
+      - name: Materialize promotion reference fixture
+        shell: pwsh
+        run: .\tests\ci\test_release_promotion_bundle.ps1
+
+      - name: Exercise Authenticode and distribution gate
+        shell: pwsh
+        run: .\tests\ci\test_release_distribution_signing.ps1
 
       - name: Setup Godot
         uses: chickensoft-games/setup-godot@v2
