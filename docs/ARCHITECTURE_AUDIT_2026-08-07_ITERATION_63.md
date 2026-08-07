@@ -31,13 +31,21 @@ Decision: commercial Distribution Gate requires both:
 
 Neither can be inferred solely from mutable bundle content.
 
-### 4. Timestamping cannot be honestly synthesized by repository CI
+### 4. Repository CI should verify signatures, not simulate the publisher private key
 
-A real commercial timestamp must come from a trusted TSA and be validated by Windows Authenticode trust. CI can prove the signature-validation path with an ephemeral local Code Signing certificate, but a local untimestamped fixture is not commercial evidence.
+The repository owns verification logic, not the real publisher signing operation. Generating a local signing key inside CI would blur that boundary and does not prove trusted timestamp handling.
 
-Decision: CI positively validates Authenticode signing and certificate pinning, while commercial timestamp mode must fail on the retained fixture.
+Decision: the permanent Windows gate discovers a real trusted, timestamped Authenticode binary already present on the hosted Windows image, derives its signer-certificate SHA-256 and sends it through the same validator used for releases. This exercises Windows trust, Code Signing EKU, certificate pinning, trusted timestamp presence and Time Stamping EKU without creating a Star World signing key.
 
-### 5. Distribution receipt must remain outside the immutable bundle
+The fixture is not a Star World release artifact and the surrounding Promotion Bundle remains reference-only, so it can never close the commercial gate.
+
+### 5. Reference fixtures must not parse placeholder EXE bytes as Authenticode
+
+The retained qualification fixture uses placeholder `StarWorld.exe` bytes only to exercise the hash/evidence contracts. Treating that placeholder as a Windows executable adds no security value and can create OS-parser-dependent behavior.
+
+Decision: reference Distribution validation skips Authenticode unless an external publisher certificate pin or `-RequireReleaseGate` is supplied. It returns an explicit unsigned reference state instead.
+
+### 6. Distribution receipt must remain outside the immutable bundle
 
 Writing validation output into the Promotion Bundle would mutate the payload being described and change its inventory/hash contract.
 
@@ -80,11 +88,12 @@ Unsigned retained fixtures remain valid reference evidence but can never close t
 
 ## Risk review
 
-- Private-key leakage: avoided; no real private key is accepted or stored by repository tooling.
+- Private-key leakage: avoided; repository tests do not create or import a Star World publisher key.
 - Wrong trusted publisher: prevented by external certificate SHA-256 pin.
-- Post-qualification signing: prevented by hash equality plus explicit policy.
+- Post-qualification signing: prevented by executable hash equality plus explicit policy.
 - Missing timestamp: commercial mode fails closed.
-- Fixture promoted as real: impossible because the fixture lacks a trusted external timestamp and its external qualification remains reference-only.
+- Signed-binary tamper: Authenticode trust validation fails after byte mutation.
+- Fixture promoted as real: impossible because the Star World Promotion fixture remains reference-only.
 - Checkout drift: already handled by Iteration 62 frozen contract snapshots.
 
 ## Conclusion
