@@ -1,0 +1,37 @@
+name: Iteration 63 final docs reconciler
+
+on:
+  push:
+    branches:
+      - agent/iteration-63-publisher-signing-gate
+    paths:
+      - '.github/iteration-63-doc-reconcile.py'
+      - '.github/workflows/iteration-63-doc-reconcile.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/iteration-63-publisher-signing-gate
+          fetch-depth: 0
+
+      - name: Apply final documentation reconciliation
+        shell: bash
+        run: python .github/iteration-63-doc-reconcile.py
+
+      - name: Commit docs and remove temporary reconciler
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/iteration-63-doc-reconcile.py .github/workflows/iteration-63-doc-reconcile.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/PRODUCT_ROADMAP.md docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/09-feature-status-board.md docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/11-readiness-gates.md .github/iteration-63-doc-reconcile.py .github/workflows/iteration-63-doc-reconcile.yml
+          git commit -m "docs: align iteration 63 signing evidence boundary"
+          git push origin HEAD:agent/iteration-63-publisher-signing-gate
