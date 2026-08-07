@@ -25,6 +25,8 @@ var _cloud_scroll_accum := 0.0
 var _last_sky_strength := -1.0
 var _fog_begin := 30.0
 var _fog_end := 47.0
+var _weather_profile: Dictionary = {}
+var _weather_revision := 0
 
 
 func _ready() -> void:
@@ -54,6 +56,37 @@ func attach_lighting(p_sun: DirectionalLight3D, p_environment: WorldEnvironment 
 func set_map_profile(p_map_id: String) -> void:
 	map_id = p_map_id
 	_apply_lighting()
+
+
+func set_weather_profile(profile: Dictionary) -> void:
+	if profile.is_empty():
+		_weather_profile.clear()
+	else:
+		_weather_profile = {
+			"state_id": str(profile.get("state_id", "clear")),
+			"label": str(profile.get("label", "晴朗")),
+			"fog_multiplier": clampf(float(profile.get("fog_multiplier", 1.0)), 0.5, 3.0),
+			"light_multiplier": clampf(float(profile.get("light_multiplier", 1.0)), 0.4, 1.2),
+			"cloud_opacity": clampf(float(profile.get("cloud_opacity", 0.25)), 0.0, 1.0),
+			"sky_tint": str(profile.get("sky_tint", "#FFFFFF")),
+			"tint_strength": clampf(float(profile.get("tint_strength", 0.0)), 0.0, 1.0),
+		}
+	_weather_revision += 1
+	_last_sky_strength = -1.0
+	_apply_lighting()
+
+
+func get_weather_environment_snapshot() -> Dictionary:
+	return {
+		"revision": _weather_revision,
+		"state_id": str(_weather_profile.get("state_id", "clear")),
+		"label": str(_weather_profile.get("label", "晴朗")),
+		"fog_multiplier": _weather_fog_multiplier(),
+		"light_multiplier": _weather_light_multiplier(),
+		"cloud_opacity": _weather_cloud_opacity(),
+		"sky_tint": str(_weather_profile.get("sky_tint", "#FFFFFF")),
+		"tint_strength": _weather_tint_strength(),
+	}
 
 
 func set_time(hours: float) -> void:
@@ -114,10 +147,14 @@ func _apply_lighting() -> void:
 	var strength := get_sun_strength()
 	if map_id == "abyss_world":
 		strength *= 0.18
+	var weather_light := _weather_light_multiplier()
+	var weather_tint := _weather_tint_color()
+	var tint_strength := _weather_tint_strength()
 	if sun != null and is_instance_valid(sun):
 		sun.rotation_degrees = Vector3(time_of_day / 24.0 * 360.0 - 90.0, -35.0, 0.0)
-		sun.light_energy = lerpf(0.08, 1.15, strength)
-		sun.light_color = Color("#9CB7E8").lerp(Color("#FFF1CD"), strength)
+		sun.light_energy = lerpf(0.08, 1.15, strength) * weather_light
+		var sun_color := Color("#9CB7E8").lerp(Color("#FFF1CD"), strength)
+		sun.light_color = sun_color.lerp(weather_tint, tint_strength * 0.3)
 	if (
 		world_environment != null
 		and is_instance_valid(world_environment)
@@ -125,8 +162,11 @@ func _apply_lighting() -> void:
 	):
 		var environment := world_environment.environment
 		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		environment.ambient_light_color = Color("#17213A").lerp(Color("#AFC7D2"), strength)
-		environment.ambient_light_energy = lerpf(0.25, 0.85, strength)
+		var ambient_color := Color("#17213A").lerp(Color("#AFC7D2"), strength)
+		environment.ambient_light_color = ambient_color.lerp(
+			weather_tint, tint_strength * 0.28
+		)
+		environment.ambient_light_energy = lerpf(0.25, 0.85, strength) * weather_light
 		var day_color := Color("#72B5E8")
 		if map_id == "desert_ruins":
 			day_color = Color("#E2B96C")
@@ -136,6 +176,7 @@ func _apply_lighting() -> void:
 			day_color = Color("#78C8FA")
 		elif map_id == "abyss_world":
 			day_color = Color("#191D31")
+		day_color = day_color.lerp(weather_tint, tint_strength)
 		environment.background_color = Color("#091020").lerp(day_color, strength)
 		_apply_sky(environment, day_color, strength)
 		_apply_fog(environment, strength)
@@ -161,7 +202,8 @@ func serialize() -> Dictionary:
 
 func _apply_sky(environment: Environment, day_color: Color, strength: float) -> void:
 	# Sky material writes dirty the material; only refresh when the daylight
-	# strength has visibly moved instead of every frame.
+	# strength has visibly moved instead of every frame. Weather changes reset
+	# _last_sky_strength so one deterministic refresh applies the new modifiers.
 	if _sky_material != null and absf(strength - _last_sky_strength) < 0.004:
 		return
 	_last_sky_strength = strength
@@ -188,8 +230,9 @@ func _apply_sky(environment: Environment, day_color: Color, strength: float) -> 
 	_sky_material.sky_horizon_color = horizon
 	_sky_material.ground_bottom_color = horizon.darkened(0.55)
 	_sky_material.ground_horizon_color = horizon.lerp(Color("#3A3328"), 0.45)
-	_sky_material.sky_energy_multiplier = lerpf(0.25, 1.0, strength)
-	_sky_material.ground_energy_multiplier = lerpf(0.1, 0.6, strength)
+	var weather_light := _weather_light_multiplier()
+	_sky_material.sky_energy_multiplier = lerpf(0.25, 1.0, strength) * weather_light
+	_sky_material.ground_energy_multiplier = lerpf(0.1, 0.6, strength) * weather_light
 
 
 func _apply_fog(environment: Environment, strength: float) -> void:
@@ -200,10 +243,11 @@ func _apply_fog(environment: Environment, strength: float) -> void:
 		density_factor = 0.85
 	elif map_id == "frozen_wastes":
 		density_factor = 1.15
+	density_factor *= _weather_fog_multiplier()
 	environment.fog_enabled = true
 	environment.fog_mode = Environment.FOG_MODE_DEPTH
 	environment.fog_light_color = environment.background_color
-	environment.fog_light_energy = lerpf(0.4, 1.0, strength)
+	environment.fog_light_energy = lerpf(0.4, 1.0, strength) * _weather_light_multiplier()
 	environment.fog_sun_scatter = 0.0
 	environment.fog_depth_curve = 1.0
 	environment.fog_density = 1.0
@@ -228,7 +272,10 @@ func _update_clouds(delta: float) -> void:
 		offset.x = fposmod(offset.x + _cloud_scroll_accum * 0.0175, 1.0)
 		_cloud_material.uv1_offset = offset
 		var tint := Color("#3A4A6B").lerp(Color("#FFFFFF"), get_sun_strength())
+		tint = tint.lerp(_weather_tint_color(), _weather_tint_strength() * 0.45)
+		tint.a = _weather_cloud_opacity()
 		_cloud_material.albedo_color = tint
+		_cloud_mesh.visible = tint.a > 0.02
 		_cloud_scroll_accum = 0.0
 	var camera := get_viewport().get_camera_3d()
 	if camera != null:
@@ -248,7 +295,7 @@ func _create_cloud_layer() -> MeshInstance3D:
 	_cloud_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	_cloud_material.alpha_scissor_threshold = 0.5
 	_cloud_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_cloud_material.albedo_color = Color(1.0, 1.0, 1.0, 0.8)
+	_cloud_material.albedo_color = Color(1.0, 1.0, 1.0, _weather_cloud_opacity())
 	_cloud_material.no_depth_test = false
 	_cloud_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var plane := PlaneMesh.new()
@@ -262,6 +309,26 @@ func _create_cloud_layer() -> MeshInstance3D:
 	mesh_instance.rotation_degrees = Vector3(0.0, 0.0, 0.0)
 	mesh_instance.name = "CloudLayer"
 	return mesh_instance
+
+
+func _weather_fog_multiplier() -> float:
+	return clampf(float(_weather_profile.get("fog_multiplier", 1.0)), 0.5, 3.0)
+
+
+func _weather_light_multiplier() -> float:
+	return clampf(float(_weather_profile.get("light_multiplier", 1.0)), 0.4, 1.2)
+
+
+func _weather_cloud_opacity() -> float:
+	return clampf(float(_weather_profile.get("cloud_opacity", 0.25)), 0.0, 1.0)
+
+
+func _weather_tint_strength() -> float:
+	return clampf(float(_weather_profile.get("tint_strength", 0.0)), 0.0, 1.0)
+
+
+func _weather_tint_color() -> Color:
+	return Color.from_string(str(_weather_profile.get("sky_tint", "#FFFFFF")), Color.WHITE)
 
 
 static func _build_cloud_texture() -> ImageTexture:
