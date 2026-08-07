@@ -1,0 +1,39 @@
+name: Iteration 64 integration materializer
+
+on:
+  push:
+    branches:
+      - agent/iteration-64-publisher-pinned-auto-update
+    paths:
+      - 'tools/_iteration64_integrate.py'
+      - '.github/workflows/iteration-64-integrate.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iteration-64-integration
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/iteration-64-publisher-pinned-auto-update
+          fetch-depth: 0
+
+      - name: Apply integration edits
+        run: python tools/_iteration64_integrate.py
+
+      - name: Commit integration and self-delete
+        shell: bash
+        run: |
+          rm -f tools/_iteration64_integrate.py .github/workflows/iteration-64-integrate.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/run_all.ps1 tests/qa/windows_update_publisher_trust_acceptance.ps1 docs/PRODUCT_ROADMAP.md docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/09-feature-status-board.md docs/tasks/20260731-v1.3.0-commercial-release-gameplay-polish/11-readiness-gates.md tools/_iteration64_integrate.py .github/workflows/iteration-64-integrate.yml
+          git commit -m 'docs: integrate iteration 64 release trust roadmap'
+          git push origin HEAD:agent/iteration-64-publisher-pinned-auto-update
