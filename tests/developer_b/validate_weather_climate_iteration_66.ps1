@@ -12,6 +12,8 @@ $required = @(
     'src\ui\exploration_progression_service_hub.gd',
     'tests\qa\weather_climate_regression.gd',
     'tests\qa\weather_climate_desktop_acceptance.gd',
+    'tests\qa\service_hub_feature_lifecycle_regression.gd',
+    'tests\ci\run_iteration_66_full_regression.ps1',
     '.github\workflows\weather-climate-iteration-66-tests.yml',
     'docs\WEATHER_CLIMATE_SYSTEM.md',
     'docs\PRODUCT_ROADMAP_ITERATION_66.md',
@@ -38,6 +40,7 @@ if ([int]$data.schema_version -ne 1) { throw 'Weather profile schema_version mus
 $expectedMaps = @('star_continent','desert_ruins','frozen_wastes','sky_islands','abyss_world')
 $profiles = @($data.profiles)
 if ($profiles.Count -ne 5) { throw 'Weather registry must contain exactly five formal map profiles.' }
+$allStateIds = [System.Collections.Generic.List[string]]::new()
 foreach ($mapId in $expectedMaps) {
     $profile = @($profiles | Where-Object { [string]$_.id -eq $mapId })
     if ($profile.Count -ne 1) { throw "Weather profile missing or duplicated: $mapId" }
@@ -45,6 +48,7 @@ foreach ($mapId in $expectedMaps) {
     if ($states.Count -lt 2 -or $states.Count -gt 4) { throw "Weather state count is not bounded for $mapId" }
     if (@($states | Where-Object { [string]$_.id -eq 'clear' }).Count -ne 1) { throw "Weather profile must retain clear baseline: $mapId" }
     foreach ($state in $states) {
+        $allStateIds.Add([string]$state.id)
         if ([int]$state.weight -lt 1 -or [int]$state.weight -gt 1000) { throw "Weather weight out of bounds: $mapId/$($state.id)" }
         if ([int]$state.min_duration_seconds -lt 15 -or [int]$state.max_duration_seconds -gt 600 -or [int]$state.max_duration_seconds -lt [int]$state.min_duration_seconds) { throw "Weather duration out of bounds: $mapId/$($state.id)" }
         if ([double]$state.fog_multiplier -lt 0.5 -or [double]$state.fog_multiplier -gt 3.0) { throw "Weather fog multiplier out of bounds: $mapId/$($state.id)" }
@@ -54,7 +58,7 @@ foreach ($mapId in $expectedMaps) {
     }
 }
 foreach ($hazard in @('thunderstorm','sandstorm','blizzard','high_wind','void_mist')) {
-    if (@($profiles.states | Where-Object { [string]$_.id -eq $hazard }).Count -lt 1) { throw "Map-signature hazardous weather missing: $hazard" }
+    if (-not $allStateIds.Contains($hazard)) { throw "Map-signature hazardous weather missing: $hazard" }
 }
 
 Assert-ContainsAll 'src\weather\weather_registry.gd' @(
@@ -68,10 +72,11 @@ Assert-ContainsAll 'src\weather\weather_service.gd' @(
     'MAX_TRANSITIONS_PER_ADVANCE := 8',
     'MAX_EXPOSURE_APPLICATIONS_PER_ADVANCE := 12',
     'EXPOSURE_INTERVAL_SECONDS := 5.0',
-    'payload',
-    'serialize()',
+    'func serialize()',
     'force_weather_state',
-    'add_exhaustion'
+    'add_exhaustion',
+    'remaining_seconds',
+    'transition_index'
 )
 Assert-ContainsAll 'src\weather\weather_runtime_participant.gd' @(
     'normalize_world_state',
@@ -103,6 +108,13 @@ if ($weatherIndex -lt 0 -or $autosaveIndex -lt 0 -or $weatherIndex -gt $autosave
     throw 'Weather must register before autosave so reverse cleanup stops autosave first.'
 }
 
+Assert-ContainsAll 'tests\qa\service_hub_feature_lifecycle_regression.gd' @(
+    'all eight lifecycle participants',
+    '&"weather_runtime"',
+    'loaded.has("weather")',
+    'participant_count", 0',
+    'autosave_runtime,weather_runtime,exploration_journal_rewards'
+)
 Assert-ContainsAll 'tests\qa\weather_climate_regression.gd' @(
     'five formal maps',
     'state survives save/reload',
@@ -115,6 +127,12 @@ Assert-ContainsAll 'tests\qa\weather_climate_desktop_acceptance.gd' @(
     'desktop HUD exposes active sandstorm',
     'real desktop fog hides distant geometry',
     'weather desktop screenshot is saved'
+)
+Assert-ContainsAll 'tests\ci\run_iteration_66_full_regression.ps1' @(
+    'validate_weather_climate_iteration_66.ps1',
+    'weather_climate_regression.gd',
+    'run_iteration_65_full_regression.ps1',
+    'ITERATION 66 FULL REGRESSION PASS'
 )
 Assert-ContainsAll '.github\workflows\weather-climate-iteration-66-tests.yml' @(
     'Validate weather and climate contracts',
