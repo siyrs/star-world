@@ -1,54 +1,49 @@
 # Delivery Summary
 
 ## Delivery Result
-- Delivered: no
-- Delivery time: 未交付
-- Version: v1.3.0 (目标)
-- Branch / Commit: `codex/commercial-release-gameplay-polish` / 尚无提交
+- Reconciled at: 2026-08-07 (Iteration 65)
+- Version: v1.3.0
+- Repository delivery: delivered
+- Repository scope: 11/11 function points complete
+- Repository QA: passed
+- Repository acceptance: accepted
+- Open repository P0/P1 blockers: 0
+- Commercial release: HOLD
 
-## Completed Scope
-- Analyst A-001: 5 正式 Profile + 内容/入口/存档/测试缺口发现
-- Developer D-001: bug 根因分析与实施方案
-- QA-001: TC-001..020 测试策略独立复核
-- Readiness Gates 0-7: 全部通过
-- Fresh export/smoke: pwsh7 通过
-- BUG-QA-002: 修复 + 独立 QA PASS
-- BUG-UI-002: 首轮修复 (QA FAIL) → 二轮 WCAG 修复
-- BUG-SPAWN-001: 首轮修复 (incomplete) → 二轮迭代
-- 版本号: project.godot 1.1.0 → 1.3.0
-- 代码质量: 函数拆分 + 命名修正 + 错误级别修正
-- 核心文件: Git 跟踪完成
+`delivered` here means the planned repository-owned implementation, tests, documentation and release-control tooling are complete on the default branch after merge. It does not mean a commercially signed build has passed the remaining physical/external qualification gates.
 
-## Documents Updated
-- [ ] README.md
-- [x] docs/PLAN.md (task index status)
-- [ ] docs/API.md
-- [ ] docs/CONFIG.md
-- [ ] docs/DEPLOY.md
-- [ ] docs/CHANGELOG.md
-- [ ] docs/TESTING.md
+## Completed Repository Scope
+- Five formal profiles and closed-loop production player journeys.
+- Spawn, collision, water/lava, save/load/recovery, death/respawn and world-switching coverage.
+- UI/accessibility/controller/high-DPI/audio/settings coverage.
+- Runtime health, scale, recovery, soak and stability harnesses.
+- Release integrity and continuous lifecycle qualification.
+- Auditable external qualification evidence kit.
+- Candidate chain of custody and immutable package identity.
+- Offline Promotion Pin and handoff validation.
+- Publisher signing/timestamp Distribution Gate.
+- Publisher-pinned CMS + Authenticode automatic update chain with pre-swap verification and rollback.
+- Iteration 65 canonical task-state contract and governance drift CI.
 
 ## Validation Summary
-- Developer self-test: BUG-QA-002 pass; BUG-UI-002 二轮待测; SPAWN-001 未闭合
-- QA result: BUG-QA-002 PASS; BUG-UI-002 首轮 FAIL; SPAWN-001 not-entered
-- Product acceptance: not accepted
-- Quality gate: blocked (7 P0/P1 open)
+- Focused static contracts: permanent CI coverage.
+- Godot strict import: required by release and iteration workflows.
+- Full repository regression: `tests/run_all.ps1` composed by `tests/ci/run_iteration_65_full_regression.ps1` for Iteration 65.
+- Current task-state consistency: `tests/developer_b/validate_task_workspace_governance_iteration_65.ps1`.
+- Current implementation authority: `09-feature-status-board.md`.
+- Current commercial boundary: `11-readiness-gates.md`.
 
-## Remaining Issues
-- 7 个 P0/P1 bugs open
-- 五 Profile 发布验收旅程 0/5 完成
-- 性能基线/长稳 0 完成
-- 全量回归 0 完成
-- 0 次提交
+## External-only remaining work
+1. Independent E4-H review.
+2. Exact-final-package minimum-hardware run.
+3. Exact-final-package recommended-hardware run.
+4. Real 7,200-second target-hardware soak.
+5. Physical HDD, antivirus and power-loss evidence.
+6. Release-owner retention of the intended Promotion Pin.
+7. Production publisher certificate/private-key signing with trusted timestamp and independently retained certificate SHA-256.
+8. Production updater trust-pin bootstrap plus externally signed release publication.
 
-## Next Iteration Candidates
-- 闭合 SPAWN-001 并提交
-- 同一 QA QA-003 独立重测 BUG-UI-002
-- 修复 BUG-REL-001/PACK-001/font → 提交
-- 性能 sample 基础设施 → 五 Profile 旅程 → 提交
-- 长稳 → 全量回归 → 最终报告 → 最后提交
+Until those eight gates are satisfied against one immutable candidate, Commercial release remains HOLD.
 
 ## Final Notes
-- 提案流程设计质量高，执行进度低
-- OpenSpec 73 任务中 14 done, 59 open (19%)
-- 下一步优先级：SPAWN-001 → BUG-UI-002 → 首次提交 → REL/PACK/font → 五 Profile 旅程
+The repository should not keep adding gameplay features merely to advance commercial readiness. The next meaningful milestone is execution of the external qualification/signing checklist on the exact candidate, followed by a GO/HOLD decision using the already-implemented validators and receipts.
