@@ -19,9 +19,15 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_content()
 	visible = false
+	var pending_service := weather_service
+	weather_service = null
+	setup(pending_service)
 
 
 func setup(service: Node) -> void:
+	if not is_node_ready() or _title == null or _detail == null:
+		weather_service = service
+		return
 	_disconnect_service()
 	weather_service = service
 	if weather_service != null and weather_service.has_signal("weather_changed"):
@@ -30,12 +36,12 @@ func setup(service: Node) -> void:
 		var raw_snapshot: Variant = weather_service.call("get_snapshot")
 		if raw_snapshot is Dictionary:
 			_on_weather_changed(raw_snapshot)
-	else:
-		_on_weather_changed({})
+			return
+	_on_weather_changed({})
 
 
 func get_display_text() -> String:
-	if _last_snapshot.is_empty():
+	if _last_snapshot.is_empty() or _title == null or _detail == null:
 		return ""
 	return "%s · %s" % [_title.text, _detail.text]
 
@@ -58,6 +64,8 @@ func _build_content() -> void:
 
 func _on_weather_changed(snapshot: Dictionary) -> void:
 	_last_snapshot = snapshot.duplicate(true)
+	if _title == null or _detail == null:
+		return
 	if snapshot.is_empty():
 		visible = false
 		_title.text = ""
