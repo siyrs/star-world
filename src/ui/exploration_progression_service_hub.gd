@@ -9,6 +9,9 @@ const ExplorationRuntimeParticipantScript = preload(
 const JournalRewardParticipantScript = preload(
 	"res://src/exploration/exploration_journal_reward_participant.gd"
 )
+const WeatherRuntimeParticipantScript = preload(
+	"res://src/weather/weather_runtime_participant.gd"
+)
 const AutosaveRuntimeParticipantScript = preload(
 	"res://src/save/autosave_runtime_participant.gd"
 )
@@ -17,6 +20,7 @@ const UiAccessibilityServiceScript = preload(
 )
 const EXPLORATION_RUNTIME_FEATURE := &"exploration_runtime"
 const JOURNAL_REWARD_FEATURE := &"exploration_journal_rewards"
+const WEATHER_RUNTIME_FEATURE := &"weather_runtime"
 const AUTOSAVE_RUNTIME_FEATURE := &"autosave_runtime"
 const AUTOSAVE_STATUS_DEDUPE_KEY := "autosave_status"
 
@@ -27,6 +31,9 @@ var exploration_reward_service: Node
 var exploration_runtime_participant: Node
 var exploration_journal_reward_participant: Node
 var pickup_stack_coordinator: Node
+var weather_runtime_participant: Node
+var weather_service: Node
+var weather_status_badge: Control
 var autosave_runtime_participant: Node
 var ui_accessibility: Node
 var _application_quit_request_count := 0
@@ -97,8 +104,16 @@ func _ready() -> void:
 			exploration_reward_service.connect(
 				"reward_claimed", Callable(self, "_on_reward_claimed_sound")
 			)
-	# Registered last with explicit dependencies so reverse lifecycle cleanup
-	# disables checkpoint activity before any gameplay domain releases state.
+	weather_runtime_participant = _register_feature_participant(
+		WEATHER_RUNTIME_FEATURE,
+		WeatherRuntimeParticipantScript.new(),
+		"weather and climate runtime"
+	)
+	if weather_runtime_participant != null:
+		weather_service = weather_runtime_participant.call("get_weather_service") as Node
+		weather_status_badge = weather_runtime_participant.call("get_status_badge") as Control
+	# Autosave remains last so reverse lifecycle cleanup disables checkpoint
+	# activity before weather or any other persistent gameplay domain releases state.
 	autosave_runtime_participant = _register_feature_participant(
 		AUTOSAVE_RUNTIME_FEATURE,
 		AutosaveRuntimeParticipantScript.new(),
@@ -168,6 +183,12 @@ func get_autosave_snapshot() -> Dictionary:
 	return autosave_runtime_participant.call("get_snapshot")
 
 
+func get_weather_snapshot() -> Dictionary:
+	if weather_service == null or not weather_service.has_method("get_snapshot"):
+		return {}
+	return weather_service.call("get_snapshot")
+
+
 func get_ui_accessibility_snapshot() -> Dictionary:
 	if ui_accessibility == null or not ui_accessibility.has_method("get_snapshot"):
 		return {}
@@ -192,6 +213,7 @@ func get_character_snapshot() -> Dictionary:
 		else {}
 	)
 	snapshot["autosave"] = get_autosave_snapshot()
+	snapshot["weather"] = get_weather_snapshot()
 	snapshot["survival_tuning"] = (
 		survival.call("get_tuning_snapshot")
 		if survival != null and survival.has_method("get_tuning_snapshot")
