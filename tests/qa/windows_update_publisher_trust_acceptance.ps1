@@ -154,13 +154,13 @@ try {
     if (-not [bool]$trust.trusted_timestamp_present -or -not [bool]$trust.timestamp_eku) { throw 'Trusted timestamp was not proven.' }
 
     $wrongManifestPolicy = $policy | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-    $wrongManifestPolicy.manifest_signature.trusted_signer_certificate_sha256 = @('f' * 64)
+    $wrongManifestPolicy.manifest_signature.trusted_signer_certificate_sha256 = @((('f' * 64) -join ''))
     $wrongManifestBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($wrongManifestPolicy | ConvertTo-Json -Depth 8 -Compress)))
     Assert-Rejected -Name 'Wrong manifest signer pin' -Expected 'manifest signer certificate is not pinned' -Action {
         & $trustValidator -ManifestPath (Join-Path $payload 'update-manifest.json') -SignaturePath (Join-Path $payload 'update-manifest.p7s') -ExecutablePath (Join-Path $payload 'StarWorld.exe') -TrustPolicyBase64 $wrongManifestBase64 | Out-Null
     }
     $wrongPublisherPolicy = $policy | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-    $wrongPublisherPolicy.executable_authenticode.trusted_publisher_certificate_sha256 = @('e' * 64)
+    $wrongPublisherPolicy.executable_authenticode.trusted_publisher_certificate_sha256 = @((('e' * 64) -join ''))
     $wrongPublisherBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($wrongPublisherPolicy | ConvertTo-Json -Depth 8 -Compress)))
     Assert-Rejected -Name 'Wrong publisher pin' -Expected 'publisher certificate is not pinned' -Action {
         & $trustValidator -ManifestPath (Join-Path $payload 'update-manifest.json') -SignaturePath (Join-Path $payload 'update-manifest.p7s') -ExecutablePath (Join-Path $payload 'StarWorld.exe') -TrustPolicyBase64 $wrongPublisherBase64 | Out-Null

@@ -136,3 +136,10 @@ Commercial release remains **HOLD**. Independent E4-H review, minimum/recommende
 Repository-owned final distribution validation now requires sign-before-qualification, Windows Authenticode verification, an externally retained publisher-certificate SHA-256 and a trusted timestamp for the commercial gate. The Distribution Gate composes the Iteration 62 Promotion Pin with the exact qualified executable hash, and Distribution Receipts remain outside the immutable Promotion Bundle.
 
 CI verifies a real trusted, timestamped Authenticode binary already present on the hosted Windows image and dynamically checks its signer-certificate SHA-256 and timestamp EKU. It does not create or use a Star World publisher key, and the Promotion fixture remains reference-only. Commercial release remains **HOLD** pending the real publisher certificate/private-key operation, trusted timestamp on the final Star World EXE, independent E4-H review, minimum/recommended physical hardware, real 7,200-second soak and physical HDD/antivirus/power-loss evidence.
+
+
+## Post-implementation reconciliation · Iteration 64 · 2026-08-07
+
+Repository-owned automatic update delivery now consumes the publisher trust introduced by Iteration 63. Schema/protocol 2 signs the exact payload Manifest with detached CMS, the staged EXE independently requires pinned Authenticode plus trusted timestamp, and all pins come from the currently installed version before the target package is promoted. The existing directory-swap/ACK/rollback transaction remains after this new pre-swap authentication gate.
+
+Hosted CI no longer publishes unsigned public update assets; it produces reference-only evidence. Real Manifest signing, real certificate pins, first-baseline bootstrap and signed GitHub Release publication remain external release controls. Commercial release remains **HOLD** with the existing independent/physical qualification requirements.

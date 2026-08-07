@@ -1,11 +1,11 @@
 # Feature Status Board
 
-This board was reconciled on 2026-08-07 after Iteration 63. Historical July preparation records remain in the other task documents; this file reflects the current implementation, repository evidence and external commercial-release state.
+This board was reconciled on 2026-08-07 after Iteration 64. Historical July preparation records remain in the other task documents; this file reflects the current implementation, repository evidence and external commercial-release state.
 
 ## Evidence grades
 
 - `accepted-repository`: production implementation plus permanent automated evidence is complete.
-- `qualification-kit-ready`: the repository-owned collector, schema, chain-of-custody, offline promotion, publisher-signing validation and anti-forgery workflows are complete, but humans and physical machines must still produce the evidence.
+- `qualification-kit-ready`: the repository-owned collector, schema, chain-of-custody, offline promotion, publisher-signing validation, publisher-pinned auto-update and anti-forgery workflows are complete, but humans and physical machines must still produce the evidence.
 - `external-hold`: a real external evidence package is still required before commercial release.
 
 ## Board
@@ -20,8 +20,8 @@ This board was reconciled on 2026-08-07 after Iteration 63. Historical July prep
 | FP-006 | complete | passed | accepted-repository | water/lava lifecycle, survival and save/reload regressions | 2026-08-07 | repository-automatable water state is covered |
 | FP-007 | complete | passed | accepted-repository | save recovery, session recovery, trash integrity, death/respawn and world switching | 2026-08-07 | wrong-id/all-corrupt trash candidates fail with world_payload_unrecoverable |
 | FP-008 | complete | passed | accepted-repository | UI, accessibility, controller, high-DPI, audio and settings matrices | 2026-08-07 | production focus graph and 3440×1440 evidence are permanent |
-| FP-009 | complete | passed | qualification-kit-ready / external-hold | exact-package hardware collectors, strict soak harness, immutable candidate ID, 19-file chain, offline Promotion Bundle and publisher Distribution Gate | 2026-08-07 | real minimum/recommended machines, real 7,200-second target soak and real trusted publisher signing/timestamp remain external |
-| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-07 | includes cross-domain campaigns, qualification anti-forgery, transport-integrity, offline promotion and publisher-signing gates |
+| FP-009 | complete | passed | qualification-kit-ready / external-hold | exact-package hardware collectors, strict soak harness, immutable candidate ID, 19-file chain, offline Promotion Bundle, publisher Distribution Gate and publisher-pinned updater | 2026-08-07 | real minimum/recommended machines, real 7,200-second target soak and real trusted publisher signing/timestamp remain external |
+| FP-010 | complete | passed | accepted-repository | permanent workflows, static contracts, headless/desktop/export regressions | 2026-08-07 | includes cross-domain campaigns, qualification anti-forgery, transport-integrity, offline promotion, publisher-signing and publisher-pinned updater gates |
 | FP-011 | complete | passed | qualification-kit-ready / external-hold | E4-H recorder, fault-lab recorder, package assembler, supporting-report chain validator, Promotion Pin/receipt, Distribution Gate/receipt and decision boundary | 2026-08-07 | independent human sign-off and real HDD/antivirus/power-loss evidence remain external |
 
 ## Iteration 59 closure
@@ -68,6 +68,16 @@ This board was reconciled on 2026-08-07 after Iteration 63. Historical July prep
 - Distribution Receipts remain external to the immutable Promotion Bundle and retain publisher/timestamp certificate and validator hashes.
 - CI validates a real trusted, timestamped Authenticode binary already present on the hosted Windows image, including signer-certificate SHA-256 and timestamp EKU; that binary is not Star World and the Promotion fixture remains reference-only, so it cannot close the commercial gate.
 
+## Iteration 64 closure
+
+- Auto-update schema/protocol 2 carries a detached CMS signature over the exact payload-hash Manifest.
+- Current-install Manifest signer and Authenticode publisher certificate SHA-256 pins authenticate the target; target content cannot select its own trust roots.
+- The signed Manifest binds `StarWorld.pck`, closing the valid-EXE/malicious-PCK substitution path.
+- Windows helper verifies payload hashes, CMS, Authenticode, Code Signing EKU and trusted TSA before the first install-directory move.
+- Four-pin bounded overlap supports certificate rotation without unbounded trust growth.
+- Hosted CI is reference-only and cannot publish unsigned commercial update assets; the external signing workstation owns signed Manifest creation and `gh release` publication.
+- Repository default real pins remain empty/fail-closed; the first production pinned baseline is an external bootstrap event.
+
 ## Commercial decision
 
-Repository implementation, external qualification, candidate chain of custody, offline promotion and publisher-signing validation are accepted. Commercial release remains **HOLD** until real external evidence is collected, the release owner independently retains the intended `pin_id` and publisher-certificate SHA-256, the final EXE is signed and trusted-timestamped before qualification, and the final Distribution Gate passes with both external identity pins.
+Repository implementation, external qualification, candidate chain of custody, offline promotion, publisher-signing validation and publisher-pinned auto-update are accepted. Commercial release remains **HOLD** until real external evidence is collected, the release owner independently retains the intended `pin_id` and publisher-certificate SHA-256, the final EXE is signed and trusted-timestamped before qualification, and the final Distribution Gate passes with both external identity pins.
