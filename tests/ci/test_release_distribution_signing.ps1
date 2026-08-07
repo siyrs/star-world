@@ -128,12 +128,12 @@ try {
             -RequireSignature | Out-Null
     }
 } finally {
-    foreach ($storePath in @(
-        if ($null -ne $certificate) { "Cert:\CurrentUser\My\$($certificate.Thumbprint)" },
-        if ($null -ne $rootCertificate) { "Cert:\CurrentUser\Root\$($certificate.Thumbprint)" },
-        if ($null -ne $publisherCertificate) { "Cert:\CurrentUser\TrustedPublisher\$($certificate.Thumbprint)" }
-    )) {
-        if ($storePath -and (Test-Path -LiteralPath $storePath)) { Remove-Item -LiteralPath $storePath -Force }
+    $storePaths = [System.Collections.Generic.List[string]]::new()
+    if ($null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\My\$($certificate.Thumbprint)") }
+    if ($null -ne $rootCertificate -and $null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\Root\$($certificate.Thumbprint)") }
+    if ($null -ne $publisherCertificate -and $null -ne $certificate) { $storePaths.Add("Cert:\CurrentUser\TrustedPublisher\$($certificate.Thumbprint)") }
+    foreach ($storePath in $storePaths) {
+        if (Test-Path -LiteralPath $storePath) { Remove-Item -LiteralPath $storePath -Force }
     }
 }
 
