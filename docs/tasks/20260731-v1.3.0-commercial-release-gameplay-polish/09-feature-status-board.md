@@ -66,7 +66,7 @@ This board was reconciled on 2026-08-07 after Iteration 63. Historical July prep
 - A trusted timestamp and Time Stamping EKU are mandatory for the commercial gate.
 - The signed executable must still equal the candidate-chain executable SHA-256, proving no post-qualification signing mutation.
 - Distribution Receipts remain external to the immutable Promotion Bundle and retain publisher/timestamp certificate and validator hashes.
-- CI signs a real fixture with an ephemeral locally trusted Code Signing certificate, but the intentionally missing real TSA timestamp keeps the commercial gate closed.
+- CI validates a real trusted, timestamped Authenticode binary already present on the hosted Windows image, including signer-certificate SHA-256 and timestamp EKU; that binary is not Star World and the Promotion fixture remains reference-only, so it cannot close the commercial gate.
 
 ## Commercial decision
 

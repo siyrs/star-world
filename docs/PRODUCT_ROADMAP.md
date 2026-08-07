@@ -390,7 +390,7 @@ The next work is external qualification, not another gameplay subsystem: indepen
 - Distribution Gate 同时验证 Iteration 62 Promotion Pin、Promotion Bundle、已资格 EXE 哈希、发行证书 SHA-256 与可信时间戳；
 - 已签名 EXE 必须与 candidate-chain 中已资格 EXE 的 SHA-256 完全一致，从而证明签名发生在资格验证之前；
 - Distribution Receipt 写在不可变 Promotion Bundle 之外，并记录发行证书、时间戳证书和验证器哈希；
-- Windows CI 使用临时自签 Code Signing 证书验证真实 Authenticode 路径，但因为没有真实 TSA 时间戳，商业模式必须 fail-close；
+- Windows CI 使用 hosted runner 上真实可信且已时间戳的 Authenticode 二进制验证系统信任、证书 SHA-256 Pin 与时间戳 EKU；该 fixture 不是 Star World 且 Promotion 仍为 reference-only，不能关闭商业门禁；
 - 商业发布继续 **HOLD**，真实发行私钥、CA 证书、可信 TSA、真实外部资格和最终发行操作仍由外部安全环境产生。
 
 合同见：
