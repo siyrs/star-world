@@ -147,9 +147,9 @@ Game Runtime
 
 - 原子 `world.json`、`.tmp/.bak` 恢复和严格迁移；
 - pause-aware Autosave、15/60/300 秒失败退避和 12 条 checkpoint timeline；
-- 自愈 catalog、权威读取/sidecar 写入/暂存硬预算；
+- 轻量世界目录 `catalog.json` 是 `world.json` 的派生、自愈、严格白名单索引；权威读取、sidecar 写入和暂存均有硬预算；
 - 虚拟化存档浏览器、索引搜索/排序；
-- 二次删除确认、受保护 Trash、指定恢复与确认永久清理；
+- 回收站最多 32 个物理目录，容量满时拒绝新删除而不是自动清理；玩家删除使用二次确认，撤销恢复保留原 world ID，受保护 Trash 还支持指定恢复与确认永久清理；
 - RuntimeHealthReport 与 F3 保存/运行健康诊断。
 
 ### UI、桌面与 Release
