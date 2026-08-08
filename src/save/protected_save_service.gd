@@ -166,7 +166,7 @@ func purge_trash_slot(trash_id: String) -> bool:
 	var entry := _read_trash_entry(trash_id)
 	var was_valid := not entry.is_empty() and bool(entry.get("valid", false))
 	var world_id := str(entry.get("world_id", "")) if was_valid else ""
-	if not _remove_directory_recursive(trash_absolute):
+	if not _remove_directory_tree(trash_absolute):
 		_trash_failure("purge_slot", trash_id, "remove_failed")
 		return false
 	_trash_purge_count += 1
@@ -597,19 +597,6 @@ func _remove_trash_manifest_files(directory_path: String) -> void:
 		var path := "%s/%s%s" % [directory_path, TRASH_FILE_NAME, suffix]
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-
-
-func _remove_directory_recursive(absolute_path: String) -> bool:
-	var directory := DirAccess.open(absolute_path)
-	if directory == null:
-		return false
-	for file_name: String in directory.get_files():
-		if DirAccess.remove_absolute(absolute_path.path_join(file_name)) != OK:
-			return false
-	for child_name: String in directory.get_directories():
-		if not _remove_directory_recursive(absolute_path.path_join(child_name)):
-			return false
-	return DirAccess.remove_absolute(absolute_path) == OK
 
 
 func _trash_directory(trash_id: String) -> String:

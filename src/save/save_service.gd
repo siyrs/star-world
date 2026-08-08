@@ -491,17 +491,63 @@ func delete_world(world_id: String) -> bool:
 	if not _is_safe_id(world_id) or not world_exists(world_id):
 		return false
 	var absolute_dir := ProjectSettings.globalize_path(_world_directory(world_id))
-	var directory := DirAccess.open(absolute_dir)
-	if directory == null:
-		return false
-	for file_name in directory.get_files():
-		DirAccess.remove_absolute(absolute_dir.path_join(file_name))
-	var error := DirAccess.remove_absolute(absolute_dir)
-	if error == OK:
+	if _remove_directory_tree(absolute_dir):
 		_staged_catalog_entries.erase(world_id)
 		world_deleted.emit(world_id)
 		return true
 	return false
+
+
+# Windows directory listing (DirAccess.open and get_files_at) fails on paths
+# longer than MAX_PATH (260 characters) even though FileAccess writes and
+# DirAccess.remove_absolute succeed there. Deep save locations (long Windows
+# account names or nested user-data roots) would otherwise make world deletion
+# and trash purges silently impossible. DirAccess.rename_absolute stays
+# long-path tolerant, so when direct removal cannot list the directory we
+# relocate it to a short sibling name and delete it from there.
+func _remove_directory_tree(absolute_path: String) -> bool:
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return false
+	if _remove_directory_recursive(absolute_path):
+		return true
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		# A partial pass removed the remainder before reporting failure.
+		return true
+	return _remove_directory_tree_relocated(absolute_path)
+
+
+func _remove_directory_tree_relocated(absolute_path: String) -> bool:
+	var parent := absolute_path.get_base_dir()
+	if parent.is_empty():
+		return false
+	for attempt in 8:
+		var short_path := parent.path_join(
+			".purge-relocate-%d-%d" % [Time.get_ticks_msec(), attempt]
+		)
+		if DirAccess.dir_exists_absolute(short_path) or FileAccess.file_exists(short_path):
+			continue
+		if DirAccess.rename_absolute(absolute_path, short_path) != OK:
+			return false
+		if _remove_directory_recursive(short_path):
+			return true
+		# Restore the original name so the failure leaves an honest, auditable
+		# state instead of an anonymous relocated directory.
+		DirAccess.rename_absolute(short_path, absolute_path)
+		return false
+	return false
+
+
+func _remove_directory_recursive(absolute_path: String) -> bool:
+	var directory := DirAccess.open(absolute_path)
+	if directory == null:
+		return false
+	for file_name: String in directory.get_files():
+		if DirAccess.remove_absolute(absolute_path.path_join(file_name)) != OK:
+			return false
+	for child_name: String in directory.get_directories():
+		if not _remove_directory_recursive(absolute_path.path_join(child_name)):
+			return false
+	return DirAccess.remove_absolute(absolute_path) == OK
 
 
 func world_exists(world_id: String) -> bool:
