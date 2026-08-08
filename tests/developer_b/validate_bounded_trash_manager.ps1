@@ -44,10 +44,14 @@ foreach ($token in @(
   'manifest_missing_or_invalid',
   'unsafe_trash_id',
   'trash_slot_purged',
-  '_remove_directory_recursive'
+  '_remove_directory_tree'
 )) {
   Assert-Match $text.service $token "Protected save service lost trash-manager behavior: $token"
 }
+# Purges route through the shared long-path-tolerant tree removal
+# (BUG-SAVE-LONG-PATH-001); a private recursive deleter would bypass the
+# relocation fallback on deep save roots.
+Assert-NoMatch $text.service 'func\s+_remove_directory_recursive' 'Trash manager must not keep a private recursive deleter that bypasses the long-path fallback'
 Assert-Match $text.service 'deleted_unix_usec\s*=\s*maxi\(deleted_unix_usec,\s*_latest_trash_deleted_usec\s*\+\s*1\)' 'Trash deletion order must remain strictly monotonic'
 Assert-Match $text.service '_trash_entry_count\s*>=\s*MAX_TRASH_ENTRIES' 'Physical trash capacity must be checked before moving a world'
 Assert-Match $text.service 'physical_count\s*:=\s*trash_ids\.size\(\)' 'Capacity must count physical directories, not only valid manifests'

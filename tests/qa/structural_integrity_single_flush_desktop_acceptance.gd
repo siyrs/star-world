@@ -6,17 +6,13 @@ const MAX_RULE_CLEANUP_MILLISECONDS := 1000.0
 const LEGACY_TIME_FAILURE := (
 	"384 unsupported structures clean up inside the five-second desktop budget"
 )
-const LEGACY_FLUSH_FAILURE := (
-	"support removal and dependent cleanup use exactly two world rebuild flushes"
-)
 
 
 func _finish(game: Node, hub: Node) -> void:
-	# The inherited journey retains all original product assertions. Replace only
-	# the two superseded performance expectations after the single-flush runtime
-	# has produced its complete benchmark report.
+	# The inherited journey retains all original product assertions, including the
+	# canonical single coalesced flush. Replace only the superseded time budget
+	# after the single-flush runtime has produced its complete benchmark report.
 	failures.erase(LEGACY_TIME_FAILURE)
-	failures.erase(LEGACY_FLUSH_FAILURE)
 
 	var cleanup_milliseconds := float(_report.get("cleanup_milliseconds", INF))
 	_check(
