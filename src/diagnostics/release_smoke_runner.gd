@@ -340,6 +340,7 @@ func _finish(
 		telemetry_snapshot = diagnostics.call("sample_now")
 	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
+	_record_journey_save()
 	var lifecycle_snapshot := _prepare_authoritative_quit()
 	var payload := {
 		"version": 5,
@@ -381,6 +382,35 @@ func _finish(
 		print("RELEASE SMOKE FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 	await _cleanup_runtime()
 	get_tree().quit(exit_code)
+
+
+func _record_journey_save() -> void:
+	# A smoke session is far shorter than the first autosave interval, so without
+	# an explicit save the quit-preparation save would become the session's first
+	# save — and it is stamped after the quit-request timestamp, inverting the
+	# lifecycle monotonic contract. Mirror the real player journey instead: save
+	# during gameplay (production manual-save path), then quit.
+	if game == null or not is_instance_valid(game):
+		return
+	var hub: Node = game.get("service_hub")
+	if hub == null or str(hub.get("current_world_id")).is_empty():
+		# Early-failure path with no active world: nothing to save; downstream
+		# lifecycle checks still report the missing first save honestly.
+		return
+	if not game.has_method("request_save"):
+		_check(false, "journey_save_coordinator_available")
+		return
+	game.call("request_save")
+	var snapshot: Dictionary = {}
+	if game.has_method("get_release_lifecycle_snapshot"):
+		var raw_snapshot: Variant = game.call("get_release_lifecycle_snapshot")
+		if raw_snapshot is Dictionary:
+			snapshot = raw_snapshot
+	var first_save: Dictionary = snapshot.get("first_save", {})
+	_check(
+		bool(first_save.get("success", false)) and int(first_save.get("bytes", 0)) > 0,
+		"journey_save_recorded_before_quit"
+	)
 
 
 func _prepare_authoritative_quit() -> Dictionary:
