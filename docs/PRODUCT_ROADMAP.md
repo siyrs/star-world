@@ -145,12 +145,13 @@ Game Runtime
 
 ### 保存、恢复、目录与回收站
 
-- 原子 `world.json`、`.tmp/.bak` 恢复和严格迁移；
+- 原子 `world.json`、`.tmp/.bak` 恢复和严格迁移；[SELF_HEALING_SAVE_RECOVERY.md](SELF_HEALING_SAVE_RECOVERY.md) 规定语义校验、恢复暂存/有效备份，以及恢复成功后原子重建主文件并保留 `.bak`；
+- 多世界目录扫描中的主文件修复每次最多 8 个，世界始终可见并通过确定性后续扫描渐进收敛；显式完整加载不受目录修复预算限制；
 - pause-aware Autosave、15/60/300 秒失败退避和 12 条 checkpoint timeline；
 - 轻量世界目录 `catalog.json` 是 `world.json` 的派生、自愈、严格白名单索引；权威读取、sidecar 写入和暂存均有硬预算；
 - 虚拟化存档浏览器、索引搜索/排序；
-- 回收站最多 32 个物理目录，容量满时拒绝新删除而不是自动清理；玩家删除使用二次确认，撤销恢复保留原 world ID，受保护 Trash 还支持指定恢复与确认永久清理；
-- RuntimeHealthReport 与 F3 保存/运行健康诊断。
+- 回收站最多 32 个物理目录，容量满时拒绝新删除而不是自动清理；玩家删除使用二次确认，撤销恢复保留原 world ID；固定 24 行的回收站管理页复用行池并分页展示，指定恢复不会误消费最新条目，损坏 Manifest 条目只允许确认永久清理；
+- 统一运行与保存健康报告聚合固定来源、运行分量与运营分量，并通过 F3 暴露主要瓶颈、保存/目录恢复证据；RuntimeHealthReport 不进入存档。
 
 ### UI、桌面与 Release
 
@@ -192,7 +193,7 @@ Iteration 66 的仓库任务清单：
 
 ### A. 仓库内产品迭代
 
-当前 v1.3.0 原始仓库任务没有未完成 P0/P1。后续新增玩法必须继续遵守“完整闭环 + 保存/恢复 + 有界预算 + Headless + 真实桌面 + Windows Release”的合同。天气之后的 lightning damage、wind physics、shelter detection、precipitation collision、Boss、更多机器或跨 Chunk 自动化都不是默认必做项；只有出现明确玩家价值与性能证据后才立项，避免用系统数量替代玩法质量。
+长期规模与恢复已经由 Iteration 58 及后续永久门禁覆盖；当前 v1.3.0 原始仓库任务没有未完成 P0/P1。后续新增玩法必须继续遵守“完整闭环 + 保存/恢复 + 有界预算 + Headless + 真实桌面 + Windows Release”的合同。天气之后的 lightning damage、wind physics、shelter detection、precipitation collision、Boss、更多机器或跨 Chunk 自动化都不是默认必做项；只有出现明确玩家价值与性能证据后才立项，避免用系统数量替代玩法质量。
 
 ### B. 商业发布外部资格
 
