@@ -15,6 +15,7 @@ $required = @(
     'tests\qa\service_hub_feature_lifecycle_regression.gd',
     'tests\ci\run_iteration_66_full_regression.ps1',
     '.github\workflows\weather-climate-iteration-66-tests.yml',
+    'docs\PRODUCT_ROADMAP.md',
     'docs\WEATHER_CLIMATE_SYSTEM.md',
     'docs\PRODUCT_ROADMAP_ITERATION_66.md',
     'docs\ARCHITECTURE_AUDIT_2026-08-07_ITERATION_66.md'
@@ -91,7 +92,8 @@ Assert-ContainsAll 'src\survival\day_night_service.gd' @(
     '_weather_fog_multiplier',
     '_weather_light_multiplier',
     '_weather_cloud_opacity',
-    '_weather_tint_color'
+    '_weather_tint_color',
+    '_weather_profile.get("cloud_opacity", 0.8)'
 )
 Assert-ContainsAll 'src\ui\exploration_progression_service_hub.gd' @(
     'WEATHER_RUNTIME_FEATURE := &"weather_runtime"',
@@ -120,7 +122,8 @@ Assert-ContainsAll 'tests\qa\weather_climate_regression.gd' @(
     'state survives save/reload',
     'survival exhaustion',
     'production service hub installs weather service',
-    'weather participates in the production lifecycle'
+    'weather participates in the production lifecycle',
+    'pre-weather cloud opacity'
 )
 Assert-ContainsAll 'tests\qa\weather_climate_desktop_acceptance.gd' @(
     'state=sandstorm',
@@ -137,11 +140,20 @@ Assert-ContainsAll 'tests\ci\run_iteration_66_full_regression.ps1' @(
     'ITERATION 66 FULL REGRESSION PASS'
 )
 Assert-ContainsAll '.github\workflows\weather-climate-iteration-66-tests.yml' @(
+    'docs/PRODUCT_ROADMAP.md',
     'Validate weather and climate contracts',
     'Run weather climate regression',
     'Run real weather desktop acceptance',
     'Run complete repository regression',
     'Export and run Windows release'
+)
+Assert-ContainsAll 'docs\PRODUCT_ROADMAP.md' @(
+    'Eight Feature Lifecycle Participants',
+    '`weather_runtime`',
+    '`autosave_runtime`',
+    'Iteration 66 · Five-Map Weather & Climate',
+    '0.8` 云层 opacity 基线',
+    'Commercial release：继续 **HOLD**'
 )
 Assert-ContainsAll 'docs\WEATHER_CLIMATE_SYSTEM.md' @(
     'single state owner',
@@ -151,4 +163,4 @@ Assert-ContainsAll 'docs\WEATHER_CLIMATE_SYSTEM.md' @(
     'DayNightService'
 )
 
-Write-Host 'ITERATION 66 WEATHER CLIMATE PASS | maps=5 | deterministic=true | states<=4 | transition-budget=8 | exposure-budget=12 | persistence=world.json | lifecycle=participant | hud=extension | daynight=single-owner | full-regression=strict-import'
+Write-Host 'ITERATION 66 WEATHER CLIMATE PASS | maps=5 | deterministic=true | states<=4 | transition-budget=8 | exposure-budget=12 | persistence=world.json | lifecycle=participant | hud=extension | daynight=single-owner | legacy-clouds=preserved | roadmap=reconciled | full-regression=strict-import'
