@@ -118,7 +118,7 @@ func _test_active_time_pause_and_manual_reset() -> void:
 			&"exploration_runtime",
 			&"exploration_journal_rewards",
 		],
-		"autosave declares every persisted gameplay participant as a dependency"
+		"autosave retains its six explicit compatibility dependencies"
 	)
 	runtime.call("begin_world", {"metadata":{"id":"fake-world"}})
 	runtime.call("activate")
@@ -299,8 +299,8 @@ func _test_production_composition_and_real_save() -> void:
 		"production service hub installs the bounded autosave participant"
 	)
 	_check(
-		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
-		"production lifecycle contains seven explicit participants"
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 8,
+		"production lifecycle contains eight explicit participants"
 	)
 	_check(
 		coordinator.call("get_participant_dependencies", &"autosave_runtime")
@@ -312,7 +312,7 @@ func _test_production_composition_and_real_save() -> void:
 			"exploration_runtime",
 			"exploration_journal_rewards",
 		],
-		"production autosave is ordered after every persisted gameplay participant"
+		"production autosave retains six explicit ordering dependencies while final registration protects weather cleanup"
 	)
 	var original_settings: Dictionary = hub.current_settings.duplicate(true)
 	hub.main_menu.settings_changed.emit({"autosave_minutes":5})
