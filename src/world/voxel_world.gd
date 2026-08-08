@@ -10,6 +10,7 @@ signal block_broken(block_position: Vector3i, block_id: String)
 signal block_placed(block_position: Vector3i, block_id: String)
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const BlockShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 const ChunkScript = preload("res://src/chunk/voxel_chunk.gd")
 const GeneratorScript = preload("res://src/world/world_generator.gd")
 const StreamingSchedulerScript = preload("res://src/world/chunk_streaming_scheduler.gd")
@@ -232,6 +233,21 @@ func serialize_state() -> Dictionary:
 
 
 func resolve_ground_position(candidate: Vector3) -> Vector3:
+	var resolved: Variant = try_resolve_ground_position(candidate)
+	if resolved is Vector3:
+		return resolved
+	# Spawn-height fallback only: callers placing a body into the world need a
+	# usable value even over an empty column. Callers that HOLD a body on the
+	# ground every frame must use try_resolve_ground_position instead —
+	# treating this fallback as ground pins the body at its own height (or at
+	# y=50) over void columns and it never falls again.
+	return Vector3(candidate.x, maxf(candidate.y, 50.0), candidate.z)
+
+
+# Same column scan as resolve_ground_position but returns null when no real
+# solid block exists below the candidate, so per-frame ground holders can tell
+# "no ground" apart from the spawn fallback above.
+func try_resolve_ground_position(candidate: Vector3) -> Variant:
 	var x := floori(candidate.x)
 	var z := floori(candidate.z)
 	for y in range(WORLD_HEIGHT - 3, 0, -1):
@@ -242,8 +258,34 @@ func resolve_ground_position(candidate: Vector3) -> Vector3:
 			get_block(Vector3i(x, y + 1, z)) == BlockRegistryScript.AIR
 			and get_block(Vector3i(x, y + 2, z)) == BlockRegistryScript.AIR
 		):
-			return Vector3(candidate.x, y + 1.05, candidate.z)
-	return Vector3(candidate.x, maxf(candidate.y, 50.0), candidate.z)
+			var surface := _resolve_block_surface_height(block_id, candidate)
+			return Vector3(candidate.x, y + surface + 0.05, candidate.z)
+	return null
+
+
+# The ground model historically treated every solid block as a full cube, so a
+# stair or slab column resolved to its full top and the player snap pinned the
+# body against the shaped collision instead of climbing it. Resolve the actual
+# collision surface under the candidate: stairs step from half height at the
+# low end to full height at the back, slabs sit at half height, full cubes are
+# unchanged.
+func _resolve_block_surface_height(block_id: String, candidate: Vector3) -> float:
+	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", ""))
+	if shape.is_empty():
+		return 1.0
+	var boxes: Array[AABB] = BlockShapeGeometryScript.get_local_boxes(block_id)
+	if boxes.is_empty():
+		return 1.0
+	var local_x := candidate.x - floorf(candidate.x)
+	var local_z := candidate.z - floorf(candidate.z)
+	var top := 0.0
+	for box: AABB in boxes:
+		if (
+			local_x >= box.position.x and local_x < box.end.x
+			and local_z >= box.position.z and local_z < box.end.z
+		):
+			top = maxf(top, box.end.y)
+	return top if top > 0.0 else 1.0
 
 
 func get_loaded_chunk_count() -> int:
