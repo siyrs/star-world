@@ -52,15 +52,15 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：无活动缺陷。导出冒烟生命周期单调门禁已按 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001 修复（烟测旅程在权威退出前走生产手动存档路径，`b23c9d6`）；五图矩阵后台执行中。
+- 当前正在处理的问题：**BUG-PERF-CHUNK-STEP-001 已修复**（`2429978` 时间片化 chunk 构建 + `8a3c797` 帧日志诊断）：导出冒烟帧日志取证确认 4ms 流式预算只是建议值——2048 格原子 build_step 单步 18–31ms，密集森林 chunk 连续 3 帧 21–35ms；修复后 star_continent 资格种子 p95 32.63→**9.09ms**、1% low 28.1→**84.8fps**、30fps 预算缺失 2.78%→**0.00%**、≥16ms 帧清零。此前附带碰撞形状直连优化（set_faces 免 SurfaceTool/trimesh 往返，几何逐点一致，台阶 33/33 回归过）。严格 7200s 长稳已主动中止（cycle 0–13 数据用于取证，~20 分钟沉没），待最终包重新生成后重启。全量 T3 复核中（后台 `bza9lf49a`）。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
 
 ## 最近命令与证据
 
-- 最近一次命令：`run_windows_export_journey_matrix.ps1 -ExistingExecutablePath export-final/StarWorld.exe -QualificationTier recommended`（五图矩阵，后台 `boj92y0f8`）；前一命令导出冒烟 PASS（`export-final/`，29 检查）
-- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；最终候选包+冒烟：`export-final/`；五图矩阵：`journey-matrix-final/`）
+- 最近一次命令：`tests/run_all.ps1` 全量 T3（chunk 性能修复后，HEAD `8a3c797`，后台 `bza9lf49a`）；前一命令导出冒烟 A/B 复测 star_continent 资格种子 **p95 9.09ms 全指标达标**
+- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；性能修复后 T3：`t3-perf-fix/`；性能取证与 A/B：`export-perf-fix/`；最终候选包+冒烟：`export-final/`；五图矩阵：`journey-matrix-final/`）
 - 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
 ## 下一步
@@ -72,5 +72,6 @@
    - T3 第三轮（校验器对齐后）：142 套件中唯一失败 `runtime_soak_regression`（"runtime health recovers after bounded travel pressure"，cycle 3 终末采样窗 peak ≥80ms）。根因定位（BUG-PERF-GROUND-SCAN-001）：台阶/悬浮修复引入的五点足迹地面扫描每次从世界顶整列下扫，传送后追赶期多物理 tick 叠加，cycle 3 终末窗均值放大到 master 的 ~2 倍，单 >80ms 峰值帧落窗即翻案。已把保持者扫描上界收紧到头顶 +2（放置 API 整列扫描语义不变），同机 4/4 PASS（终末窗 avg 22.7–24.2ms、peak 40–47ms）。取证过程：master worktree A/B 3/3 通过、逐帧计时探针（单周期不复现 → 三周期序列相关）、套件级复刻 + nosample/noteleport/nospawn/noadaptive 逐项隔离（单项均非根因，系边际放大）、batch 统计。证据 `t3-rerun/`（含探针脚本与全部日志）。扫描修复提交后全量 T3 第四轮重跑。
    - **第二遍结果 88/91，3 失败已全部关闭**：①`encounter_reward_economy` 聚合运行首枪未击杀级联 25 项失败，**单独复跑 70/70 PASS**（并发+低优先级下仍过）；非确定性时序脆弱，已加 `KILL-TIMEOUT` 诊断 dump 取证下次失败。②`multi_hostile_danger` 静默 exit 0xCFFFFFFF 崩溃（~54s 无输出）——**单独复跑 48/48 PASS**；崩溃窗口与我自己发起的 encounter 单独复跑并发重叠（双桌面 Godot 实例争用），判定环境性，非产品缺陷；同时补上该套件修复后缺失的单独复验（`9ddb0a2` 提交信息对该套件的复验声明由此兑现）。③`rest_closed_loop_stable` 解析错误——我在父套件补时钟暂停机制时与子类既有成员（`_paused_day_night` 等）重复声明；已将子类瘦身到只剩 `_settle_player` 探针覆写（机制与父套件逐字节等价），**单独复跑 57/57 PASS**。已审计其余三个子类（agriculture_canonical、husbandry_stable、multi_hostile_batched）在第二遍全过，无同类碰撞。
 3. ~~重新导出 fresh EXE/PCK~~ **已完成**（`export-final/`，含 `b23c9d6` 生命周期修复；导出冒烟 29 检查全绿、生命周期单调）。五图矩阵后台执行中（后台 `boj92y0f8`）。
-4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID）与严格 7,200 秒长稳（`tests/ci/run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`），再更新覆盖矩阵和最终报告。
+4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID——**已完成** 13 场景 PASS，证据 `perf-capture-final/`）与硬件资格门禁（`run_external_hardware_qualification.ps1 -Tier recommended`）；随后严格 7,200 秒长稳（`run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`；第一轮已主动中止取证，待最终包重启），再更新覆盖矩阵和最终报告。
+   - **插队性能修复（已完成取证与修复）**：矩阵发现 star_continent 资格种子 soak 超推荐档 → 帧日志取证 → 时间片化 chunk 构建修复（`2429978`）→ 复测全指标达标（p95 9.09ms）。此修复使最终包必须重新导出并重走矩阵/资格/长稳，且 T3（进行中）与桌面最终遍（排队）须在最终 HEAD 重取证据。
 5. 最终报告 + 合并 master + tag + release + 同步远程。
