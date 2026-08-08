@@ -130,8 +130,10 @@ Assert-ContainsAll 'tests\qa\weather_climate_desktop_acceptance.gd' @(
 )
 Assert-ContainsAll 'tests\ci\run_iteration_66_full_regression.ps1' @(
     'validate_weather_climate_iteration_66.ps1',
+    '--editor --quit',
     'weather_climate_regression.gd',
     'run_iteration_65_full_regression.ps1',
+    'iteration66-wrapper.log',
     'ITERATION 66 FULL REGRESSION PASS'
 )
 Assert-ContainsAll '.github\workflows\weather-climate-iteration-66-tests.yml' @(
@@ -149,4 +151,4 @@ Assert-ContainsAll 'docs\WEATHER_CLIMATE_SYSTEM.md' @(
     'DayNightService'
 )
 
-Write-Host 'ITERATION 66 WEATHER CLIMATE PASS | maps=5 | deterministic=true | states<=4 | transition-budget=8 | exposure-budget=12 | persistence=world.json | lifecycle=participant | hud=extension | daynight=single-owner'
+Write-Host 'ITERATION 66 WEATHER CLIMATE PASS | maps=5 | deterministic=true | states<=4 | transition-budget=8 | exposure-budget=12 | persistence=world.json | lifecycle=participant | hud=extension | daynight=single-owner | full-regression=strict-import'
