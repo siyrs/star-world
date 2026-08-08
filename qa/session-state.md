@@ -21,7 +21,7 @@
 - T3 全量回归（game 侧修复后最终轮，HEAD `ee6995f`）：**全绿 EXIT: 0**（213 条套件级 PASS、0 FAIL；`runtime_soak_regression` 72/72、`player_continuous_route_buffered_jump_regression` 50/50 五图路线契约均通过），证据 `build/commercial-acceptance-20260808/t3-final/run_all.log`。**T3 门禁正式关闭**。
 - fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设、台阶行走、长路径删除、有界地面扫描），桌面验收后重新导出候选包再跑五图矩阵。
 - 最终 EXE 五图路线：待执行（基于新导出）。
-- 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD 干净证据）进行中**，证据 `desktop-final-pass/`。
+- 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD `7af35ef` 干净证据）91/91 全绿**（19:31→20:01，30.7 分钟，selected=91 passed=91 failed=0），证据 `desktop-final-pass/`。**桌面验收门禁正式关闭**。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
 - 严格 7,200 秒长稳：待 fresh 候选包与短资格门禁通过后执行。
 
