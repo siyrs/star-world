@@ -35,11 +35,11 @@ PR #101 将同一生产路线合同放入最终 PCK，通过一个已验证的 W
 
 | Profile | 路线步数 | 位移 | 唯一 Chunk | 最大跌落 | 平均 FPS | 1% Low | p95 | p99 | 世界启动 | WS p95 | 判定 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `star_continent` | 36/36 | 28.4m | 3 | 1.00m | 143.8 | 84.8 | 9.09ms | 11.23ms | 1014ms | 380 MiB | 通过（性能修复后复测） |
-| `desert_ruins` | 36/36 | 34.9m | 5 | 0.00m | 165.6 | 129.2 | 6.93ms | 7.72ms | 985ms | 365 MiB | 通过 |
-| `frozen_wastes` | 36/36 | 35.9m | 3 | 1.00m | 165.8 | 103.5 | 7.47ms | 8.18ms | 558ms | 366 MiB | 通过 |
-| `sky_islands` | 36/36 | 27.3m | 2 | 1.00m | 165.8 | 108.5 | 6.95ms | 7.15ms | 1167ms | 370 MiB | 通过 |
-| `abyss_world` | 36/36 | 36.2m | 4 | 1.00m | 165.6 | 133.5 | 7.05ms | 7.37ms | 597ms | 375 MiB | 通过 |
+| `star_continent` | 36/36 | 28.4m | 3 | 1.00m | 146.0 | 81.6 | 8.76ms | 10.88ms | 976ms | 366 MiB | 通过（最终包 v2） |
+| `desert_ruins` | 36/36 | 34.9m | 5 | 0.00m | 164.5 | 117.3 | 7.08ms | 8.35ms | 936ms | 358 MiB | 通过（最终包 v2） |
+| `frozen_wastes` | 36/36 | 35.9m | 3 | 1.00m | 165.7 | 142.4 | 6.90ms | 7.00ms | 533ms | 355 MiB | 通过（最终包 v2） |
+| `sky_islands` | 36/36 | 27.3m | 2 | 1.00m | 165.8 | 142.3 | 6.89ms | 6.99ms | 1163ms | 362 MiB | 通过（最终包 v2） |
+| `abyss_world` | 36/36 | 36.2m | 4 | 1.00m | 160.9 | 96.8 | 7.39ms | 9.78ms | 573ms | 369 MiB | 通过（最终包 v2） |
 
 五图共同合同：零出生后传送（`player_transform_writes=0`）、视觉细节全过、教程卡片全隐藏、逐图权威退出全干净（`authoritative_quit:true`，生命周期时序单调）。推荐档阈值：avg≥60、1% low≥45、p95≤22.22ms、p99≤33.33ms、加载≤6s、WS≤6144 MiB。
 
@@ -49,4 +49,4 @@ PR #101 将同一生产路线合同放入最终 PCK，通过一个已验证的 W
 - `abyss_world`：熔岩玩家物理在修复回归中持续锁定（BUG-LAVA-001 既有回归链）。
 - `sky_islands`：高空谨慎下降（BUG-QA-SKY-DESCENT-001 既有）+ 本轮悬浮修复同根因复核。
 
-> 性能修复（`2429978`）改变了候选包，矩阵 v2 与严格 7200s 长稳在最终包重取；本表 star_continent 帧时列引用修复后精确种子复测（`export-perf-fix/`），其余四图引用 `journey-matrix-final/`（修复不影响其已达标指标，v2 将以最终包刷新全行）。
+> 上表为最终候选包 v2（`export-final-v2/`，含台阶坡面地面模型修复 `bb46e35`）的五图矩阵 v2 实测（`journey-matrix-final-v2/`）；推荐档硬件资格同包复测 35/35 断言全过（`hardware-qualification-recommended/`）。性能修复前矩阵 v1（`journey-matrix-final/`）与修复中 A/B（`export-perf-fix/`）存档保留。
