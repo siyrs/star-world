@@ -233,7 +233,9 @@ func serialize_state() -> Dictionary:
 
 
 func resolve_ground_position(candidate: Vector3) -> Vector3:
-	var resolved: Variant = try_resolve_ground_position(candidate)
+	# Placement callers keep the full top-down scan: a body placed inside a
+	# hill must still pop to the open surface above it.
+	var resolved: Variant = _scan_ground_column(candidate, WORLD_HEIGHT - 3)
 	if resolved is Vector3:
 		return resolved
 	# Spawn-height fallback only: callers placing a body into the world need a
@@ -246,11 +248,20 @@ func resolve_ground_position(candidate: Vector3) -> Vector3:
 
 # Same column scan as resolve_ground_position but returns null when no real
 # solid block exists below the candidate, so per-frame ground holders can tell
-# "no ground" apart from the spawn fallback above.
+# "no ground" apart from the spawn fallback above. The scan starts just above
+# the candidate's head instead of at the world top: holders only ever stand on
+# ground at or below their own body, and skipping the empty air column keeps
+# this O(standing height) instead of O(WORLD_HEIGHT) per call — the player
+# samples a five-point footprint every physics tick, so an unbounded scan
+# measurably inflated frame time during post-teleport catch-up.
 func try_resolve_ground_position(candidate: Vector3) -> Variant:
+	return _scan_ground_column(candidate, mini(WORLD_HEIGHT - 3, floori(candidate.y) + 2))
+
+
+func _scan_ground_column(candidate: Vector3, y_start: int) -> Variant:
 	var x := floori(candidate.x)
 	var z := floori(candidate.z)
-	for y in range(WORLD_HEIGHT - 3, 0, -1):
+	for y in range(y_start, 0, -1):
 		var block_id := get_block(Vector3i(x, y, z))
 		if not BlockRegistryScript.is_solid(block_id) or block_id == "leaves":
 			continue
