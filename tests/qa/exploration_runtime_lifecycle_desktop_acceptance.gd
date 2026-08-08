@@ -182,11 +182,11 @@ func _run() -> void:
 	_check(bool(machine_runtime.call("is_active")), "full reload reactivates Machine Base")
 	_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload reactivates bounded autosave")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 7, "production diagnostics expose all seven participants")
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 8, "production diagnostics expose all eight participants")
 	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "production diagnostics include Machine Base fields")
 	_check(character_snapshot.has("husbandry") and character_snapshot.has("animal_products"), "production character diagnostics include husbandry and ranch participant fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "production character diagnostics retain legacy runtime fields")
-	_check(character_snapshot.has("autosave"), "production character diagnostics include bounded autosave evidence")
+	_check(character_snapshot.has("weather") and character_snapshot.has("autosave"), "production character diagnostics include weather and bounded autosave evidence")
 
 	game.call("_abort_world_start", "qa_exploration_runtime_failure")
 	for _frame in 4:

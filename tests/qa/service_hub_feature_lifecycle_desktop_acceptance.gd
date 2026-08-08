@@ -32,6 +32,7 @@ func _run() -> void:
 	var ranch: Node = hub.get("ranch_runtime_participant") if hub != null else null
 	var runtime: Node = hub.get("exploration_runtime_participant") if hub != null else null
 	var participant: Node = hub.get("exploration_journal_reward_participant") if hub != null else null
+	var weather: Node = hub.get("weather_runtime_participant") if hub != null else null
 	var autosave: Node = hub.get("autosave_runtime_participant") if hub != null else null
 	var machine_runtime: Node = hub.get("machine_runtime") if hub != null else null
 	_check(
@@ -43,9 +44,10 @@ func _run() -> void:
 		and ranch != null
 		and runtime != null
 		and participant != null
+		and weather != null
 		and autosave != null
 		and machine_runtime != null,
-		"production game mounts all seven feature lifecycle participants"
+		"production game mounts all eight feature lifecycle participants"
 	)
 	if (
 		hub == null
@@ -56,6 +58,7 @@ func _run() -> void:
 		or ranch == null
 		or runtime == null
 		or participant == null
+		or weather == null
 		or autosave == null
 		or machine_runtime == null
 	):
@@ -244,9 +247,9 @@ func _run() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
+			"autosave_runtime,weather_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
-		"desktop cleanup records the complete seven-participant reverse dependency order"
+		"desktop cleanup records the complete eight-participant reverse dependency order"
 	)
 
 	game.begin_world_state(loaded)
@@ -286,14 +289,15 @@ func _run() -> void:
 	)
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(
-		int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 7,
-		"production diagnostics expose all seven composed participants"
+		int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 8,
+		"production diagnostics expose all eight composed participants"
 	)
 	_check(character_snapshot.has("machine_runtime") and character_snapshot.has("machines"), "Machine Base participant preserves its diagnostics fields")
 	_check(character_snapshot.has("agriculture"), "agriculture participant preserves its diagnostics field")
 	_check(character_snapshot.has("husbandry"), "husbandry participant preserves its legacy diagnostics field")
 	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
 	_check(character_snapshot.has("exploration") and character_snapshot.has("danger"), "runtime participant preserves legacy diagnostics fields")
+	_check(character_snapshot.has("weather"), "weather participant preserves bounded diagnostics evidence")
 	_check(character_snapshot.has("autosave"), "autosave participant preserves bounded diagnostics evidence")
 	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()

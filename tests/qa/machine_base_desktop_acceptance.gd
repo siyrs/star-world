@@ -57,8 +57,9 @@ func _run() -> void:
 	_check(bool(autosave.call("get_snapshot").get("active", false)), "world activation starts bounded autosave")
 	_check(bool(furnace.call("is_externally_scheduled")) and not furnace.is_processing(), "production furnace has no duplicate private process loop")
 	_check(
-		int(hub.feature_lifecycle.call("get_snapshot").get("participant_count", 0)) == 7,
-		"production composition exposes seven lifecycle participants"
+		int(hub.feature_lifecycle.call("get_snapshot").get("participant_count", 0)) == 8
+		and hub.feature_lifecycle.call("has_participant", &"weather_runtime"),
+		"production composition exposes all eight lifecycle participants including weather"
 	)
 	_check(
 		hub.feature_lifecycle.call("get_participant_dependencies", &"autosave_runtime") == [

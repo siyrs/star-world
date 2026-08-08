@@ -1,7 +1,8 @@
 .godot/
 .import/
 .mono/
-build/
+build/*
+!build/.gdignore
 
 *.uid
 *.tmp

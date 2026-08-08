@@ -1,0 +1,1 @@
+# Generated binaries and acceptance evidence must never enter Godot's resource scan.

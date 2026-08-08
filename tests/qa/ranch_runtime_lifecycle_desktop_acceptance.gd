@@ -70,8 +70,9 @@ func _run() -> void:
 	_check(world != null and bool(world.get("is_started")), "production voxel world starts before ranch lifecycle tests")
 	_check(husbandry != null and interaction != null and attraction != null and products != null, "participant-owned husbandry and ranch services keep their public ports")
 	_check(
-		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
-		"production coordinator exposes all seven participants"
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 8
+		and coordinator.call("has_participant", &"weather_runtime"),
+		"production coordinator exposes all eight participants including weather"
 	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root")
 	_check(
@@ -236,7 +237,7 @@ func _run() -> void:
 	_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload reactivates bounded autosave")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("machine_runtime"), "ranch journey preserves Machine Base diagnostics")
-	_check(character_snapshot.has("autosave"), "ranch journey exposes bounded autosave diagnostics")
+	_check(character_snapshot.has("weather") and character_snapshot.has("autosave"), "ranch journey exposes weather and bounded autosave diagnostics")
 
 	game.call("_abort_world_start", "qa_ranch_runtime_failure")
 	for _frame in 4:

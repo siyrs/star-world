@@ -217,8 +217,10 @@ func _create_target(parent: Node3D, position: Vector3, radius: float) -> Firearm
 	sphere.radius = radius
 	shape_node.shape = sphere
 	target.add_child(shape_node)
-	target.global_position = position
 	parent.add_child(target)
+	# global_position requires an active SceneTree transform. Parenting first keeps
+	# the regression free of a hidden engine ERROR while preserving world-space aim.
+	target.global_position = position
 	return target
 
 

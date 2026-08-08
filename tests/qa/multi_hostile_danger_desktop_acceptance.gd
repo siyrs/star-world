@@ -60,8 +60,9 @@ func _run() -> void:
 	_check(world != null and bool(world.get("is_started")), "production world starts before multi-hostile acceptance")
 	_check(spawner != null and danger != null and hud != null, "production ecology, danger and HUD services are available")
 	_check(
-		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
-		"production coordinator retains all seven lifecycle participants"
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 8
+		and coordinator.call("has_participant", &"weather_runtime"),
+		"production coordinator retains all eight lifecycle participants including weather"
 	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root during combat")
 	_check(bool(autosave.call("get_snapshot").get("active", false)), "bounded autosave activates during combat")
@@ -205,7 +206,8 @@ func _run() -> void:
 		_check(hub.inventory.count_item("rotten_flesh") == drops_before_reload, "full reload restores preserved enemy drops exactly once")
 		_check(bool(machine_runtime.call("is_active")), "full reload restores Machine Base lifecycle")
 		_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload restores bounded autosave lifecycle")
-		_check(hub.call("get_character_snapshot").has("autosave"), "combat diagnostics expose bounded autosave evidence")
+		var character_snapshot: Dictionary = hub.call("get_character_snapshot")
+		_check(character_snapshot.has("weather") and character_snapshot.has("autosave"), "combat diagnostics expose weather and bounded autosave evidence")
 	await _finish(game, hub)
 
 

@@ -199,7 +199,13 @@ func _test_production_composition() -> void:
 	_check((payload.get("husbandry", {}).get("animals", {}) as Dictionary).has("animal@persisted"), "husbandry participant contributes records to the shared save payload")
 	var snapshot: Dictionary = {}
 	coordinator.call("snapshot_into", snapshot)
-	_check(snapshot.has("husbandry") and snapshot.has("animal_products") and snapshot.has("autosave"), "husbandry, ranch and autosave diagnostics share one snapshot")
+	_check(
+		snapshot.has("husbandry")
+		and snapshot.has("animal_products")
+		and snapshot.has("weather")
+		and snapshot.has("autosave"),
+		"husbandry, ranch, weather and autosave diagnostics share one snapshot"
+	)
 
 	coordinator.call("clear", &"qa_husbandry_clear")
 	_check(fake_player.entity_interaction_service == null, "reverse cleanup unbinds the old entity interaction port")
@@ -208,9 +214,9 @@ func _test_production_composition() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
+			"autosave_runtime,weather_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
 		),
-		"clear history records autosave-first reverse dependency order"
+		"clear history records autosave-then-weather reverse dependency order"
 	)
 	coordinator.call("shutdown")
 	_check(interaction.get("service") == null, "shutdown disconnects the husbandry interaction adapter")

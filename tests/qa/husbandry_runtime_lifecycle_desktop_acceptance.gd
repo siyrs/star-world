@@ -65,8 +65,9 @@ func _run() -> void:
 	_check(world != null and bool(world.get("is_started")), "production world starts before husbandry lifecycle acceptance")
 	_check(service != null and interaction != null, "participant-owned husbandry ports remain available")
 	_check(
-		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
-		"production coordinator exposes seven lifecycle participants"
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 8
+		and coordinator.call("has_participant", &"weather_runtime"),
+		"production coordinator exposes all eight lifecycle participants including weather"
 	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base is the lifecycle root participant")
 	_check(
@@ -204,7 +205,7 @@ func _run() -> void:
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("husbandry") and character_snapshot.has("animal_products"), "production diagnostics preserve husbandry and ranch fields")
 	_check(character_snapshot.has("machine_runtime"), "production diagnostics preserve Machine Base state")
-	_check(character_snapshot.has("autosave"), "production diagnostics preserve bounded autosave state")
+	_check(character_snapshot.has("weather") and character_snapshot.has("autosave"), "production diagnostics preserve weather and bounded autosave state")
 
 	game.call("_abort_world_start", "qa_husbandry_lifecycle_failure")
 	for _frame in 4:

@@ -195,8 +195,11 @@ func _test_production_ranch_composition() -> void:
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("husbandry"), "husbandry participant preserves its legacy diagnostics field")
 	_check(character_snapshot.has("animal_attraction") and character_snapshot.has("animal_products"), "ranch participant preserves legacy diagnostics fields")
-	_check(character_snapshot.has("autosave"), "production diagnostics expose transient autosave evidence")
-	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 7, "production diagnostics expose all seven lifecycle participants")
+	_check(
+		character_snapshot.has("weather") and character_snapshot.has("autosave"),
+		"production diagnostics expose weather and transient autosave evidence"
+	)
+	_check(int(character_snapshot.get("feature_lifecycle", {}).get("participant_count", 0)) == 8, "production diagnostics expose all eight lifecycle participants")
 
 	coordinator.call("clear", &"qa_ranch_clear")
 	_check(fake_player.entity_interaction_service == null, "reverse clear unbinds the husbandry interaction service")
@@ -208,9 +211,9 @@ func _test_production_ranch_composition() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
+			"autosave_runtime,weather_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime"
 		),
-		"reverse clear stops autosave before ranch and husbandry state"
+		"reverse clear stops autosave and weather before ranch and husbandry state"
 	)
 	fake_player.queue_free()
 	await _cleanup_hub(hub, world_id)

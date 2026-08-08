@@ -82,7 +82,7 @@ func _test_menu_and_dynamic_button_contracts() -> void:
 	var save_panel: Control = menu.get("_save_panel")
 	var settings_panel: Control = menu.get("_settings_panel")
 	var main_panel: Control = menu.get("_main_panel")
-	for label in ["开始游戏", "地图选择"]:
+	for label in ["继续游戏", "创建新世界"]:
 		var button = _find_button(menu, label)
 		_expect(button != null, "AC-001 menu button exists: %s" % label)
 		if button != null:
@@ -328,7 +328,7 @@ func _test_player_world_interaction() -> void:
 
 func _test_inventory_and_crafting() -> void:
 	var registry = ItemRegistryScript.new()
-	_expect(registry.load_from_file() and registry.item_count() == 62, "AC-004 62 item definitions load")
+	_expect(registry.load_from_file() and registry.item_count() == 116, "AC-004 116 item definitions load")
 	var inventory = InventoryScript.new()
 	root.add_child(inventory)
 	_expect(inventory.slot_count == 36 and inventory.hotbar_size == 9, "AC-004 inventory exposes 36 slots and 9-slot hotbar")
@@ -341,7 +341,7 @@ func _test_inventory_and_crafting() -> void:
 	var crafting = CraftingScript.new()
 	root.add_child(crafting)
 	crafting.setup(restored)
-	_expect(crafting.recipe_count() == 42, "AC-004 42 recipes load")
+	_expect(crafting.recipe_count() == 72, "AC-004 72 recipes load")
 	restored.clear()
 	restored.add_item("oak_planks", 8)
 	restored.add_item("stick", 4)
@@ -387,8 +387,8 @@ func _test_survival_entities_and_audio() -> void:
 	_expect(sun.light_energy < day_energy, "AC-005 day/night changes real light energy")
 
 	var factory = CreatureFactoryScript.new()
-	_expect(factory.profiles.size() == 4, "AC-005 four creature profiles load")
-	for species in ["chicken", "cow", "pig", "zombie"]:
+	_expect(factory.profiles.size() == 6, "AC-005 six creature profiles load")
+	for species in factory.get_species_ids():
 		var creature = factory.create(species, Vector3.ZERO)
 		root.add_child(creature)
 		await process_frame
