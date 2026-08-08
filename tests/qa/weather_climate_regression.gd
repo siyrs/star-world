@@ -49,6 +49,11 @@ func _run() -> void:
 	day_night.set_time(12.0)
 	day_night.set_view_distance(64.0)
 	day_night.attach_lighting(sun, world_environment)
+	var legacy_environment := day_night.get_weather_environment_snapshot()
+	_check(
+		is_equal_approx(float(legacy_environment.get("cloud_opacity", 0.0)), 0.8),
+		"empty weather profile preserves the pre-weather cloud opacity",
+	)
 	_check(weather.setup(survival, day_night), "weather service accepts survival/day-night authorities")
 	weather.begin_world("frozen_wastes", 24681357, {})
 	weather.activate()
@@ -126,7 +131,7 @@ func _run() -> void:
 	for _frame in 6:
 		await process_frame
 	if failures.is_empty():
-		print("QA WEATHER CLIMATE PASS | checks=%d | maps=5 | persistence=true | environment=true | survival=true | lifecycle=true" % checks)
+		print("QA WEATHER CLIMATE PASS | checks=%d | maps=5 | persistence=true | environment=true | survival=true | lifecycle=true | legacy-clouds=true" % checks)
 		quit(0)
 	else:
 		for failure: String in failures:
