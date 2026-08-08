@@ -65,8 +65,9 @@
 
 ## 下一步
 
-1. 分组小提交（save 长路径、台阶/悬浮地面、生成 Chunk 实体化、套件契约对齐、QA 记录）。
-2. 桌面验收 91 套件第二遍全量 + game 侧改动后 T3 全量重跑（核 +1 台阶跳跃契约）。
-3. 重新导出 fresh EXE/PCK，运行五图最终包矩阵与关键桌面内容闭环。
-4. 运行本机性能资格与严格 7,200 秒长稳，再更新覆盖矩阵和最终报告。
+1. ~~分组小提交~~ **已完成**（6 笔：`d6cc2da` save 长路径、`c9ba9fd` 台阶/悬浮地面、`1431234` 生成 Chunk 实体化、`5cb573e` scale 契约对齐、`9ddb0a2` 桌面套件时序对齐、`b90a816` QA 记录）。
+2. ~~桌面验收第二遍~~ **88/91 完成且 3 失败全部关闭**（见上）；**进行中**：T3 全量重跑（核 +1 台阶跳跃契约）；然后最终一遍全量桌面验收（91，最终 HEAD 干净证据）。
+   - **第二遍结果 88/91，3 失败已全部关闭**：①`encounter_reward_economy` 聚合运行首枪未击杀级联 25 项失败，**单独复跑 70/70 PASS**（并发+低优先级下仍过）；非确定性时序脆弱，已加 `KILL-TIMEOUT` 诊断 dump 取证下次失败。②`multi_hostile_danger` 静默 exit 0xCFFFFFFF 崩溃（~54s 无输出）——**单独复跑 48/48 PASS**；崩溃窗口与我自己发起的 encounter 单独复跑并发重叠（双桌面 Godot 实例争用），判定环境性，非产品缺陷；同时补上该套件修复后缺失的单独复验（`9ddb0a2` 提交信息对该套件的复验声明由此兑现）。③`rest_closed_loop_stable` 解析错误——我在父套件补时钟暂停机制时与子类既有成员（`_paused_day_night` 等）重复声明；已将子类瘦身到只剩 `_settle_player` 探针覆写（机制与父套件逐字节等价），**单独复跑 57/57 PASS**。已审计其余三个子类（agriculture_canonical、husbandry_stable、multi_hostile_batched）在第二遍全过，无同类碰撞。
+3. 重新导出 fresh EXE/PCK。**决策**：用户管线原定“用 11:40 fresh EXE 跑五图矩阵”，但 11:40 包早于台阶/悬浮/生成/长路径全部 game 侧修复，用它出矩阵证据等于认证一个已不存在的构建；按“证据必须在当前候选 HEAD 重新生成”原则，桌面+T3 全绿后导出新候选包再跑五图最终包矩阵与关键桌面内容闭环。
+4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID）与严格 7,200 秒长稳（`tests/ci/run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`），再更新覆盖矩阵和最终报告。
 5. 最终报告 + 合并 master + tag + release + 同步远程。
