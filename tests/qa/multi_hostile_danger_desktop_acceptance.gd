@@ -181,8 +181,19 @@ func _run() -> void:
 	for pickup: Node3D in pickups:
 		if is_instance_valid(pickup):
 			pickup.global_position = player.global_position + Vector3(0.0, 0.7, 0.0)
-			await physics_frame
-			await process_frame
+			# Overlap collection registers a frame after the physics sync; pump a
+			# bounded window until this pickup frees itself instead of assuming a
+			# fixed one-frame latency.
+			for _frame in 12:
+				await physics_frame
+				await process_frame
+				if not is_instance_valid(pickup):
+					break
+	for _frame in 24:
+		if hub.inventory.count_item("rotten_flesh") == 3:
+			break
+		await physics_frame
+		await process_frame
 	_check(hub.inventory.count_item("rotten_flesh") == 3, "physical collection transfers all three preserved drops")
 
 	_check(bool(hub.save_current()), "multi-hostile runtime keeps the production save transaction healthy")

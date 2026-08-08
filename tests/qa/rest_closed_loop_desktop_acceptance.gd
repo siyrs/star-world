@@ -88,7 +88,7 @@ func _run() -> void:
 	player.call("reset_motion")
 	player.velocity.y = -1.0
 	await _settle_player(player, 120)
-	_check(player.is_on_floor(), "production player settles on live collision before bed use")
+	_check(player.is_grounded(), "production player settles on live collision before bed use")
 	_check(str(world.call("get_block", safe_bed)) == "oak_bed", "arena contains one real safe bed")
 	_check(str(world.call("get_block", obstructed_bed)) == "oak_bed", "arena contains one real obstructed bed")
 
@@ -255,7 +255,9 @@ func _build_rest_arena(world: Node, player: Node3D, rest: Node) -> Dictionary:
 
 func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
 	for _frame in frame_limit:
-		if player.is_on_floor():
+		# Voxel ground snapping keeps the body above engine floor contact; the
+		# public grounded contract covers both collider floors and voxel terrain.
+		if player.is_grounded():
 			return
 		await physics_frame
 		await process_frame
@@ -275,7 +277,15 @@ func _wait_for_world_ready(game: Node, hub: Node) -> bool:
 	return false
 
 
+var _paused_day_night: Node
+var _paused_day_night_was_processing := false
+
+
 func _aim_at(player: Node3D, target: Vector3) -> void:
+	# Suspend only the natural clock ticks for the aim-and-click window so a
+	# rejected interaction cannot accumulate incidental frame drift; the real
+	# RestService.skip_to_time() path still advances time authoritatively.
+	_pause_passive_clock()
 	var camera: Camera3D = player.call("get_view_camera") as Camera3D
 	if camera != null:
 		var direction := (target - camera.global_position).normalized()
@@ -316,6 +326,8 @@ func _block_key(position: Vector3i) -> String:
 
 
 func _right_click_center() -> void:
+	if _paused_day_night == null:
+		_pause_passive_clock()
 	var center := Vector2(root.size) * 0.5
 	for pressed: bool in [true, false]:
 		var event := InputEventMouseButton.new()
@@ -327,6 +339,36 @@ func _right_click_center() -> void:
 		root.push_input(event)
 		await process_frame
 	await process_frame
+	_restore_passive_clock()
+
+
+func _pause_passive_clock() -> void:
+	if _paused_day_night != null and is_instance_valid(_paused_day_night):
+		return
+	_paused_day_night = _find_day_night(root)
+	if _paused_day_night == null:
+		return
+	_paused_day_night_was_processing = _paused_day_night.is_processing()
+	_paused_day_night.set_process(false)
+
+
+func _restore_passive_clock() -> void:
+	if _paused_day_night != null and is_instance_valid(_paused_day_night):
+		_paused_day_night.set_process(_paused_day_night_was_processing)
+	_paused_day_night = null
+	_paused_day_night_was_processing = false
+
+
+func _find_day_night(node: Node) -> Node:
+	if node == null:
+		return null
+	if node is DayNightService:
+		return node
+	for child: Node in node.get_children():
+		var found := _find_day_night(child)
+		if found != null:
+			return found
+	return null
 
 
 func _press_primary() -> void:
