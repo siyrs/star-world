@@ -277,26 +277,17 @@ func _scan_ground_column(candidate: Vector3, y_start: int) -> Variant:
 # The ground model historically treated every solid block as a full cube, so a
 # stair or slab column resolved to its full top and the player snap pinned the
 # body against the shaped collision instead of climbing it. Resolve the actual
-# collision surface under the candidate: stairs step from half height at the
-# low end to full height at the back, slabs sit at half height, full cubes are
-# unchanged.
+# collision surface under the candidate: stairs return the analytic ramp
+# height at the local (x,z) so the snap tracks the exact surface the physics
+# body touches, slabs sit at half height, full cubes are unchanged.
 func _resolve_block_surface_height(block_id: String, candidate: Vector3) -> float:
 	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", ""))
 	if shape.is_empty():
 		return 1.0
-	var boxes: Array[AABB] = BlockShapeGeometryScript.get_local_boxes(block_id)
-	if boxes.is_empty():
-		return 1.0
-	var local_x := candidate.x - floorf(candidate.x)
-	var local_z := candidate.z - floorf(candidate.z)
-	var top := 0.0
-	for box: AABB in boxes:
-		if (
-			local_x >= box.position.x and local_x < box.end.x
-			and local_z >= box.position.z and local_z < box.end.z
-		):
-			top = maxf(top, box.end.y)
-	return top if top > 0.0 else 1.0
+	var local_point := Vector3(
+		candidate.x - floorf(candidate.x), 0.0, candidate.z - floorf(candidate.z)
+	)
+	return BlockShapeGeometryScript.get_local_surface_height(block_id, local_point)
 
 
 func get_loaded_chunk_count() -> int:
