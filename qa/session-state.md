@@ -18,7 +18,8 @@
 ## 当前构建与测试状态
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
-- T3 全量回归（game 侧修复后最终轮，HEAD `ee6995f`）：**全绿 EXIT: 0**（213 条套件级 PASS、0 FAIL；`runtime_soak_regression` 72/72、`player_continuous_route_buffered_jump_regression` 50/50 五图路线契约均通过），证据 `build/commercial-acceptance-20260808/t3-final/run_all.log`。**T3 门禁正式关闭**。
+- T3 全量回归（chunk 性能修复后最终轮，HEAD `3c0d82d`）：**全绿 EXIT: 0**（142/142；runtime_soak 72/72、acceptance 185/185、runtime_stability 25/25、core_smoke 100/100、structural_integrity 28+31），证据 `build/commercial-acceptance-20260808/t3-perf-fix/run_all.log`。AC-002 泵窗口已按时间片语义对齐（`3c0d82d`，实测 47/120）；TARGETING 陈旧 token 误报横幅已在 `7ed0eea` 消除（终审 T3 将于长稳后最终 HEAD 复跑一遍取干净日志）。**T3 门禁再次关闭（性能修复后）**。
+- 桌面验收最终遍（性能修复后，HEAD `7ed0eea`）：进行中（后台 `bn0s7m1xx`，证据 `desktop-perf-fix/`）。
 - fresh Windows 导出：最终候选包 `export-final/`（含全部 game 侧修复 + 生命周期修复 `b23c9d6`）；导出冒烟 **PASS**（29 检查，authoritative_quit:true，生命周期时序单调，证据 `export-final/`）。此前两轮（11:40 与首轮 export-final）均在生命周期单调门禁失败——复查确认 11:40 当时也是失败（driver log 有抛错记录，"通过"为误记），该门禁在本分支从未通过，已由 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001 修复。
 - 最终 EXE 五图路线：**PASS（5/5）**（`journey-matrix-final/`，recommended 档，复用 export-final 精确包 exe=c42eb5d1…/pck=822c06b5…；36/36 步/图、位移 27.3–36.2m、跨 2–5 chunk、最大跌落 ≤1.0m、零传送、视觉全过、教程全隐藏、每图 authoritative_quit:true）。**五图矩阵门禁正式关闭**。注：star_continent 冷启动 180 帧短 soak 的 1%low 28.1/p95 32.63 超 recommended 阈值（其余四图 1%low 103–133 全达标）——矩阵门禁只记录不卡阈值，正式分档判定由性能采集与严格长稳执行。
 - 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD `7af35ef` 干净证据）91/91 全绿**（19:31→20:01，30.7 分钟，selected=91 passed=91 failed=0），证据 `desktop-final-pass/`。**桌面验收门禁正式关闭**。
@@ -52,7 +53,7 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：**BUG-PERF-CHUNK-STEP-001 已修复**（`2429978` 时间片化 chunk 构建 + `8a3c797` 帧日志诊断）：导出冒烟帧日志取证确认 4ms 流式预算只是建议值——2048 格原子 build_step 单步 18–31ms，密集森林 chunk 连续 3 帧 21–35ms；修复后 star_continent 资格种子 p95 32.63→**9.09ms**、1% low 28.1→**84.8fps**、30fps 预算缺失 2.78%→**0.00%**、≥16ms 帧清零。此前附带碰撞形状直连优化（set_faces 免 SurfaceTool/trimesh 往返，几何逐点一致，台阶 33/33 回归过）。严格 7200s 长稳已主动中止（cycle 0–13 数据用于取证，~20 分钟沉没），待最终包重新生成后重启。全量 T3 复核中（后台 `bza9lf49a`）。
+- 当前正在处理的问题：无活动缺陷。桌面验收最终遍（性能修复后）执行中；其后最终导出 → 五图矩阵 v2 → 推荐档硬件资格 → 7200s 严格长稳 → 终审 T3（取无 TARGETING 误报横幅的干净日志）。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
