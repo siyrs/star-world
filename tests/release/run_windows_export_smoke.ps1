@@ -5,6 +5,7 @@ param(
     [string]$ProfileId = 'star_continent',
     [int]$Seed = 24681357,
     [switch]$RouteProbe,
+    [switch]$FrameLog,
     [switch]$SkipExport,
     [string]$ExecutablePath = ''
 )
@@ -396,6 +397,7 @@ try {
         "--smoke-profile=$ProfileId", "--smoke-seed=$Seed"
     )
     if ($RouteProbe) { $memArgs += '--smoke-route-probe' }
+    if ($FrameLog) { $memArgs += '--smoke-frame-log' }
     $runnerResult = Invoke-SampledProcess `
         -FilePath $runnerPath `
         -Arguments $memArgs `

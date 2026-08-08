@@ -26,6 +26,7 @@ var soak_frames := DEFAULT_SOAK_FRAMES
 var profile_id := DEFAULT_PROFILE_ID
 var seed := DEFAULT_SEED
 var route_probe_enabled := false
+var frame_log_enabled := false
 var checks := 0
 var failures: Array[String] = []
 var _world_started := false
@@ -41,12 +42,15 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 	var configured_profile := DEFAULT_PROFILE_ID
 	var configured_seed := DEFAULT_SEED
 	var configured_route_probe := false
+	var configured_frame_log := false
 	var configured_lifecycle_output := ""
 	for argument in arguments:
 		if argument == "--release-smoke":
 			enabled = true
 		elif argument == "--smoke-route-probe":
 			configured_route_probe = true
+		elif argument == "--smoke-frame-log":
+			configured_frame_log = true
 		elif argument.begins_with("--smoke-output="):
 			output = argument.trim_prefix("--smoke-output=").strip_edges()
 		elif argument.begins_with("--smoke-lifecycle-output="):
@@ -75,6 +79,7 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 		"profile_id": configured_profile,
 		"seed": configured_seed,
 		"route_probe": configured_route_probe,
+		"frame_log": configured_frame_log,
 		"lifecycle_report_path": configured_lifecycle_output,
 	}
 
@@ -90,6 +95,7 @@ func configure(p_game: Node, configuration: Dictionary) -> void:
 	profile_id = str(configuration.get("profile_id", DEFAULT_PROFILE_ID))
 	seed = int(configuration.get("seed", DEFAULT_SEED))
 	route_probe_enabled = bool(configuration.get("route_probe", false))
+	frame_log_enabled = bool(configuration.get("frame_log", false))
 
 
 func _ready() -> void:
@@ -215,6 +221,7 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	var samples := 0
 	var frame_times_ms: Array[float] = []
 	var engine_fps_samples: Array[float] = []
+	var slow_frames: Array[Dictionary] = []
 	var previous_usec := Time.get_ticks_usec()
 	# Movement pressure is supplied by the production route probe. The soak phase
 	# deliberately performs no coordinate mutation; it observes the live endpoint
@@ -222,8 +229,19 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	for frame_index in soak_frames:
 		await get_tree().process_frame
 		var now_usec := Time.get_ticks_usec()
-		frame_times_ms.append(float(now_usec - previous_usec) / 1000.0)
+		var frame_ms := float(now_usec - previous_usec) / 1000.0
+		frame_times_ms.append(frame_ms)
 		previous_usec = now_usec
+		if frame_log_enabled and frame_ms >= 16.0 and world != null:
+			var live_stats: Dictionary = world.call("get_streaming_stats")
+			slow_frames.append({
+				"frame": frame_index,
+				"ms": snappedf(frame_ms, 0.001),
+				"pending": int(live_stats.get("pending", -1)),
+				"building": int(live_stats.get("building", -1)),
+				"loaded": int(live_stats.get("loaded", -1)),
+				"last_work_usec": int(live_stats.get("last_work_usec", -1)),
+			})
 		if frame_index % SOAK_SAMPLE_INTERVAL_FRAMES != 0:
 			continue
 		engine_fps_samples.append(float(Engine.get_frames_per_second()))
@@ -275,6 +293,7 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 		"movement_pressure": "production_route_probe" if route_probe_enabled else "stationary",
 		"player_transform_writes": 0,
 		"frame_metrics": frame_metrics,
+		"slow_frames": slow_frames,
 		"final_snapshot": final_snapshot,
 	}
 

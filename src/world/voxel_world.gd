@@ -363,7 +363,9 @@ func _process_streaming_budget() -> void:
 		if _active_build_chunk == null and not _begin_next_chunk_build():
 			break
 		var completed: bool = bool(
-			_active_build_chunk.call("build_step", maxi(256, chunk_build_cells_per_step))
+			_active_build_chunk.call(
+				"build_step", maxi(256, chunk_build_cells_per_step), deadline
+			)
 		)
 		steps += 1
 		if completed:
