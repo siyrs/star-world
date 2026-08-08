@@ -149,7 +149,8 @@ Game Runtime
 - 多世界目录扫描中的主文件修复每次最多 8 个，世界始终可见并通过确定性后续扫描渐进收敛；显式完整加载不受目录修复预算限制；
 - 轻量世界目录 `catalog.json` 是 `world.json` 的派生、自愈、严格白名单索引；目录 sidecar 重建使用与主文件修复独立的写入预算，每次最多 16 个；完整存档读取使用另一独立预算，每次最多 32 个；写入预算耗尽时可使用最多 64 条的瞬时目录暂存，目录暂存只保存白名单 metadata、不进入存档，并通过后续扫描渐进收敛；
 - 存档浏览器采用固定 24 行可复用行池和分页；自动整理每帧只执行一次有界目录扫描，最多 6 次自动收敛，不创建 Timer/Thread；索引搜索覆盖名称、ID、地图和 Seed，排序覆盖最近更新、名称和存档大小，页面切换和查询只使用内存索引；
-- pause-aware Autosave、15/60/300 秒失败退避和 12 条 checkpoint timeline；
+- [BOUNDED_AUTOSAVE_RUNTIME.md](BOUNDED_AUTOSAVE_RUNTIME.md) 定义有界自动保存：只累计活动时间，手动保存复用同一权威事务并去重 pending，失败采用 15 / 60 / 300 秒分级退避，Autosave 自身瞬态调度状态不进入 `world.json`；生产组合中 Autosave 最后注册，逆序清理时先于 Weather 和其他持久玩法域停止；
+- 保存健康证据保留 12 条 bounded checkpoint timeline，并区分 manual / autosave / return_to_menu / system 来源；
 - 回收站最多 32 个物理目录，容量满时拒绝新删除而不是自动清理；玩家删除使用二次确认，撤销恢复保留原 world ID；固定 24 行的回收站管理页复用行池并分页展示，指定恢复不会误消费最新条目，损坏 Manifest 条目只允许确认永久清理；
 - 统一运行与保存健康报告聚合固定来源、运行分量与运营分量，并通过 F3 暴露主要瓶颈、保存/目录恢复证据；RuntimeHealthReport 不进入存档。
 
