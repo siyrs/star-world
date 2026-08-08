@@ -156,6 +156,7 @@ Game Runtime
 
 ### UI、桌面与 Release
 
+- 已完成统一专业 UI 系统，设计约束与验收标准见 [UI_DESIGN_SYSTEM.md](UI_DESIGN_SYSTEM.md)；
 - 统一 Celestial UI Design System；
 - Hero 主菜单、地图/设置/存档工作区、HUD、背包/合成/机器/探索界面；
 - 双分辨率、超宽屏、高 DPI、控制器焦点与真实旅程证据；
