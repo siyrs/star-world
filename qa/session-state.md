@@ -1,6 +1,6 @@
 # QA Session State
 
-更新时间：2026-08-08 +08:00（商业验收重新执行中 — Claude 接管继续）
+更新时间：2026-08-09 +08:00（商业验收全部自动化门禁关闭 — 发布序列执行中）
 
 ## 当前候选
 
@@ -24,10 +24,11 @@
 - fresh Windows 导出：最终候选包 **v2** `export-final-v2/`（坡面修复后最终包，exe=c42eb5d1…/pck=7f035ce7…）；导出冒烟 **PASS**（29 检查，authoritative_quit:true，生命周期单调）。此前 v1 包 `export-final/`（含 `b23c9d6` 生命周期修复）同门禁通过；更早两轮失败史见 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001。
 - 最终 EXE 五图路线：**PASS（5/5，v2 复取）**（`journey-matrix-final-v2/`，精确复用 export-final-v2 包；36/36 步/图、位移 27.3–36.2m、跨 2–5 chunk、最大跌落 ≤1.0m、零传送、视觉全过、教程全隐藏、每图 authoritative_quit:true）。v2 逐图指标全部落在推荐档阈值内：avg 146–166fps、1% low 81.6–142.4、p95 6.89–8.76ms、p99 6.99–10.88ms、miss30 全 0%、加载 533–1163ms、WS p95 355–369 MiB（star_continent 资格种子 p95 8.76ms，较修复前 32.63ms 改善 73%）。**五图矩阵门禁在最终包上正式关闭**（v1 证据 `journey-matrix-final/` 存档保留）。
 - 本机硬件资格（推荐档）：**PASS**（`hardware-qualification-recommended/`，result=pass，35/35 断言 0 违规，五图逐图独立判定全过；operator=claude-release-20260808，OperatorAttested，fingerprint=7e2e4d39…）。本机 RTX 3090 高于推荐档参考配置，最低档硬件资格仍为既有外部 HOLD。
-- 严格 7,200 秒长稳：首跑在 cycle 70 中止（star_continent seed 112428 `route_too_short`，规划 6 步/最低 20）→ 定位 **BUG-SPAWN-WALKABLE-REACH-001**（出生质量系统只查局部指标，~10% 种子落微连通孤岛）→ 修复 `02e8793`（walkable-reach BFS，与路线探针同合同；300 周期种子空间扫描全部 reach≥20 零降级，五基准出生点不变，6 个出生敏感套件全过）→ 最终包 v3 `export-final-v3/`（冒烟 29 检查 PASS）→ 矩阵 v3 + 推荐档资格执行中（后台 `bk8xvpa6k`），其后长稳从 cycle 0 重启。
+- 严格 7,200 秒长稳：**PASS（最终包 v3）**（`strict-soak-7200-v3/`：requested=7200 elapsed=7208，269 周期 / 269 路线 / 5 Profile，0 崩溃、0 fatal 诊断、0 出生后传送、0 玩家坐标写入、269/269 权威生命周期干净退出；WS p95 首窗 365.9 → 末窗 367.2 MiB，增长 0.36% 无泄漏；cycle 70 失败种子复验 planned=36 步）。**严格长稳门禁正式关闭（本机目标硬件，推荐档及以上）**。
 - 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD `7af35ef` 干净证据）91/91 全绿**（19:31→20:01，30.7 分钟，selected=91 passed=91 failed=0），证据 `desktop-final-pass/`。**桌面验收门禁正式关闭**。
-- 本机最低/推荐硬件资格：推荐档 **已通过**（见上）；最低档硬件为既有外部 HOLD（本机配置高于最低档，无法冒充）。
-- 严格 7,200 秒长稳：最终包上执行中（后台 `bt11v4cxj`）。
+- 终审 T3（最终 HEAD，含出生连通性修复 `02e8793`）：**142/142 EXIT: 0**，0 FAIL，仅一行 CONTRACT PASS 无 TARGETING 误报，证据 `t3-final-head/run_all.log`。**T3 门禁在发布 HEAD 最终关闭**。
+- 本机最低/推荐硬件资格：推荐档 **已通过**（`hardware-qualification-recommended-v3/`，35/35 断言）；最低档硬件为既有外部 HOLD（本机配置高于最低档，无法冒充）。
+- 严格 7,200 秒长稳：**PASS（最终包 v3）**（见上条 `strict-soak-7200-v3/`；早期 `bt11v4cxj` 轮已主动中止取证，存档保留）。
 
 ## 台阶行走修复（P1 真实产品缺陷，**已关闭**）
 
@@ -56,15 +57,15 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：无活动缺陷。最终候选包 v2 导出+冒烟执行中（`export-final-v2/`）；其后五图矩阵 v2 → 推荐档硬件资格 → 7200s 严格长稳 → 最终报告 → 合并/tag/release/推送。
+- 当前正在处理的问题：无活动缺陷。**全部自动化验收门禁已在发布 HEAD 关闭**（桌面 91/91、T3 142/142、导出冒烟、五图矩阵 v3、推荐档资格 v3、严格 7200s 长稳 v3）。最终报告已定稿（closure 校验器 PASS），正在执行发布序列：合并 master → tag v1.3.1 → GitHub release → 推送远程。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
 
 ## 最近命令与证据
 
-- 最近一次命令：推荐档硬件资格 **PASS**（35/35 断言）→ 严格 7200s 长稳启动（后台 `bt11v4cxj`，`strict-soak-7200-final/`）；前一命令五图矩阵 v2 **PASS 5/5**（star_continent p95 8.76ms）
-- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；性能修复后 T3：`t3-perf-fix/`；性能取证与 A/B：`export-perf-fix/`；最终候选包 v1+冒烟：`export-final/`；五图矩阵 v1：`journey-matrix-final/`；坡面修复取证与复验：`chunk-perf-fix/`；坡面修复后桌面 91/91：`desktop-ramp-fix/`；终审 T3：`t3-ramp-fix/`；最终包 v2：`export-final-v2/`；矩阵 v2：`journey-matrix-final-v2/`；推荐档资格：`hardware-qualification-recommended/`；7200s 长稳：`strict-soak-7200-final/`）
+- 最近一次命令：终审 T3（最终 HEAD `02e8793` 出生修复后）**142/142 EXIT: 0**（`t3-final-head/`）；前一命令 closure 校验器 **PASS**（报告/矩阵 v3 对齐后）
+- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；性能修复后 T3：`t3-perf-fix/`；性能取证与 A/B：`export-perf-fix/`；最终候选包 v1+冒烟：`export-final/`；五图矩阵 v1：`journey-matrix-final/`；坡面修复取证与复验：`chunk-perf-fix/`；坡面修复后桌面 91/91：`desktop-ramp-fix/`；终审 T3 v2：`t3-ramp-fix/`；最终包 v2：`export-final-v2/`；矩阵 v2：`journey-matrix-final-v2/`；推荐档资格 v2：`hardware-qualification-recommended/`；7200s 长稳中止轮：`strict-soak-7200-final/`；**发布级证据**：最终包 v3 `export-final-v3/`、矩阵 v3 `journey-matrix-final-v3/`、资格 v3 `hardware-qualification-recommended-v3/`、7200s 长稳 PASS `strict-soak-7200-v3/`、出生种子扫描 `soak_seed_sweep2.out.log`、终审 T3 v3 `t3-final-head/`）
 - 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
 ## 下一步
@@ -78,4 +79,4 @@
 3. ~~重新导出 fresh EXE/PCK~~ **已完成**（`export-final/`，含 `b23c9d6` 生命周期修复；导出冒烟 29 检查全绿、生命周期单调）。五图矩阵后台执行中（后台 `boj92y0f8`）。
 4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID——**已完成** 13 场景 PASS，证据 `perf-capture-final/`）与硬件资格门禁（`run_external_hardware_qualification.ps1 -Tier recommended`）；随后严格 7,200 秒长稳（`run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`；第一轮已主动中止取证，待最终包重启），再更新覆盖矩阵和最终报告。
    - **插队性能修复（已完成取证与修复）**：矩阵发现 star_continent 资格种子 soak 超推荐档 → 帧日志取证 → 时间片化 chunk 构建修复（`2429978`）→ 复测全指标达标（p95 9.09ms）。此修复使最终包必须重新导出并重走矩阵/资格/长稳，且 T3（进行中）与桌面最终遍（排队）须在最终 HEAD 重取证据。
-5. 最终报告 + 合并 master + tag + release + 同步远程。
+5. 最终报告 + 合并 master + tag + release + 同步远程。**进行中**：报告已定稿（closure 校验 PASS，矩阵 v3 刷新）；发布序列执行中。

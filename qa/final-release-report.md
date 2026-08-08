@@ -29,7 +29,7 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
 
 ## 3. 地图覆盖情况
 
-逐图实测（最终候选包 v2，`journey-matrix-final-v2/` + 推荐档资格复测 `hardware-qualification-recommended/`）：
+逐图实测（最终候选包 v3，`journey-matrix-final-v3/` + 推荐档资格复测 `hardware-qualification-recommended-v3/`）：
 
 | Profile | 进入 | 完整探索* | 连续路线通关 | 水域 | 边界 | 存档/读档 | 死亡复活 | 任务/内容 | 剩余问题 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -41,13 +41,13 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
 
 \* 程序化无限世界不可完整探索；逐图"否"为诚实证据边界而非未测。有界连续路线、区域采样与最终包截图已全过。
 
-五图共同合同（v2 全满足）：零出生后传送（`player_transform_writes=0`）、视觉细节全过、教程卡片全隐藏、逐图权威退出干净（`authoritative_quit:true`、生命周期时序单调）、36/36 步、最大跌落 ≤1.0m。
+五图共同合同（v3 全满足）：零出生后传送（`player_transform_writes=0`）、视觉细节全过、教程卡片全隐藏、逐图权威退出干净（`authoritative_quit:true`、生命周期时序单调）、36/36 步、最大跌落 ≤1.0m。
 
 ## 4. 性能优化结果
 
 ### 4.1 优化前后对比（star_continent 资格种子 112358，同一冷启动 180 帧 soak 窗）
 
-| 指标 | 修复前 | 修复后（最终包 v2） | 变化 |
+| 指标 | 修复前 | 修复后（最终包 v2/v3） | 变化 |
 |---|---:|---:|---|
 | 平均 FPS | 102.7 | 146.0–154.6 | +42~50% |
 | 1% Low FPS | 28.1 | 80.0–81.6 | 2.9× |
@@ -58,22 +58,22 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
 
 根因与修复：`BUG-PERF-CHUNK-STEP-001`（流式预算只在 build_step 之间检查，单个 2048 格原子步骤 18–31ms 击穿 4ms 预算）→ 时间片化 `build_step(deadline_usec)`（每 64 格检查期限，同步强载语义不变）；附带碰撞直连 `ConcavePolygonShape3D.set_faces` 微优化（A/B 证明对帧刺无影响，保留为清洁优化）。辅助修复 `BUG-PERF-GROUND-SCAN-001`（地面保持扫描上界收紧到头顶+2）。
 
-### 4.2 最终包五图实测（矩阵 v2；推荐档阈值：avg≥60、1% low≥45、p95≤22.22ms、p99≤33.33ms、加载≤6s、WS≤6144MiB）
+### 4.2 最终包五图实测（矩阵 v3，最终候选包 `export-final-v3/`（exe=c42eb5d1…/pck=d8c29b1e…）；推荐档阈值：avg≥60、1% low≥45、p95≤22.22ms、p99≤33.33ms、加载≤6s、WS≤6144MiB）
 
 | Profile | 平均 FPS | 1% Low | p95 | p99 | 世界启动 | WS p95 |
 |---|---:|---:|---:|---:|---:|---:|
-| `star_continent` | 146.0 | 81.6 | 8.76ms | 10.88ms | 976ms | 366 MiB |
-| `desert_ruins` | 164.5 | 117.3 | 7.08ms | 8.35ms | 936ms | 358 MiB |
-| `frozen_wastes` | 165.7 | 142.4 | 6.90ms | 7.00ms | 533ms | 355 MiB |
-| `sky_islands` | 165.8 | 142.3 | 6.89ms | 6.99ms | 1163ms | 362 MiB |
-| `abyss_world` | 160.9 | 96.8 | 7.39ms | 9.78ms | 573ms | 369 MiB |
+| `star_continent` | 149.9 | 83.5 | 8.99ms | 11.39ms | 1834ms | 369 MiB |
+| `desert_ruins` | 164.7 | 102.1 | 7.00ms | 9.39ms | 1084ms | 356 MiB |
+| `frozen_wastes` | 165.6 | 138.9 | 7.03ms | 7.18ms | 707ms | 356 MiB |
+| `sky_islands` | 165.7 | 146.6 | 6.72ms | 6.82ms | 1428ms | 367 MiB |
+| `abyss_world` | 160.9 | 101.9 | 7.14ms | 9.14ms | 642ms | 369 MiB |
 
-推荐档硬件资格同包复测：35/35 断言全过、0 违规、五图逐图独立判定 pass（`hardware-recommended.json`，fingerprint 7e2e4d39…，OperatorAttested）。
+推荐档硬件资格同包复测：35/35 断言全过、0 违规、五图逐图独立判定 pass（`hardware-qualification-recommended-v3/hardware-recommended.json`，fingerprint 7e2e4d39…，OperatorAttested）。世界启动时间含出生连通性 BFS 成本（最慢 star_continent 1834ms，阈值 6s 内余量充足）。
 
 ### 4.3 长时间运行
 
-- 严格 7,200 秒目标硬件长稳：见 §8 第 13 项与 `strict-soak-7200-final/`（本报告定稿时以最终证据刷新）。
-- 内存：性能采集 13 场景 WS p95 404.7 MiB（`perf-capture-final/`）；矩阵 v2 五图 WS p95 355–369 MiB，远低于 6144 MiB 上限；T3 `runtime_soak` 72/72 含逐周期内存/资源释放断言。
+- **严格 7,200 秒目标硬件长稳：PASS（最终候选包 v3）**（`strict-soak-7200-v3/`）：requested=7200 / elapsed=7208，**269 周期 / 269 完成路线 / 5 Profile 全覆盖**，0 崩溃、0 fatal 诊断、0 出生后传送、0 玩家坐标写入、269/269 周期权威生命周期干净退出（quit_source=release_smoke，时序单调）；WS p95 首窗 365.9 → 末窗 367.2 MiB，**增长 0.36%，无泄漏迹象**。该门禁此前从未在任何提交上完成过（BUG-SOAK-120-001 历史 open），本轮首跑在 cycle 70 命中出生微连通孤岛（BUG-SPAWN-WALKABLE-REACH-001），修复后同一失败 cycle 在 v3 上以 36 步路线复验通过。
+- 内存：性能采集 13 场景 WS p95 404.7 MiB（`perf-capture-final/`）；矩阵 v3 五图 WS p95 356–371 MiB，远低于 6144 MiB 上限；T3 `runtime_soak` 72/72 含逐周期内存/资源释放断言。
 
 ## 5. 自动化能力（本轮新增/强化）
 
@@ -90,6 +90,7 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
 - **主要修改模块**：
   - `src/chunk/voxel_chunk.gd`：时间片化构建步骤 + 碰撞 set_faces 直连。
   - `src/world/voxel_world.gd`：流式期限传递；地面解析委托解析坡高。
+  - `src/world/world_generator.gd` + `data/spawn_quality_profiles.json`：出生候选连通性门禁 `_evaluate_walkable_reach`（与路线探针同合同 BFS、懒求值、可靠性记忆化、受限降级路径），约 10% 种子的微连通孤岛出生被迁移到连通区（BUG-SPAWN-WALKABLE-REACH-001）。
   - `src/block/block_shape_geometry.gd`：新增 `get_local_surface_height`（楼梯解析坡面，其余形状语义不变）。
   - `src/player/first_person_player.gd` / `ladder_climbing_player.gd`：成形地面 step-up 镜像（BUG-STAIR-STEP-001 既有修复本轮复验）。
   - `src/diagnostics/release_smoke_runner.gd`：旅程存档先于权威退出（生命周期单调）；选择性帧日志。
@@ -106,15 +107,16 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
    - 当前证据：E3+E4-A 全绿（§3/§4）；BLOCKER-GUI-001（Computer Use 窗口激活/捕获在本机被拒绝访问 0x80070005，已改用 production-scene InputEvent 自动化，不把 E3 冒充 E4-H）。
    - 已尝试：Computer Use 窗口捕获（系统权限拒绝）；游戏内 InputEvent 自动化（已全覆盖客观合同）。
    - 为何未完：需要独立人员在最终候选包上人工签字，非当前会话可替代。
-   - 下一步：发布负责人在 `export-final-v2` 同等包上完成 E4-H 抽查并签字。
+   - 下一步：发布负责人在 `export-final-v3` 同等包上完成 E4-H 抽查并签字。
 2. **BUG-PERF-002 — 最低档实体硬件资格（推荐档腿已关闭，最低档腿 open）。**
    - 问题：最低档（GTX 1060 6GB / RX 580 级）阈值需在实体最低档机器上执行。
    - 当前证据：本机（高于推荐档）推荐档 35/35 断言全过；最低档指标在本机全部大幅超标通过但不构成最低档证据。
    - 已尝试：本机推荐档资格（PASS）；无法把本机伪装成最低档（诚实边界，资格脚本强制 operator  attest 与机器指纹）。
    - 为何未完：当前机器不存在最低档 GPU。
    - 下一步：在 GTX 1060 级机器运行 `run_external_hardware_qualification.ps1 -Tier minimum -OperatorAttested`。
-3. **BUG-SOAK-120-001 — 严格 7,200 秒目标硬件长稳。**
-   - 状态：最终包上已执行（`strict-soak-7200-final/`；逐周期门禁：报告 ok + soak ok + 路线零传送 + 无 fatal + WS p95 + 生命周期单调 + quit_source=release_smoke）。定稿结论以该目录最终报告为准；若任何周期失败，本条回到 open 且发布阻塞。
+3. **BUG-SOAK-120-001 — 严格 7,200 秒目标硬件长稳（closed on this machine）。**
+   - 最终包 v3 已完成：269 周期/7208 秒/5 Profile，0 崩溃 0 fatal 0 传送，WS 增长 0.36%（§4.3）。资格脚本的政策下限（duration_seconds_min=7200、五图循环、operator attest、机器指纹）全部满足并留证 `strict-soak-7200-v3/strict-soak.json`。
+   - 诚实边界：本机为高于推荐档的单台机器；不同硬件/驱动组合上的等价长稳仍属外部抽样，与 BUG-PERF-002 最低档腿一并列入发布后续抽检。
 4. **物理 HDD / 杀毒软件 / 异常断电场景（历史外部 HOLD，本轮未覆盖）。**
    - 当前证据：长路径删除容错（BUG-SAVE-LONG-PATH-001）、崩溃恢复与同字节 stale catalog 拒绝（Iteration 58）在 SSD 环境验证；HDD 慢 IO 与实时杀毒扫描下的保存原子性未实测。
    - 下一步：在 HDD 与杀毒常驻环境重跑保存/删除/崩溃恢复套件。
@@ -123,17 +125,17 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
 
 ### 历史缺陷状态核验（保留钉定）
 
-- BUG-QA-COVERAGE-001 — qa-passed：五图生产出生点连续路线（PR #100/#101 合同）本轮在最终包 v2 复测通过。
+- BUG-QA-COVERAGE-001 — qa-passed：五图生产出生点连续路线（PR #100/#101 合同）本轮在最终包 v3 复测通过。
 - BUG-QA-CONTENT-001 — qa-passed：教程/建造/采矿/合成/农业/畜牧/床位/探索/战斗 E3 闭环本轮全量复跑通过。
-- BUG-QA-EXPORT-ROUTE-001 — qa-passed：生产路线探针零传送合同在矩阵 v2 与长稳每周期复核。
+- BUG-QA-EXPORT-ROUTE-001 — qa-passed：生产路线探针零传送合同在矩阵 v3 与长稳每周期复核。
 - BUG-QA-SOAK-TRANSPORT-001 — qa-passed：长稳复用生产路线探针，schema 2 合同不变。
-- BUG-QA-VISUAL-EVIDENCE-001 — qa-passed：release-smoke 诊断世界加载已完成教程状态，矩阵 v2 逐图 `tutorial_hidden_for_evidence=true`。
+- BUG-QA-VISUAL-EVIDENCE-001 — qa-passed：release-smoke 诊断世界加载已完成教程状态，矩阵 v3 逐图 `tutorial_hidden_for_evidence=true`。
 - BUG-QA-SOAK-PROFILE-COVERAGE-001 — qa-passed：长稳 runner "达到时间且≥5 轮"双条件不变，五 Profile 覆盖由驱动与 workflow 双核验。
 - BUG-QA-SKY-DESCENT-001 — qa-passed：sky_islands 一格下坡谨慎制动合同与精确 Seed 112361 回归本轮 T3 复跑通过。
 
 ## 8. 发布验收标准逐项核对（20 项）
 
-1. 稳定构建：✅ 最终包 v2 导出可复现（exe=c42eb5d1…/pck=7f035ce7…）。
+1. 稳定构建：✅ 最终包 v3 导出可复现（exe=c42eb5d1…/pck=d8c29b1e…）。
 2. 正常启动与退出：✅ 导出冒烟 29 检查 ×（1+5+资格复测+长稳逐周期）全部 `authoritative_quit:true`。
 3. 全部正式地图进入测试：✅ 5/5（桌面+T3+最终 EXE 三层）。
 4. 可通关地图实际通关：✅ 5/5 连续路线 36/36 步。
@@ -145,13 +147,13 @@ E0–E3 或 E4-A 不能自动升级成 E4-H；无限程序化世界的有界路�
 10. 空气墙/碰撞/穿模/掉出地图系统检查：✅（non_cube 33/33、台阶坡面、边界足迹容差、掉出恢复）。
 11. 水域与水下流程：✅（star_continent/frozen_wastes 进出水与快速反复；熔岩 BUG-LAVA-001 回归链）。
 12. 存档/读档/死亡/复活/地图切换：✅（精确位置保真 AC-006、迁移、多世界、崩溃恢复、长路径删除）。
-13. 长时间运行无持续内存增长/严重掉帧/崩溃：✅/⏳（T3 runtime_soak 72/72 + 7200s 严格长稳最终证据，见 §4.3）。
+13. 长时间运行无持续内存增长/严重掉帧/崩溃：✅（T3 runtime_soak 72/72 + 严格 7200s 长稳 269 周期 0 崩溃、WS 增长 0.36%，§4.3）。
 14. 性能优化前后对比：✅（§4.1 精确同种子同窗口对比）。
 15. 修复具自动化回归：✅（每项修复均有套件/校验器钉定，见 qa/issues-found.md）。
 16. 无影响游玩的高频错误日志：✅（各套件出口 ObjectDB/诊断门禁；音频 Dummy 泄漏已修）。
-17. 构建/自动化测试/关键回归全过：✅（T3 142/142、桌面 91/91、导出冒烟、矩阵 v2、推荐档资格）。
+17. 构建/自动化测试/关键回归全过：✅（T3 142/142、桌面 91/91、导出冒烟、矩阵 v3、推荐档资格 v3）。
 18. 全部修改提交独立分支：✅（36 笔，`codex/commercial-acceptance-20260808`）。
-19. 地图覆盖矩阵完整：✅（qa/map-coverage-matrix.md 2026-08-08 v2 刷新）。
+19. 地图覆盖矩阵完整：✅（qa/map-coverage-matrix.md 2026-08-08 v3 刷新）。
 20. 最终发布报告完整：✅（本文件，随长稳最终证据定稿）。
 
-**结论：除 §7 所列外部依赖外，全部发布验收标准已在最终候选包 v2 上满足。当前状态保持 HOLD 直至独立 E4-H 签字与最低档硬件证据到位；在此边界内，推荐档及以上配置的工程发布条件已具备。**
+**结论：除 §7 所列外部依赖外，全部发布验收标准已在最终候选包 v3 上满足。当前状态保持 HOLD 直至独立 E4-H 签字与最低档硬件证据到位；在此边界内，推荐档及以上配置的工程发布条件已具备。**
