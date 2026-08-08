@@ -1,6 +1,6 @@
 # QA Session State
 
-更新时间：2026-08-09 +08:00（商业验收全部自动化门禁关闭 — 发布序列执行中）
+更新时间：2026-08-09 +08:00（商业验收完成 — v1.3.1 已发布）
 
 ## 当前候选
 
@@ -13,7 +13,7 @@
 
 ## 当前发布结论
 
-**IN PROGRESS / HOLD**。2026-08-02 及更早的报告只作为断点和用例来源；只有 2026-08-08 在当前候选 HEAD 上重新生成的构建、日志、截图、性能和长稳证据才可进入本轮结论。
+**v1.3.1 已发布（2026-08-09）**。全部 20 项发布验收标准中可在当前机器闭环的项全部通过；分支 `codex/commercial-acceptance-20260808`（42 笔提交）已合并 master（merge `c34b36e`），annotated tag `v1.3.1`（`9c3a60a`）与 GitHub Release（含 `StarWorld-v1.3.1-windows-x86_64.zip`，exe+pck，41.4MB）已推送远程 `siyrs/star-world`。既有外部边界保持诚实声明：独立 E4-H 体验签字、最低档实体硬件资格、HDD/杀毒场景（详见 `qa/final-release-report.md` §7）。
 
 ## 当前构建与测试状态
 
@@ -57,14 +57,14 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：无活动缺陷。**全部自动化验收门禁已在发布 HEAD 关闭**（桌面 91/91、T3 142/142、导出冒烟、五图矩阵 v3、推荐档资格 v3、严格 7200s 长稳 v3）。最终报告已定稿（closure 校验器 PASS），正在执行发布序列：合并 master → tag v1.3.1 → GitHub release → 推送远程。
+- 当前正在处理的问题：无。**任务完成**：全部自动化验收门禁关闭，v1.3.1 已合并/打标/发布/推送（master `c34b36e`，tag `v1.3.1`，release 非草稿含游戏包资产）。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
 
 ## 最近命令与证据
 
-- 最近一次命令：终审 T3（最终 HEAD `02e8793` 出生修复后）**142/142 EXIT: 0**（`t3-final-head/`）；前一命令 closure 校验器 **PASS**（报告/矩阵 v3 对齐后）
+- 最近一次命令：`gh release create v1.3.1`（发布非草稿，资产 `StarWorld-v1.3.1-windows-x86_64.zip` 41.4MB 已上传）；`git push origin master`（`5cbaca6..c34b36e`）+ `git push origin v1.3.1`
 - 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；性能修复后 T3：`t3-perf-fix/`；性能取证与 A/B：`export-perf-fix/`；最终候选包 v1+冒烟：`export-final/`；五图矩阵 v1：`journey-matrix-final/`；坡面修复取证与复验：`chunk-perf-fix/`；坡面修复后桌面 91/91：`desktop-ramp-fix/`；终审 T3 v2：`t3-ramp-fix/`；最终包 v2：`export-final-v2/`；矩阵 v2：`journey-matrix-final-v2/`；推荐档资格 v2：`hardware-qualification-recommended/`；7200s 长稳中止轮：`strict-soak-7200-final/`；**发布级证据**：最终包 v3 `export-final-v3/`、矩阵 v3 `journey-matrix-final-v3/`、资格 v3 `hardware-qualification-recommended-v3/`、7200s 长稳 PASS `strict-soak-7200-v3/`、出生种子扫描 `soak_seed_sweep2.out.log`、终审 T3 v3 `t3-final-head/`）
 - 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
@@ -79,4 +79,4 @@
 3. ~~重新导出 fresh EXE/PCK~~ **已完成**（`export-final/`，含 `b23c9d6` 生命周期修复；导出冒烟 29 检查全绿、生命周期单调）。五图矩阵后台执行中（后台 `boj92y0f8`）。
 4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID——**已完成** 13 场景 PASS，证据 `perf-capture-final/`）与硬件资格门禁（`run_external_hardware_qualification.ps1 -Tier recommended`）；随后严格 7,200 秒长稳（`run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`；第一轮已主动中止取证，待最终包重启），再更新覆盖矩阵和最终报告。
    - **插队性能修复（已完成取证与修复）**：矩阵发现 star_continent 资格种子 soak 超推荐档 → 帧日志取证 → 时间片化 chunk 构建修复（`2429978`）→ 复测全指标达标（p95 9.09ms）。此修复使最终包必须重新导出并重走矩阵/资格/长稳，且 T3（进行中）与桌面最终遍（排队）须在最终 HEAD 重取证据。
-5. 最终报告 + 合并 master + tag + release + 同步远程。**进行中**：报告已定稿（closure 校验 PASS，矩阵 v3 刷新）；发布序列执行中。
+5. ~~最终报告 + 合并 master + tag + release + 同步远程~~ **已完成（2026-08-09）**：报告定稿（closure 校验 PASS）；merge `c34b36e`、tag `v1.3.1`、GitHub Release（含 Windows 游戏包）、远程推送全部完成。/loop 任务全部验收标准闭环，循环可终止。
