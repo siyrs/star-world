@@ -21,6 +21,7 @@ const DEFAULT_SEED := 24681357
 var game: Node
 var report_path := DEFAULT_REPORT_PATH
 var screenshot_path := "user://release-smoke.png"
+var lifecycle_report_path := ""
 var soak_frames := DEFAULT_SOAK_FRAMES
 var profile_id := DEFAULT_PROFILE_ID
 var seed := DEFAULT_SEED
@@ -40,6 +41,7 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 	var configured_profile := DEFAULT_PROFILE_ID
 	var configured_seed := DEFAULT_SEED
 	var configured_route_probe := false
+	var configured_lifecycle_output := ""
 	for argument in arguments:
 		if argument == "--release-smoke":
 			enabled = true
@@ -47,6 +49,10 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 			configured_route_probe = true
 		elif argument.begins_with("--smoke-output="):
 			output = argument.trim_prefix("--smoke-output=").strip_edges()
+		elif argument.begins_with("--smoke-lifecycle-output="):
+			configured_lifecycle_output = argument.trim_prefix(
+				"--smoke-lifecycle-output="
+			).strip_edges()
 		elif argument.begins_with("--smoke-soak-frames="):
 			var raw_frames := argument.trim_prefix("--smoke-soak-frames=").strip_edges()
 			if raw_frames.is_valid_int():
@@ -69,6 +75,7 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 		"profile_id": configured_profile,
 		"seed": configured_seed,
 		"route_probe": configured_route_probe,
+		"lifecycle_report_path": configured_lifecycle_output,
 	}
 
 
@@ -76,6 +83,7 @@ func configure(p_game: Node, configuration: Dictionary) -> void:
 	game = p_game
 	report_path = str(configuration.get("report_path", DEFAULT_REPORT_PATH))
 	screenshot_path = "%s.png" % report_path.get_basename()
+	lifecycle_report_path = str(configuration.get("lifecycle_report_path", ""))
 	soak_frames = clampi(
 		int(configuration.get("soak_frames", DEFAULT_SOAK_FRAMES)), 60, 600
 	)
@@ -96,6 +104,14 @@ func _run() -> void:
 	if game == null:
 		await _finish()
 		return
+	var lifecycle_report: Node = game.get("release_lifecycle_report")
+	_check(lifecycle_report != null, "release_lifecycle_report_available")
+	if lifecycle_report != null and not lifecycle_report_path.is_empty():
+		lifecycle_report.call("configure", true, lifecycle_report_path)
+		_check(
+			str(lifecycle_report.call("get_report_path")) == lifecycle_report_path,
+			"release_lifecycle_report_output_bound"
+		)
 	_world_started = false
 	_world_start_failure = ""
 	_tutorial_hidden_for_evidence = false
@@ -324,8 +340,9 @@ func _finish(
 		telemetry_snapshot = diagnostics.call("sample_now")
 	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
+	var lifecycle_snapshot := _prepare_authoritative_quit()
 	var payload := {
-		"version": 4,
+		"version": 5,
 		"ok": failures.is_empty(),
 		"checks": checks,
 		"failures": failures,
@@ -342,6 +359,7 @@ func _finish(
 		"visual_evidence": evidence_result,
 		"soak": soak_result,
 		"telemetry": telemetry_snapshot,
+		"lifecycle": lifecycle_snapshot,
 		"engine_version": Engine.get_version_info(),
 	}
 	_ensure_output_directory(report_path)
@@ -363,6 +381,46 @@ func _finish(
 		print("RELEASE SMOKE FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 	await _cleanup_runtime()
 	get_tree().quit(exit_code)
+
+
+func _prepare_authoritative_quit() -> Dictionary:
+	if game == null or not is_instance_valid(game):
+		_check(false, "authoritative_quit_game_available")
+		return {}
+	if not game.has_method("request_application_quit"):
+		_check(false, "authoritative_quit_coordinator_available")
+		return {}
+	# Keep the diagnostic runner in control of its non-zero exit code while using
+	# the production coordinator for save, teardown, and lifecycle finalization.
+	game.set("application_exit_enabled", false)
+	var prepared := bool(game.call("request_application_quit", &"release_smoke"))
+	_check(prepared, "authoritative_quit_prepared")
+	var snapshot: Dictionary = {}
+	if game.has_method("get_release_lifecycle_snapshot"):
+		var raw_snapshot: Variant = game.call("get_release_lifecycle_snapshot")
+		if raw_snapshot is Dictionary:
+			snapshot = raw_snapshot
+	var quit: Dictionary = snapshot.get("quit", {})
+	var service_hub: Dictionary = quit.get("service_hub", {})
+	var game_quit: Dictionary = quit.get("game", {})
+	_check(bool(quit.get("prepared", false)), "authoritative_lifecycle_quit_prepared")
+	_check(
+		str(quit.get("termination_reason", "")) == "prepared_quit",
+		"authoritative_lifecycle_termination_reason"
+	)
+	_check(str(quit.get("source", "")) == "release_smoke", "authoritative_lifecycle_source")
+	_check(bool(snapshot.get("last_write_ok", false)), "authoritative_lifecycle_report_persisted")
+	_check(
+		int(service_hub.get("success_count", 0)) >= 1
+		and int(service_hub.get("failure_count", 0)) == 0,
+		"authoritative_service_hub_quit_clean"
+	)
+	_check(
+		int(game_quit.get("success_count", 0)) >= 1
+		and int(game_quit.get("failure_count", 0)) == 0,
+		"authoritative_game_quit_clean"
+	)
+	return snapshot
 
 
 func _cleanup_runtime() -> void:

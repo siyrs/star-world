@@ -6,8 +6,20 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$policyHelpers = Join-Path $PSScriptRoot 'qualification_policy_helpers.ps1'
+if (-not (Test-Path -LiteralPath $policyHelpers -PathType Leaf)) {
+    throw "Qualification policy helpers not found: $policyHelpers"
+}
+. $policyHelpers
+$PolicyContext = Get-ReleaseQualificationPolicyContext -ProjectRoot $ProjectRoot
+$HardwarePolicies = @{
+    minimum = New-HardwareQualificationPolicySnapshot -PolicyContext $PolicyContext -Tier 'minimum'
+    recommended = New-HardwareQualificationPolicySnapshot -PolicyContext $PolicyContext -Tier 'recommended'
+}
+$StrictSoakPolicy = New-StrictSoakPolicySnapshot -PolicyContext $PolicyContext
 $SchemaVersion = 2
-$StrictSoakSeconds = 7200
+$StrictSoakSeconds = [int]$StrictSoakPolicy.duration_seconds_min
 $RequiredProfiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
 $RequiredTiers = @('minimum', 'recommended')
 $RequiredFaultScenarios = @('hdd', 'antivirus', 'power_loss')
@@ -168,6 +180,24 @@ function Test-ExternalQualificationPackage {
         if ($seenTiers.ContainsKey($tier)) { $errors.Add("hardware tier is duplicated: $tier") }
         $seenTiers[$tier] = $true
         Add-ChildConsistencyErrors $errors $entry $source $referenceOnly 'hardware'
+        if ([int](Get-Field $entry 'schema_version' 0) -ne 2) {
+            $errors.Add("hardware $tier schema_version must equal 2")
+        }
+        if (-not [bool](Get-Field $entry 'exact_final_package_reused' $false)) {
+            $errors.Add("hardware $tier must attest exact final package reuse")
+        }
+        $expectedHardwarePolicy = $HardwarePolicies[$tier]
+        foreach ($policyError in @(Get-HardwarePolicySnapshotErrors `
+            -Snapshot (Get-Field $entry 'qualification_policy' $null) `
+            -Expected $expectedHardwarePolicy)) {
+            $errors.Add("hardware $tier`: $policyError")
+        }
+        foreach ($metricError in @(Get-HardwareMetricEvaluationErrors `
+            -RecordedEvaluation (Get-Field $entry 'metric_evaluation' $null) `
+            -MetricPolicy $expectedHardwarePolicy.metrics `
+            -RequiredProfiles $RequiredProfiles)) {
+            $errors.Add("hardware $tier`: $metricError")
+        }
         Add-RequiredTextError $errors $entry 'operator_id'
         Add-RequiredHashError $errors $entry 'machine_fingerprint_sha256' 64
         Add-RequiredTextError $errors $entry 'cpu'
@@ -201,20 +231,80 @@ function Test-ExternalQualificationPackage {
 
     $soak = Get-Field $Package 'strict_soak' $null
     Add-ChildConsistencyErrors $errors $soak $source $referenceOnly 'strict soak'
+    if ([int](Get-Field $soak 'schema_version' 0) -ne 2) { $errors.Add('strict soak schema_version must equal 2') }
+    if (-not [bool](Get-Field $soak 'exact_final_package_reused' $false)) {
+        $errors.Add('strict soak must attest exact final package reuse')
+    }
+    foreach ($policyError in @(Get-StrictSoakPolicySnapshotErrors `
+        -Snapshot (Get-Field $soak 'qualification_policy' $null) `
+        -Expected $StrictSoakPolicy)) {
+        $errors.Add($policyError)
+    }
     $requested = [long](Get-Field $soak 'requested_seconds' 0)
     $elapsed = [long](Get-Field $soak 'elapsed_seconds' 0)
     $soakReference = [bool](Get-Field $soak 'reference_only' $false)
     if ($requested -le 0 -or $elapsed -le 0) { $errors.Add('strict soak durations must be positive') }
-    if ($elapsed -gt $requested + 600) { $errors.Add('strict soak elapsed_seconds exceeds the requested window unexpectedly') }
     if ($requireReal) {
         if ($requested -lt $StrictSoakSeconds -or $elapsed -lt $StrictSoakSeconds) {
-            $errors.Add('target-hardware soak must run for at least 7200 seconds')
+            $errors.Add("target-hardware soak must run for at least $StrictSoakSeconds seconds")
         }
         if ($soakReference) { $errors.Add('target-hardware soak cannot be reference_only') }
         if (-not [bool](Get-Field $soak 'target_hardware' $false)) { $errors.Add('strict soak must attest target_hardware') }
     } else {
         if (-not $soakReference) { $errors.Add('non-target soak must be reference_only') }
-        if ($requested -lt $StrictSoakSeconds) { $warnings.Add('reference soak is shorter than the commercial 7200-second gate') }
+        if ($requested -lt $StrictSoakSeconds) { $warnings.Add("reference soak is shorter than the commercial $StrictSoakSeconds-second gate") }
+    }
+    $soakProfiles = @((Get-Field $soak 'profiles' @()) | ForEach-Object { [string]$_ })
+    $uniqueSoakProfiles = @($soakProfiles | Sort-Object -Unique)
+    foreach ($profile in $RequiredProfiles) {
+        if ($profile -notin $uniqueSoakProfiles) { $errors.Add("strict soak is missing profile $profile") }
+    }
+    if ($uniqueSoakProfiles.Count -ne $RequiredProfiles.Count -or [int](Get-Field $soak 'profile_count' 0) -ne $RequiredProfiles.Count) {
+        $errors.Add("strict soak must cover exactly $($RequiredProfiles.Count) formal profiles")
+    }
+    $completedRoutes = [int](Get-Field $soak 'completed_routes' 0)
+    $cycleCount = [int](Get-Field $soak 'cycle_count' 0)
+    if ($completedRoutes -le 0 -or $cycleCount -ne $completedRoutes) {
+        $errors.Add('strict soak completed_routes must be positive and equal cycle_count')
+    }
+    if ($requireReal -and $completedRoutes -lt [int]$StrictSoakPolicy.minimum_completed_routes) {
+        $errors.Add("target-hardware soak must complete at least $($StrictSoakPolicy.minimum_completed_routes) routes")
+    } elseif (-not $requireReal -and $completedRoutes -lt $RequiredProfiles.Count) {
+        $errors.Add("reference soak must complete at least $($RequiredProfiles.Count) routes")
+    } elseif (-not $requireReal -and $completedRoutes -lt [int]$StrictSoakPolicy.minimum_completed_routes) {
+        $warnings.Add("reference soak completed fewer than the commercial $($StrictSoakPolicy.minimum_completed_routes)-route gate")
+    }
+    $fatalDiagnostics = [int](Get-Field $soak 'fatal_diagnostics_count' -1)
+    if ($fatalDiagnostics -lt 0 -or $fatalDiagnostics -gt [int]$StrictSoakPolicy.fatal_diagnostics_max) {
+        $errors.Add('strict soak fatal diagnostics exceed policy')
+    }
+    $transportCount = [int](Get-Field $soak 'post_spawn_transport_count' -1)
+    if ($transportCount -lt 0 -or $transportCount -gt [int]$StrictSoakPolicy.route_transport_after_spawn_max) {
+        $errors.Add('strict soak post-spawn transport exceeds policy')
+    }
+    if ([int](Get-Field $soak 'player_transform_writes' -1) -ne 0) {
+        $errors.Add('strict soak player_transform_writes must be zero')
+    }
+    $firstWorkingSet = Get-Field $soak 'working_set_first_p95_mib' $null
+    $lastWorkingSet = Get-Field $soak 'working_set_last_p95_mib' $null
+    $recordedGrowth = Get-Field $soak 'memory_growth_percent' $null
+    if (-not (Test-QualificationFiniteNumber $firstWorkingSet) -or [double]$firstWorkingSet -le 0.0 -or -not (Test-QualificationFiniteNumber $lastWorkingSet) -or [double]$lastWorkingSet -le 0.0 -or -not (Test-QualificationFiniteNumber $recordedGrowth)) {
+        $errors.Add('strict soak Working Set growth evidence must be finite and positive')
+    } else {
+        $computedGrowth = [math]::Round((([double]$lastWorkingSet - [double]$firstWorkingSet) / [double]$firstWorkingSet) * 100.0, 4)
+        if ([math]::Abs($computedGrowth - [double]$recordedGrowth) -gt 0.0001) {
+            $errors.Add('strict soak memory_growth_percent does not match Working Set evidence')
+        }
+        if ([double]$recordedGrowth -gt [double]$StrictSoakPolicy.memory_growth_percent_max) {
+            $errors.Add('strict soak Working Set growth exceeds policy')
+        }
+    }
+    $lifecycleSummary = Get-Field $soak 'lifecycle' $null
+    foreach ($lifecycleError in @(Get-LifecycleSummaryErrors -Summary $lifecycleSummary)) {
+        $errors.Add($lifecycleError)
+    }
+    if ([int](Get-Field $soak 'authoritative_cycle_lifecycle_count' -1) -ne $completedRoutes) {
+        $errors.Add('strict soak authoritative cycle lifecycle count must equal completed routes')
     }
     if (-not [bool](Get-Field $soak 'clean_exit' $false)) { $errors.Add('strict soak must end with a clean exit') }
     if ([int](Get-Field $soak 'crash_count' -1) -ne 0) { $errors.Add('strict soak crash_count must be zero') }
@@ -222,6 +312,7 @@ function Test-ExternalQualificationPackage {
     if ([string](Get-Field $soak 'result' '') -ne 'pass') { $errors.Add('strict soak result must be pass') }
     Add-RequiredHashError $errors $soak 'lifecycle_report_sha256' 64
     Add-RequiredHashError $errors $soak 'soak_report_sha256' 64
+    Add-RequiredHashError $errors $soak 'progress_journal_sha256' 64
     Add-ExpectedValueError $errors ([string](Get-Field $soak 'executable_sha256' '')) $executableSha 'strict soak executable'
     Add-ExpectedValueError $errors ([string](Get-Field $soak 'pck_sha256' '')) $pckSha 'strict soak PCK'
 
@@ -307,13 +398,29 @@ function New-FixturePackage {
     $exe = '1' * 64
     $pck = '2' * 64
     $hardware = foreach ($tier in $RequiredTiers) {
+        $tierPolicy = $HardwarePolicies[$tier]
+        $metricProfiles = foreach ($profile in $RequiredProfiles) {
+            [pscustomobject][ordered]@{
+                profile_id = $profile
+                avg_fps = [double]$tierPolicy.metrics.avg_fps_min + 10.0
+                one_percent_low_fps = [double]$tierPolicy.metrics.one_percent_low_fps_min + 5.0
+                frame_ms_p95 = [double]$tierPolicy.metrics.frame_ms_p95_max * 0.8
+                frame_ms_p99 = [double]$tierPolicy.metrics.frame_ms_p99_max * 0.8
+                frame_budget_miss_30fps_percent = [double]$tierPolicy.metrics.frame_budget_miss_30fps_percent_max * 0.5
+                world_start_ms = [double]$tierPolicy.metrics.profile_load_ms_max * 0.8
+                working_set_p95_mib = [double]$tierPolicy.metrics.working_set_p95_mib_max * 0.8
+            }
+        }
         [pscustomobject]@{
+            schema_version = 2; exact_final_package_reused = $true
             tier = $tier; evidence_source = $Source; reference_only = $ReferenceOnly
             operator_id = "operator-$tier"; operator_attested = $false
             machine_fingerprint_sha256 = 'b' * 64; cpu = 'fixture cpu'; gpu = 'fixture gpu'
             ram_gib = 16; os = 'Windows fixture'
             storage = [pscustomobject]@{ drive_type = 'ssd'; model = 'fixture storage' }
             profiles = @($RequiredProfiles); started_at_unix = 1000; completed_at_unix = 1050; result = 'pass'
+            qualification_policy = $tierPolicy
+            metric_evaluation = Get-HardwareMetricEvaluation -ProfileRecords @($metricProfiles) -MetricPolicy $tierPolicy.metrics -RequiredProfiles $RequiredProfiles
             build = [pscustomobject]@{ executable_sha256 = $exe; pck_sha256 = $pck }
         }
     }
@@ -342,11 +449,28 @@ function New-FixturePackage {
         }
         hardware_qualification = @($hardware)
         strict_soak = [pscustomobject]@{
+            schema_version = 2; exact_final_package_reused = $true
             evidence_source = $Source; reference_only = $ReferenceOnly; target_hardware = $false
             requested_seconds = 600; elapsed_seconds = 600; clean_exit = $true
             crash_count = 0; timed_out = $false; result = 'pass'
+            qualification_policy = $StrictSoakPolicy
+            cycle_count = 5; completed_routes = 5; profile_count = 5; profiles = @($RequiredProfiles)
+            fatal_diagnostics_count = 0; post_spawn_transport_count = 0; player_transform_writes = 0
+            working_set_first_p95_mib = 100.0; working_set_last_p95_mib = 110.0; memory_growth_percent = 10.0
+            authoritative_cycle_lifecycle_count = 5
+            lifecycle = [pscustomobject]@{
+                schema_version = 1; release_build = $true; engine_version = '4.7.fixture'; captured_unix = 1500
+                first_world_profile_id = 'star_continent'; first_world_id = 'fixture-world'
+                first_save_success = $true; first_save_world_id = 'fixture-world'; first_save_bytes = 1024
+                world_save_identity_matches = $true; timings_monotonic = $true
+                quit_attempt_count = 1; quit_source = 'release_smoke'; quit_prepared = $true
+                termination_reason = 'prepared_quit'; service_hub_request_count = 1
+                service_hub_success_count = 1; service_hub_failure_count = 0
+                game_request_count = 1; game_success_count = 1; game_failure_count = 0
+                authoritative_clean_quit = $true
+            }
             executable_sha256 = $exe; pck_sha256 = $pck
-            lifecycle_report_sha256 = '3' * 64; soak_report_sha256 = '4' * 64
+            lifecycle_report_sha256 = '3' * 64; soak_report_sha256 = '4' * 64; progress_journal_sha256 = '5' * 64
         }
         fault_lab = [pscustomobject]@{ operator_id = 'fault-operator'; result = 'pass'; scenarios = @($scenarios) }
         findings = @()
@@ -360,7 +484,12 @@ function ConvertTo-RealPackage {
         $entry.evidence_source = 'target_hardware'; $entry.reference_only = $false; $entry.operator_attested = $true
     }
     $Package.strict_soak.evidence_source = 'target_hardware'; $Package.strict_soak.reference_only = $false
-    $Package.strict_soak.target_hardware = $true; $Package.strict_soak.requested_seconds = 7200; $Package.strict_soak.elapsed_seconds = 7200
+    $Package.strict_soak.target_hardware = $true
+    $Package.strict_soak.requested_seconds = [int]$StrictSoakPolicy.duration_seconds_min
+    $Package.strict_soak.elapsed_seconds = [int]$StrictSoakPolicy.duration_seconds_min
+    $Package.strict_soak.cycle_count = [int]$StrictSoakPolicy.minimum_completed_routes
+    $Package.strict_soak.completed_routes = [int]$StrictSoakPolicy.minimum_completed_routes
+    $Package.strict_soak.authoritative_cycle_lifecycle_count = [int]$StrictSoakPolicy.minimum_completed_routes
     foreach ($scenario in @($Package.fault_lab.scenarios)) {
         $scenario.evidence_source = 'target_hardware'; $scenario.reference_only = $false; $scenario.attested_real = $true
     }
@@ -414,7 +543,34 @@ function Invoke-SelfTest {
     $copy.fault_lab.scenarios[0].operator_id = 'another-operator'
     Assert-Invalid $copy 'operator does not match' 'mixed-fault-operator'
 
-    Write-Host 'EXTERNAL QUALIFICATION PACKAGE VALIDATOR PASS | schema=2 | fixture=reference-only | real-algorithm=pass | rejection-cases=7'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.hardware_qualification[0].metric_evaluation.profiles[0].avg_fps = 0.0
+    Assert-Invalid $copy 'hardware metric threshold failed' 'forged-performance-pass'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.hardware_qualification[1].qualification_policy.sha256 = 'f' * 64
+    Assert-Invalid $copy 'does not match repository policy' 'forged-policy'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.strict_soak.completed_routes = [int]$StrictSoakPolicy.minimum_completed_routes - 1
+    $copy.strict_soak.cycle_count = $copy.strict_soak.completed_routes
+    $copy.strict_soak.authoritative_cycle_lifecycle_count = $copy.strict_soak.completed_routes
+    Assert-Invalid $copy 'complete at least' 'short-route-count'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.strict_soak.working_set_last_p95_mib = 140.0
+    $copy.strict_soak.memory_growth_percent = 40.0
+    Assert-Invalid $copy 'Working Set growth exceeds policy' 'memory-growth'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.strict_soak.fatal_diagnostics_count = 1
+    Assert-Invalid $copy 'fatal diagnostics exceed policy' 'fatal-diagnostic'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.strict_soak.lifecycle.termination_reason = 'scene_exit_without_prepared_quit'
+    $copy.strict_soak.lifecycle.quit_prepared = $false
+    $copy.strict_soak.lifecycle.authoritative_clean_quit = $false
+    Assert-Invalid $copy 'termination_reason must equal prepared_quit' 'dirty-lifecycle'
+    $copy = $real | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $copy.hardware_qualification[0].exact_final_package_reused = $false
+    Assert-Invalid $copy 'exact final package reuse' 'package-reexport'
+
+    Write-Host 'EXTERNAL QUALIFICATION PACKAGE VALIDATOR PASS | schema=2 | fixture=reference-only | real-algorithm=pass | rejection-cases=14'
 }
 
 if ([string]::IsNullOrWhiteSpace($PackagePath)) {

@@ -13,10 +13,12 @@
 - [x] Reuse the exact final EXE/PCK across the five-profile route matrix.
 - [x] Add minimum/recommended hardware collectors.
 - [x] Record normalized CPU, GPU, RAM, OS and storage evidence.
+- [x] Bind both hardware records to `data/release_qualification.json` and recompute all 35 five-profile performance assertions per tier.
 - [x] Add a strict wall-clock final-package soak harness.
 - [x] Reject real target-hardware soak shorter than 7,200 seconds.
+- [x] Require at least 10 completed real routes, zero fatal diagnostics, zero transport/write violations and policy-bounded Working Set growth.
 - [x] Rotate the strict soak across all five formal profiles.
-- [x] Preserve zero post-spawn transport and clean-cycle exits.
+- [x] Route fixed-package smoke/soak exits through the production quit coordinator and reject non-prepared lifecycle reports.
 - [x] Add resumable HDD, antivirus and power-loss experiment records.
 - [x] Preserve world identity, pre/post-fault hashes and exact EXE/PCK across both phases.
 - [x] Add package assembly with cross-artifact hash verification.
@@ -33,7 +35,7 @@ These items cannot be marked complete by repository automation:
 - [ ] An independent person performs and signs the E4-H final-build review.
 - [ ] The exact final EXE/PCK passes the minimum target-hardware five-profile matrix.
 - [ ] The same exact final EXE/PCK passes the recommended target-hardware five-profile matrix.
-- [ ] The same exact final EXE/PCK completes at least 7,200 seconds on target hardware.
+- [ ] The same exact final EXE/PCK completes at least 7,200 seconds and 10 routes on target hardware with five profiles, fatal=0, no transport and Working Set growth within policy.
 - [ ] A real HDD interference/recovery experiment is completed.
 - [ ] A real antivirus interference/recovery experiment is completed.
 - [ ] A real power-loss interruption/recovery experiment is completed.

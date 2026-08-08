@@ -10,10 +10,12 @@ Convert the remaining commercial-release HOLD items from prose-only requirements
 - Added independent E4-H review recording with self-review, incomplete-checklist and unresolved-blocker rejection.
 - Extended the five-profile Windows Release matrix so minimum and recommended qualification reuse one exact prebuilt EXE/PCK.
 - Added target-hardware collection for CPU, GPU, RAM, OS, storage, machine fingerprint and five-profile final-package routes.
-- Added a strict wall-clock soak harness that refuses real runs below 7,200 seconds and rotates the exact final package through all five profiles.
+- Bound both hardware tiers to `data/release_qualification.json` and added validation-time recomputation of 35 five-profile performance assertions per tier.
+- Added a strict wall-clock soak harness that refuses real runs below policy duration/route count, rotates the exact final package through all five profiles and enforces fatal, transport and Working Set growth limits.
+- Routed fixed-package release-smoke shutdown through the production quit coordinator and made every strict-soak cycle prove `prepared_quit` lifecycle semantics.
 - Added resumable two-phase HDD, antivirus and power-loss records with world identity, before/after hashes and exact EXE/PCK continuity across restart.
 - Added a package assembler that binds every record to one commit, EXE and PCK and invokes the strict validator.
-- Added validation-time rebinding in both GDScript and PowerShell so stored JSON cannot mix another commit, binary, evidence class, reference flag or fault operator.
+- Added validation-time rebinding in both GDScript and PowerShell so stored JSON cannot mix another commit, binary, evidence class, reference flag, fault operator, loosened policy, forged performance PASS or dirty lifecycle.
 - Added a non-qualifying retained fixture and an end-to-end test that assembles, mutates and requires rejection of a reference package.
 - Added a permanent Godot 4.7 workflow for schema, parser, anti-forgery and adjacent release-contract regression.
 

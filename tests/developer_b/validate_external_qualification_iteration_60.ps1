@@ -11,6 +11,10 @@ $faultRecorderPath = Join-Path $root 'tests\ci\new_external_fault_lab_record.ps1
 $reviewRecorderPath = Join-Path $root 'tests\ci\new_independent_experience_review.ps1'
 $assemblerPath = Join-Path $root 'tests\ci\new_external_qualification_package.ps1'
 $assemblerTestPath = Join-Path $root 'tests\ci\test_external_qualification_package_assembler.ps1'
+$policyHelpersPath = Join-Path $root 'tests\ci\qualification_policy_helpers.ps1'
+$policyHelpersTestPath = Join-Path $root 'tests\ci\test_qualification_policy_helpers.ps1'
+$releaseSmokeRunnerPath = Join-Path $root 'tests\release\run_windows_export_smoke.ps1'
+$releaseSmokeScriptPath = Join-Path $root 'src\diagnostics\release_smoke_runner.gd'
 $fixturePath = Join-Path $root 'tests\fixtures\external_qualification\reference-package.json'
 
 $requiredFiles = @(
@@ -23,6 +27,10 @@ $requiredFiles = @(
     $reviewRecorderPath,
     $assemblerPath,
     $assemblerTestPath,
+    $policyHelpersPath,
+    $policyHelpersTestPath,
+    $releaseSmokeRunnerPath,
+    $releaseSmokeScriptPath,
     $fixturePath
 )
 foreach ($path in $requiredFiles) {
@@ -36,7 +44,10 @@ foreach ($path in @(
     $faultRecorderPath,
     $reviewRecorderPath,
     $assemblerPath,
-    $assemblerTestPath
+    $assemblerTestPath,
+    $policyHelpersPath,
+    $policyHelpersTestPath,
+    $releaseSmokeRunnerPath
 )) {
     $tokens = $null
     $parseErrors = $null
@@ -63,7 +74,11 @@ Assert-ContainsAll $contractPath @(
     'release_gate_passed',
     'experiential reviewer must be independent',
     'hardware qualification is missing tier',
-    'target-hardware soak must run for at least 7200 seconds',
+    'QUALIFICATION_POLICY_PATH',
+    'metric threshold failed',
+    'Working Set growth exceeds policy',
+    'termination_reason must equal prepared_quit',
+    'exact final package reuse',
     'fault lab is missing scenario',
     'release owner must explicitly approve',
     'review commit',
@@ -78,7 +93,10 @@ Assert-ContainsAll $regressionPath @(
     'all required real fault scenarios are required',
     'E4-H review cannot be rebound to another commit',
     'hardware evidence cannot be mixed from another executable',
-    'fault scenarios must retain one operator identity'
+    'fault scenarios must retain one operator identity',
+    'forged passing performance is recomputed and rejected',
+    'scene exit without prepared quit is rejected',
+    'strict soak requires ten completed routes'
 )
 Assert-ContainsAll $packageValidatorPath @(
     '$SchemaVersion = 2',
@@ -87,7 +105,9 @@ Assert-ContainsAll $packageValidatorPath @(
     'strict soak PCK',
     'fault $scenarioType PCK',
     'reference_only does not match package',
-    'rejection-cases=7'
+    'Get-HardwareMetricEvaluationErrors',
+    'Get-LifecycleSummaryErrors',
+    'rejection-cases=14'
 )
 Assert-ContainsAll $hardwareRunnerPath @(
     'run_windows_export_journey_matrix.ps1',
@@ -96,16 +116,46 @@ Assert-ContainsAll $hardwareRunnerPath @(
     'exact_existing_package_reused',
     'operator_attested',
     'executable_sha256',
-    'pck_sha256'
+    'pck_sha256',
+    'qualification_policy',
+    'metric_evaluation',
+    'exact_final_package_reused'
 )
 Assert-ContainsAll $soakRunnerPath @(
-    'Commercial target-hardware soak cannot be shorter than 7200 seconds',
+    'soakPolicy.duration_seconds_min',
     'GitHub-hosted runners cannot create target-hardware soak evidence',
     'run_windows_export_smoke.ps1',
     '[System.Diagnostics.Stopwatch]::StartNew()',
     'while ($watch.Elapsed.TotalSeconds -lt $SoakSeconds',
     'Strict soak did not reach wall-clock target',
-    'post-spawn transport'
+    'post-spawn transport',
+    'minimum_completed_routes',
+    'Get-AuthoritativeLifecycleEvidence',
+    'authoritative_cycle_lifecycle_count',
+    'memoryGrowthPercent'
+)
+Assert-ContainsAll $releaseSmokeRunnerPath @(
+    '--smoke-lifecycle-output=',
+    'Get-AuthoritativeLifecycleEvidence',
+    'clean authoritative quit'
+)
+Assert-ContainsAll $releaseSmokeScriptPath @(
+    'request_application_quit',
+    'release_smoke',
+    'authoritative_lifecycle_termination_reason',
+    'application_exit_enabled'
+)
+Assert-ContainsAll $policyHelpersPath @(
+    'Get-ReleaseQualificationPolicyContext',
+    'Get-HardwareMetricEvaluation',
+    'Get-AuthoritativeLifecycleEvidence',
+    'prepared_quit'
+)
+Assert-ContainsAll $policyHelpersTestPath @(
+    'assertions=70',
+    'scene_exit_without_prepared_quit',
+    'minimum_completed_routes',
+    'Get-HardwareMetricEvaluation'
 )
 Assert-ContainsAll $faultRecorderPath @(
     "ValidateSet('hdd', 'antivirus', 'power_loss')",
@@ -151,6 +201,7 @@ if ($soakText -notmatch "star_continent.*desert_ruins.*frozen_wastes.*sky_island
 }
 
 & $packageValidatorPath
+& $policyHelpersTestPath
 & $assemblerTestPath
 
 $fixtureOutput = (& $packageValidatorPath -PackagePath $fixturePath | Out-String).Trim()
@@ -170,4 +221,4 @@ if ($null -ne $fixture.PSObject.Properties['release_owner_attestation']) {
     throw 'Reference fixture must not contain release-owner approval.'
 }
 
-Write-Host 'ITERATION 60 EXTERNAL QUALIFICATION CONTRACT PASS | schema=2 | powershell=7 | assembler=bound | fixture=non-qualifying | anti-forgery=validation-time | strict-soak=7200s'
+Write-Host 'ITERATION 60 EXTERNAL QUALIFICATION CONTRACT PASS | schema=2 | policy=repository-bound | metrics=35-per-tier | lifecycle=authoritative | assembler=bound | fixture=non-qualifying | anti-forgery=validation-time | strict-soak=policy-7200s'
