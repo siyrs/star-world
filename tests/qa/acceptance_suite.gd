@@ -248,11 +248,12 @@ func _test_five_maps_seed_and_chunks() -> void:
 	root.add_child(stream_world)
 	stream_world.start_world("star_continent", 998877, "qa-stream", {})
 	var origin_coord := Vector2i(stream_world.get_loaded_chunk_coords()[0])
-	# A full chunk costs eight 2048-cell build steps and the per-frame budget
-	# completes at most two steps, so a fixed four-frame window is machine
-	# sensitive. Pump the streaming loop until the first neighbour lands,
-	# bounded well above the deterministic build cost.
-	for _index in 40:
+	# A full chunk costs 16384 cells across generation and meshing, and the
+	# time-sliced streaming budget bounds each pump to ~4ms of wall-clock work
+	# (deadline-checked every 64 cells), so a fixed pump count is machine
+	# sensitive: 47 pumps on the reference machine. Pump the streaming loop
+	# until the first neighbour lands, bounded well above the measured cost.
+	for _index in 120:
 		stream_world._process(0.5)
 		if stream_world.get_loaded_chunk_count() > 1:
 			break
