@@ -18,10 +18,10 @@
 ## 当前构建与测试状态
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
-- T3 全量回归（整改后第一跑）：**135/142**，7 失败全部定位修复并单独复验通过（`2ae6573`）；修复后全量重跑进行中，证据写入 `build/commercial-acceptance-20260808/t3-post-fixes/`。
-- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设），T3 全绿后重新导出候选包。
-- 最终 EXE 五图路线：待执行。
-- 全部桌面验收旅程：待执行。
+- T3 全量回归（整改后重跑）：**142/142 全绿**（`RUN_ALL_EXIT=0`，0 fatal/leak）；上轮 7 个失败套件全部在本轮确认 PASS，证据 `build/commercial-acceptance-20260808/t3-post-fixes/`。
+- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设），桌面验收后重新导出候选包再跑五图矩阵。
+- 最终 EXE 五图路线：待执行（基于新导出）。
+- 全部桌面验收旅程：**进行中**（91 套件：`desktop_acceptance_regression` + 90 个 `*_desktop_acceptance.gd`，逐套件隔离用户数据 + 截图取证），证据写入 `build/commercial-acceptance-20260808/desktop-acceptance/`。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
 - 严格 7,200 秒长稳：待 fresh 候选包与短资格门禁通过后执行。
 
@@ -50,8 +50,8 @@
 
 ## 下一步
 
-1. 收集并审计 fresh T3 的退出码、用例计数和 fatal/leak 日志。
-2. 对失败项执行复现—定位—修复—Developer 自测。
-3. fresh 导出同一 EXE/PCK，运行五图最终包矩阵与关键桌面内容闭环。
-4. 由独立 QA 以原用例和相邻流程重测所有修复。
-5. 运行本机性能资格与严格长稳，再更新覆盖矩阵和最终报告。
+1. 桌面验收 91 套件全量执行并审计 summary（进行中）。
+2. 对失败项执行复现—定位—修复—回归。
+3. 重新导出 fresh EXE/PCK（含本轮 game 侧修复），运行五图最终包矩阵与关键桌面内容闭环。
+4. 运行本机性能资格与严格 7,200 秒长稳，再更新覆盖矩阵和最终报告。
+5. 最终报告 + 合并 master + tag + release + 同步远程。
