@@ -114,9 +114,9 @@ $candidateValidator = Join-Path $PSScriptRoot 'validate_release_candidate_manife
 & $candidateValidator -ProjectRoot $projectFullPath -CandidateManifestPath $candidatePath -ReleaseExecutable $exePath -ReleasePck $pckPath | Out-Null
 $packageValidator = Join-Path $PSScriptRoot 'validate_external_qualification_package.ps1'
 if ($RequireReleaseGate) {
-    & $packageValidator -PackagePath $packagePath -RequireReleaseGate | Out-Null
+    & $packageValidator -PackagePath $packagePath -PolicyRoot $projectFullPath -RequireReleaseGate | Out-Null
 } else {
-    & $packageValidator -PackagePath $packagePath | Out-Null
+    & $packageValidator -PackagePath $packagePath -PolicyRoot $projectFullPath | Out-Null
 }
 
 $candidate = Get-Content -LiteralPath $candidatePath -Raw | ConvertFrom-Json -Depth 30

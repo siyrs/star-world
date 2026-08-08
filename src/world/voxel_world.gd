@@ -10,6 +10,7 @@ signal block_broken(block_position: Vector3i, block_id: String)
 signal block_placed(block_position: Vector3i, block_id: String)
 
 const BlockRegistryScript = preload("res://src/block/block_registry.gd")
+const BlockShapeGeometryScript = preload("res://src/block/block_shape_geometry.gd")
 const ChunkScript = preload("res://src/chunk/voxel_chunk.gd")
 const GeneratorScript = preload("res://src/world/world_generator.gd")
 const StreamingSchedulerScript = preload("res://src/world/chunk_streaming_scheduler.gd")
@@ -232,9 +233,35 @@ func serialize_state() -> Dictionary:
 
 
 func resolve_ground_position(candidate: Vector3) -> Vector3:
+	# Placement callers keep the full top-down scan: a body placed inside a
+	# hill must still pop to the open surface above it.
+	var resolved: Variant = _scan_ground_column(candidate, WORLD_HEIGHT - 3)
+	if resolved is Vector3:
+		return resolved
+	# Spawn-height fallback only: callers placing a body into the world need a
+	# usable value even over an empty column. Callers that HOLD a body on the
+	# ground every frame must use try_resolve_ground_position instead —
+	# treating this fallback as ground pins the body at its own height (or at
+	# y=50) over void columns and it never falls again.
+	return Vector3(candidate.x, maxf(candidate.y, 50.0), candidate.z)
+
+
+# Same column scan as resolve_ground_position but returns null when no real
+# solid block exists below the candidate, so per-frame ground holders can tell
+# "no ground" apart from the spawn fallback above. The scan starts just above
+# the candidate's head instead of at the world top: holders only ever stand on
+# ground at or below their own body, and skipping the empty air column keeps
+# this O(standing height) instead of O(WORLD_HEIGHT) per call — the player
+# samples a five-point footprint every physics tick, so an unbounded scan
+# measurably inflated frame time during post-teleport catch-up.
+func try_resolve_ground_position(candidate: Vector3) -> Variant:
+	return _scan_ground_column(candidate, mini(WORLD_HEIGHT - 3, floori(candidate.y) + 2))
+
+
+func _scan_ground_column(candidate: Vector3, y_start: int) -> Variant:
 	var x := floori(candidate.x)
 	var z := floori(candidate.z)
-	for y in range(WORLD_HEIGHT - 3, 0, -1):
+	for y in range(y_start, 0, -1):
 		var block_id := get_block(Vector3i(x, y, z))
 		if not BlockRegistryScript.is_solid(block_id) or block_id == "leaves":
 			continue
@@ -242,8 +269,25 @@ func resolve_ground_position(candidate: Vector3) -> Vector3:
 			get_block(Vector3i(x, y + 1, z)) == BlockRegistryScript.AIR
 			and get_block(Vector3i(x, y + 2, z)) == BlockRegistryScript.AIR
 		):
-			return Vector3(candidate.x, y + 1.05, candidate.z)
-	return Vector3(candidate.x, maxf(candidate.y, 50.0), candidate.z)
+			var surface := _resolve_block_surface_height(block_id, candidate)
+			return Vector3(candidate.x, y + surface + 0.05, candidate.z)
+	return null
+
+
+# The ground model historically treated every solid block as a full cube, so a
+# stair or slab column resolved to its full top and the player snap pinned the
+# body against the shaped collision instead of climbing it. Resolve the actual
+# collision surface under the candidate: stairs return the analytic ramp
+# height at the local (x,z) so the snap tracks the exact surface the physics
+# body touches, slabs sit at half height, full cubes are unchanged.
+func _resolve_block_surface_height(block_id: String, candidate: Vector3) -> float:
+	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", ""))
+	if shape.is_empty():
+		return 1.0
+	var local_point := Vector3(
+		candidate.x - floorf(candidate.x), 0.0, candidate.z - floorf(candidate.z)
+	)
+	return BlockShapeGeometryScript.get_local_surface_height(block_id, local_point)
 
 
 func get_loaded_chunk_count() -> int:
@@ -310,7 +354,9 @@ func _process_streaming_budget() -> void:
 		if _active_build_chunk == null and not _begin_next_chunk_build():
 			break
 		var completed: bool = bool(
-			_active_build_chunk.call("build_step", maxi(256, chunk_build_cells_per_step))
+			_active_build_chunk.call(
+				"build_step", maxi(256, chunk_build_cells_per_step), deadline
+			)
 		)
 		steps += 1
 		if completed:

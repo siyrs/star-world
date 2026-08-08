@@ -33,7 +33,7 @@ Running an export separately on minimum and recommended hardware could produce t
 
 A high frame count is not a time qualification because render and simulation rates vary by hardware. Sleeping for two hours would also prove nothing.
 
-**Resolution:** the strict harness repeatedly executes the same final package through the production release-smoke route and uses a monotonic `Stopwatch` wall clock. Each cycle must pass, exit cleanly, use real movement and preserve zero direct transform writes.
+**Resolution:** the strict harness repeatedly executes the same final package through the production release-smoke route and uses a monotonic `Stopwatch` wall clock. Policy requires duration, at least 10 routes and all five profiles. Each cycle must pass through the production quit coordinator with a parsed `prepared_quit` lifecycle report; aggregate fatal diagnostics, post-spawn transport and direct transform writes must be zero, and Working Set growth must remain within policy.
 
 ### A-60-05 · Real interruption evidence must survive the interruption
 
@@ -51,7 +51,7 @@ The repository cannot prove a human identity, but it can reject obvious self-rev
 
 The first implementation verified cross-artifact hashes only while assembling the package. A later manual edit could replace a child record while leaving the top-level build unchanged, and a standalone validator would have accepted the structurally complete JSON.
 
-**Resolution:** schema v2 performs validation-time rebinding in both GDScript and PowerShell. Review commit/EXE/PCK, both hardware EXE/PCK pairs, soak EXE/PCK, all fault EXE/PCK pairs, child evidence class/reference flags and fault operator identity are rechecked every time. Regression tests assemble a valid package, mutate it, and require rejection.
+**Resolution:** schema v2 performs validation-time rebinding in both GDScript and PowerShell. Review commit/EXE/PCK, both hardware EXE/PCK pairs, soak EXE/PCK, all fault EXE/PCK pairs, child evidence class/reference flags and fault operator identity are rechecked every time. Hardware thresholds and strict-soak limits are additionally bound to the repository policy hash/schema and recomputed from packaged metrics/lifecycle fields. Regression tests assemble a valid package, mutate build, policy, metrics and lifecycle data, and require rejection.
 
 ## Architecture decision
 

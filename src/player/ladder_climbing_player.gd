@@ -138,6 +138,11 @@ func _physics_process(delta: float) -> void:
 		_report_player_action(&"jump")
 	elif not in_fluid and not contact_active:
 		_apply_voxel_ground_recovery()
+	# This override replaces first_person_player._physics_process (no super call),
+	# so the shaped-surface step-up must run here too, the same way lava contact
+	# damage does below (BUG-LAVA-001). movement_result carries the ladder state,
+	# so _apply_voxel_step_up skips itself while climbing.
+	_apply_voxel_step_up(movement_vector, voxel_grounded, in_fluid, movement_result)
 	if global_position.y < -12.0:
 		respawn()
 	# This override replaces first_person_player._physics_process (no super call),

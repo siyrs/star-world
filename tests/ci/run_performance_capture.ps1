@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Godot,
     [string]$ProjectRoot = '.',
-    [string]$OutputDirectory = 'build/claude-perf'
+    [string]$OutputDirectory = 'build/claude-perf',
+    [int]$TimeoutMilliseconds = 1800000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,9 +12,17 @@ $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $Out
 New-Item -ItemType Directory -Force -Path $outputFullPath | Out-Null
 
 $capturePath = (Join-Path $outputFullPath 'perf-main.png').Replace('\', '/')
+$reportPath = Join-Path $outputFullPath 'perf-report.json'
 $stdoutPath = Join-Path $outputFullPath 'perf.stdout.log'
 $stderrPath = Join-Path $outputFullPath 'perf.stderr.log'
 $memoryPath = Join-Path $outputFullPath 'perf.memory.json'
+$userDataFullPath = Join-Path $outputFullPath 'isolated-userdata'
+$roamingPath = Join-Path $userDataFullPath 'Roaming'
+$localPath = Join-Path $userDataFullPath 'Local'
+if (Test-Path -LiteralPath $userDataFullPath) {
+    Remove-Item -LiteralPath $userDataFullPath -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $roamingPath, $localPath | Out-Null
 
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $Godot
@@ -22,6 +31,8 @@ $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
+$startInfo.Environment['APPDATA'] = $roamingPath
+$startInfo.Environment['LOCALAPPDATA'] = $localPath
 foreach ($argument in @(
     '--path', $projectFullPath,
     '--rendering-method', 'gl_compatibility',
@@ -52,7 +63,13 @@ $nextSampleMs = 1000
 # workload process once it appears and sample that PID instead.
 $workloadProcess = $null
 $workloadLogged = $false
+$timedOut = $false
 while (-not $process.WaitForExit(200)) {
+    if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMilliseconds) {
+        $timedOut = $true
+        $process.Kill($true)
+        break
+    }
     if ($workloadProcess -eq $null) {
         $children = @(Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $process.Id })
         foreach ($child in $children) {
@@ -129,7 +146,7 @@ $memoryEvidence = [ordered]@{
 }
 $memoryEvidence | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $memoryPath -Encoding utf8
 
-$fatalPatterns = @('SCRIPT ERROR', 'Parse Error', 'ObjectDB instances were leaked', 'Leaked instance:', 'Resources still in use at exit')
+$fatalPatterns = @('SCRIPT ERROR', 'Parse Error', 'ObjectDB instances were leaked', 'Leaked instance:', 'Resources still in use at exit', 'Unhandled exception', 'FATAL:', 'Condition "!is_inside_tree()" is true')
 $hits = @()
 foreach ($path in @($stdoutPath, $stderrPath)) {
     if (Test-Path -LiteralPath $path) {
@@ -139,8 +156,21 @@ foreach ($path in @($stdoutPath, $stderrPath)) {
 if ($hits.Count -gt 0) {
     throw "Fatal Godot diagnostics:`n$(($hits | ForEach-Object { $_.Line }) -join "`n")"
 }
+if ($timedOut) {
+    throw "Performance capture timed out after $TimeoutMilliseconds ms"
+}
 if ($process.ExitCode -ne 0) {
     throw "Performance capture failed with exit $($process.ExitCode)"
 }
+if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf) -or (Get-Item -LiteralPath $reportPath).Length -le 0) {
+    throw "Performance capture did not create a non-empty report: $reportPath"
+}
+$report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json -Depth 30
+if ([int]$report.schema_version -lt 2 -or @($report.scenarios).Count -lt 13) {
+    throw "Performance report is incomplete: schema=$($report.schema_version) scenarios=$(@($report.scenarios).Count)"
+}
+if ([int]$memoryEvidence.working_set_mib.sample_count -le 0) {
+    throw 'Performance capture produced no workload memory samples.'
+}
 
-Write-Host "PERF CAPTURE PASS | report=$outputFullPath\perf-report.json | memory=$memoryPath | ws_p95=$($memoryEvidence.working_set_mib.p95_mib) MiB"
+Write-Host "PERF CAPTURE PASS | report=$reportPath | scenarios=$(@($report.scenarios).Count) | memory=$memoryPath | ws_p95=$($memoryEvidence.working_set_mib.p95_mib) MiB"

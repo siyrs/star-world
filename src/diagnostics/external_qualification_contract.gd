@@ -3,6 +3,7 @@ extends RefCounted
 
 const SCHEMA_VERSION := 2
 const STRICT_SOAK_SECONDS := 7200
+const QUALIFICATION_POLICY_PATH := "res://data/release_qualification.json"
 const MAX_TEXT_LENGTH := 256
 const REQUIRED_PROFILES: Array[String] = [
 	"star_continent",
@@ -57,11 +58,12 @@ func validate_package(package: Dictionary) -> Dictionary:
 	var soak := _dictionary(package.get("strict_soak", {}))
 	var fault_lab := _dictionary(package.get("fault_lab", {}))
 	var require_real := source == "target_hardware"
+	var policy := _load_qualification_policy(errors)
 
 	_validate_build(build, errors)
 	_validate_review(review, errors)
-	_validate_hardware(hardware, errors, require_real)
-	_validate_soak(soak, errors, warnings, require_real)
+	_validate_hardware(hardware, errors, require_real, policy)
+	_validate_soak(soak, errors, warnings, require_real, policy)
 	_validate_fault_lab(fault_lab, errors, require_real)
 	_validate_findings(_array(package.get("findings", [])), errors)
 	_validate_release_owner(
@@ -132,7 +134,9 @@ func _validate_review(review: Dictionary, errors: Array[String]) -> void:
 		errors.append("experiential review contains unresolved blockers")
 
 
-func _validate_hardware(entries: Array, errors: Array[String], require_real: bool) -> void:
+func _validate_hardware(
+	entries: Array, errors: Array[String], require_real: bool, policy: Dictionary
+) -> void:
 	var seen: Dictionary = {}
 	for value: Variant in entries:
 		if not value is Dictionary:
@@ -146,6 +150,11 @@ func _validate_hardware(entries: Array, errors: Array[String], require_real: boo
 		if seen.has(tier):
 			errors.append("hardware tier is duplicated: %s" % tier)
 		seen[tier] = true
+		if int(entry.get("schema_version", 0)) != 2:
+			errors.append("hardware %s schema_version must equal 2" % tier)
+		if not bool(entry.get("exact_final_package_reused", false)):
+			errors.append("hardware %s must attest exact final package reuse" % tier)
+		_validate_hardware_policy_and_metrics(entry, tier, policy, errors)
 		_require_text(errors, entry, "operator_id")
 		_require_hash(errors, entry, "machine_fingerprint_sha256", 64)
 		_require_text(errors, entry, "cpu")
@@ -174,22 +183,214 @@ func _validate_hardware(entries: Array, errors: Array[String], require_real: boo
 			errors.append("hardware qualification is missing tier: %s" % tier)
 
 
+func _load_qualification_policy(errors: Array[String]) -> Dictionary:
+	if not FileAccess.file_exists(QUALIFICATION_POLICY_PATH):
+		errors.append("qualification policy is missing")
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(QUALIFICATION_POLICY_PATH))
+	if not parsed is Dictionary:
+		errors.append("qualification policy is not valid JSON")
+		return {}
+	var policy: Dictionary = parsed
+	if int(policy.get("schema_version", 0)) <= 0:
+		errors.append("qualification policy schema_version must be positive")
+	policy["_sha256"] = FileAccess.get_sha256(QUALIFICATION_POLICY_PATH).to_lower()
+	return policy
+
+
+func _validate_hardware_policy_and_metrics(
+	entry: Dictionary, tier: String, policy: Dictionary, errors: Array[String]
+) -> void:
+	var snapshot := _dictionary(entry.get("qualification_policy", {}))
+	var tier_policy := _dictionary(_dictionary(policy.get("tiers", {})).get(tier, {}))
+	var expected_metrics := _dictionary(tier_policy.get("metrics", {}))
+	if int(snapshot.get("schema_version", 0)) != int(policy.get("schema_version", -1)):
+		errors.append("hardware %s qualification policy schema_version does not match repository policy" % tier)
+	for key: String in ["product", "platform", "rendering_method"]:
+		if str(snapshot.get(key, "")) != str(policy.get(key, "")):
+			errors.append("hardware %s qualification policy %s does not match repository policy" % [tier, key])
+	if str(snapshot.get("sha256", "")).to_lower() != str(policy.get("_sha256", "")):
+		errors.append("hardware %s qualification policy sha256 does not match repository policy" % tier)
+	if str(snapshot.get("tier", "")) != tier:
+		errors.append("hardware %s qualification policy tier does not match repository policy" % tier)
+	if _array(snapshot.get("resolution", [])) != _array(policy.get("resolution", [])):
+		errors.append("hardware %s qualification policy resolution does not match repository policy" % tier)
+	var recorded_metrics := _dictionary(snapshot.get("metrics", {}))
+	var metric_keys: Array[String] = [
+		"avg_fps_min",
+		"one_percent_low_fps_min",
+		"frame_ms_p95_max",
+		"frame_ms_p99_max",
+		"frame_budget_miss_30fps_percent_max",
+		"profile_load_ms_max",
+		"working_set_p95_mib_max",
+	]
+	for key: String in metric_keys:
+		if (
+			not _is_finite_number(recorded_metrics.get(key, null))
+			or not _is_finite_number(expected_metrics.get(key, null))
+			or not is_equal_approx(float(recorded_metrics.get(key)), float(expected_metrics.get(key)))
+		):
+			errors.append("hardware %s qualification policy metric %s does not match repository policy" % [tier, key])
+	_validate_metric_evaluation(
+		_dictionary(entry.get("metric_evaluation", {})), expected_metrics, tier, errors
+	)
+
+
+func _validate_metric_evaluation(
+	evaluation: Dictionary, metric_policy: Dictionary, tier: String, errors: Array[String]
+) -> void:
+	var records := _array(evaluation.get("profiles", []))
+	var rules: Array[Dictionary] = [
+		{"evidence":"avg_fps", "policy":"avg_fps_min", "minimum":true},
+		{"evidence":"one_percent_low_fps", "policy":"one_percent_low_fps_min", "minimum":true},
+		{"evidence":"frame_ms_p95", "policy":"frame_ms_p95_max", "minimum":false},
+		{"evidence":"frame_ms_p99", "policy":"frame_ms_p99_max", "minimum":false},
+		{"evidence":"frame_budget_miss_30fps_percent", "policy":"frame_budget_miss_30fps_percent_max", "minimum":false},
+		{"evidence":"world_start_ms", "policy":"profile_load_ms_max", "minimum":false},
+		{"evidence":"working_set_p95_mib", "policy":"working_set_p95_mib_max", "minimum":false},
+	]
+	var computed_failures := 0
+	var evaluated_profiles := 0
+	for profile_id: String in REQUIRED_PROFILES:
+		var matches: Array = []
+		for value: Variant in records:
+			if value is Dictionary and str(value.get("profile_id", "")) == profile_id:
+				matches.append(value)
+		if matches.size() != 1:
+			computed_failures += 1
+			errors.append("hardware %s metric threshold failed: expected one %s record" % [tier, profile_id])
+			continue
+		evaluated_profiles += 1
+		var record: Dictionary = matches[0]
+		var assertions := _dictionary(record.get("assertions", {}))
+		var profile_pass := true
+		for rule: Dictionary in rules:
+			var evidence_key := str(rule.get("evidence", ""))
+			var policy_key := str(rule.get("policy", ""))
+			var actual: Variant = record.get(evidence_key, null)
+			var threshold: Variant = metric_policy.get(policy_key, null)
+			var passed := false
+			if _is_finite_number(actual) and _is_finite_number(threshold):
+				passed = (
+					float(actual) >= 0.0
+					and (
+						float(actual) >= float(threshold)
+						if bool(rule.get("minimum", false))
+						else float(actual) <= float(threshold)
+					)
+				)
+			if not passed:
+				computed_failures += 1
+				profile_pass = false
+				errors.append("hardware %s metric threshold failed: %s.%s" % [tier, profile_id, evidence_key])
+			if bool(assertions.get(policy_key, not passed)) != passed:
+				errors.append("hardware %s metric assertion does not match recomputed evidence: %s.%s" % [tier, profile_id, policy_key])
+		if bool(record.get("pass", not profile_pass)) != profile_pass:
+			errors.append("hardware %s metric profile result does not match recomputed evidence: %s" % [tier, profile_id])
+	var computed_pass := computed_failures == 0 and evaluated_profiles == REQUIRED_PROFILES.size()
+	if int(evaluation.get("profile_count", -1)) != evaluated_profiles:
+		errors.append("hardware %s metric evaluation profile_count does not match recomputed evidence" % tier)
+	if int(evaluation.get("assertion_count", -1)) != evaluated_profiles * rules.size():
+		errors.append("hardware %s metric evaluation assertion_count does not match recomputed evidence" % tier)
+	if int(evaluation.get("failure_count", -1)) != computed_failures:
+		errors.append("hardware %s metric evaluation failure_count does not match recomputed evidence" % tier)
+	if bool(evaluation.get("passed", not computed_pass)) != computed_pass:
+		errors.append("hardware %s metric evaluation passed does not match recomputed evidence" % tier)
+	if _array(evaluation.get("violations", [])).size() != computed_failures:
+		errors.append("hardware %s metric evaluation violations do not match recomputed evidence" % tier)
+
+
+func _validate_soak_policy_snapshot(
+	soak: Dictionary, policy: Dictionary, errors: Array[String]
+) -> void:
+	var snapshot := _dictionary(soak.get("qualification_policy", {}))
+	var expected := _dictionary(policy.get("soak", {}))
+	if int(snapshot.get("schema_version", 0)) != int(policy.get("schema_version", -1)):
+		errors.append("strict soak policy schema_version does not match repository policy")
+	if str(snapshot.get("sha256", "")).to_lower() != str(policy.get("_sha256", "")):
+		errors.append("strict soak policy sha256 does not match repository policy")
+	if bool(snapshot.get("all_profiles_required", false)) != bool(expected.get("all_profiles_required", false)):
+		errors.append("strict soak policy all_profiles_required does not match repository policy")
+	for key: String in [
+		"duration_seconds_min",
+		"minimum_completed_routes",
+		"fatal_diagnostics_max",
+		"memory_growth_percent_max",
+		"route_transport_after_spawn_max",
+	]:
+		if (
+			not _is_finite_number(snapshot.get(key, null))
+			or not _is_finite_number(expected.get(key, null))
+			or not is_equal_approx(float(snapshot.get(key)), float(expected.get(key)))
+		):
+			errors.append("strict soak policy %s does not match repository policy" % key)
+
+
+func _validate_lifecycle_summary(summary: Dictionary, errors: Array[String]) -> void:
+	if int(summary.get("schema_version", 0)) != 1:
+		errors.append("strict soak lifecycle schema_version must equal 1")
+	if not bool(summary.get("release_build", false)):
+		errors.append("strict soak lifecycle must come from a release build")
+	if int(summary.get("captured_unix", 0)) <= 0 or str(summary.get("engine_version", "")).is_empty():
+		errors.append("strict soak lifecycle capture identity is invalid")
+	if not REQUIRED_PROFILES.has(str(summary.get("first_world_profile_id", ""))):
+		errors.append("strict soak lifecycle first world profile is not formal")
+	var world_id := str(summary.get("first_world_id", "")).strip_edges()
+	if world_id.is_empty():
+		errors.append("strict soak lifecycle first world id is required")
+	if (
+		not bool(summary.get("first_save_success", false))
+		or int(summary.get("first_save_bytes", 0)) <= 0
+		or not bool(summary.get("world_save_identity_matches", false))
+		or str(summary.get("first_save_world_id", "")) != world_id
+	):
+		errors.append("strict soak lifecycle first save must match the playable world")
+	if not bool(summary.get("timings_monotonic", false)):
+		errors.append("strict soak lifecycle timings must be monotonic")
+	if int(summary.get("quit_attempt_count", 0)) < 1 or str(summary.get("quit_source", "")).is_empty():
+		errors.append("strict soak lifecycle authoritative quit must be attempted")
+	if not bool(summary.get("quit_prepared", false)):
+		errors.append("strict soak lifecycle authoritative quit must be prepared")
+	if str(summary.get("termination_reason", "")) != "prepared_quit":
+		errors.append("strict soak lifecycle termination_reason must equal prepared_quit")
+	for prefix: String in ["service_hub", "game"]:
+		if (
+			int(summary.get("%s_request_count" % prefix, 0)) < 1
+			or int(summary.get("%s_success_count" % prefix, 0)) < 1
+			or int(summary.get("%s_failure_count" % prefix, -1)) != 0
+		):
+			errors.append("strict soak lifecycle %s quit counts are invalid" % prefix)
+	if not bool(summary.get("authoritative_clean_quit", false)):
+		errors.append("strict soak lifecycle authoritative_clean_quit must be true")
+
+
 func _validate_soak(
 	soak: Dictionary,
 	errors: Array[String],
 	warnings: Array[String],
-	require_target: bool
+	require_target: bool,
+	policy: Dictionary
 ) -> void:
+	var soak_policy := _dictionary(policy.get("soak", {}))
+	var duration_min := int(soak_policy.get("duration_seconds_min", STRICT_SOAK_SECONDS))
+	var route_min := int(soak_policy.get("minimum_completed_routes", 10))
+	var fatal_max := int(soak_policy.get("fatal_diagnostics_max", 0))
+	var memory_growth_max := float(soak_policy.get("memory_growth_percent_max", 25.0))
+	var transport_max := int(soak_policy.get("route_transport_after_spawn_max", 0))
+	if int(soak.get("schema_version", 0)) != 2:
+		errors.append("strict soak schema_version must equal 2")
+	if not bool(soak.get("exact_final_package_reused", false)):
+		errors.append("strict soak must attest exact final package reuse")
+	_validate_soak_policy_snapshot(soak, policy, errors)
 	var requested := int(soak.get("requested_seconds", 0))
 	var elapsed := int(soak.get("elapsed_seconds", 0))
 	var reference_only := bool(soak.get("reference_only", false))
 	if requested <= 0 or elapsed <= 0:
 		errors.append("strict soak durations must be positive")
-	if elapsed > requested + 600:
-		errors.append("strict soak elapsed_seconds exceeds the requested window unexpectedly")
 	if require_target:
-		if requested < STRICT_SOAK_SECONDS or elapsed < STRICT_SOAK_SECONDS:
-			errors.append("target-hardware soak must run for at least 7200 seconds")
+		if requested < duration_min or elapsed < duration_min:
+			errors.append("target-hardware soak must run for at least %d seconds" % duration_min)
 		if reference_only:
 			errors.append("target-hardware soak cannot be reference_only")
 		if not bool(soak.get("target_hardware", false)):
@@ -197,8 +398,54 @@ func _validate_soak(
 	else:
 		if not reference_only:
 			errors.append("non-target soak must be reference_only")
-		if requested < STRICT_SOAK_SECONDS:
-			warnings.append("reference soak is shorter than the commercial 7200-second gate")
+		if requested < duration_min:
+			warnings.append("reference soak is shorter than the commercial %d-second gate" % duration_min)
+	var profiles := _string_set(_array(soak.get("profiles", [])))
+	for profile_id: String in REQUIRED_PROFILES:
+		if not profiles.has(profile_id):
+			errors.append("strict soak is missing profile %s" % profile_id)
+	if profiles.size() != REQUIRED_PROFILES.size() or int(soak.get("profile_count", 0)) != REQUIRED_PROFILES.size():
+		errors.append("strict soak must cover exactly %d formal profiles" % REQUIRED_PROFILES.size())
+	var completed_routes := int(soak.get("completed_routes", 0))
+	if completed_routes <= 0 or int(soak.get("cycle_count", 0)) != completed_routes:
+		errors.append("strict soak completed_routes must be positive and equal cycle_count")
+	if require_target and completed_routes < route_min:
+		errors.append("target-hardware soak must complete at least %d routes" % route_min)
+	elif not require_target and completed_routes < REQUIRED_PROFILES.size():
+		errors.append("reference soak must complete at least %d routes" % REQUIRED_PROFILES.size())
+	elif not require_target and completed_routes < route_min:
+		warnings.append("reference soak completed fewer than the commercial %d-route gate" % route_min)
+	var fatal_count := int(soak.get("fatal_diagnostics_count", -1))
+	if fatal_count < 0 or fatal_count > fatal_max:
+		errors.append("strict soak fatal diagnostics exceed policy")
+	var transport_count := int(soak.get("post_spawn_transport_count", -1))
+	if transport_count < 0 or transport_count > transport_max:
+		errors.append("strict soak post-spawn transport exceeds policy")
+	if int(soak.get("player_transform_writes", -1)) != 0:
+		errors.append("strict soak player_transform_writes must be zero")
+	var first_working_set: Variant = soak.get("working_set_first_p95_mib", null)
+	var last_working_set: Variant = soak.get("working_set_last_p95_mib", null)
+	var recorded_growth: Variant = soak.get("memory_growth_percent", null)
+	if (
+		not _is_finite_number(first_working_set)
+		or float(first_working_set) <= 0.0
+		or not _is_finite_number(last_working_set)
+		or float(last_working_set) <= 0.0
+		or not _is_finite_number(recorded_growth)
+	):
+		errors.append("strict soak Working Set growth evidence must be finite and positive")
+	else:
+		var computed_growth := snappedf(
+			((float(last_working_set) - float(first_working_set)) / float(first_working_set)) * 100.0,
+			0.0001
+		)
+		if absf(computed_growth - float(recorded_growth)) > 0.0001:
+			errors.append("strict soak memory_growth_percent does not match Working Set evidence")
+		if float(recorded_growth) > memory_growth_max:
+			errors.append("strict soak Working Set growth exceeds policy")
+	_validate_lifecycle_summary(_dictionary(soak.get("lifecycle", {})), errors)
+	if int(soak.get("authoritative_cycle_lifecycle_count", -1)) != completed_routes:
+		errors.append("strict soak authoritative cycle lifecycle count must equal completed routes")
 	if not bool(soak.get("clean_exit", false)):
 		errors.append("strict soak must end with a clean exit")
 	if int(soak.get("crash_count", -1)) != 0:
@@ -209,6 +456,7 @@ func _validate_soak(
 		errors.append("strict soak result must be pass")
 	_require_hash(errors, soak, "lifecycle_report_sha256", 64)
 	_require_hash(errors, soak, "soak_report_sha256", 64)
+	_require_hash(errors, soak, "progress_journal_sha256", 64)
 
 
 func _validate_fault_lab(fault_lab: Dictionary, errors: Array[String], require_real: bool) -> void:
@@ -390,6 +638,10 @@ func _is_hex(value: String) -> bool:
 		if not "0123456789abcdef".contains(value[index]):
 			return false
 	return true
+
+
+func _is_finite_number(value: Variant) -> bool:
+	return (value is int or value is float) and is_finite(float(value))
 
 
 func _string_set(values: Array) -> Dictionary:

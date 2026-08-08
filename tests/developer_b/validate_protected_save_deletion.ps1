@@ -51,10 +51,15 @@ foreach ($token in @(
   'trash_full',
   'world_exists',
   'trash_missing_or_invalid',
-  '_remove_directory_recursive'
+  '_remove_directory_tree'
 )) {
   Assert-Match $text.service $token "Protected save service lost required behavior: $token"
 }
+# Purge must route through the inherited long-path-tolerant tree removal
+# (BUG-SAVE-LONG-PATH-001): a protected purge can no longer own a private
+# recursive deleter that fails silently beyond MAX_PATH.
+Assert-Match $text.service '_remove_directory_tree\(trash_absolute\)' 'Protected purge must remove the slot via the shared long-path-tolerant tree removal'
+Assert-NoMatch $text.service 'func\s+_remove_directory_recursive' 'Protected service must not keep a private recursive deleter that bypasses the long-path fallback'
 Assert-NoMatch $text.service 'delete_world\s*\(' 'Protected service must not override the explicit permanent-delete compatibility API'
 Assert-Match $text.service '_trash_entry_count\s*>=\s*MAX_TRASH_ENTRIES' 'Full trash must reject new deletion before moving files'
 Assert-Match $text.service '_store\.write_dictionary\(_trash_manifest_path' 'Trash must persist a bounded manifest after the atomic directory move'

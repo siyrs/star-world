@@ -76,7 +76,7 @@ func _run() -> void:
 	player.call("reset_motion")
 	player.velocity.y = -1.0
 	await _settle_player(player, 120)
-	_check(player.is_on_floor(), "production player settles on the live husbandry arena")
+	_check(player.is_grounded(), "production player settles on the live husbandry arena")
 
 	var pair: Array[Node3D] = await _spawn_parent_pair(game, hub, arena)
 	_check(pair.size() == 2, "real creature spawner creates two bounded parent cows")
@@ -383,7 +383,9 @@ func _arrange_family(
 
 func _settle_player(player: CharacterBody3D, frame_limit: int) -> void:
 	for _frame in frame_limit:
-		if player.is_on_floor():
+		# Voxel ground snapping keeps the body above engine floor contact; the
+		# public grounded contract covers both collider floors and voxel terrain.
+		if player.is_grounded():
 			return
 		await physics_frame
 		await process_frame

@@ -84,7 +84,8 @@ $fatalPatterns = @(
     'Parse Error',
     'ObjectDB instances were leaked',
     'Leaked instance:',
-    'Resources still in use at exit'
+    'Resources still in use at exit',
+    'Condition "!is_inside_tree()" is true'
 )
 $fatalMatches = @($stdout, $stderr | Select-String -Pattern $fatalPatterns -SimpleMatch)
 if ($fatalMatches.Count -gt 0) {

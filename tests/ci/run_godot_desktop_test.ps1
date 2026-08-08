@@ -4,20 +4,52 @@ param(
     [Parameter(Mandatory = $true)][string]$ScriptPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$RenderingMethod = 'gl_compatibility',
-    [int]$TimeoutMilliseconds = 60000
+    [int]$TimeoutMilliseconds = 60000,
+    [string]$UserDataDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 $projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
-$outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputPath))
+# Callers may pass either a project-relative output path (CI jobs) or an
+# already-rooted evidence path (local aggregate runners). Join-Path would
+# concatenate a rooted path onto the project root and produce an illegal
+# doubled path, so resolve rooted inputs directly.
+$outputFullPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) {
+    [System.IO.Path]::GetFullPath($OutputPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputPath))
+}
 $outputDirectory = Split-Path -Parent $outputFullPath
 $outputBaseName = [System.IO.Path]::GetFileNameWithoutExtension($outputFullPath)
 $stdoutPath = Join-Path $outputDirectory "$outputBaseName.stdout.log"
 $stderrPath = Join-Path $outputDirectory "$outputBaseName.stderr.log"
 
+if ([string]::IsNullOrWhiteSpace($UserDataDirectory)) {
+    $UserDataDirectory = Join-Path $outputDirectory "$outputBaseName.userdata"
+}
+$userDataFullPath = if ([System.IO.Path]::IsPathRooted($UserDataDirectory)) {
+    [System.IO.Path]::GetFullPath($UserDataDirectory)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $UserDataDirectory))
+}
+$allowedUserDataPrefix = $outputDirectory.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+$buildRoot = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath 'build'))
+$allowedBuildPrefix = $buildRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+$insideOutput = $userDataFullPath.StartsWith($allowedUserDataPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+$insideBuild = $userDataFullPath.StartsWith($allowedBuildPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+if (-not $insideOutput -and -not $insideBuild) {
+    throw "Desktop test user-data directory must remain under the test output or project build directory: $userDataFullPath"
+}
+$roamingPath = Join-Path $userDataFullPath 'Roaming'
+$localPath = Join-Path $userDataFullPath 'Local'
+
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 Remove-Item -LiteralPath $outputFullPath, $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $userDataFullPath) {
+    Remove-Item -LiteralPath $userDataFullPath -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $roamingPath, $localPath | Out-Null
 
 # GitHub Actions jobs use isolated clean workspaces. A successful import in the
 # headless regression job does not populate this desktop job's .godot cache.
@@ -31,10 +63,19 @@ if (-not (Test-Path -LiteralPath $importMarker)) {
         throw "Missing strict Godot import runner: $importRunner"
     }
     Write-Host 'Preparing isolated desktop acceptance import cache...'
-    & $importRunner `
-        -Godot $Godot `
-        -Arguments "--headless --path `"$projectFullPath`" --editor --quit" `
-        -TimeoutMilliseconds 600000
+    $previousAppData = $env:APPDATA
+    $previousLocalAppData = $env:LOCALAPPDATA
+    try {
+        $env:APPDATA = $roamingPath
+        $env:LOCALAPPDATA = $localPath
+        & $importRunner `
+            -Godot $Godot `
+            -Arguments "--headless --path `"$projectFullPath`" --editor --quit" `
+            -TimeoutMilliseconds 600000
+    } finally {
+        $env:APPDATA = $previousAppData
+        $env:LOCALAPPDATA = $previousLocalAppData
+    }
     New-Item -ItemType File -Force -Path $importMarker | Out-Null
 }
 
@@ -46,7 +87,8 @@ function Assert-NoFatalGodotLog {
         'Parse Error',
         'ObjectDB instances were leaked',
         'Leaked instance:',
-        'Resources still in use at exit'
+        'Resources still in use at exit',
+        'Condition "!is_inside_tree()" is true'
     )
     foreach ($path in $Paths) {
         if (-not (Test-Path -LiteralPath $path)) {
@@ -79,6 +121,8 @@ $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
+$startInfo.Environment['APPDATA'] = $roamingPath
+$startInfo.Environment['LOCALAPPDATA'] = $localPath
 foreach ($argument in $arguments) {
     [void]$startInfo.ArgumentList.Add($argument)
 }

@@ -183,7 +183,8 @@ foreach ($phrase in @(
   'support loss leaves no floating or half-door cells',
   'support loss leaves no un-climbable ladder remnants',
   'cleanup returns the exact canonical door and ladder totals',
-  'support removal and dependent cleanup use exactly two world rebuild flushes',
+  'support removal and dependent cleanup coalesce into one world rebuild flush',
+  'batched pre-flush hook drains the structural queue inside the support batch',
   'physical fallback preserves exact door and ladder totals',
   'full inventory aggregates sixteen returns into at most two pickup nodes',
   'full reload never duplicates structural return items'

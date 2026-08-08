@@ -175,7 +175,8 @@ func play_creature(species_id: String) -> void:
 		return
 	_creature_player.stream = _cache[species_id]
 	_creature_player.pitch_scale = _rng.randf_range(0.92, 1.08)
-	_creature_player.play()
+	if _playback_supported():
+		_creature_player.play()
 	sound_played.emit("creature_%s" % species_id)
 
 
@@ -205,7 +206,8 @@ func play_dig_tick(progress: float = 0.0) -> void:
 		return
 	player.stream = _cache["dig_tick"]
 	player.pitch_scale = 0.92 + clampf(progress, 0.0, 1.0) * 0.35
-	player.play()
+	if _playback_supported():
+		player.play()
 	sound_played.emit("dig_tick")
 
 
@@ -247,7 +249,8 @@ func start_ambient(profile: String = "forest") -> void:
 		stream.loop_end = int(stream.mix_rate * 2.5)
 		_cache[key] = stream
 	_ambient_player.stream = _cache[key]
-	_ambient_player.play()
+	if _playback_supported():
+		_ambient_player.play()
 	sound_played.emit(key)
 
 
@@ -271,8 +274,17 @@ func _play_effect(key: String) -> void:
 		return
 	player.stream = _cache[key]
 	player.pitch_scale = _rng.randf_range(0.94, 1.06)
-	player.play()
+	if _playback_supported():
+		player.play()
 	sound_played.emit(key)
+
+
+# The Dummy audio driver (headless CI/QA runs) never mixes, so every started
+# playback is retained forever and leaks AudioStreamPlaybackWAV instances at
+# exit. Skip the playback start there while still emitting the sound_played
+# contract; real drivers are unaffected.
+func _playback_supported() -> bool:
+	return AudioServer.get_driver_name() != "Dummy"
 
 
 func _next_pool_player() -> AudioStreamPlayer:

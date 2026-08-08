@@ -70,8 +70,9 @@ func _run() -> void:
 	_check(world != null and bool(world.get("is_started")), "production voxel world starts before ranch lifecycle tests")
 	_check(husbandry != null and interaction != null and attraction != null and products != null, "participant-owned husbandry and ranch services keep their public ports")
 	_check(
-		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 7,
-		"production coordinator exposes all seven participants"
+		int(coordinator.call("get_snapshot").get("participant_count", 0)) == 8
+		and coordinator.call("has_participant", &"weather_runtime"),
+		"production coordinator exposes all eight participants including weather"
 	)
 	_check(coordinator.call("has_participant", &"machine_runtime"), "Machine Base remains the lifecycle root")
 	_check(
@@ -193,6 +194,17 @@ func _run() -> void:
 		_save_image(image)
 	for pickup: Node3D in egg_pickups:
 		pickup.global_position = player.global_position + Vector3(0.0, 0.7, 0.0)
+		# Overlap collection registers a frame after the physics sync; pump a
+		# bounded window until this pickup frees itself instead of assuming a
+		# fixed one-frame latency.
+		for _frame in 12:
+			await physics_frame
+			await process_frame
+			if not is_instance_valid(pickup):
+				break
+	for _frame in 24:
+		if hub.inventory.count_item("egg") == 3:
+			break
 		await physics_frame
 		await process_frame
 	_check(hub.inventory.count_item("egg") == 3, "physical pickup collection transfers the full batched yield")
@@ -236,7 +248,7 @@ func _run() -> void:
 	_check(bool(autosave.call("get_snapshot").get("active", false)), "full reload reactivates bounded autosave")
 	var character_snapshot: Dictionary = hub.call("get_character_snapshot")
 	_check(character_snapshot.has("machine_runtime"), "ranch journey preserves Machine Base diagnostics")
-	_check(character_snapshot.has("autosave"), "ranch journey exposes bounded autosave diagnostics")
+	_check(character_snapshot.has("weather") and character_snapshot.has("autosave"), "ranch journey exposes weather and bounded autosave diagnostics")
 
 	game.call("_abort_world_start", "qa_ranch_runtime_failure")
 	for _frame in 4:

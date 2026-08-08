@@ -322,10 +322,13 @@ func _test_production_participant_lifecycle() -> void:
 	_check((loaded.get("agriculture", {}).get("crops", {}) as Dictionary).size() == 2, "production save preserves both participant-owned crops")
 	var character: Dictionary = hub.call("get_character_snapshot")
 	_check(int(character.get("agriculture", {}).get("crop_count", 0)) == 2, "character diagnostics use bounded agriculture runtime data")
-	_check(character.has("autosave"), "character diagnostics include transient autosave evidence")
 	_check(
-		int(character.get("feature_lifecycle", {}).get("participant_count", 0)) == 7,
-		"feature diagnostics expose all seven lifecycle participants"
+		character.has("weather") and character.has("autosave"),
+		"character diagnostics include weather and transient autosave evidence"
+	)
+	_check(
+		int(character.get("feature_lifecycle", {}).get("participant_count", 0)) == 8,
+		"feature diagnostics expose all eight lifecycle participants"
 	)
 	var batch_count := batches.size()
 	hub.call("return_to_menu")
@@ -343,9 +346,9 @@ func _test_production_participant_lifecycle() -> void:
 	_check(
 		not history.is_empty()
 		and str(history.back()).contains(
-			"autosave_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
+			"autosave_runtime,weather_runtime,exploration_journal_rewards,exploration_runtime,ranch_runtime,husbandry_runtime,agriculture_runtime,machine_runtime"
 		),
-		"reverse cleanup starts with autosave and keeps agriculture between husbandry and machine runtimes"
+		"reverse cleanup starts with autosave then weather and keeps agriculture between husbandry and machine runtimes"
 	)
 	if not world_id.is_empty():
 		hub.save_service.delete_world(world_id)

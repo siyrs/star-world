@@ -82,6 +82,9 @@ func _initialize() -> void:
 	)
 	player.queue_free()
 	generated_world.queue_free()
+	# The flat fake never enters the tree; free it explicitly so its Node,
+	# script and native-class instances do not leak at exit.
+	world.free()
 	if failures.is_empty():
 		print("QA SPAWN SEAM PASS | checks=%d" % checks)
 		quit(0)

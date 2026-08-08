@@ -27,6 +27,16 @@ const SPAWN_NEIGHBOR_DIRECTIONS := [
 	Vector2i(0, 1),
 	Vector2i(1, 1),
 ]
+# Walkable-reach BFS must mirror the production route probe's planner contract
+# exactly: four cardinal moves, |Δheight| <= 1 per step, walkable surface only.
+# Using the profile's looser step height or diagonal moves would accept spawn
+# pockets the route gate (minimum 20 planned steps) still cannot traverse.
+const SPAWN_REACH_DIRECTIONS: Array[Vector2i] = [
+	Vector2i(1, 0),
+	Vector2i(-1, 0),
+	Vector2i(0, 1),
+	Vector2i(0, -1),
+]
 
 var profile_id := "star_continent"
 var seed_value := 734521
@@ -222,6 +232,11 @@ func find_spawn_position() -> Vector3:
 	var best_snapshot: Dictionary = {}
 	var highest_scoring_candidate := Vector3(INF, INF, INF)
 	var highest_scoring_snapshot: Dictionary = {}
+	var first_reach_rejected_candidate := Vector3(INF, INF, INF)
+	var first_reach_rejected_snapshot: Dictionary = {}
+	var reach_target := int(_spawn_quality_profile.get("minimum_walkable_reach_distance", 20))
+	var reach_accepted_cells: Dictionary = {}
+	var reach_rejected_cells: Dictionary = {}
 	var termination_condition := "search_radius_exhausted"
 	for radius in range(0, search_radius + 1):
 		for x in range(-radius, radius + 1):
@@ -235,22 +250,59 @@ func find_spawn_position() -> Vector3:
 				var candidate := Vector3(x + 0.5, top + 1.05, z + 0.5)
 				var snapshot := _evaluate_spawn_candidate(x, z, top, radius)
 				evaluated_candidates += 1
-				if bool(snapshot.get("hard_safe", false)) and not _is_valid_spawn_found(first_safe_candidate):
-					first_safe_candidate = candidate
-					first_safe_snapshot = snapshot
-				if bool(snapshot.get("hard_safe", false)) and (
-					highest_scoring_snapshot.is_empty()
-					or float(snapshot.get("score", 0.0))
-					> float(highest_scoring_snapshot.get("score", 0.0))
-				):
-					highest_scoring_candidate = candidate
-					highest_scoring_snapshot = snapshot
-				if bool(snapshot.get("meets_thresholds", false)) and (
-					best_snapshot.is_empty()
-					or float(snapshot.get("score", 0.0)) > float(best_snapshot.get("score", 0.0))
-				):
-					best_candidate = candidate
-					best_snapshot = snapshot
+				# Local quality thresholds cannot see confinement: a candidate on
+				# a tiny plateau passes clearance/walkability/visibility yet the
+				# player cannot walk further than a few steps in any direction
+				# (star_continent seed 112428 spawned on a 34-column pocket whose
+				# longest route was 6 steps, failing the 20-step route gate).
+				# Bucket-eligible candidates must therefore prove walkable reach
+				# with the route probe's own transition contract; the BFS runs
+				# lazily — only when a candidate would enter or displace a bucket.
+				var bucket_candidate := (
+					bool(snapshot.get("hard_safe", false))
+					or bool(snapshot.get("meets_thresholds", false))
+				)
+				var need_first := (
+					bool(snapshot.get("hard_safe", false))
+					and not _is_valid_spawn_found(first_safe_candidate)
+				)
+				var beat_highest := (
+					bool(snapshot.get("hard_safe", false))
+					and (
+						highest_scoring_snapshot.is_empty()
+						or float(snapshot.get("score", 0.0))
+						> float(highest_scoring_snapshot.get("score", 0.0))
+					)
+				)
+				var beat_best := (
+					bool(snapshot.get("meets_thresholds", false))
+					and (
+						best_snapshot.is_empty()
+						or float(snapshot.get("score", 0.0)) > float(best_snapshot.get("score", 0.0))
+					)
+				)
+				if bucket_candidate and (need_first or beat_highest or beat_best):
+					var reach := _evaluate_walkable_reach(
+						x, z, top, reach_accepted_cells, reach_rejected_cells
+					)
+					snapshot["walkable_reach_distance"] = int(reach.get("distance", 0))
+					snapshot["walkable_reach_nodes"] = int(reach.get("nodes", 0))
+					if not bool(reach.get("accepted", false)):
+						snapshot["reach_rejected"] = true
+						if not _is_valid_spawn_found(first_reach_rejected_candidate):
+							first_reach_rejected_candidate = candidate
+							first_reach_rejected_snapshot = snapshot
+					else:
+						snapshot["reach_accepted"] = true
+						if need_first:
+							first_safe_candidate = candidate
+							first_safe_snapshot = snapshot
+						if beat_highest:
+							highest_scoring_candidate = candidate
+							highest_scoring_snapshot = snapshot
+						if beat_best:
+							best_candidate = candidate
+							best_snapshot = snapshot
 				if evaluated_candidates >= candidate_budget:
 					termination_condition = "candidate_budget_reached"
 					break
@@ -309,6 +361,31 @@ func find_spawn_position() -> Vector3:
 			% [profile_id, seed_value]
 		)
 		return first_safe_candidate
+	# Degraded path: every bucket-eligible candidate in range was confined to a
+	# pocket smaller than the walkable-reach target. Spawn resolution must
+	# never fail outright, so accept the first confined candidate and mark the
+	# snapshot — the route gate will still report such seeds honestly instead
+	# of the spawn picker silently pretending they are traversable.
+	if _is_valid_spawn_found(first_reach_rejected_candidate):
+		first_reach_rejected_snapshot["reach_degraded"] = true
+		_finalize_spawn_snapshot(
+			first_reach_rejected_snapshot,
+			first_reach_rejected_snapshot,
+			scanned_columns,
+			evaluated_candidates,
+			termination_condition,
+			started_at,
+			true
+		)
+		_last_spawn_quality_snapshot = first_reach_rejected_snapshot
+		push_warning(
+			(
+				"All spawn candidates were confined below the walkable-reach target "
+				+ "for profile=%s seed=%d; using the first confined safe candidate."
+			)
+			% [profile_id, seed_value]
+		)
+		return first_reach_rejected_candidate
 	_last_spawn_quality_snapshot = {
 		"profile_id": profile_id,
 		"seed": seed_value,
@@ -495,6 +572,93 @@ func _evaluate_spawn_walkability(x: int, z: int, top: int, rejected_surfaces: Ar
 			if neighbor_surface not in rejected_surfaces:
 				walkable_neighbors += 1
 	return walkable_neighbors
+
+
+# Breadth-first walkable reach from a spawn candidate, mirroring the
+# production route probe's transition contract (four cardinal moves,
+# |Δheight| <= 1, probe-rejected supports excluded) so an accepted spawn can
+# always satisfy the route gate's minimum planned-step count. Success is
+# proven the moment a cell at the target distance is ENQUEUED — the path
+# exists at that point, no dequeue needed. Memoization is deliberately
+# eccentricity-sound: an accepted flood proves ecc >= target only for its
+# origin and the cells it enqueued at distance >= target; a rejected flood
+# proves the whole visited component confined only when it exhausted with
+# best*2 < target (any cell's eccentricity is then bounded by the diameter).
+# Anything else re-floods — cheap in practice because bucket leadership
+# changes rarely and pocket floods are tiny.
+func _evaluate_walkable_reach(
+	x: int,
+	z: int,
+	top: int,
+	accepted_cells: Dictionary,
+	rejected_cells: Dictionary
+) -> Dictionary:
+	var reach_target := int(_spawn_quality_profile.get("minimum_walkable_reach_distance", 20))
+	var start_key := "%d,%d" % [x, z]
+	if accepted_cells.has(start_key):
+		return {"accepted": true, "distance": reach_target, "nodes": 0}
+	if rejected_cells.has(start_key):
+		return {"accepted": false, "distance": 0, "nodes": 0}
+	var rejected_surfaces: Array = _spawn_quality_profile.get("rejected_surface_blocks", []).duplicate()
+	# find_walkable_surface already guarantees a non-leaves/non-ice solid with
+	# three air cells above (stricter than the probe's two); the probe's extra
+	# unsupported-surface rejections must still apply here.
+	for probe_rejected in ["water", "lava", "glow_crystal"]:
+		if probe_rejected not in rejected_surfaces:
+			rejected_surfaces.append(probe_rejected)
+	var node_budget := int(_spawn_quality_profile.get("walkable_reach_node_budget", 1600))
+	var reach_radius := int(_spawn_quality_profile.get("walkable_reach_radius", 32))
+	var start := Vector2i(x, z)
+	var queue: Array[Vector2i] = [start]
+	var head := 0
+	var heights: Dictionary = {start_key: top}
+	var distances: Dictionary = {start_key: 0}
+	var best_distance := 0
+	var accepted := false
+	while head < queue.size() and head < node_budget:
+		var current := queue[head]
+		head += 1
+		var current_key := "%d,%d" % [current.x, current.y]
+		var current_height := int(heights[current_key])
+		var current_distance := int(distances[current_key])
+		for offset: Vector2i in SPAWN_REACH_DIRECTIONS:
+			var next := current + offset
+			if absi(next.x - x) > reach_radius or absi(next.y - z) > reach_radius:
+				continue
+			var next_key := "%d,%d" % [next.x, next.y]
+			if heights.has(next_key):
+				continue
+			var next_height := find_walkable_surface(next.x, next.y)
+			if next_height < 1 or absi(next_height - current_height) > 1:
+				continue
+			var next_surface := get_block(Vector3i(next.x, next_height, next.y))
+			if next_surface in rejected_surfaces:
+				continue
+			var next_distance := current_distance + 1
+			heights[next_key] = next_height
+			distances[next_key] = next_distance
+			queue.append(next)
+			if next_distance > best_distance:
+				best_distance = next_distance
+				if best_distance >= reach_target:
+					accepted = true
+					break
+		if accepted:
+			break
+	if accepted:
+		# The origin and every cell enqueued at distance >= target provably
+		# have eccentricity >= target (their distance from the origin alone
+		# witnesses it).
+		accepted_cells[start_key] = true
+		for cell_key in distances.keys():
+			if int(distances[cell_key]) >= reach_target:
+				accepted_cells[cell_key] = true
+	elif head >= queue.size() and best_distance * 2 < reach_target:
+		# Exhausted flood with diameter < target: every visited cell's
+		# eccentricity is bounded by the diameter — a proven confined pocket.
+		for cell_key in heights.keys():
+			rejected_cells[cell_key] = true
+	return {"accepted": accepted, "distance": best_distance, "nodes": head}
 
 
 func _evaluate_spawn_visibility(x: int, z: int, top: int) -> Dictionary:

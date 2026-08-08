@@ -21,10 +21,12 @@ const DEFAULT_SEED := 24681357
 var game: Node
 var report_path := DEFAULT_REPORT_PATH
 var screenshot_path := "user://release-smoke.png"
+var lifecycle_report_path := ""
 var soak_frames := DEFAULT_SOAK_FRAMES
 var profile_id := DEFAULT_PROFILE_ID
 var seed := DEFAULT_SEED
 var route_probe_enabled := false
+var frame_log_enabled := false
 var checks := 0
 var failures: Array[String] = []
 var _world_started := false
@@ -40,13 +42,21 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 	var configured_profile := DEFAULT_PROFILE_ID
 	var configured_seed := DEFAULT_SEED
 	var configured_route_probe := false
+	var configured_frame_log := false
+	var configured_lifecycle_output := ""
 	for argument in arguments:
 		if argument == "--release-smoke":
 			enabled = true
 		elif argument == "--smoke-route-probe":
 			configured_route_probe = true
+		elif argument == "--smoke-frame-log":
+			configured_frame_log = true
 		elif argument.begins_with("--smoke-output="):
 			output = argument.trim_prefix("--smoke-output=").strip_edges()
+		elif argument.begins_with("--smoke-lifecycle-output="):
+			configured_lifecycle_output = argument.trim_prefix(
+				"--smoke-lifecycle-output="
+			).strip_edges()
 		elif argument.begins_with("--smoke-soak-frames="):
 			var raw_frames := argument.trim_prefix("--smoke-soak-frames=").strip_edges()
 			if raw_frames.is_valid_int():
@@ -69,6 +79,8 @@ static func configuration_from_arguments(arguments: PackedStringArray) -> Dictio
 		"profile_id": configured_profile,
 		"seed": configured_seed,
 		"route_probe": configured_route_probe,
+		"frame_log": configured_frame_log,
+		"lifecycle_report_path": configured_lifecycle_output,
 	}
 
 
@@ -76,12 +88,14 @@ func configure(p_game: Node, configuration: Dictionary) -> void:
 	game = p_game
 	report_path = str(configuration.get("report_path", DEFAULT_REPORT_PATH))
 	screenshot_path = "%s.png" % report_path.get_basename()
+	lifecycle_report_path = str(configuration.get("lifecycle_report_path", ""))
 	soak_frames = clampi(
 		int(configuration.get("soak_frames", DEFAULT_SOAK_FRAMES)), 60, 600
 	)
 	profile_id = str(configuration.get("profile_id", DEFAULT_PROFILE_ID))
 	seed = int(configuration.get("seed", DEFAULT_SEED))
 	route_probe_enabled = bool(configuration.get("route_probe", false))
+	frame_log_enabled = bool(configuration.get("frame_log", false))
 
 
 func _ready() -> void:
@@ -96,6 +110,14 @@ func _run() -> void:
 	if game == null:
 		await _finish()
 		return
+	var lifecycle_report: Node = game.get("release_lifecycle_report")
+	_check(lifecycle_report != null, "release_lifecycle_report_available")
+	if lifecycle_report != null and not lifecycle_report_path.is_empty():
+		lifecycle_report.call("configure", true, lifecycle_report_path)
+		_check(
+			str(lifecycle_report.call("get_report_path")) == lifecycle_report_path,
+			"release_lifecycle_report_output_bound"
+		)
 	_world_started = false
 	_world_start_failure = ""
 	_tutorial_hidden_for_evidence = false
@@ -199,6 +221,7 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	var samples := 0
 	var frame_times_ms: Array[float] = []
 	var engine_fps_samples: Array[float] = []
+	var slow_frames: Array[Dictionary] = []
 	var previous_usec := Time.get_ticks_usec()
 	# Movement pressure is supplied by the production route probe. The soak phase
 	# deliberately performs no coordinate mutation; it observes the live endpoint
@@ -206,8 +229,19 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 	for frame_index in soak_frames:
 		await get_tree().process_frame
 		var now_usec := Time.get_ticks_usec()
-		frame_times_ms.append(float(now_usec - previous_usec) / 1000.0)
+		var frame_ms := float(now_usec - previous_usec) / 1000.0
+		frame_times_ms.append(frame_ms)
 		previous_usec = now_usec
+		if frame_log_enabled and frame_ms >= 16.0 and world != null:
+			var live_stats: Dictionary = world.call("get_streaming_stats")
+			slow_frames.append({
+				"frame": frame_index,
+				"ms": snappedf(frame_ms, 0.001),
+				"pending": int(live_stats.get("pending", -1)),
+				"building": int(live_stats.get("building", -1)),
+				"loaded": int(live_stats.get("loaded", -1)),
+				"last_work_usec": int(live_stats.get("last_work_usec", -1)),
+			})
 		if frame_index % SOAK_SAMPLE_INTERVAL_FRAMES != 0:
 			continue
 		engine_fps_samples.append(float(Engine.get_frames_per_second()))
@@ -259,6 +293,7 @@ func _run_runtime_soak(world: Node, player: Node3D, diagnostics: Node) -> Dictio
 		"movement_pressure": "production_route_probe" if route_probe_enabled else "stationary",
 		"player_transform_writes": 0,
 		"frame_metrics": frame_metrics,
+		"slow_frames": slow_frames,
 		"final_snapshot": final_snapshot,
 	}
 
@@ -324,8 +359,10 @@ func _finish(
 		telemetry_snapshot = diagnostics.call("sample_now")
 	elif diagnostics != null and diagnostics.has_method("get_latest_snapshot"):
 		telemetry_snapshot = diagnostics.call("get_latest_snapshot")
+	_record_journey_save()
+	var lifecycle_snapshot := _prepare_authoritative_quit()
 	var payload := {
-		"version": 4,
+		"version": 5,
 		"ok": failures.is_empty(),
 		"checks": checks,
 		"failures": failures,
@@ -342,6 +379,7 @@ func _finish(
 		"visual_evidence": evidence_result,
 		"soak": soak_result,
 		"telemetry": telemetry_snapshot,
+		"lifecycle": lifecycle_snapshot,
 		"engine_version": Engine.get_version_info(),
 	}
 	_ensure_output_directory(report_path)
@@ -363,6 +401,75 @@ func _finish(
 		print("RELEASE SMOKE FAIL | checks=%d | failures=%d" % [checks, failures.size()])
 	await _cleanup_runtime()
 	get_tree().quit(exit_code)
+
+
+func _record_journey_save() -> void:
+	# A smoke session is far shorter than the first autosave interval, so without
+	# an explicit save the quit-preparation save would become the session's first
+	# save — and it is stamped after the quit-request timestamp, inverting the
+	# lifecycle monotonic contract. Mirror the real player journey instead: save
+	# during gameplay (production manual-save path), then quit.
+	if game == null or not is_instance_valid(game):
+		return
+	var hub: Node = game.get("service_hub")
+	if hub == null or str(hub.get("current_world_id")).is_empty():
+		# Early-failure path with no active world: nothing to save; downstream
+		# lifecycle checks still report the missing first save honestly.
+		return
+	if not game.has_method("request_save"):
+		_check(false, "journey_save_coordinator_available")
+		return
+	game.call("request_save")
+	var snapshot: Dictionary = {}
+	if game.has_method("get_release_lifecycle_snapshot"):
+		var raw_snapshot: Variant = game.call("get_release_lifecycle_snapshot")
+		if raw_snapshot is Dictionary:
+			snapshot = raw_snapshot
+	var first_save: Dictionary = snapshot.get("first_save", {})
+	_check(
+		bool(first_save.get("success", false)) and int(first_save.get("bytes", 0)) > 0,
+		"journey_save_recorded_before_quit"
+	)
+
+
+func _prepare_authoritative_quit() -> Dictionary:
+	if game == null or not is_instance_valid(game):
+		_check(false, "authoritative_quit_game_available")
+		return {}
+	if not game.has_method("request_application_quit"):
+		_check(false, "authoritative_quit_coordinator_available")
+		return {}
+	# Keep the diagnostic runner in control of its non-zero exit code while using
+	# the production coordinator for save, teardown, and lifecycle finalization.
+	game.set("application_exit_enabled", false)
+	var prepared := bool(game.call("request_application_quit", &"release_smoke"))
+	_check(prepared, "authoritative_quit_prepared")
+	var snapshot: Dictionary = {}
+	if game.has_method("get_release_lifecycle_snapshot"):
+		var raw_snapshot: Variant = game.call("get_release_lifecycle_snapshot")
+		if raw_snapshot is Dictionary:
+			snapshot = raw_snapshot
+	var quit: Dictionary = snapshot.get("quit", {})
+	var service_hub: Dictionary = quit.get("service_hub", {})
+	var game_quit: Dictionary = quit.get("game", {})
+	_check(bool(quit.get("prepared", false)), "authoritative_lifecycle_quit_prepared")
+	_check(
+		str(quit.get("termination_reason", "")) == "prepared_quit",
+		"authoritative_lifecycle_termination_reason"
+	)
+	_check(str(quit.get("source", "")) == "release_smoke", "authoritative_lifecycle_source")
+	_check(bool(snapshot.get("last_write_ok", false)), "authoritative_lifecycle_report_persisted")
+	_check(
+		int(service_hub.get("success_count", 0)) >= 1
+		and int(service_hub.get("failure_count", 0)) == 0,
+		"authoritative_service_hub_quit_clean"
+	)
+	_check(
+		int(game_quit.get("success_count", 0)) >= 1
+		and int(game_quit.get("failure_count", 0)) == 0,
+		"authoritative_game_quit_clean"
+	)
+	return snapshot
 
 
 func _cleanup_runtime() -> void:

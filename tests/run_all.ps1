@@ -98,6 +98,19 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 & "$PSScriptRoot\developer_b\validate_husbandry_lifecycle.ps1"
 & "$PSScriptRoot\developer_b\validate_ranch.ps1"
 & "$PSScriptRoot\developer_b\validate_ranch_lifecycle.ps1"
+& "$PSScriptRoot\developer_b\validate_crafting_closed_loop.ps1"
+& "$PSScriptRoot\developer_b\validate_experience_hardening.ps1"
+& "$PSScriptRoot\developer_b\validate_furnace_closed_loop.ps1"
+& "$PSScriptRoot\developer_b\validate_generator_column_cache.ps1"
+& "$PSScriptRoot\developer_b\validate_hostile_cover_counter_v2.ps1"
+& "$PSScriptRoot\developer_b\validate_primary_action_targeting.ps1"
+& "$PSScriptRoot\developer_b\validate_release_evidence_contract.ps1"
+& "$PSScriptRoot\developer_b\validate_release_readiness_closure.ps1"
+& "$PSScriptRoot\developer_b\validate_remaining_player_journeys.ps1"
+& "$PSScriptRoot\developer_b\validate_repair_closed_loop.ps1"
+& "$PSScriptRoot\developer_b\validate_stonecutter_closed_loop.ps1"
+& "$PSScriptRoot\developer_b\validate_task_workspace_governance_iteration_65.ps1"
+& "$PSScriptRoot\developer_b\validate_weather_climate_iteration_66.ps1"
 
 $script:failedTests = [System.Collections.Generic.List[string]]::new()
 $script:passedCount = 0
@@ -106,25 +119,45 @@ $script:failedCount = 0
 function Invoke-GodotTest {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
-        # Isolated user:// dir for tests that assume a clean world/catalog directory
-        # (saves/catalog/counting). Pass a relative path under build/ so real user
-        # worlds under the default user:// are never touched or counted.
+        # Optional stable isolation name. Every test is isolated even when this is
+        # omitted; named directories only make focused evidence easier to locate.
         [string]$UserDataDir = ''
     )
     $name = [System.IO.Path]::GetFileNameWithoutExtension($ScriptPath)
-    $userDataArg = ''
-    if (-not [string]::IsNullOrWhiteSpace($UserDataDir)) {
-        $absolute = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\build\qa-userdata\$UserDataDir"))
-        $userDataArg = " --user-data-dir $absolute"
+    $isolationName = if ([string]::IsNullOrWhiteSpace($UserDataDir)) { $name } else { $UserDataDir }
+    if ($isolationName -notmatch '^[A-Za-z0-9._-]+$') {
+        throw "Unsafe QA user-data isolation name: $isolationName"
     }
+    $isolationRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\build\qa-userdata'))
+    $absolute = [System.IO.Path]::GetFullPath((Join-Path $isolationRoot $isolationName))
+    $requiredPrefix = $isolationRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $absolute.StartsWith($requiredPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "QA user-data target escaped the isolation root: $absolute"
+    }
+    if (Test-Path -LiteralPath $absolute) {
+        Remove-Item -LiteralPath $absolute -Recurse -Force
+    }
+    $isolatedAppData = Join-Path $absolute 'Roaming'
+    $isolatedLocalAppData = Join-Path $absolute 'Local'
+    New-Item -ItemType Directory -Force -Path $isolatedAppData, $isolatedLocalAppData | Out-Null
+    $originalAppData = $env:APPDATA
+    $originalLocalAppData = $env:LOCALAPPDATA
     try {
-        & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path .$userDataArg --script $ScriptPath -- --disable-update-check"
+        # Godot 4.7 does not expose a --user-data-dir engine option on Windows.
+        # Redirect the inherited Windows data roots instead, then restore them so
+        # the real player worlds are never read, counted, written or deleted.
+        $env:APPDATA = $isolatedAppData
+        $env:LOCALAPPDATA = $isolatedLocalAppData
+        & "$PSScriptRoot\ci\Invoke-Godot.ps1" -Godot $Godot -Arguments "--headless --path . --script $ScriptPath -- --disable-update-check"
         $script:passedCount++
         Write-Host "PASS $name"
     } catch {
         $script:failedCount++
         $script:failedTests.Add("$name : $($_.Exception.Message)")
         Write-Host "FAIL $name : $($_.Exception.Message)"
+    } finally {
+        $env:APPDATA = $originalAppData
+        $env:LOCALAPPDATA = $originalLocalAppData
     }
 }
 
@@ -149,6 +182,7 @@ function Report-TestSummary {
 
 Invoke-GodotTest 'res://tests/developer_a/core_smoke_test.gd'
 Invoke-GodotTest 'res://tests/developer_b/run_tests.gd'
+Invoke-GodotTest 'res://tests/qa/acceptance_suite.gd'
 Invoke-GodotTest 'res://tests/qa/integration_regression.gd'
 Invoke-GodotTest 'res://tests/qa/input_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/movement_lifecycle_regression.gd'
@@ -158,6 +192,7 @@ Invoke-GodotTest 'res://tests/qa/pickup_stack_regression.gd'
 Invoke-GodotTest 'res://tests/qa/pickup_shared_runtime_regression.gd'
 Invoke-GodotTest 'res://tests/qa/block_interaction_regression.gd'
 Invoke-GodotTest 'res://tests/qa/inventory_transaction_regression.gd'
+Invoke-GodotTest 'res://tests/qa/inventory_canonical_roundtrip_regression.gd'
 Invoke-GodotTest 'res://tests/qa/machine_base_regression.gd'
 Invoke-GodotTest 'res://tests/qa/stonecutter_machine_regression.gd'
 Invoke-GodotTest 'res://tests/qa/machine_capability_regression.gd'
@@ -173,6 +208,7 @@ Invoke-GodotTest 'res://tests/qa/multi_hostile_arena_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/multi_hostile_danger_batch_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_journal_regression.gd'
 Invoke-GodotTest 'res://tests/qa/exploration_milestone_reward_regression.gd'
+Invoke-GodotTest 'res://tests/qa/exploration_reward_inventory_persistence_regression.gd'
 Invoke-GodotTest 'res://tests/qa/map_signature_prospecting_regression.gd'
 Invoke-GodotTest 'res://tests/qa/service_hub_feature_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/bounded_autosave_runtime_regression.gd'
@@ -183,6 +219,9 @@ Invoke-GodotTest 'res://tests/qa/world_scoped_save_checkpoint_session_regression
 Invoke-GodotTest 'res://tests/qa/world_session_recovery_regression.gd'
 Invoke-GodotTest 'res://tests/qa/graceful_application_quit_regression.gd'
 Invoke-GodotTest 'res://tests/qa/release_lifecycle_report_regression.gd' -UserDataDir 'release-lifecycle-report'
+Invoke-GodotTest 'res://tests/qa/release_smoke_evidence_state_regression.gd'
+Invoke-GodotTest 'res://tests/qa/release_smoke_runtime_health_scope_regression.gd'
+Invoke-GodotTest 'res://tests/qa/external_qualification_contract_regression.gd'
 Invoke-GodotTest 'res://tests/qa/session_recovery_ui_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_runtime_lifecycle_regression.gd'
 Invoke-GodotTest 'res://tests/qa/agriculture_scale_batch_regression.gd'
@@ -193,6 +232,7 @@ Invoke-GodotTest 'res://tests/qa/connected_block_shapes_regression.gd'
 Invoke-GodotTest 'res://tests/qa/double_door_regression.gd'
 Invoke-GodotTest 'res://tests/qa/directional_ladder_regression.gd'
 Invoke-GodotTest 'res://tests/qa/structural_integrity_desktop_import_regression.gd'
+Invoke-GodotTest 'res://tests/qa/structural_integrity_regression.gd'
 Invoke-GodotTest 'res://tests/qa/world_mutation_pre_flush_regression.gd'
 Invoke-GodotTest 'res://tests/qa/structural_integrity_batched_regression.gd'
 Invoke-GodotTest 'res://tests/qa/long_term_structure_pickup_churn_regression.gd'
@@ -245,11 +285,18 @@ Invoke-GodotTest 'res://tests/qa/rest_respawn_regression.gd'
 Invoke-GodotTest 'res://tests/qa/repair_regression.gd'
 Invoke-GodotTest 'res://tests/qa/husbandry_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ranch_products_regression.gd'
+Invoke-GodotTest 'res://tests/qa/ranch_product_conservation_regression.gd'
+Invoke-GodotTest 'res://tests/qa/ranch_product_expiration_conservation_regression.gd'
 Invoke-GodotTest 'res://tests/qa/tutorial_placement_regression.gd'
 Invoke-GodotTest 'res://tests/qa/placement_preview_regression.gd'
 Invoke-GodotTest 'res://tests/qa/desktop_input_contract_regression.gd'
 Invoke-GodotTest 'res://tests/qa/spawn_experience_regression.gd'
+Invoke-GodotTest 'res://tests/qa/spawn_seam_regression.gd'
 Invoke-GodotTest 'res://tests/qa/collision_seam_probe_regression.gd'
+Invoke-GodotTest 'res://tests/qa/player_continuous_route_regression.gd'
+Invoke-GodotTest 'res://tests/qa/player_continuous_route_buffered_jump_regression.gd'
+Invoke-GodotTest 'res://tests/qa/player_driven_regional_traversal_regression.gd'
+Invoke-GodotTest 'res://tests/qa/sky_islands_cautious_descent_regression.gd'
 Invoke-GodotTest 'res://tests/qa/profile_release_journey_regression.gd'
 Invoke-GodotTest 'res://tests/qa/profile_deep_journey_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_health_source_projection_regression.gd'
@@ -257,6 +304,7 @@ Invoke-GodotTest 'res://tests/qa/runtime_health_report_policy_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_health_report_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_health_failed_return_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_diagnostics_regression.gd'
+Invoke-GodotTest 'res://tests/qa/frame_performance_metrics_regression.gd'
 Invoke-GodotTest 'res://tests/qa/player_experience_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ui_layout_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ui_design_system_regression.gd'
@@ -264,7 +312,13 @@ Invoke-GodotTest 'res://tests/qa/menu_keyboard_navigation_regression.gd'
 Invoke-GodotTest 'res://tests/qa/ui_accessibility_regression.gd'
 Invoke-GodotTest 'res://tests/qa/visual_acceptance_regression.gd'
 Invoke-GodotTest 'res://tests/qa/adaptive_streaming_regression.gd'
+Invoke-GodotTest 'res://tests/qa/world_generator_column_cache_regression.gd'
 Invoke-GodotTest 'res://tests/qa/audio_lifecycle_regression.gd'
+Invoke-GodotTest 'res://tests/qa/creature_ambient_voice_regression.gd'
+Invoke-GodotTest 'res://tests/qa/experience_hardening_regression.gd'
+Invoke-GodotTest 'res://tests/qa/hostile_cover_counter_v2_regression.gd'
+Invoke-GodotTest 'res://tests/qa/water_survival_regression.gd'
+Invoke-GodotTest 'res://tests/qa/weather_climate_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_stability_regression.gd'
 Invoke-GodotTest 'res://tests/qa/runtime_soak_regression.gd'
 Invoke-GodotTest 'res://tests/qa/settings_retest.gd'

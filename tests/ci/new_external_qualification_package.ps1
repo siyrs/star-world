@@ -78,11 +78,19 @@ Assert-Equal $CommitSha ([string]$review.build.commit_sha) 'E4-H review commit'
 Assert-Equal $exeHash ([string]$review.build.executable_sha256) 'E4-H review executable'
 Assert-Equal $pckHash ([string]$review.build.pck_sha256) 'E4-H review PCK'
 foreach ($hardware in @($minimum, $recommended)) {
+    if ([int]$hardware.schema_version -ne 2) {
+        throw "hardware $($hardware.tier) must use qualification child schema 2"
+    }
+    if (-not [bool]$hardware.exact_final_package_reused) {
+        throw "hardware $($hardware.tier) does not prove exact final package reuse"
+    }
     Assert-Equal $source ([string]$hardware.evidence_source) "hardware $($hardware.tier) evidence source"
     Assert-Equal ([string][bool]$ReferenceOnly) ([string][bool]$hardware.reference_only) "hardware $($hardware.tier) reference flag"
     Assert-Equal $exeHash ([string]$hardware.build.executable_sha256) "hardware $($hardware.tier) executable"
     Assert-Equal $pckHash ([string]$hardware.build.pck_sha256) "hardware $($hardware.tier) PCK"
 }
+if ([int]$soak.schema_version -ne 2) { throw 'strict soak must use qualification child schema 2' }
+if (-not [bool]$soak.exact_final_package_reused) { throw 'strict soak does not prove exact final package reuse' }
 Assert-Equal $source ([string]$soak.evidence_source) 'strict soak evidence source'
 Assert-Equal ([string][bool]$ReferenceOnly) ([string][bool]$soak.reference_only) 'strict soak reference flag'
 Assert-Equal $exeHash ([string]$soak.executable_sha256) 'strict soak executable'
@@ -169,6 +177,9 @@ if (-not $ReferenceOnly) {
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputFullPath) | Out-Null
 $package | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $outputFullPath -Encoding utf8
+if ((Get-Sha256 $exePath) -ne $exeHash -or (Get-Sha256 $pckPath) -ne $pckHash) {
+    throw 'The supplied final EXE/PCK changed while the qualification package was assembled.'
+}
 $validator = Join-Path $PSScriptRoot 'validate_external_qualification_package.ps1'
 if ($ReferenceOnly) {
     & $validator -PackagePath $outputFullPath

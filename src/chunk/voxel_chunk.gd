@@ -40,6 +40,10 @@ const CROP_NORMALS := [
 	Vector3(0.70710678,0.0,-0.70710678),
 	Vector3(0.70710678,0.0,0.70710678),
 ]
+# How often the incremental build loops re-check the frame deadline. Small
+# enough to keep per-frame streaming work inside the budget, large enough that
+# the clock reads stay negligible next to real per-cell work.
+const DEADLINE_CHECK_CELLS := 64
 
 static var _shared_voxel_material: StandardMaterial3D
 
@@ -54,7 +58,7 @@ var _build_cursor := 0
 var _visual_faces := 0
 var _collision_faces := 0
 var _visual_tool: SurfaceTool
-var _collision_tool: SurfaceTool
+var _collision_vertices := PackedVector3Array()
 var _pending_generation_overrides: Dictionary = {}
 
 
@@ -84,20 +88,28 @@ func begin_initialize(p_chunk_coord: Vector2i, p_world: Node) -> void:
 	_collision_shape.shape = null
 
 
-func build_step(cell_budget: int) -> bool:
+func build_step(cell_budget: int, deadline_usec: int = 0) -> bool:
+	# deadline_usec > 0 makes the step time-sliced: the cell loops return as soon
+	# as the frame deadline expires (checked every DEADLINE_CHECK_CELLS cells) so
+	# the streaming pump's budget is real instead of advisory. Callers that force
+	# synchronous loads pass the default 0 and run to completion unchanged.
 	var remaining := maxi(1,cell_budget)
 	while remaining > 0:
 		match _build_phase:
 			BuildPhase.GENERATING:
 				var generation_count := mini(remaining,TOTAL_CELLS-_build_cursor)
-				_generate_cells(generation_count)
-				remaining -= generation_count
+				var generated := _generate_cells(generation_count,deadline_usec)
+				remaining -= generated
+				if generated < generation_count:
+					return false
 				if _build_cursor >= TOTAL_CELLS:
 					_begin_mesh_build()
 			BuildPhase.MESHING:
 				var mesh_count := mini(remaining,TOTAL_CELLS-_build_cursor)
-				_mesh_cells(mesh_count)
-				remaining -= mesh_count
+				var meshed := _mesh_cells(mesh_count,deadline_usec)
+				remaining -= meshed
+				if meshed < mesh_count:
+					return false
 				if _build_cursor >= TOTAL_CELLS:
 					_commit_mesh_build()
 					return true
@@ -186,9 +198,17 @@ func get_block_count() -> int:
 	return count
 
 
-func _generate_cells(count: int) -> void:
+func _generate_cells(count: int, deadline_usec: int = 0) -> int:
 	var origin := Vector3i(chunk_coord.x*SIZE,0,chunk_coord.y*SIZE)
+	var processed := 0
 	for _offset in count:
+		if (
+			deadline_usec > 0
+			and processed > 0
+			and processed % DEADLINE_CHECK_CELLS == 0
+			and Time.get_ticks_usec() >= deadline_usec
+		):
+			return processed
 		var local_position := _position_from_index(_build_cursor)
 		var global_block := origin+local_position
 		var numeric_id := BlockRegistryScript.get_numeric_id(
@@ -199,22 +219,31 @@ func _generate_cells(count: int) -> void:
 			_pending_generation_overrides.erase(_build_cursor)
 		blocks[_build_cursor] = numeric_id
 		_build_cursor += 1
+		processed += 1
+	return processed
 
 
 func _begin_mesh_build() -> void:
 	_visual_tool = SurfaceTool.new()
-	_collision_tool = SurfaceTool.new()
+	_collision_vertices = PackedVector3Array()
 	_visual_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_collision_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	_visual_faces = 0
 	_collision_faces = 0
 	_build_cursor = 0
 	_build_phase = BuildPhase.MESHING
 
 
-func _mesh_cells(count: int) -> void:
+func _mesh_cells(count: int, deadline_usec: int = 0) -> int:
 	var origin := Vector3i(chunk_coord.x*SIZE,0,chunk_coord.y*SIZE)
+	var processed := 0
 	for _offset in count:
+		if (
+			deadline_usec > 0
+			and processed > 0
+			and processed % DEADLINE_CHECK_CELLS == 0
+			and Time.get_ticks_usec() >= deadline_usec
+		):
+			return processed
 		var local_position := _position_from_index(_build_cursor)
 		var block_id := BlockRegistryScript.get_block_id(blocks[_build_cursor])
 		if block_id != BlockRegistryScript.AIR:
@@ -245,7 +274,8 @@ func _mesh_cells(count: int) -> void:
 			else:
 				_append_full_cube(global_block,local_position,local_origin,block_id)
 		_build_cursor += 1
-
+		processed += 1
+	return processed
 
 func _append_full_cube(
 	global_block: Vector3i,
@@ -264,7 +294,7 @@ func _append_full_cube(
 		_append_cube_face(_visual_tool,local_origin,face_index,block_id,true)
 		_visual_faces += 1
 		if BlockRegistryScript.is_solid(block_id):
-			_append_cube_face(_collision_tool,local_origin,face_index,block_id,false)
+			_append_cube_face(null,local_origin,face_index,block_id,false)
 			_collision_faces += 1
 
 
@@ -317,7 +347,7 @@ func _append_partial_block(
 	if not BlockRegistryScript.is_solid(block_id):
 		return
 	if shape == "stairs":
-		_append_stair_ramp_collision(_collision_tool,local_origin,block_id)
+		_append_stair_ramp_collision(local_origin,block_id)
 		_collision_faces += 5
 	else:
 		for box_index in boxes.size():
@@ -344,7 +374,7 @@ func _append_partial_block(
 					):
 						continue
 				_append_box_face(
-					_collision_tool,
+					null,
 					local_origin,
 					box,
 					face_index,
@@ -363,15 +393,18 @@ func _commit_mesh_build() -> void:
 	else:
 		_mesh_instance.mesh = null
 	if _collision_faces > 0:
-		var collision_mesh := _collision_tool.commit()
-		var collision_shape := collision_mesh.create_trimesh_shape()
-		if collision_shape is ConcavePolygonShape3D:
-			collision_shape.backface_collision = true
+		# Collision vertices are already an exact triangle soup (FACE_VERTEX_ORDER
+		# emits two triangles per quad): hand them to the shape directly. This
+		# skips the SurfaceTool commit plus create_trimesh_shape round-trip that
+		# used to spike post-travel frames on dense chunks.
+		var collision_shape := ConcavePolygonShape3D.new()
+		collision_shape.backface_collision = true
+		collision_shape.set_faces(_collision_vertices)
 		_collision_shape.shape = collision_shape
 	else:
 		_collision_shape.shape = null
 	_visual_tool = null
-	_collision_tool = null
+	_collision_vertices = PackedVector3Array()
 	_build_cursor = TOTAL_CELLS
 	_build_phase = BuildPhase.READY
 
@@ -425,13 +458,18 @@ func _append_cube_face(
 ) -> void:
 	var direction := Vector3(FACE_DIRECTIONS[face_index])
 	var corners: Array = FULL_FACE_VERTICES[face_index]
+	if not with_visual_data:
+		# Collision-only face: collect the triangle soup verbatim; the commit
+		# hands it to ConcavePolygonShape3D.set_faces without a mesh round-trip.
+		for corner_index in FACE_VERTEX_ORDER:
+			_collision_vertices.append(local_origin+Vector3(corners[corner_index]))
+		return
 	var shade := _face_shade(direction)
 	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id,face_index)
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(direction)
-		if with_visual_data:
-			tool.set_color(shade)
-			tool.set_uv(uvs[corner_index])
+		tool.set_color(shade)
+		tool.set_uv(uvs[corner_index])
 		tool.add_vertex(local_origin+Vector3(corners[corner_index]))
 
 
@@ -445,13 +483,16 @@ func _append_box_face(
 ) -> void:
 	var direction := Vector3(FACE_DIRECTIONS[face_index])
 	var corners: Array[Vector3] = ShapeGeometryScript.face_vertices(box,face_index)
+	if not with_visual_data:
+		for corner_index in FACE_VERTEX_ORDER:
+			_collision_vertices.append(local_origin+corners[corner_index])
+		return
 	var shade := _face_shade(direction)
 	var uvs: Array[Vector2] = TextureAtlasScript.get_uvs(block_id,face_index)
 	for corner_index in FACE_VERTEX_ORDER:
 		tool.set_normal(direction)
-		if with_visual_data:
-			tool.set_color(shade)
-			tool.set_uv(uvs[corner_index])
+		tool.set_color(shade)
+		tool.set_uv(uvs[corner_index])
 		tool.add_vertex(local_origin+corners[corner_index])
 
 
@@ -464,39 +505,31 @@ func _face_shade(direction: Vector3) -> Color:
 
 
 func _append_stair_ramp_collision(
-	tool: SurfaceTool,
 	local_origin: Vector3,
 	block_id: String
 ) -> void:
 	for face: Dictionary in ShapeGeometryScript.get_stair_ramp_collision_faces(block_id):
 		var corners: Array = face.get("corners",[])
-		var normal: Vector3 = face.get("normal",Vector3.UP)
 		if corners.size() == 4:
-			_append_collision_quad(tool,local_origin,corners,normal)
+			_append_collision_quad(local_origin,corners)
 		elif corners.size() == 3:
-			_append_collision_triangle(tool,local_origin,corners,normal)
+			_append_collision_triangle(local_origin,corners)
 
 
 func _append_collision_quad(
-	tool: SurfaceTool,
 	local_origin: Vector3,
-	corners: Array,
-	normal: Vector3
+	corners: Array
 ) -> void:
 	for corner_index in FACE_VERTEX_ORDER:
-		tool.set_normal(normal)
-		tool.add_vertex(local_origin+Vector3(corners[corner_index]))
+		_collision_vertices.append(local_origin+Vector3(corners[corner_index]))
 
 
 func _append_collision_triangle(
-	tool: SurfaceTool,
 	local_origin: Vector3,
-	corners: Array,
-	normal: Vector3
+	corners: Array
 ) -> void:
 	for corner: Variant in corners:
-		tool.set_normal(normal)
-		tool.add_vertex(local_origin+Vector3(corner))
+		_collision_vertices.append(local_origin+Vector3(corner))
 
 
 func _append_crop(tool: SurfaceTool, local_origin: Vector3, block_id: String) -> void:

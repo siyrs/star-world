@@ -28,7 +28,14 @@ const BASE_ATTACK_DAMAGE := 1.0
 const FOCUS_POLL_INTERVAL := 0.1
 const VOXEL_GROUND_CLEARANCE := 0.02
 const VOXEL_GROUND_TOLERANCE_ABOVE := 0.18
+# Upward recovery only corrects shallow penetrations (landing after knockback,
+# chunk rebuilds). Shaped-surface climbs must NOT go through this snap: a 0.5
+# recovery yanks the body up instantly when the centre passively drifts across
+# a stair's half-height boundary, so _apply_voxel_step_up owns every +0.5 lift.
 const VOXEL_GROUND_RECOVERY_DEPTH := 0.4
+const VOXEL_GROUND_FOOTPRINT_RADIUS := 0.3
+const VOXEL_STEP_UP_MAX_HEIGHT := 0.55
+const VOXEL_STEP_UP_PROBE_DISTANCE := 0.45
 # Lava is a hazard, not a swimmable fluid: periodic contact damage on a short
 # cooldown so brief contact burns but does not instantly kill (BUG-LAVA-001).
 const LAVA_CONTACT_DAMAGE := 4.0
@@ -182,9 +189,58 @@ func _physics_process(delta: float) -> void:
 		_report_player_action(&"jump")
 	elif not in_fluid:
 		_apply_voxel_ground_recovery()
+	_apply_voxel_step_up(movement_vector, voxel_grounded, in_fluid, movement_result)
 	if global_position.y < -12.0:
 		respawn()
 	_apply_lava_contact_damage(delta)
+
+
+# Stair/slab shaped surfaces sit half a block above the floor, so their front
+# face stops the capsule before its centre enters the column and the ground
+# snap alone can never engage. When horizontal motion is blocked, probe the
+# ground one capsule-radius ahead and lift the body onto a single shaped step.
+# Full one-block ledges exceed the step height and still require a jump;
+# resolve_ground_position only returns surfaces with two air blocks above, so
+# the lift can never wedge the body under a shaped ceiling.
+func _apply_voxel_step_up(
+	movement_vector: Vector2,
+	voxel_grounded: bool,
+	in_fluid: bool,
+	movement_result: Dictionary
+) -> void:
+	if in_fluid or movement_vector.length_squared() <= 0.04:
+		return
+	if not voxel_grounded and not is_on_floor():
+		return
+	if bool(movement_result.get("on_ladder", false)):
+		return
+	if not is_on_wall():
+		return
+	var world_direction := (
+		global_transform.basis * Vector3(movement_vector.x, 0.0, movement_vector.y)
+	)
+	world_direction.y = 0.0
+	if world_direction.length_squared() < 0.0001:
+		return
+	world_direction = world_direction.normalized()
+	if world == null:
+		return
+	var probe_position := global_position + world_direction * VOXEL_STEP_UP_PROBE_DISTANCE
+	# The probe must find a real shaped surface: the spawn-height fallback in
+	# resolve_ground_position would invent a step over empty columns.
+	var resolved: Variant = null
+	if world.has_method("try_resolve_ground_position"):
+		resolved = world.call("try_resolve_ground_position", probe_position)
+	elif world.has_method("resolve_ground_position"):
+		resolved = world.call("resolve_ground_position", probe_position)
+	if resolved is not Vector3:
+		return
+	var target_y: float = (resolved as Vector3).y + VOXEL_GROUND_CLEARANCE
+	var step_height := target_y - global_position.y
+	if step_height <= 0.05 or step_height > VOXEL_STEP_UP_MAX_HEIGHT:
+		return
+	global_position.y = target_y
+	velocity.y = 0.0
 
 
 # Lava is distinct from water: it burns on contact rather than acting as a
@@ -213,8 +269,42 @@ func _is_in_lava() -> bool:
 
 
 func _get_nearby_voxel_ground() -> Variant:
-	if world == null or not world.has_method("resolve_ground_position"):
+	if world == null:
 		return null
+	if world.has_method("try_resolve_ground_position"):
+		# The body is 0.68m wide, so sample the centre plus the four horizontal
+		# footprint extremes and keep the highest real surface inside the snap
+		# tolerances. Centre-only sampling drops the body the instant its centre
+		# crosses a block edge even while most of the capsule still stands on
+		# solid ground, and the legacy resolve fallback (spawn height over empty
+		# columns) must never count as ground here or the body levitates over
+		# void columns instead of falling.
+		var best: Variant = null
+		for offset: Vector2 in [
+			Vector2.ZERO,
+			Vector2(VOXEL_GROUND_FOOTPRINT_RADIUS, 0.0),
+			Vector2(-VOXEL_GROUND_FOOTPRINT_RADIUS, 0.0),
+			Vector2(0.0, VOXEL_GROUND_FOOTPRINT_RADIUS),
+			Vector2(0.0, -VOXEL_GROUND_FOOTPRINT_RADIUS),
+		]:
+			var resolved: Variant = world.call(
+				"try_resolve_ground_position",
+				global_position + Vector3(offset.x, 0.0, offset.y)
+			)
+			if resolved is not Vector3:
+				continue
+			var vertical_delta := global_position.y - (resolved as Vector3).y
+			if (
+				vertical_delta < -VOXEL_GROUND_RECOVERY_DEPTH
+				or vertical_delta > VOXEL_GROUND_TOLERANCE_ABOVE
+			):
+				continue
+			if best == null or (resolved as Vector3).y > (best as Vector3).y:
+				best = resolved
+		return best
+	if not world.has_method("resolve_ground_position"):
+		return null
+	# Legacy path for test doubles that only implement resolve_ground_position.
 	var resolved: Variant = world.call("resolve_ground_position", global_position)
 	if resolved is not Vector3:
 		return null
@@ -226,6 +316,14 @@ func _get_nearby_voxel_ground() -> Variant:
 	):
 		return null
 	return ground
+
+
+# Public grounded contract for gameplay systems and QA: the player rests on
+# ground when the engine body reports floor contact or the voxel ground model
+# holds them (the voxel model snaps position without producing engine contact,
+# so is_on_floor() alone is never authoritative for this controller).
+func is_grounded() -> bool:
+	return is_on_floor() or _get_nearby_voxel_ground() is Vector3
 
 
 func _apply_voxel_ground_recovery() -> void:

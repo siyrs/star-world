@@ -1,0 +1,88 @@
+version: 2
+
+project:
+  name: star-world
+  type: custom
+  modules:
+    - name: game
+      path: .
+
+git:
+  default_branch: master
+  remote: origin
+  sync_mode: current-branch
+  integration: rebase
+  create_pr: false
+
+testing:
+  authoring:
+    default_depth: strict
+  tiers:
+    t1:
+      commands:
+        - id: deterministic-regression
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/run_all.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe"]
+          timeout_seconds: 3600
+          network: deny
+      baseline: last-t1-or-t3
+    t2:
+      selector_id: commercial-smoke-v1
+      commands:
+        - id: five-profile-main-path
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/qa/run_all_desktop_acceptance.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe", "-OutputDirectory", "build/siyrs/t2/five-profile-main-path", "-ScriptPaths", "res://tests/qa/profile_release_journey_regression.gd"]
+          timeout_seconds: 2400
+          network: deny
+        - id: save-recovery-boundary
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/qa/run_all_desktop_acceptance.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe", "-OutputDirectory", "build/siyrs/t2/save-recovery-boundary", "-ScriptPaths", "res://tests/qa/save_recovery_desktop_acceptance.gd"]
+          timeout_seconds: 2400
+          network: deny
+      required_per_module:
+        main_path: 1
+        boundary: 1
+    t3:
+      commands:
+        - id: deterministic-regression
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/run_all.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe"]
+          timeout_seconds: 3600
+          network: deny
+        - id: desktop-acceptance
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/qa/run_all_desktop_acceptance.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe", "-OutputDirectory", "build/siyrs/t3/desktop-acceptance"]
+          timeout_seconds: 21600
+          network: deny
+        - id: performance-scenarios
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/ci/run_performance_capture.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe", "-ProjectRoot", ".", "-OutputDirectory", "build/siyrs/t3/performance-scenarios"]
+          timeout_seconds: 7200
+          network: deny
+        - id: exported-five-profile-matrix
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/release/run_windows_export_journey_matrix.ps1", "-Godot", "build/tools/godot/Godot_v4.7-stable_win64_console.exe", "-OutputDirectory", "build/siyrs/t3/release-journey-matrix", "-QualificationTier", "hosted-ci-reference", "-RunnerTimeoutMilliseconds", "1200000"]
+          timeout_seconds: 10800
+          network: deny
+        - id: strict-reference-soak-120m
+          argv: ["pwsh", "-NoProfile", "-NonInteractive", "-File", "tests/ci/run_strict_target_hardware_soak.ps1", "-ProjectRoot", ".", "-ReleaseExecutable", "build/siyrs/t3/release-journey-matrix/binary/StarWorld.exe", "-ReleasePck", "build/siyrs/t3/release-journey-matrix/binary/StarWorld.pck", "-LifecycleReportPath", "build/siyrs/t3/release-journey-matrix/binary/release-lifecycle-report.json", "-OperatorId", "siyrs-reference-automation", "-OutputDirectory", "build/siyrs/t3/strict-reference-soak", "-ReferenceOnly", "-SoakSeconds", "7200"]
+          timeout_seconds: 10800
+          network: deny
+      require_real_uat: true
+      release_gate: true
+  preflight:
+    commit: "none"
+    sync_after_integration: "none"
+    pr: "none"
+  coverage:
+    enabled: false
+    minimum: 80
+  documentation:
+    root: docs/testing
+    index: README.md
+    evidence_root: evidence
+    agent_discovery: true
+
+paths:
+  docs: docs
+  reports: build/siyrs
+
+exclude:
+  - .git
+  - .godot
+  - build
+  - dist
+

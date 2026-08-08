@@ -316,6 +316,26 @@ func _defeat_members_with_pistol(
 			ACTION_TIMEOUT_MS
 		)
 		_check(defeated, "real mouse firearm defeats one reward encounter member")
+		if not defeated:
+			# The overlay last_result is a shared transient (shots, rejections and
+			# incoming attacks all overwrite it), so a timed-out kill needs the
+			# authoritative snapshots dumped to tell "shot never fired", "shot
+			# missed" and "result overwritten" apart on the next failure.
+			var feedback_node: Node = hub.game_ui.call("get_combat_feedback_overlay")
+			var overlay_result: Dictionary = feedback_node.call("get_snapshot").get("last_result", {})
+			var ranged_snapshot: Dictionary = hub.ranged_combat_service.call("get_snapshot")
+			print("QA ENCOUNTER REWARD KILL-TIMEOUT | target=%d member_valid=%s member_pos=%s member_health=%s player_pos=%s overlay_status=%s overlay_keys=%s ranged_last=%s cooldown_ready=%s magazine=%s" % [
+				target_id,
+				target_ref.get_ref() != null,
+				(member as Node3D).global_position if is_instance_valid(member) else Vector3.ZERO,
+				member.get("health") if is_instance_valid(member) else -1.0,
+				player.global_position,
+				str(overlay_result.get("status", "")),
+				overlay_result.keys(),
+				ranged_snapshot.get("last_result", {}),
+				bool(ranged_snapshot.get("cooldown_ready", false)),
+				int(ranged_snapshot.get("magazine_rounds", -1)),
+			])
 		if defeated:
 			defeated_count += 1
 		var cooled := await _wait_until(

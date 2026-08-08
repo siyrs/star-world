@@ -21,6 +21,13 @@ if (-not $ReferenceOnly -and $env:GITHUB_ACTIONS -eq 'true') {
 }
 
 $projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
+$policyHelpers = Join-Path $PSScriptRoot 'qualification_policy_helpers.ps1'
+if (-not (Test-Path -LiteralPath $policyHelpers -PathType Leaf)) {
+    throw "Qualification policy helpers not found: $policyHelpers"
+}
+. $policyHelpers
+$policyContext = Get-ReleaseQualificationPolicyContext -ProjectRoot $projectFullPath
+$policySnapshot = New-HardwareQualificationPolicySnapshot -PolicyContext $policyContext -Tier $Tier
 $exeFullPath = [System.IO.Path]::GetFullPath($ReleaseExecutable)
 $pckFullPath = [System.IO.Path]::GetFullPath($ReleasePck)
 $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputDirectory))
@@ -43,6 +50,8 @@ function Get-StringSha256 {
     return [Convert]::ToHexString($hash).ToLowerInvariant()
 }
 
+$exeHashBefore = Get-Sha256 $exeFullPath
+$pckHashBefore = Get-Sha256 $pckFullPath
 $startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $matrixRoot = Join-Path $outputFullPath 'release-journey-matrix'
 $matrixRelative = [System.IO.Path]::GetRelativePath($projectFullPath, $matrixRoot)
@@ -69,11 +78,21 @@ if (-not [bool]$matrix.exact_existing_package_reused) {
 }
 $exeHash = Get-Sha256 $exeFullPath
 $pckHash = Get-Sha256 $pckFullPath
+if ($exeHash -ne $exeHashBefore -or $pckHash -ne $pckHashBefore) {
+    throw 'The supplied final EXE/PCK changed while the fixed-package matrix was running.'
+}
 if ([string]$matrix.final_executable_sha256 -ne $exeHash -or [string]$matrix.final_pck_sha256 -ne $pckHash) {
     throw 'Release journey matrix hashes do not match the supplied final package.'
 }
 if ([int]$matrix.assertions.post_spawn_transport_count -ne 0) {
     throw 'Release journey matrix contains forbidden post-spawn transport.'
+}
+$metricEvaluation = Get-HardwareMetricEvaluation `
+    -ProfileRecords @($matrix.profiles) `
+    -MetricPolicy $policySnapshot.metrics `
+    -RequiredProfiles $requiredProfiles
+if (-not [bool]$metricEvaluation.passed) {
+    throw "Hardware qualification metric policy failed for $Tier`: $($metricEvaluation.violations -join ' | ')"
 }
 
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
@@ -103,7 +122,7 @@ $hardwareIdentity = [ordered]@{
 $machineFingerprint = Get-StringSha256 ($hardwareIdentity | ConvertTo-Json -Depth 5 -Compress)
 $completedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $evidence = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     tier = $Tier
     evidence_source = if ($ReferenceOnly) { 'hosted_reference' } else { 'target_hardware' }
     reference_only = [bool]$ReferenceOnly
@@ -118,6 +137,9 @@ $evidence = [ordered]@{
     profiles = @($requiredProfiles)
     started_at_unix = $startedAt
     completed_at_unix = $completedAt
+    exact_final_package_reused = $true
+    qualification_policy = $policySnapshot
+    metric_evaluation = $metricEvaluation
     result = 'pass'
     build = [ordered]@{
         executable_path = $exeFullPath

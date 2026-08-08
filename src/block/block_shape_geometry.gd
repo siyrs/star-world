@@ -196,6 +196,34 @@ static func get_stair_ramp_collision_faces(block_id: String) -> Array[Dictionary
 	return result
 
 
+# Ground queries (ground snap, step-up probe, spawn/creature placement) must
+# resolve the same surface the physics body collides with. For stairs that is
+# the analytic collision ramp — half height at the front edge rising linearly
+# to full height at the back edge — NOT the two flattened box tops from
+# get_local_boxes. Snapping to the box top pinned bodies half a step INTO the
+# rising ramp, so forward progress depended on penetration-recovery creep and
+# wedged deterministically once frame pacing became smooth. The ramp is
+# x-invariant, so the inverse-rotated canonical z gives the exact height.
+static func get_local_surface_height(block_id: String, local_point: Vector3) -> float:
+	var shape := str(BlockRegistryScript.get_definition(block_id).get("shape", ""))
+	if shape == "stairs":
+		var quarters := OrientationPolicyScript.rotation_quarters(block_id)
+		var canonical := rotate_local_point(
+			Vector3(local_point.x, 0.0, local_point.z), posmod(4 - quarters, 4)
+		)
+		return 0.5 + 0.5 * clampf(canonical.z, 0.0, 1.0)
+	var top := 0.0
+	for box: AABB in get_local_boxes(block_id):
+		if (
+			local_point.x >= box.position.x
+			and local_point.x < box.end.x
+			and local_point.z >= box.position.z
+			and local_point.z < box.end.z
+		):
+			top = maxf(top, box.end.y)
+	return top if top > 0.0 else 1.0
+
+
 static func rotate_local_point(point: Vector3, quarters: int) -> Vector3:
 	match posmod(quarters, 4):
 		1:

@@ -39,6 +39,8 @@ Schema v2 enforces this twice:
 
 The E4-H review, both hardware tiers, strict soak and all three fault records must reference the same build. Child `evidence_source`, `reference_only` and fault-operator identity must also match the package. Editing an assembled JSON file to mix evidence from another commit, EXE, PCK, hosted run or operator is rejected.
 
+Hardware and soak child records use qualification schema 2 and bind the exact SHA-256 plus schema from `data/release_qualification.json`. The validators do not trust a recorded `result=pass`: PowerShell and GDScript independently recompute every performance assertion, soak aggregate and lifecycle semantic from the packaged fields. A loosened threshold, stale policy hash, forged PASS flag, or `scene_exit_without_prepared_quit` is invalid.
+
 ## 1. Independent E4-H review
 
 Run on the final candidate after the independent reviewer completes every checklist item:
@@ -82,27 +84,45 @@ The collector:
 - runs the existing final-package five-profile route matrix;
 - reuses the supplied exact EXE/PCK for all five profiles;
 - requires real movement, at least two Chunks, visual acceptance and zero post-spawn transport;
+- evaluates average FPS, 1% low FPS, frame-time p95 and p99, 30 FPS budget-miss percentage, profile load time and Working Set p95 for each profile (35 assertions per tier);
+- records the repository policy schema/hash and rejects threshold drift;
 - records the final package hashes in each tier result.
 
 `-ReferenceOnly` is available for mechanism testing, but that result can never close the release gate.
 
+The minimum and recommended records must come from machines that actually represent those physical tiers. One overpowered machine cannot be relabeled as the minimum tier merely because it exceeds the minimum performance floor.
+
 ## 3. Strict final-package soak
 
-Run the exact final package on target hardware:
+First, run one normal-exit preflight against the same already-exported package. `-SkipExport` is mandatory for qualification reuse; this step must not create a new EXE/PCK:
+
+```powershell
+pwsh -NoProfile -File tests/release/run_windows_export_smoke.ps1 `
+  -SkipExport `
+  -ExecutablePath C:\candidate\StarWorld.exe `
+  -ProfileId star_continent `
+  -RouteProbe `
+  -RunnerTimeoutMilliseconds 1200000 `
+  -OutputDirectory build/external-qualification/lifecycle-preflight
+```
+
+The preflight writes `release-lifecycle-report.json` after the release-smoke runner calls the production `request_application_quit("release_smoke")` coordinator. The driver parses the report and requires a successful save, matching world identity, monotonic timings, `prepared=true`, `termination_reason=prepared_quit`, and zero service/game quit failures.
+
+Then run the exact same final package on target hardware:
 
 ```powershell
 pwsh -NoProfile -File tests/ci/run_strict_target_hardware_soak.ps1 `
   -ProjectRoot . `
   -ReleaseExecutable C:\candidate\StarWorld.exe `
   -ReleasePck C:\candidate\StarWorld.pck `
-  -LifecycleReportPath C:\candidate-evidence\release-lifecycle-report.json `
+  -LifecycleReportPath build\external-qualification\lifecycle-preflight\release-lifecycle-report.json `
   -OperatorId soak-operator `
   -OperatorAttested `
   -SoakSeconds 7200 `
   -OutputDirectory build/external-qualification/strict-soak
 ```
 
-The harness repeatedly starts the same final package through the production release-smoke route, rotates across all five formal profiles and accumulates real wall-clock time with `Stopwatch`. Each cycle must exit cleanly, retain real player traversal and avoid direct transform writes. A progress journal, per-cycle reports and SHA-256 manifest are retained.
+The harness repeatedly starts the same final package through the production release-smoke route, rotates across all five formal profiles and accumulates real wall-clock time with `Stopwatch`. Policy currently requires at least 7,200 seconds and 10 completed routes. Every cycle must produce its own parsed authoritative lifecycle report, exit cleanly, retain real player traversal and avoid direct transform writes or post-spawn transport. Aggregate fatal diagnostics must be zero and first-to-last Working Set p95 growth must remain at or below the policy limit (currently 25%). A progress journal, per-cycle reports and SHA-256 manifest are retained.
 
 The script refuses a real run shorter than 7,200 seconds and refuses real mode on hosted GitHub runners. A short `-ReferenceOnly` run is suitable only for validating the harness.
 
@@ -160,7 +180,7 @@ pwsh -NoProfile -File tests/ci/new_external_qualification_package.ps1 `
   -OutputPath evidence/external-qualification-package.json
 ```
 
-The assembler verifies all build/source/reference/operator bindings before writing schema v2 and invokes:
+The assembler verifies all build/source/reference/operator bindings, qualification child schema 2 and `exact_final_package_reused=true` before writing schema v2. It hashes the supplied EXE/PCK again after assembly and invokes:
 
 ```powershell
 pwsh -NoProfile -File tests/ci/validate_external_qualification_package.ps1 `
@@ -168,7 +188,7 @@ pwsh -NoProfile -File tests/ci/validate_external_qualification_package.ps1 `
   -RequireReleaseGate
 ```
 
-The standalone validator re-checks the complete package; successful assembly alone is not treated as proof.
+The standalone validator re-checks the complete package, including policy hash/schema, all 35 metrics per tier, duration, route count, five-profile coverage, fatal/transport/write counts, Working Set growth and authoritative lifecycle semantics. Successful assembly alone is not treated as proof.
 
 ## Permanent repository evidence
 
@@ -178,6 +198,7 @@ The workflow `.github/workflows/external-qualification-iteration-60-tests.yml` v
 - fixture and hosted-reference non-qualification;
 - self-review, hosted-target and short-soak rejection;
 - commit/EXE/PCK rebinding rejection after package assembly;
+- policy loosening, performance PASS forgery, short route count, fatal diagnostic, excessive memory growth and dirty lifecycle rejection;
 - child source/reference and fault-operator mismatch rejection;
 - PowerShell parser correctness for all collectors;
 - an end-to-end reference package assembly and deliberate tampering attempt;

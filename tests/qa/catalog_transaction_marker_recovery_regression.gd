@@ -97,7 +97,8 @@ func _run() -> void:
 		int(steady_diagnostics.get("last_hit_count", 0)) == 1
 		and int(steady_diagnostics.get("last_fallback_count", -1)) == 0
 		and int(steady_diagnostics.get("last_authoritative_read_budget_used", -1)) == 0,
-		"second listing is a pure sidecar hit with zero authoritative reads"
+		"second listing is a pure sidecar hit with zero authoritative reads; diagnostics=%s"
+		% JSON.stringify(steady_diagnostics)
 	)
 	var loaded: Dictionary = restarted.load_world(_world_id)
 	_check(

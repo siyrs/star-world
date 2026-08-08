@@ -106,7 +106,6 @@ foreach ($needle in @(
   'const MAX_SINGLE_FLUSH_CHUNKS := 32',
   'const MAX_RULE_CLEANUP_MILLISECONDS := 1000.0',
   'failures.erase(LEGACY_TIME_FAILURE)',
-  'failures.erase(LEGACY_FLUSH_FAILURE)',
   'await super._finish(game, hub)'
 )) {
   Assert-Contains $desktop $needle 'Single-flush desktop entry point is incomplete.'

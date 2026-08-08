@@ -5,6 +5,7 @@ param(
     [string]$ProfileId = 'star_continent',
     [int]$Seed = 24681357,
     [switch]$RouteProbe,
+    [switch]$FrameLog,
     [switch]$SkipExport,
     [string]$ExecutablePath = ''
 )
@@ -24,6 +25,11 @@ Install pwsh from https://github.com/PowerShell/PowerShell and run:
 '@
 }
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$qualificationPolicyHelpers = Join-Path $ProjectRoot 'tests\ci\qualification_policy_helpers.ps1'
+if (-not (Test-Path -LiteralPath $qualificationPolicyHelpers -PathType Leaf)) {
+    throw "Qualification policy helpers not found: $qualificationPolicyHelpers"
+}
+. $qualificationPolicyHelpers
 
 if (-not $SkipExport) {
     if ([string]::IsNullOrWhiteSpace($Godot)) {
@@ -44,6 +50,18 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+$releaseSmokeUserDataRoot = Join-Path $OutputDirectory 'isolated-userdata'
+$releaseSmokeRoamingPath = Join-Path $releaseSmokeUserDataRoot 'Roaming'
+$releaseSmokeLocalPath = Join-Path $releaseSmokeUserDataRoot 'Local'
+$hostAppDataPath = $env:APPDATA
+$allowedUserDataPrefix = $OutputDirectory.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+if (-not $releaseSmokeUserDataRoot.StartsWith($allowedUserDataPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Release smoke user-data directory escaped its output directory: $releaseSmokeUserDataRoot"
+}
+if (Test-Path -LiteralPath $releaseSmokeUserDataRoot) {
+    Remove-Item -LiteralPath $releaseSmokeUserDataRoot -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $releaseSmokeRoamingPath, $releaseSmokeLocalPath | Out-Null
 $validProfiles = @('star_continent', 'desert_ruins', 'frozen_wastes', 'sky_islands', 'abyss_world')
 if ($ProfileId -notin $validProfiles) {
     throw "Unknown release-smoke profile: $ProfileId"
@@ -74,10 +92,11 @@ $stdoutPath = Join-Path $OutputDirectory 'release-smoke.stdout.log'
 $stderrPath = Join-Path $OutputDirectory 'release-smoke.stderr.log'
 $driverLogPath = Join-Path $OutputDirectory 'release-smoke.driver.log'
 $memoryEvidencePath = Join-Path $OutputDirectory 'release-smoke.memory.json'
+$lifecycleReportPath = Join-Path $OutputDirectory 'release-lifecycle-report.json'
 
 $evidenceFiles = @(
     $reportPath, $screenshotPath, $exportStdoutPath, $exportStderrPath,
-    $stdoutPath, $stderrPath, $driverLogPath, $memoryEvidencePath
+    $stdoutPath, $stderrPath, $driverLogPath, $memoryEvidencePath, $lifecycleReportPath
 )
 if (-not $SkipExport) {
     $evidenceFiles += @($exePath, $consolePath, $pckPath)
@@ -99,6 +118,44 @@ function Show-LogFile {
     }
 }
 
+function Initialize-IsolatedExportTemplates {
+    if ($SkipExport) { return '' }
+    $versionText = (& $Godot --version).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($versionText)) {
+        throw 'Unable to resolve the Godot version for isolated export templates.'
+    }
+    $versionParts = @($versionText -split '\.')
+    if ($versionParts.Count -lt 3) {
+        throw "Unexpected Godot version string: $versionText"
+    }
+    $templateVersion = "$($versionParts[0]).$($versionParts[1]).$($versionParts[2])"
+    $sourceDirectory = Join-Path $hostAppDataPath "Godot\export_templates\$templateVersion"
+    if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
+        throw "Godot export templates are unavailable for $templateVersion`: $sourceDirectory"
+    }
+    $targetDirectory = Join-Path $releaseSmokeRoamingPath "Godot\export_templates\$templateVersion"
+    New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
+    foreach ($name in @(
+        'windows_debug_x86_64.exe',
+        'windows_debug_x86_64_console.exe',
+        'windows_release_x86_64.exe',
+        'windows_release_x86_64_console.exe',
+        'version.txt'
+    )) {
+        $source = Join-Path $sourceDirectory $name
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "Required Godot export template is missing: $source"
+        }
+        $target = Join-Path $targetDirectory $name
+        try {
+            New-Item -ItemType HardLink -Path $target -Target $source -ErrorAction Stop | Out-Null
+        } catch {
+            Copy-Item -LiteralPath $source -Destination $target -Force
+        }
+    }
+    return $targetDirectory
+}
+
 function Invoke-WaitedProcess {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -116,6 +173,8 @@ function Invoke-WaitedProcess {
     $startInfo.CreateNoWindow = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    $startInfo.Environment['APPDATA'] = $releaseSmokeRoamingPath
+    $startInfo.Environment['LOCALAPPDATA'] = $releaseSmokeLocalPath
     foreach ($argument in $Arguments) {
         [void]$startInfo.ArgumentList.Add($argument)
     }
@@ -200,6 +259,8 @@ function Invoke-SampledProcess {
     $startInfo.CreateNoWindow = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    $startInfo.Environment['APPDATA'] = $releaseSmokeRoamingPath
+    $startInfo.Environment['LOCALAPPDATA'] = $releaseSmokeLocalPath
     foreach ($argument in $Arguments) {
         [void]$startInfo.ArgumentList.Add($argument)
     }
@@ -266,7 +327,10 @@ function Assert-NoFatalGodotLog {
         'Parse Error',
         'ObjectDB instances were leaked',
         'Leaked instance:',
-        'Resources still in use at exit'
+        'Resources still in use at exit',
+        'Unhandled exception',
+        'FATAL:',
+        'Condition "!is_inside_tree()" is true'
     )
     foreach ($path in $Paths) {
         if (-not (Test-Path -LiteralPath $path)) {
@@ -284,6 +348,11 @@ function Assert-NoFatalGodotLog {
 Write-DriverLog "project_root=$ProjectRoot"
 Write-DriverLog "godot=$Godot"
 Write-DriverLog "output_directory=$OutputDirectory"
+Write-DriverLog "isolated_user_data=$releaseSmokeUserDataRoot"
+$isolatedTemplateDirectory = Initialize-IsolatedExportTemplates
+if (-not [string]::IsNullOrWhiteSpace($isolatedTemplateDirectory)) {
+    Write-DriverLog "isolated_export_templates=$isolatedTemplateDirectory"
+}
 
 try {
     if (-not $SkipExport) {
@@ -315,6 +384,7 @@ try {
 
     $runnerPath = if (Test-Path -LiteralPath $consolePath) { $consolePath } else { $exePath }
     $reportArgumentPath = ([System.IO.Path]::GetFullPath($reportPath)).Replace('\', '/')
+    $lifecycleArgumentPath = ([System.IO.Path]::GetFullPath($lifecycleReportPath)).Replace('\', '/')
     Write-DriverLog "runner=$runnerPath"
     Write-DriverLog "report_argument=$reportArgumentPath"
     Write-DriverLog "profile_id=$ProfileId seed=$Seed route_probe=$([bool]$RouteProbe)"
@@ -323,9 +393,11 @@ try {
     # release review can distinguish a real percentile from a summary bug.
     $memArgs = @(
         '--verbose', '--', '--release-smoke', '--smoke-soak-frames=180',
-        "--smoke-output=$reportArgumentPath", "--smoke-profile=$ProfileId", "--smoke-seed=$Seed"
+        "--smoke-output=$reportArgumentPath", "--smoke-lifecycle-output=$lifecycleArgumentPath",
+        "--smoke-profile=$ProfileId", "--smoke-seed=$Seed"
     )
     if ($RouteProbe) { $memArgs += '--smoke-route-probe' }
+    if ($FrameLog) { $memArgs += '--smoke-frame-log' }
     $runnerResult = Invoke-SampledProcess `
         -FilePath $runnerPath `
         -Arguments $memArgs `
@@ -373,6 +445,14 @@ try {
     if (-not (Test-Path -LiteralPath $screenshotPath)) {
         throw "Release smoke screenshot missing: $screenshotPath"
     }
+    if (-not (Test-Path -LiteralPath $lifecycleReportPath)) {
+        throw "Authoritative release lifecycle report missing: $lifecycleReportPath"
+    }
+
+    $lifecycleEvidence = Get-AuthoritativeLifecycleEvidence -Path $lifecycleReportPath
+    if (-not [bool]$lifecycleEvidence.Valid) {
+        throw "Release smoke did not complete a clean authoritative quit: $($lifecycleEvidence.Errors -join ' | ')"
+    }
 
     $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
     if (-not [bool]$report.ok) {
@@ -406,7 +486,8 @@ try {
         throw 'Release smoke screenshot is empty.'
     }
 
-    Write-DriverLog "release_smoke_pass=profile:$ProfileId,checks:$($report.checks),soak_frames:$($report.soak.frames),route:$([bool]$RouteProbe)"
+    Write-DriverLog "release_lifecycle_sha256=$($lifecycleEvidence.Sha256)"
+    Write-DriverLog "release_smoke_pass=profile:$ProfileId,checks:$($report.checks),soak_frames:$($report.soak.frames),route:$([bool]$RouteProbe),authoritative_quit:true"
     Write-Host "PASS: exported Windows release smoke | profile=$ProfileId | checks=$($report.checks) | output=$OutputDirectory"
 }
 catch {

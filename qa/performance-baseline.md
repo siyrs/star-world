@@ -163,3 +163,28 @@ PR #101 新增 `data/release_qualification.json`，首次把最低/推荐硬件�
 - `run_target_hardware_qualification.ps1` 在真实机器上强制 7,200 秒、五图循环、操作人和硬件身份。
 
 GitHub 托管 Runner 的输出固定标记为 `hosted_ci_reference`。只有真实最低/推荐机器运行得到的 `target_hardware_candidate`，并经发布负责人核对硬件身份后，才可用于关闭 `BUG-PERF-002` 和 `BUG-SOAK-120-001`。
+
+## 5. 2026-08-08 商业验收重跑 · 流式构建时间片化（BUG-PERF-CHUNK-STEP-001）
+
+测量对象：发布包 `StarWorld.exe`（导出冒烟 + 生产路线探针 + 180 帧 soak，`frame-time-tail-v2` 指标）；机器：RTX 3090 桌面（推荐档以上硬件）。
+
+### 优化前后对比（star_continent 资格种子 112358，同机同流程精确复测）
+
+| 指标 | 优化前 | 优化后 | 推荐档阈值 | 判定 |
+|---|---:|---:|---:|---|
+| 平均 FPS | 102.7 | 143.8 | ≥60 | ✅ |
+| 1% Low FPS | 28.1 | 84.8 | ≥45 | ✅ |
+| 帧时 p95 | 32.63ms | 9.09ms | ≤22.22ms | ✅ |
+| 帧时 p99 | 34.60ms | 11.23ms | ≤33.33ms | ✅ |
+| 30fps 预算缺失率 | 2.78% | 0.00% | ≤1% | ✅ |
+| ≥16ms 慢帧数（180 帧） | 22 | 0 | — | ✅ |
+
+根因与修复：4ms 流式预算只在原子 2048 格 build_step 之间检查（单步实测 18–31ms），时间片化后期限每 64 格生效；附带碰撞形状直连（set_faces 免网格往返）。取证：`export-perf-fix/` 帧日志（22 个慢帧全部 building=1）。提交 `2429978`、`8a3c797`。
+
+### 编辑器场景基线（perf-capture-final，编辑器进程，仅作参考）
+
+主菜单 avg 164.8 / 1% low 153.0；五图 spawn p95 41–43ms（含 Chunk 初建）；移动压力 p95 31–35ms；工作集 p95 404.7 MiB。编辑器开销使绝对值系统性高于发布包（发布包同场景稳态 p95 ≈7–9ms）。
+
+### T3 地面扫描优化（BUG-PERF-GROUND-SCAN-001，本轮回程）
+
+`runtime_soak_regression` cycle 3 终末采样窗：avg 29–36ms → 22.7–24.2ms、peak 98–609ms → ≤47ms（地面保持扫描 O(WORLD_HEIGHT)→O(站立高度)）。

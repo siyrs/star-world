@@ -462,8 +462,12 @@ func _walk_step(
 		if (
 			target.y > previous.y
 			and jump_attempts == 0
-			and player.is_on_floor()
 		):
+			# The voxel ground model holds the player without producing engine
+			# floor contact, so gating the ascent jump on is_on_floor() suppresses
+			# it forever. Buffer the press before the physics frame and let the
+			# production controller consume the edge on a grounded tick, the same
+			# contract the buffered-jump executor documents.
 			Input.action_press(Actions.JUMP)
 			jump_hold_remaining = JUMP_HOLD_FRAMES
 			jump_attempts += 1
@@ -504,8 +508,9 @@ func _walk_step(
 				if (
 					target.y >= previous.y
 					and jump_attempts < MAX_JUMP_ATTEMPTS_PER_STEP
-					and player.is_on_floor()
 				):
+					# Keep the press held for a bounded window so the gameplay
+					# controller consumes it on the next grounded tick.
 					Input.action_press(Actions.JUMP)
 					jump_hold_remaining = JUMP_HOLD_FRAMES
 					jump_attempts += 1
