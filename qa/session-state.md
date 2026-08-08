@@ -19,12 +19,15 @@
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
 - T3 全量回归（chunk 性能修复后最终轮，HEAD `3c0d82d`）：**全绿 EXIT: 0**（142/142；runtime_soak 72/72、acceptance 185/185、runtime_stability 25/25、core_smoke 100/100、structural_integrity 28+31），证据 `build/commercial-acceptance-20260808/t3-perf-fix/run_all.log`。AC-002 泵窗口已按时间片语义对齐（`3c0d82d`，实测 47/120）；TARGETING 陈旧 token 误报横幅已在 `7ed0eea` 消除（终审 T3 将于长稳后最终 HEAD 复跑一遍取干净日志）。**T3 门禁再次关闭（性能修复后）**；台阶坡面修复 `bb46e35` 后须在最终 HEAD 终审复跑。
-- 桌面验收最终遍（性能修复后，HEAD `7ed0eea`）：第一遍 89/91——non_cube 台阶 traverse 确定性楔死（5/5）、husbandry_closed_loop 读档活体空引用崩溃（2/2）。二分（仅回退 deadline 传递即复绿）+ 逐帧探针定位真根因 **BUG-STAIR-RAMP-GROUND-SCAN-001**：地面模型盒顶近似与碰撞连续斜坡不一致，旧原子构建的帧刺白送额外物理步掩盖了蠕行渐近线楔死，时间片化平滑帧步使其确定性暴露。修复 `bb46e35`（`get_local_surface_height` 解析坡高，吸附追踪真实接触面）：non_cube 3/3 PASS（起攀即站坡面 49.81，匀速爬 50.07，不依赖 tick 运气）、husbandry 3/3 PASS、7 个相关 T3 套件全过（acceptance 隔离 185/185）。最终桌面全量遍（91 套件，HEAD `bb46e35`）进行中（后台 `bjwe3exsk`，证据 `desktop-ramp-fix/`）。
-- fresh Windows 导出：最终候选包 `export-final/`（含全部 game 侧修复 + 生命周期修复 `b23c9d6`）；导出冒烟 **PASS**（29 检查，authoritative_quit:true，生命周期时序单调，证据 `export-final/`）。此前两轮（11:40 与首轮 export-final）均在生命周期单调门禁失败——复查确认 11:40 当时也是失败（driver log 有抛错记录，"通过"为误记），该门禁在本分支从未通过，已由 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001 修复。
-- 最终 EXE 五图路线：**PASS（5/5）**（`journey-matrix-final/`，recommended 档，复用 export-final 精确包 exe=c42eb5d1…/pck=822c06b5…；36/36 步/图、位移 27.3–36.2m、跨 2–5 chunk、最大跌落 ≤1.0m、零传送、视觉全过、教程全隐藏、每图 authoritative_quit:true）。**五图矩阵门禁正式关闭**。注：star_continent 冷启动 180 帧短 soak 的 1%low 28.1/p95 32.63 超 recommended 阈值（其余四图 1%low 103–133 全达标）——矩阵门禁只记录不卡阈值，正式分档判定由性能采集与严格长稳执行。
+- 桌面验收最终遍（性能修复后，HEAD `7ed0eea`）：第一遍 89/91——non_cube 台阶 traverse 确定性楔死（5/5）、husbandry_closed_loop 读档活体空引用崩溃（2/2）。二分（仅回退 deadline 传递即复绿）+ 逐帧探针定位真根因 **BUG-STAIR-RAMP-GROUND-SCAN-001**：地面模型盒顶近似与碰撞连续斜坡不一致，旧原子构建的帧刺白送额外物理步掩盖了蠕行渐近线楔死，时间片化平滑帧步使其确定性暴露。修复 `bb46e35`（`get_local_surface_height` 解析坡高，吸附追踪真实接触面）：non_cube 3/3 PASS（起攀即站坡面 49.81，匀速爬 50.07，不依赖 tick 运气）、husbandry 3/3 PASS、7 个相关 T3 套件全过（acceptance 隔离 185/185）。**最终桌面全量遍 91/91 全绿**（HEAD `bb46e35`，证据 `desktop-ramp-fix/`，summary passed=91 failed=0）。**桌面验收门禁在最终 HEAD 正式关闭**。
+- 终审 T3（HEAD `bb46e35`）：**142/142 EXIT: 0**，无 TARGETING 横幅（仅一行 CONTRACT PASS），证据 `t3-ramp-fix/run_all.log`。**T3 门禁在最终 HEAD 正式关闭**。
+- fresh Windows 导出：最终候选包 **v2** `export-final-v2/`（坡面修复后最终包，exe=c42eb5d1…/pck=7f035ce7…）；导出冒烟 **PASS**（29 检查，authoritative_quit:true，生命周期单调）。此前 v1 包 `export-final/`（含 `b23c9d6` 生命周期修复）同门禁通过；更早两轮失败史见 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001。
+- 最终 EXE 五图路线：**PASS（5/5，v2 复取）**（`journey-matrix-final-v2/`，精确复用 export-final-v2 包；36/36 步/图、位移 27.3–36.2m、跨 2–5 chunk、最大跌落 ≤1.0m、零传送、视觉全过、教程全隐藏、每图 authoritative_quit:true）。v2 逐图指标全部落在推荐档阈值内：avg 146–166fps、1% low 81.6–142.4、p95 6.89–8.76ms、p99 6.99–10.88ms、miss30 全 0%、加载 533–1163ms、WS p95 355–369 MiB（star_continent 资格种子 p95 8.76ms，较修复前 32.63ms 改善 73%）。**五图矩阵门禁在最终包上正式关闭**（v1 证据 `journey-matrix-final/` 存档保留）。
+- 本机硬件资格（推荐档）：**PASS**（`hardware-qualification-recommended/`，result=pass，35/35 断言 0 违规，五图逐图独立判定全过；operator=claude-release-20260808，OperatorAttested，fingerprint=7e2e4d39…）。本机 RTX 3090 高于推荐档参考配置，最低档硬件资格仍为既有外部 HOLD。
+- 严格 7,200 秒长稳：**执行中**（最终包 export-final-v2，后台 `bt11v4cxj`，证据 `strict-soak-7200-final/`，预计 ~2 小时+）。
 - 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD `7af35ef` 干净证据）91/91 全绿**（19:31→20:01，30.7 分钟，selected=91 passed=91 failed=0），证据 `desktop-final-pass/`。**桌面验收门禁正式关闭**。
-- 本机最低/推荐硬件资格：待硬件分档后执行。
-- 严格 7,200 秒长稳：待 fresh 候选包与短资格门禁通过后执行。
+- 本机最低/推荐硬件资格：推荐档 **已通过**（见上）；最低档硬件为既有外部 HOLD（本机配置高于最低档，无法冒充）。
+- 严格 7,200 秒长稳：最终包上执行中（后台 `bt11v4cxj`）。
 
 ## 台阶行走修复（P1 真实产品缺陷，**已关闭**）
 
@@ -53,15 +56,15 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：无活动缺陷。桌面验收最终遍（坡面修复后 HEAD `bb46e35`）执行中；其后最终导出 → 五图矩阵 v2 → 推荐档硬件资格 → 7200s 严格长稳 → 终审 T3（取无 TARGETING 误报横幅的干净日志）。
+- 当前正在处理的问题：无活动缺陷。最终候选包 v2 导出+冒烟执行中（`export-final-v2/`）；其后五图矩阵 v2 → 推荐档硬件资格 → 7200s 严格长稳 → 最终报告 → 合并/tag/release/推送。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
 
 ## 最近命令与证据
 
-- 最近一次命令：台阶坡面地面模型修复 `bb46e35` 提交 + 桌面最终遍启动（后台 `bjwe3exsk`，`desktop-ramp-fix/`）；前一命令 non_cube/husbandry 各 3/3 复验 + 7 个相关 T3 套件复验全过
-- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；性能修复后 T3：`t3-perf-fix/`；性能取证与 A/B：`export-perf-fix/`；最终候选包+冒烟：`export-final/`；五图矩阵：`journey-matrix-final/`；坡面修复取证与复验：`chunk-perf-fix/`）
+- 最近一次命令：推荐档硬件资格 **PASS**（35/35 断言）→ 严格 7200s 长稳启动（后台 `bt11v4cxj`，`strict-soak-7200-final/`）；前一命令五图矩阵 v2 **PASS 5/5**（star_continent p95 8.76ms）
+- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；性能修复后 T3：`t3-perf-fix/`；性能取证与 A/B：`export-perf-fix/`；最终候选包 v1+冒烟：`export-final/`；五图矩阵 v1：`journey-matrix-final/`；坡面修复取证与复验：`chunk-perf-fix/`；坡面修复后桌面 91/91：`desktop-ramp-fix/`；终审 T3：`t3-ramp-fix/`；最终包 v2：`export-final-v2/`；矩阵 v2：`journey-matrix-final-v2/`；推荐档资格：`hardware-qualification-recommended/`；7200s 长稳：`strict-soak-7200-final/`）
 - 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
 ## 下一步
