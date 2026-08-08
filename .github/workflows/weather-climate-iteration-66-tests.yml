@@ -1,0 +1,180 @@
+name: Weather climate quality gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/weather-climate-iteration-66-tests.yml'
+      - 'data/weather_profiles.json'
+      - 'src/weather/**'
+      - 'src/survival/day_night_service.gd'
+      - 'src/ui/exploration_progression_service_hub.gd'
+      - 'tests/developer_b/validate_weather_climate_iteration_66.ps1'
+      - 'tests/qa/weather_climate_regression.gd'
+      - 'tests/qa/weather_climate_desktop_acceptance.gd'
+      - 'tests/qa/service_hub_feature_lifecycle_regression.gd'
+      - 'tests/ci/run_iteration_66_full_regression.ps1'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/WEATHER_CLIMATE_SYSTEM.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_66.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_66.md'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/weather-climate-iteration-66-tests.yml'
+      - 'data/weather_profiles.json'
+      - 'src/weather/**'
+      - 'src/survival/day_night_service.gd'
+      - 'src/ui/exploration_progression_service_hub.gd'
+      - 'tests/developer_b/validate_weather_climate_iteration_66.ps1'
+      - 'tests/qa/weather_climate_regression.gd'
+      - 'tests/qa/weather_climate_desktop_acceptance.gd'
+      - 'tests/qa/service_hub_feature_lifecycle_regression.gd'
+      - 'tests/ci/run_iteration_66_full_regression.ps1'
+      - 'docs/PRODUCT_ROADMAP.md'
+      - 'docs/WEATHER_CLIMATE_SYSTEM.md'
+      - 'docs/PRODUCT_ROADMAP_ITERATION_66.md'
+      - 'docs/ARCHITECTURE_AUDIT_2026-08-07_ITERATION_66.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weather-climate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  weather-contract:
+    name: Validate weather and climate contracts
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate weather and climate contracts
+        shell: pwsh
+        run: .\tests\developer_b\validate_weather_climate_iteration_66.ps1
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Validate strict project import
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --editor --quit'
+
+      - name: Run weather climate regression
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/weather_climate_regression.gd -- --disable-update-check'
+
+      - name: Re-run feature lifecycle regression
+        shell: pwsh
+        run: .\tests\ci\Invoke-Godot.ps1 -Arguments '--headless --path . --script res://tests/qa/service_hub_feature_lifecycle_regression.gd -- --disable-update-check'
+
+  weather-desktop:
+    name: Run real weather desktop acceptance
+    needs: weather-contract
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Run real weather desktop acceptance
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\ci\run_godot_desktop_test.ps1 `
+            -Godot $godotPath `
+            -ProjectRoot . `
+            -ScriptPath 'res://tests/qa/weather_climate_desktop_acceptance.gd' `
+            -OutputPath 'build\weather-climate-desktop.png' `
+            -TimeoutMilliseconds 180000
+
+      - name: Upload weather desktop evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-climate-desktop-${{ github.run_number }}
+          path: |
+            build/weather-climate-desktop.*
+          if-no-files-found: error
+          retention-days: 21
+
+  full-regression:
+    name: Run complete repository regression
+    needs: weather-desktop
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: false
+
+      - name: Run complete repository regression
+        shell: pwsh
+        run: .\tests\ci\run_iteration_66_full_regression.ps1 -Godot (Get-Command godot).Source
+
+      - name: Upload full regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-climate-full-regression-${{ github.run_number }}
+          path: |
+            build/iteration66-full-regression/*.log
+          if-no-files-found: warn
+          retention-days: 21
+
+  release-smoke:
+    name: Export and run Windows release
+    needs: full-regression
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot with export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Export and run Windows release
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot).Source
+          .\tests\release\run_windows_export_smoke.ps1 `
+            -Godot $godotPath `
+            -OutputDirectory .\build\weather-release-smoke
+
+      - name: Upload Windows release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-release-smoke-${{ github.run_number }}
+          path: |
+            build/weather-release-smoke/**
+          if-no-files-found: warn
+          retention-days: 21

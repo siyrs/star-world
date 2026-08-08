@@ -112,6 +112,7 @@ Assert-NotMatches $text.gameplay_hub 'const\s+DEFAULT_SETTINGS\s*:=\s*\{' 'Gamep
 foreach ($token in @(
   'AutosaveRuntimeParticipantScript',
   'AUTOSAVE_RUNTIME_FEATURE\s*:=\s*&"autosave_runtime"',
+  'WEATHER_RUNTIME_FEATURE\s*:=\s*&"weather_runtime"',
   'SettingsPolicyScript\.normalize\(current_settings\)',
   'SettingsPolicyScript\.merge\(current_settings,\s*settings\)',
   'autosave_completed',
@@ -122,7 +123,11 @@ foreach ($token in @(
 )) {
   Assert-Matches $text.final_hub $token "Final production composition is missing autosave integration: $token"
 }
-Assert-Matches $text.final_hub 'Registered last|registered last' 'Autosave composition must document reverse-cleanup ordering'
+$weatherRegistration = $text.final_hub.IndexOf('weather_runtime_participant = _register_feature_participant')
+$autosaveRegistration = $text.final_hub.IndexOf('autosave_runtime_participant = _register_feature_participant')
+if ($weatherRegistration -lt 0 -or $autosaveRegistration -lt 0 -or $weatherRegistration -gt $autosaveRegistration) {
+  throw 'Autosave composition must register weather before autosave so reverse cleanup disables autosave first'
+}
 
 Assert-Matches $text.runtime_health_hub 'func\s+return_to_menu\s*\(\)[\s\S]{0,700}super\.return_to_menu\(\)[\s\S]{0,300}current_world_id\.is_empty\(\)[\s\S]{0,200}detach_runtime' 'Runtime health must detach only after the authoritative return succeeds'
 Assert-NotMatches $text.runtime_health_hub 'func\s+return_to_menu\s*\(\)[\s\S]{0,180}detach_runtime[\s\S]{0,180}super\.return_to_menu' 'Runtime health must not detach before a fallible final save'
@@ -144,11 +149,12 @@ foreach ($phrase in @(
   'autosave settings expose one bounded deterministic choice list',
   'manual save cancels a queued autosave',
   'real autosave transaction persists the production inventory mutation',
-  'production lifecycle contains seven explicit participants',
+  'production lifecycle contains eight explicit participants',
   'reverse lifecycle cleanup disables autosave'
 )) {
   Assert-Matches $text.runtime_test ([regex]::Escape($phrase)) "Autosave runtime regression is missing coverage: $phrase"
 }
+Assert-Matches $text.runtime_test 'participant_count", 0\)\) == 8' 'Autosave runtime regression must enforce the eight-participant production lifecycle'
 Assert-Matches $text.runtime_test 'var\s+expected_delays\s*:=\s*\[15\.0,\s*60\.0,\s*300\.0\]' 'Autosave runtime regression must exercise all three retry tiers'
 Assert-Matches $text.runtime_test ([regex]::Escape('failure %d applies the bounded %.0f-second retry tier')) 'Autosave runtime regression must assert every generated retry-tier description'
 
@@ -219,4 +225,4 @@ Assert-Matches $text.testing 'runtime_health_failed_return_regression\.gd' 'Test
 Assert-Matches $text.roadmap '有界自动保存' 'Product roadmap must record the completed bounded autosave capability'
 Assert-Matches $text.roadmap 'BOUNDED_AUTOSAVE_RUNTIME\.md' 'Product roadmap must link the autosave contract'
 
-Write-Host 'PASS bounded_autosave interval=0|2|5|10|15 active_time=pause-aware manual=deduplicated retries=15|60|300 participants=7 settings=canonical persistence=authoritative ui=fact-driven failed_return=attached desktop=visual'
+Write-Host 'PASS bounded_autosave interval=0|2|5|10|15 active_time=pause-aware manual=deduplicated retries=15|60|300 participants=8 settings=canonical persistence=authoritative ui=fact-driven failed_return=attached desktop=visual weather=ordered-before-autosave'

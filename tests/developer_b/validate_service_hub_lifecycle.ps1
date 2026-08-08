@@ -17,6 +17,7 @@ $husbandryParticipantPath = Join-Path $root 'src\husbandry\husbandry_runtime_par
 $ranchParticipantPath = Join-Path $root 'src\husbandry\ranch_runtime_participant.gd'
 $runtimeParticipantPath = Join-Path $root 'src\exploration\exploration_runtime_participant.gd'
 $journalParticipantPath = Join-Path $root 'src\exploration\exploration_journal_reward_participant.gd'
+$weatherParticipantPath = Join-Path $root 'src\weather\weather_runtime_participant.gd'
 $autosaveParticipantPath = Join-Path $root 'src\save\autosave_runtime_participant.gd'
 $doorServicePath = Join-Path $root 'src\interaction\block_door_interaction_service.gd'
 $runAllPath = Join-Path $root 'tests\run_all.ps1'
@@ -26,7 +27,7 @@ foreach ($path in @(
   $ranchHubPath,$runtimeHealthHubPath,$explorationHubPath,$coordinatorPath,
   $machineParticipantPath,$machineSchedulerPath,$agricultureParticipantPath,
   $husbandryParticipantPath,$ranchParticipantPath,$runtimeParticipantPath,
-  $journalParticipantPath,$autosaveParticipantPath,$doorServicePath,$runAllPath
+  $journalParticipantPath,$weatherParticipantPath,$autosaveParticipantPath,$doorServicePath,$runAllPath
 )) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Lifecycle file is missing: $path" }
 }
@@ -47,6 +48,7 @@ $husbandryText = Get-Content -Raw -Encoding UTF8 $husbandryParticipantPath
 $ranchText = Get-Content -Raw -Encoding UTF8 $ranchParticipantPath
 $runtimeText = Get-Content -Raw -Encoding UTF8 $runtimeParticipantPath
 $journalText = Get-Content -Raw -Encoding UTF8 $journalParticipantPath
+$weatherText = Get-Content -Raw -Encoding UTF8 $weatherParticipantPath
 $autosaveText = Get-Content -Raw -Encoding UTF8 $autosaveParticipantPath
 $doorText = Get-Content -Raw -Encoding UTF8 $doorServicePath
 $runAllText = Get-Content -Raw -Encoding UTF8 $runAllPath
@@ -87,13 +89,14 @@ foreach ($participantPath in @(
   'ranch_runtime_participant\.gd',
   'exploration_runtime_participant\.gd',
   'exploration_journal_reward_participant\.gd',
+  'weather_runtime_participant\.gd',
   'autosave_runtime_participant\.gd'
 )) {
   if ($combinedHubs -notmatch $participantPath) { throw "Production composition must install participant: $participantPath" }
 }
 foreach ($featureId in @(
   'machine_runtime','agriculture_runtime','husbandry_runtime','ranch_runtime',
-  'exploration_runtime','exploration_journal_rewards','autosave_runtime'
+  'exploration_runtime','exploration_journal_rewards','weather_runtime','autosave_runtime'
 )) {
   if ($combinedHubs -notmatch $featureId) { throw "Production composition is missing feature id: $featureId" }
 }
@@ -114,6 +117,12 @@ foreach ($legacyField in @('animal_attraction_service','animal_product_service')
 }
 foreach ($legacyField in @('prospecting_service','exploration_danger_service','exploration_journal_service','exploration_reward_service','autosave_runtime_participant')) {
   if ($explorationHubText -notmatch "var\s+$legacyField\s*:\s*Node") { throw "Exploration hub removed compatible public field: $legacyField" }
+}
+foreach ($weatherField in @('weather_runtime_participant','weather_service')) {
+  if ($explorationHubText -notmatch "var\s+$weatherField\s*:\s*Node") { throw "Exploration hub is missing weather runtime field: $weatherField" }
+}
+if ($explorationHubText -notmatch 'var\s+weather_status_badge\s*:\s*Control') {
+  throw 'Exploration hub must expose the read-only weather HUD extension port'
 }
 if ($runtimeHealthHubText -notmatch 'var\s+runtime_health_report_service\s*:\s*Node') {
   throw 'Runtime health hub must expose the stable read-only report service port'
@@ -152,6 +161,7 @@ foreach ($participant in @(
   @{Name='Husbandry'; Text=$husbandryText},
   @{Name='Ranch'; Text=$ranchText},
   @{Name='Exploration'; Text=$runtimeText},
+  @{Name='Weather'; Text=$weatherText},
   @{Name='Autosave'; Text=$autosaveText}
 )) {
   foreach ($method in @('get_dependencies','install','normalize_world_state','begin_world','attach_game','activate','save_into','snapshot_into','clear','shutdown','get_lifecycle_snapshot')) {
@@ -189,6 +199,12 @@ if ($runtimeText -notmatch 'payload\["exploration"\]' -or $runtimeText -notmatch
 if ($journalText -notmatch 'return\s+\[&"exploration_runtime"\]') {
   throw 'Journal/reward participant must declare its exploration dependency'
 }
+if ($weatherText -notmatch 'payload\["weather"\]' -or $weatherText -notmatch 'snapshot\["weather"\]') {
+  throw 'Weather participant must preserve one additive weather save and diagnostics domain'
+}
+if ($weatherText -notmatch 'return\s+\[\]') {
+  throw 'Weather must remain an independent participant ordered before autosave by registration'
+}
 foreach ($dependency in @('machine_runtime','agriculture_runtime','husbandry_runtime','ranch_runtime','exploration_runtime','exploration_journal_rewards')) {
   if ($autosaveText -notmatch [regex]::Escape('&"' + $dependency + '"')) {
     throw "Autosave must declare persisted participant dependency: $dependency"
@@ -196,6 +212,11 @@ foreach ($dependency in @('machine_runtime','agriculture_runtime','husbandry_run
 }
 if ($autosaveText -notmatch 'snapshot\["autosave"\]' -or $autosaveText -match 'payload\["autosave"\]') {
   throw 'Autosave must expose transient diagnostics without creating a persistence domain'
+}
+$weatherRegistration = $explorationHubText.IndexOf('weather_runtime_participant = _register_feature_participant')
+$autosaveRegistration = $explorationHubText.IndexOf('autosave_runtime_participant = _register_feature_participant')
+if ($weatherRegistration -lt 0 -or $autosaveRegistration -lt 0 -or $weatherRegistration -gt $autosaveRegistration) {
+  throw 'Weather must register immediately before autosave so reverse cleanup stops autosave first'
 }
 
 foreach ($scriptName in @(
@@ -207,4 +228,4 @@ foreach ($scriptName in @(
   if ($runAllText -notmatch $scriptName) { throw "Full regression entry point must include: $scriptName" }
 }
 
-Write-Host 'PASS service_hub_lifecycle participants=7 root=gameplay health=readonly entry=exploration chain=ranch->health->exploration dependencies=ranch->husbandry,journal->exploration,autosave->all history=48 machine_domains=16'
+Write-Host 'PASS service_hub_lifecycle participants=8 root=gameplay health=readonly entry=exploration chain=ranch->health->exploration dependencies=ranch->husbandry,journal->exploration,weather=registration-before-autosave,autosave->persisted-baseline history=48 machine_domains=16'
