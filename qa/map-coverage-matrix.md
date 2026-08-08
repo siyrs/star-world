@@ -45,7 +45,7 @@ PR #101 将同一生产路线合同放入最终 PCK，通过一个已验证的 W
 
 本轮新关闭的地图级缺陷（详见 `qa/issues-found.md`）：
 
-- `star_continent`：台阶/半砖可行走（BUG-STAIR-STEP-001）、虚空悬浮（BUG-VOID-LEVITATE-001）、生成坠 Chunk（BUG-SPAWN-CHUNK-001）、流式帧刺（BUG-PERF-CHUNK-STEP-001，全图受益）、地面保持扫描放大（BUG-PERF-GROUND-SCAN-001）。
+- `star_continent`：台阶/半砖可行走（BUG-STAIR-STEP-001）、台阶坡面地面模型（BUG-STAIR-RAMP-GROUND-SCAN-001，全图所有楼梯受益）、虚空悬浮（BUG-VOID-LEVITATE-001）、生成坠 Chunk（BUG-SPAWN-CHUNK-001）、流式帧刺（BUG-PERF-CHUNK-STEP-001，全图受益）、地面保持扫描放大（BUG-PERF-GROUND-SCAN-001）。
 - `abyss_world`：熔岩玩家物理在修复回归中持续锁定（BUG-LAVA-001 既有回归链）。
 - `sky_islands`：高空谨慎下降（BUG-QA-SKY-DESCENT-001 既有）+ 本轮悬浮修复同根因复核。
 
