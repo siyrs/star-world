@@ -19,8 +19,8 @@
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
 - T3 全量回归（game 侧修复后最终轮，HEAD `ee6995f`）：**全绿 EXIT: 0**（213 条套件级 PASS、0 FAIL；`runtime_soak_regression` 72/72、`player_continuous_route_buffered_jump_regression` 50/50 五图路线契约均通过），证据 `build/commercial-acceptance-20260808/t3-final/run_all.log`。**T3 门禁正式关闭**。
-- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设、台阶行走、长路径删除、有界地面扫描），桌面验收后重新导出候选包再跑五图矩阵。
-- 最终 EXE 五图路线：待执行（基于新导出）。
+- fresh Windows 导出：最终候选包 `export-final/`（含全部 game 侧修复 + 生命周期修复 `b23c9d6`）；导出冒烟 **PASS**（29 检查，authoritative_quit:true，生命周期时序单调，证据 `export-final/`）。此前两轮（11:40 与首轮 export-final）均在生命周期单调门禁失败——复查确认 11:40 当时也是失败（driver log 有抛错记录，"通过"为误记），该门禁在本分支从未通过，已由 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001 修复。
+- 最终 EXE 五图路线：**PASS（5/5）**（`journey-matrix-final/`，recommended 档，复用 export-final 精确包 exe=c42eb5d1…/pck=822c06b5…；36/36 步/图、位移 27.3–36.2m、跨 2–5 chunk、最大跌落 ≤1.0m、零传送、视觉全过、教程全隐藏、每图 authoritative_quit:true）。**五图矩阵门禁正式关闭**。注：star_continent 冷启动 180 帧短 soak 的 1%low 28.1/p95 32.63 超 recommended 阈值（其余四图 1%low 103–133 全达标）——矩阵门禁只记录不卡阈值，正式分档判定由性能采集与严格长稳执行。
 - 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD `7af35ef` 干净证据）91/91 全绿**（19:31→20:01，30.7 分钟，selected=91 passed=91 failed=0），证据 `desktop-final-pass/`。**桌面验收门禁正式关闭**。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
 - 严格 7,200 秒长稳：待 fresh 候选包与短资格门禁通过后执行。
@@ -44,23 +44,23 @@
 
 | Profile | 进入 | 连续正常路线 | 内容闭环 | 碰撞/边界 | 水域/危险 | 存读档/死亡复活 | 最终 EXE | 状态 |
 |---|---|---|---|---|---|---|---|---|
-| `star_continent` | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | pending |
-| `desert_ruins` | 待测 | 待测 | 待测 | 待测 | N/A/待核对 | 待测 | 待测 | pending |
-| `frozen_wastes` | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | pending |
-| `sky_islands` | 待测 | 待测 | 待测 | 待测 | 高空/跌落待测 | 待测 | 待测 | pending |
-| `abyss_world` | 待测 | 待测 | 待测 | 待测 | 熔岩待测 | 待测 | 待测 | pending |
+| `star_continent` | ✅ 桌面+T3 | ✅ 路线 36/36 步 | ✅ 内容闭环桌面套件 | ✅ 边界/足迹容差 | ✅ 水域套件 | ✅ 存读档套件 | ✅ 矩阵 PASS | passed |
+| `desert_ruins` | ✅ 桌面+T3 | ✅ 路线 36/36 步 | ✅ 内容闭环桌面套件 | ✅ 边界 | N/A（无正式水域，已有危险/陷阱套件） | ✅ 存读档套件 | ✅ 矩阵 PASS | passed |
+| `frozen_wastes` | ✅ 桌面+T3 | ✅ 路线 36/36 步 | ✅ 内容闭环桌面套件 | ✅ 边界 | ✅ 水域套件 | ✅ 存读档套件 | ✅ 矩阵 PASS | passed |
+| `sky_islands` | ✅ 桌面+T3 | ✅ 路线 36/36 步 | ✅ 内容闭环桌面套件 | ✅ 高空谨慎下降套件 | 高空/跌落 ✅ | ✅ 存读档套件 | ✅ 矩阵 PASS | passed |
+| `abyss_world` | ✅ 桌面+T3 | ✅ 路线 36/36 步 | ✅ 内容闭环桌面套件 | ✅ 边界 | 熔岩 ✅（BUG-LAVA-001 回归） | ✅ 存读档套件 | ✅ 矩阵 PASS | passed |
 
 ## 问题与回归
 
-- 当前正在处理的问题：`runtime_soak_regression` 边际失败已按 BUG-PERF-GROUND-SCAN-001 修复（地面保持扫描 O(WORLD_HEIGHT)→O(站立高度)，soak cycle 3 终末窗 avg 29–36ms→22.7–24.2ms、peak ≤47ms，4/4 PASS）；等待全量 T3 复核。
+- 当前正在处理的问题：无活动缺陷。导出冒烟生命周期单调门禁已按 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001 修复（烟测旅程在权威退出前走生产手动存档路径，`b23c9d6`）；五图矩阵后台执行中。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
 
 ## 最近命令与证据
 
-- 最近一次命令：`run_godot_desktop_test.ps1 ... structural_integrity_scale_desktop_acceptance.gd`（契约对齐后复验 **61/61 PASS**，证据 `desktop-second-pass/`）
-- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；桌面第二遍：`desktop-second-pass/`）
+- 最近一次命令：`run_windows_export_journey_matrix.ps1 -ExistingExecutablePath export-final/StarWorld.exe -QualificationTier recommended`（五图矩阵，后台 `boj92y0f8`）；前一命令导出冒烟 PASS（`export-final/`，29 检查）
+- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；T3 最终：`t3-final/`；桌面最终：`desktop-final-pass/`；最终候选包+冒烟：`export-final/`；五图矩阵：`journey-matrix-final/`）
 - 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
 ## 下一步
@@ -71,6 +71,6 @@
    - T3 第二轮在 `validate_bounded_trash_manager.ps1` 硬停（同源陈旧 token）。随即对全部 21 个引用改动文件的 developer_b 校验器做了一次性扫描：另发现 `validate_structural_integrity.ps1` 钉 scale 套件旧的"恰好两次 flush"断言文本；同时清理 `structural_integrity_single_flush_desktop_acceptance.gd` 里已无匹配文本的 `LEGACY_FLUSH_FAILURE` erase 死代码（父套件断言已与单次 flush 规范一致）。三处校验器+套件对齐（`cedd869`），T3 第三轮重跑中（后台 `bvedcugju`）。
    - T3 第三轮（校验器对齐后）：142 套件中唯一失败 `runtime_soak_regression`（"runtime health recovers after bounded travel pressure"，cycle 3 终末采样窗 peak ≥80ms）。根因定位（BUG-PERF-GROUND-SCAN-001）：台阶/悬浮修复引入的五点足迹地面扫描每次从世界顶整列下扫，传送后追赶期多物理 tick 叠加，cycle 3 终末窗均值放大到 master 的 ~2 倍，单 >80ms 峰值帧落窗即翻案。已把保持者扫描上界收紧到头顶 +2（放置 API 整列扫描语义不变），同机 4/4 PASS（终末窗 avg 22.7–24.2ms、peak 40–47ms）。取证过程：master worktree A/B 3/3 通过、逐帧计时探针（单周期不复现 → 三周期序列相关）、套件级复刻 + nosample/noteleport/nospawn/noadaptive 逐项隔离（单项均非根因，系边际放大）、batch 统计。证据 `t3-rerun/`（含探针脚本与全部日志）。扫描修复提交后全量 T3 第四轮重跑。
    - **第二遍结果 88/91，3 失败已全部关闭**：①`encounter_reward_economy` 聚合运行首枪未击杀级联 25 项失败，**单独复跑 70/70 PASS**（并发+低优先级下仍过）；非确定性时序脆弱，已加 `KILL-TIMEOUT` 诊断 dump 取证下次失败。②`multi_hostile_danger` 静默 exit 0xCFFFFFFF 崩溃（~54s 无输出）——**单独复跑 48/48 PASS**；崩溃窗口与我自己发起的 encounter 单独复跑并发重叠（双桌面 Godot 实例争用），判定环境性，非产品缺陷；同时补上该套件修复后缺失的单独复验（`9ddb0a2` 提交信息对该套件的复验声明由此兑现）。③`rest_closed_loop_stable` 解析错误——我在父套件补时钟暂停机制时与子类既有成员（`_paused_day_night` 等）重复声明；已将子类瘦身到只剩 `_settle_player` 探针覆写（机制与父套件逐字节等价），**单独复跑 57/57 PASS**。已审计其余三个子类（agriculture_canonical、husbandry_stable、multi_hostile_batched）在第二遍全过，无同类碰撞。
-3. 重新导出 fresh EXE/PCK。**决策**：用户管线原定“用 11:40 fresh EXE 跑五图矩阵”，但 11:40 包早于台阶/悬浮/生成/长路径全部 game 侧修复，用它出矩阵证据等于认证一个已不存在的构建；按“证据必须在当前候选 HEAD 重新生成”原则，桌面+T3 全绿后导出新候选包再跑五图最终包矩阵与关键桌面内容闭环。
+3. ~~重新导出 fresh EXE/PCK~~ **已完成**（`export-final/`，含 `b23c9d6` 生命周期修复；导出冒烟 29 检查全绿、生命周期单调）。五图矩阵后台执行中（后台 `boj92y0f8`）。
 4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID）与严格 7,200 秒长稳（`tests/ci/run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`），再更新覆盖矩阵和最终报告。
 5. 最终报告 + 合并 master + tag + release + 同步远程。
