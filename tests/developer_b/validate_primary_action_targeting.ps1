@@ -39,7 +39,7 @@ Require-Contains $harvestPlayer 'collider.has_method("take_damage")' 'Entity att
 Require-Contains $harvestPlayer '_advance_resolved_harvest(target, 0.0)' 'A resolved voxel target must start the production harvest transaction without a second target lookup'
 Require-NotContains $harvestPlayer "if not _refresh_interaction_ray():\n\t\t_primary_action_held = false\n\t\t_cancel_harvest(\"no_target\")" 'A transiently empty physics ray must not reject a valid virtual voxel target'
 
-Require-Contains $precisionPlayer 'target_resolver.call("resolve", interaction_ray, world)' 'Precision player must retain deterministic grid-ray fallback targeting'
+Require-Contains $precisionPlayer '_precision_target_resolver.resolve(interaction_ray, world)' 'Precision player must retain deterministic grid-ray fallback targeting'
 Require-Contains $precisionPlayer 'func _resolve_harvest_target() -> Dictionary:' 'Precision player must override the harvest target policy'
 Require-Contains $controllerPlayer 'set_primary_action_active(true)' 'Controller press must enter the shared production primary-action state'
 Require-Contains $controllerPlayer 'set_primary_action_active(false, reason)' 'Controller release must cancel the shared production action state'
