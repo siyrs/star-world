@@ -24,7 +24,7 @@
 - fresh Windows 导出：最终候选包 **v2** `export-final-v2/`（坡面修复后最终包，exe=c42eb5d1…/pck=7f035ce7…）；导出冒烟 **PASS**（29 检查，authoritative_quit:true，生命周期单调）。此前 v1 包 `export-final/`（含 `b23c9d6` 生命周期修复）同门禁通过；更早两轮失败史见 BUG-RELEASE-LIFECYCLE-SAVE-ORDER-001。
 - 最终 EXE 五图路线：**PASS（5/5，v2 复取）**（`journey-matrix-final-v2/`，精确复用 export-final-v2 包；36/36 步/图、位移 27.3–36.2m、跨 2–5 chunk、最大跌落 ≤1.0m、零传送、视觉全过、教程全隐藏、每图 authoritative_quit:true）。v2 逐图指标全部落在推荐档阈值内：avg 146–166fps、1% low 81.6–142.4、p95 6.89–8.76ms、p99 6.99–10.88ms、miss30 全 0%、加载 533–1163ms、WS p95 355–369 MiB（star_continent 资格种子 p95 8.76ms，较修复前 32.63ms 改善 73%）。**五图矩阵门禁在最终包上正式关闭**（v1 证据 `journey-matrix-final/` 存档保留）。
 - 本机硬件资格（推荐档）：**PASS**（`hardware-qualification-recommended/`，result=pass，35/35 断言 0 违规，五图逐图独立判定全过；operator=claude-release-20260808，OperatorAttested，fingerprint=7e2e4d39…）。本机 RTX 3090 高于推荐档参考配置，最低档硬件资格仍为既有外部 HOLD。
-- 严格 7,200 秒长稳：**执行中**（最终包 export-final-v2，后台 `bt11v4cxj`，证据 `strict-soak-7200-final/`，预计 ~2 小时+）。
+- 严格 7,200 秒长稳：首跑在 cycle 70 中止（star_continent seed 112428 `route_too_short`，规划 6 步/最低 20）→ 定位 **BUG-SPAWN-WALKABLE-REACH-001**（出生质量系统只查局部指标，~10% 种子落微连通孤岛）→ 修复 `02e8793`（walkable-reach BFS，与路线探针同合同；300 周期种子空间扫描全部 reach≥20 零降级，五基准出生点不变，6 个出生敏感套件全过）→ 最终包 v3 `export-final-v3/`（冒烟 29 检查 PASS）→ 矩阵 v3 + 推荐档资格执行中（后台 `bk8xvpa6k`），其后长稳从 cycle 0 重启。
 - 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD `7af35ef` 干净证据）91/91 全绿**（19:31→20:01，30.7 分钟，selected=91 passed=91 failed=0），证据 `desktop-final-pass/`。**桌面验收门禁正式关闭**。
 - 本机最低/推荐硬件资格：推荐档 **已通过**（见上）；最低档硬件为既有外部 HOLD（本机配置高于最低档，无法冒充）。
 - 严格 7,200 秒长稳：最终包上执行中（后台 `bt11v4cxj`）。
