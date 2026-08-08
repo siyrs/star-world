@@ -143,6 +143,7 @@ func spawn_creature(species_id: String, fixed_position: Variant = null):
 	var spawn_position: Vector3 = (
 		fixed_position if fixed_position is Vector3 else _choose_position()
 	)
+	_ensure_spawn_chunk_collision(spawn_position)
 	var creature = _factory.create(
 		species_id,
 		spawn_position,
@@ -157,6 +158,28 @@ func spawn_creature(species_id: String, fixed_position: Variant = null):
 	creature_spawned.emit(creature)
 	_publish_ecology_if_changed(true)
 	return creature
+
+
+# A spawned creature is an authoritative physics body. The voxel data for its
+# landing column can already be correct while the chunk is still queued in the
+# streaming scheduler (no StaticBody3D yet), and then the body falls straight
+# through the world. Spawns are infrequent, so materialize that one chunk
+# synchronously before adding the body. Test doubles that only resolve ground
+# simply skip this.
+func _ensure_spawn_chunk_collision(spawn_position: Vector3) -> void:
+	var resolver_object: Object = (
+		ground_resolver.get_object() if ground_resolver.is_valid() else null
+	)
+	if resolver_object == null:
+		return
+	if not resolver_object.has_method("force_load_chunk"):
+		return
+	if not resolver_object.has_method("world_to_block") or not resolver_object.has_method("block_to_chunk"):
+		return
+	var block: Vector3i = resolver_object.call("world_to_block", spawn_position)
+	resolver_object.call(
+		"force_load_chunk", resolver_object.call("block_to_chunk", block)
+	)
 
 
 func get_nearby_hostile_count(position: Vector3, radius: float) -> int:
