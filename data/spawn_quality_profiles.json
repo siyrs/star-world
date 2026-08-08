@@ -14,6 +14,9 @@
     "minimum_forward_view_distance": 4,
     "minimum_obstacle_distance": 3.0,
     "maximum_step_height": 1,
+    "minimum_walkable_reach_distance": 20,
+    "walkable_reach_node_budget": 1600,
+    "walkable_reach_radius": 32,
     "rejected_surface_blocks": [
       "wood",
       "leaves",
