@@ -67,7 +67,7 @@ func set_weather_profile(profile: Dictionary) -> void:
 			"label": str(profile.get("label", "晴朗")),
 			"fog_multiplier": clampf(float(profile.get("fog_multiplier", 1.0)), 0.5, 3.0),
 			"light_multiplier": clampf(float(profile.get("light_multiplier", 1.0)), 0.4, 1.2),
-			"cloud_opacity": clampf(float(profile.get("cloud_opacity", 0.25)), 0.0, 1.0),
+			"cloud_opacity": clampf(float(profile.get("cloud_opacity", 0.8)), 0.0, 1.0),
 			"sky_tint": str(profile.get("sky_tint", "#FFFFFF")),
 			"tint_strength": clampf(float(profile.get("tint_strength", 0.0)), 0.0, 1.0),
 		}
@@ -320,7 +320,9 @@ func _weather_light_multiplier() -> float:
 
 
 func _weather_cloud_opacity() -> float:
-	return clampf(float(_weather_profile.get("cloud_opacity", 0.25)), 0.0, 1.0)
+	# Preserve the pre-weather DayNightService cloud baseline when no profile is
+	# active. Individual weather states still override this through profile data.
+	return clampf(float(_weather_profile.get("cloud_opacity", 0.8)), 0.0, 1.0)
 
 
 func _weather_tint_strength() -> float:
