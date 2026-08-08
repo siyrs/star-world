@@ -18,10 +18,10 @@
 ## 当前构建与测试状态
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
-- T3 全量回归（整改后重跑）：**142/142 全绿**（`RUN_ALL_EXIT=0`，0 fatal/leak）；上轮 7 个失败套件全部在本轮确认 PASS，证据 `build/commercial-acceptance-20260808/t3-post-fixes/`。**注意**：此后 game 侧又有改动（save 服务长路径删除、voxel 成形地面、玩家 step-up、ladder 子类），桌面验收定稿后必须再全量重跑 T3（重点核 +1 整砖台阶仍需跳跃的路线契约）。
-- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设、台阶行走、长路径删除），桌面验收后重新导出候选包再跑五图矩阵。
+- T3 全量回归（game 侧修复后最终轮，HEAD `ee6995f`）：**全绿 EXIT: 0**（213 条套件级 PASS、0 FAIL；`runtime_soak_regression` 72/72、`player_continuous_route_buffered_jump_regression` 50/50 五图路线契约均通过），证据 `build/commercial-acceptance-20260808/t3-final/run_all.log`。**T3 门禁正式关闭**。
+- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设、台阶行走、长路径删除、有界地面扫描），桌面验收后重新导出候选包再跑五图矩阵。
 - 最终 EXE 五图路线：待执行（基于新导出）。
-- 全部桌面验收旅程：第一遍 78/91 完成，13 失败**已全部整改并单独验证 PASS**（见下节）；修复后第二遍全量待执行。
+- 全部桌面验收旅程：第一遍 78/91 完成，13 失败已全部整改并单独验证 PASS；第二遍 88/91，3 失败全部关闭；**第三遍（最终 HEAD 干净证据）进行中**，证据 `desktop-final-pass/`。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
 - 严格 7,200 秒长稳：待 fresh 候选包与短资格门禁通过后执行。
 
