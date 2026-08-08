@@ -52,7 +52,7 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：无阻塞；等待整改后 T3 结果。
+- 当前正在处理的问题：`runtime_soak_regression` 边际失败已按 BUG-PERF-GROUND-SCAN-001 修复（地面保持扫描 O(WORLD_HEIGHT)→O(站立高度)，soak cycle 3 终末窗 avg 29–36ms→22.7–24.2ms、peak ≤47ms，4/4 PASS）；等待全量 T3 复核。
 - 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
@@ -67,6 +67,9 @@
 
 1. ~~分组小提交~~ **已完成**（6 笔：`d6cc2da` save 长路径、`c9ba9fd` 台阶/悬浮地面、`1431234` 生成 Chunk 实体化、`5cb573e` scale 契约对齐、`9ddb0a2` 桌面套件时序对齐、`b90a816` QA 记录）。
 2. ~~桌面验收第二遍~~ **88/91 完成且 3 失败全部关闭**（见上）；**进行中**：T3 全量重跑（核 +1 台阶跳跃契约）；然后最终一遍全量桌面验收（91，最终 HEAD 干净证据）。
+   - T3 第一轮在 `validate_protected_save_deletion.ps1` 硬停：静态校验器仍把 `_remove_directory_recursive` 钉为保护删除服务的必备行为，而 BUG-SAVE-LONG-PATH-001 修复后该服务改走继承的 `_remove_directory_tree`。已将校验器对齐新调用点并显式禁止重新引入私有递归删除器（`3959cb6`）。
+   - T3 第二轮在 `validate_bounded_trash_manager.ps1` 硬停（同源陈旧 token）。随即对全部 21 个引用改动文件的 developer_b 校验器做了一次性扫描：另发现 `validate_structural_integrity.ps1` 钉 scale 套件旧的"恰好两次 flush"断言文本；同时清理 `structural_integrity_single_flush_desktop_acceptance.gd` 里已无匹配文本的 `LEGACY_FLUSH_FAILURE` erase 死代码（父套件断言已与单次 flush 规范一致）。三处校验器+套件对齐（`cedd869`），T3 第三轮重跑中（后台 `bvedcugju`）。
+   - T3 第三轮（校验器对齐后）：142 套件中唯一失败 `runtime_soak_regression`（"runtime health recovers after bounded travel pressure"，cycle 3 终末采样窗 peak ≥80ms）。根因定位（BUG-PERF-GROUND-SCAN-001）：台阶/悬浮修复引入的五点足迹地面扫描每次从世界顶整列下扫，传送后追赶期多物理 tick 叠加，cycle 3 终末窗均值放大到 master 的 ~2 倍，单 >80ms 峰值帧落窗即翻案。已把保持者扫描上界收紧到头顶 +2（放置 API 整列扫描语义不变），同机 4/4 PASS（终末窗 avg 22.7–24.2ms、peak 40–47ms）。取证过程：master worktree A/B 3/3 通过、逐帧计时探针（单周期不复现 → 三周期序列相关）、套件级复刻 + nosample/noteleport/nospawn/noadaptive 逐项隔离（单项均非根因，系边际放大）、batch 统计。证据 `t3-rerun/`（含探针脚本与全部日志）。扫描修复提交后全量 T3 第四轮重跑。
    - **第二遍结果 88/91，3 失败已全部关闭**：①`encounter_reward_economy` 聚合运行首枪未击杀级联 25 项失败，**单独复跑 70/70 PASS**（并发+低优先级下仍过）；非确定性时序脆弱，已加 `KILL-TIMEOUT` 诊断 dump 取证下次失败。②`multi_hostile_danger` 静默 exit 0xCFFFFFFF 崩溃（~54s 无输出）——**单独复跑 48/48 PASS**；崩溃窗口与我自己发起的 encounter 单独复跑并发重叠（双桌面 Godot 实例争用），判定环境性，非产品缺陷；同时补上该套件修复后缺失的单独复验（`9ddb0a2` 提交信息对该套件的复验声明由此兑现）。③`rest_closed_loop_stable` 解析错误——我在父套件补时钟暂停机制时与子类既有成员（`_paused_day_night` 等）重复声明；已将子类瘦身到只剩 `_settle_player` 探针覆写（机制与父套件逐字节等价），**单独复跑 57/57 PASS**。已审计其余三个子类（agriculture_canonical、husbandry_stable、multi_hostile_batched）在第二遍全过，无同类碰撞。
 3. 重新导出 fresh EXE/PCK。**决策**：用户管线原定“用 11:40 fresh EXE 跑五图矩阵”，但 11:40 包早于台阶/悬浮/生成/长路径全部 game 侧修复，用它出矩阵证据等于认证一个已不存在的构建；按“证据必须在当前候选 HEAD 重新生成”原则，桌面+T3 全绿后导出新候选包再跑五图最终包矩阵与关键桌面内容闭环。
 4. 运行本机性能资格（`tests/ci/run_performance_capture.ps1`，外部采样须跟踪 console.exe 派生的 GUI 子进程 PID）与严格 7,200 秒长稳（`tests/ci/run_strict_target_hardware_soak.ps1 -SoakSeconds 7200`），再更新覆盖矩阵和最终报告。
