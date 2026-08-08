@@ -1,6 +1,6 @@
 # QA Session State
 
-更新时间：2026-08-08 +08:00（商业验收重新执行中）
+更新时间：2026-08-08 +08:00（商业验收重新执行中 — Claude 接管继续）
 
 ## 当前候选
 
@@ -17,9 +17,9 @@
 
 ## 当前构建与测试状态
 
-- Git 保护：起点工作树干净，已创建独立分支。
-- T3 全量回归：正在执行 `tests/run_all.ps1`，结果待写入。
-- fresh Windows 导出：待 T3 完成后执行，避免并行负载污染性能数据。
+- Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
+- T3 全量回归（整改后重跑）：正在执行 `tests/run_all.ps1`，证据写入 `build/commercial-acceptance-20260808/t3-post-remediation/`。
+- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；若 T3 后有代码修复则重新导出。
 - 最终 EXE 五图路线：待执行。
 - 全部桌面验收旅程：待执行。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
@@ -44,9 +44,9 @@
 
 ## 最近命令与证据
 
-- 最近一次命令：`tests/run_all.ps1 -Godot build/tools/godot/Godot_v4.7-stable_win64_console.exe`（运行中）
-- 本轮证据根目录：`build/commercial-acceptance-20260808/`
-- 用户真实存档：不得修改；测试使用隔离 `user://` / QA 世界并在前后校验清单。
+- 最近一次命令：`tests/run_all.ps1 -Godot build/tools/godot/Godot_v4.7-stable_win64_console.exe`（整改后重跑，运行中）
+- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-remediation/`）
+- 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
 ## 下一步
 

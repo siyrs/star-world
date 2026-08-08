@@ -69,3 +69,7 @@
 - `BUG-SOAK-120-001`: strict 7,200-second final-package target-hardware soak.
 
 Hosted CI cannot close those external evidence packages.
+
+## 2026-08-08 商业验收重跑 · Iteration Acceptance Rerun
+
+- **已修复：BUG-QUALIFY-POLICY-ROOT-001（P1，runner 故障）。** 整改后包校验器 `validate_external_qualification_package.ps1` 把政策根硬编码为当前 checkout（`$PSScriptRoot\..\..`）。晋升包漂移测试在窗口期内把 checkout 的 `data/release_qualification.json` 替换为漂移垃圾，校验器读取它并抛出 `Qualification policy schema_version must be positive`，未被捕获的异常硬杀整个 T3 套件进程（exit 1、无 summary）。根因：Iteration 60 的 validation-time 反伪造约束与 Iteration 62 的"接收方不信任当前 checkout"约束冲突。修复：包校验器新增 `-PolicyRoot`（默认仍为 checkout，保留反伪造语义），链/晋升包校验显式传入不可变包内快照根。回归：`test_release_promotion_bundle.ps1`（checkout_drift=pass、negative_cases=8）、`validate_external_qualification_iteration_60.ps1`（anti-forgery=validation-time）、61/62 迭代门禁、政策助手与组装器测试全部通过。

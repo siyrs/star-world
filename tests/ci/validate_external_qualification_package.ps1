@@ -1,12 +1,21 @@
 param(
     [string]$PackagePath = '',
+    # Optional policy source root. When empty, the live repository checkout
+    # provides data\release_qualification.json (validation-time anti-forgery).
+    # Immutable bundle validation passes the extracted snapshot root instead so
+    # the pinned bundle remains the only trusted contract source.
+    [string]$PolicyRoot = '',
     [switch]$RequireReleaseGate
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$ProjectRoot = if ([string]::IsNullOrWhiteSpace($PolicyRoot)) {
+    (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+} else {
+    [System.IO.Path]::GetFullPath($PolicyRoot)
+}
 $policyHelpers = Join-Path $PSScriptRoot 'qualification_policy_helpers.ps1'
 if (-not (Test-Path -LiteralPath $policyHelpers -PathType Leaf)) {
     throw "Qualification policy helpers not found: $policyHelpers"
