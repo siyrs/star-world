@@ -10,6 +10,7 @@ $weatherValidator = Join-Path $root 'tests\developer_b\validate_weather_climate_
 $iteration65Runner = Join-Path $root 'tests\ci\run_iteration_65_full_regression.ps1'
 $invokeGodot = Join-Path $root 'tests\ci\Invoke-Godot.ps1'
 $diagnosticDirectory = Join-Path $root 'build\iteration66-full-regression'
+$wrapperLog = Join-Path $diagnosticDirectory 'iteration66-wrapper.log'
 $baselineStdout = Join-Path $diagnosticDirectory 'iteration65-baseline.stdout.log'
 $baselineStderr = Join-Path $diagnosticDirectory 'iteration65-baseline.stderr.log'
 
@@ -31,15 +32,27 @@ if ([string]::IsNullOrWhiteSpace($Godot) -or -not (Test-Path -LiteralPath $Godot
 }
 
 New-Item -ItemType Directory -Path $diagnosticDirectory -Force | Out-Null
-Remove-Item -LiteralPath $baselineStdout, $baselineStderr -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $wrapperLog, $baselineStdout, $baselineStderr -Force -ErrorAction SilentlyContinue
 
-Write-Host 'ITERATION 66 STAGE 1/3 | weather static contract'
+function Write-Iteration66Stage([string]$Message) {
+    Write-Host $Message
+    Add-Content -LiteralPath $wrapperLog -Value $Message -Encoding UTF8
+}
+
+Write-Iteration66Stage 'ITERATION 66 STAGE 1/4 | weather static contract'
 & $weatherValidator
 
-Write-Host 'ITERATION 66 STAGE 2/3 | weather runtime regression'
+# A fresh GitHub Actions checkout has no imported Godot resource cache. The
+# dedicated weather-contract job performs this strict import before executing
+# GDScript; the standalone full-regression runner must do the same instead of
+# depending on another job's isolated workspace side effects.
+Write-Iteration66Stage 'ITERATION 66 STAGE 2/4 | strict project import'
+& $invokeGodot -Godot $Godot -Arguments '--headless --path . --editor --quit'
+
+Write-Iteration66Stage 'ITERATION 66 STAGE 3/4 | weather runtime regression'
 & $invokeGodot -Godot $Godot -Arguments '--headless --path . --script res://tests/qa/weather_climate_regression.gd -- --disable-update-check'
 
-Write-Host 'ITERATION 66 STAGE 3/3 | inherited Iteration 65 + full repository regression'
+Write-Iteration66Stage 'ITERATION 66 STAGE 4/4 | inherited Iteration 65 + full repository regression'
 $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
 $baselineProcess = Start-Process `
     -FilePath $pwsh `
@@ -66,4 +79,4 @@ if ($baselineProcess.ExitCode -ne 0) {
     throw "Baseline full repository regression failed with exit code $($baselineProcess.ExitCode). Diagnostic logs: $diagnosticDirectory"
 }
 
-Write-Host 'ITERATION 66 FULL REGRESSION PASS | weather-domain=true | lifecycle=true | iteration65-baseline=true | run_all=true'
+Write-Iteration66Stage 'ITERATION 66 FULL REGRESSION PASS | weather-domain=true | strict-import=true | lifecycle=true | iteration65-baseline=true | run_all=true'
