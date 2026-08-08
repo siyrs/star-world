@@ -205,8 +205,12 @@ func _run() -> void:
 	)
 	var rebuild := _dictionary_value(world.call("get_chunk_rebuild_stats"))
 	_check(
-		int(rebuild.get("flush_count", 0)) == 2,
-		"support removal and dependent cleanup use exactly two world rebuild flushes",
+		int(rebuild.get("flush_count", 0)) == 1,
+		"support removal and dependent cleanup coalesce into one world rebuild flush",
+	)
+	_check(
+		int(integrity_snapshot.get("pre_flush_cleanup_count", 0)) >= 1,
+		"batched pre-flush hook drains the structural queue inside the support batch",
 	)
 	_check(
 		int(rebuild.get("execution_count", 0)) <= 64
