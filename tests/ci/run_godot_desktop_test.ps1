@@ -11,7 +11,15 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $projectFullPath = [System.IO.Path]::GetFullPath($ProjectRoot)
-$outputFullPath = [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputPath))
+# Callers may pass either a project-relative output path (CI jobs) or an
+# already-rooted evidence path (local aggregate runners). Join-Path would
+# concatenate a rooted path onto the project root and produce an illegal
+# doubled path, so resolve rooted inputs directly.
+$outputFullPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) {
+    [System.IO.Path]::GetFullPath($OutputPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $projectFullPath $OutputPath))
+}
 $outputDirectory = Split-Path -Parent $outputFullPath
 $outputBaseName = [System.IO.Path]::GetFileNameWithoutExtension($outputFullPath)
 $stdoutPath = Join-Path $outputDirectory "$outputBaseName.stdout.log"

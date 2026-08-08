@@ -30,7 +30,9 @@ $summaryPath = Join-Path $outputRoot 'desktop-acceptance-summary.json'
 New-Item -ItemType Directory -Force -Path $artifactsRoot, $userdataRoot | Out-Null
 
 function Get-Sha256Text {
-    param([Parameter(Mandatory = $true)][string]$Text)
+    # A clean worktree produces an empty diff; hashing the empty string is
+    # well-defined, so the fingerprint must accept it instead of throwing.
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
     $hash = [System.Security.Cryptography.SHA256]::HashData($bytes)
     return [Convert]::ToHexString($hash).ToLowerInvariant()
