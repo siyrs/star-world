@@ -18,8 +18,8 @@
 ## 当前构建与测试状态
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
-- T3 全量回归（整改后重跑）：正在执行 `tests/run_all.ps1`，证据写入 `build/commercial-acceptance-20260808/t3-post-remediation/`。
-- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；若 T3 后有代码修复则重新导出。
+- T3 全量回归（整改后第一跑）：**135/142**，7 失败全部定位修复并单独复验通过（`2ae6573`）；修复后全量重跑进行中，证据写入 `build/commercial-acceptance-20260808/t3-post-fixes/`。
+- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设），T3 全绿后重新导出候选包。
 - 最终 EXE 五图路线：待执行。
 - 全部桌面验收旅程：待执行。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
@@ -37,8 +37,8 @@
 
 ## 问题与回归
 
-- 当前正在处理的问题：尚无；等待 fresh 基线发现。
-- 已修复问题：0。
+- 当前正在处理的问题：无阻塞；等待整改后 T3 结果。
+- 已修复问题：1（`BUG-QUALIFY-POLICY-ROOT-001`，包校验器政策根硬编码 checkout 导致漂移测试窗口硬杀 T3；已加 `-PolicyRoot` 并提交 `6da93ee`，回归全过）。
 - 待独立 QA 回归：0。
 - 历史外部 HOLD：独立 E4-H、两档实体硬件、严格 7,200 秒、物理 HDD/杀毒/断电、发布签名与更新信任引导；本轮将重新核实可在当前电脑执行的部分，不直接沿用历史状态。
 
