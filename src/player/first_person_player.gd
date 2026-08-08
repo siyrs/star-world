@@ -228,6 +228,14 @@ func _get_nearby_voxel_ground() -> Variant:
 	return ground
 
 
+# Public grounded contract for gameplay systems and QA: the player rests on
+# ground when the engine body reports floor contact or the voxel ground model
+# holds them (the voxel model snaps position without producing engine contact,
+# so is_on_floor() alone is never authoritative for this controller).
+func is_grounded() -> bool:
+	return is_on_floor() or _get_nearby_voxel_ground() is Vector3
+
+
 func _apply_voxel_ground_recovery() -> void:
 	if velocity.y > 0.0:
 		return

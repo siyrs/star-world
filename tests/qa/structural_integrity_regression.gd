@@ -169,7 +169,10 @@ func _test_batched_cleanup_and_dedupe() -> void:
 	world.set_test_block(door_support, "stone")
 	world.set_test_block(lower, "oak_door")
 	world.set_test_block(lower + Vector3i.UP, "oak_door_upper")
-	var ladder_position := Vector3i(16, 20, 15)
+	# Keep the ladder one cell further out so its west backing wall does not
+	# share (and silently overwrite) the door's lower cell; the batched-evidence
+	# contract below counts the door as two cells plus one ladder cell.
+	var ladder_position := Vector3i(17, 20, 15)
 	var ladder_support := ladder_position + Vector3i.LEFT
 	world.set_test_block(ladder_support, "stone")
 	world.set_test_block(ladder_position, "ladder_west")

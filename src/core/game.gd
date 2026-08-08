@@ -85,14 +85,29 @@ func start_world(
 	var fallback_spawn: Vector3 = world.call("get_spawn_position")
 	var player_state: Dictionary = current_saved_state.get("player", {})
 	var preferred_spawn := fallback_spawn
+	var has_saved_position := false
 	if player_state.has("position"):
 		preferred_spawn = _array_to_vector3(player_state.get("position", []), fallback_spawn)
-	var resolved_spawn: Vector3 = _spawn_resolver.resolve(
-		world, preferred_spawn, fallback_spawn
+		has_saved_position = true
+	# Save fidelity: restore the exact saved position whenever it is clear of
+	# solid geometry (mid-air saves settle via gravity). The full supported-
+	# ground resolve still owns fresh spawns and embedded recoveries.
+	var restore_exact: bool = has_saved_position and _spawn_resolver.is_position_loadable(
+		world, preferred_spawn
 	)
+	var resolved_spawn: Vector3 = preferred_spawn
+	if not restore_exact:
+		resolved_spawn = _spawn_resolver.resolve(
+			world, preferred_spawn, fallback_spawn
+		)
 	var initially_resolved_spawn := resolved_spawn
 	_load_player_collision_chunks(resolved_spawn)
-	resolved_spawn = _spawn_resolver.resolve(world, resolved_spawn, fallback_spawn)
+	if restore_exact and not _spawn_resolver.is_position_clear(world, preferred_spawn):
+		restore_exact = false
+		resolved_spawn = _spawn_resolver.resolve(world, preferred_spawn, fallback_spawn)
+		initially_resolved_spawn = resolved_spawn
+	elif not restore_exact:
+		resolved_spawn = _spawn_resolver.resolve(world, resolved_spawn, fallback_spawn)
 	print(
 		"PLAYER SPAWN RESOLVE | preferred=%s first=%s final=%s fallback=%s"
 		% [preferred_spawn, initially_resolved_spawn, resolved_spawn, fallback_spawn]

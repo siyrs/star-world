@@ -42,6 +42,15 @@ func resolve(world: Node, preferred: Vector3, fallback: Vector3) -> Vector3:
 	return grounded_fallback
 
 
+# Save/load fidelity contract: a position the player actually occupied (for
+# example a mid-air jump at save time) only has to be finite and free of solid
+# geometry. Ground support is intentionally not required here; gravity settles
+# the player naturally after an exact restore. Fresh spawns and embedded
+# recoveries still go through the full supported-ground resolve above.
+func is_position_loadable(world: Node, feet_position: Vector3) -> bool:
+	return _is_reasonable_position(feet_position) and is_position_clear(world, feet_position)
+
+
 func is_position_clear(world: Node, feet_position: Vector3) -> bool:
 	if not _is_reasonable_position(feet_position):
 		return false
