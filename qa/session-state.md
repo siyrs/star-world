@@ -18,12 +18,27 @@
 ## 当前构建与测试状态
 
 - Git 保护：起点工作树干净，已创建独立分支；Codex 整改成果已由 Claude 分三笔提交（`64fe48d` 隔离与套件扩容、`06068b7` 资格政策助手、`d54171d` 治理文档），工作树再次干净。
-- T3 全量回归（整改后重跑）：**142/142 全绿**（`RUN_ALL_EXIT=0`，0 fatal/leak）；上轮 7 个失败套件全部在本轮确认 PASS，证据 `build/commercial-acceptance-20260808/t3-post-fixes/`。
-- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设），桌面验收后重新导出候选包再跑五图矩阵。
+- T3 全量回归（整改后重跑）：**142/142 全绿**（`RUN_ALL_EXIT=0`，0 fatal/leak）；上轮 7 个失败套件全部在本轮确认 PASS，证据 `build/commercial-acceptance-20260808/t3-post-fixes/`。**注意**：此后 game 侧又有改动（save 服务长路径删除、voxel 成形地面、玩家 step-up、ladder 子类），桌面验收定稿后必须再全量重跑 T3（重点核 +1 整砖台阶仍需跳跃的路线契约）。
+- fresh Windows 导出：已完成一轮（`export-smoke-after-gdignore`，11:40，smoke 通过）；因本轮有 game 侧修复（音频 Dummy 防护、读档位置保真、is_grounded、导出预设、台阶行走、长路径删除），桌面验收后重新导出候选包再跑五图矩阵。
 - 最终 EXE 五图路线：待执行（基于新导出）。
-- 全部桌面验收旅程：**进行中**（91 套件：`desktop_acceptance_regression` + 90 个 `*_desktop_acceptance.gd`，逐套件隔离用户数据 + 截图取证），证据写入 `build/commercial-acceptance-20260808/desktop-acceptance/`。
+- 全部桌面验收旅程：第一遍 78/91 完成，13 失败**已全部整改并单独验证 PASS**（见下节）；修复后第二遍全量待执行。
 - 本机最低/推荐硬件资格：待硬件分档后执行。
 - 严格 7,200 秒长稳：待 fresh 候选包与短资格门禁通过后执行。
+
+## 台阶行走修复（P1 真实产品缺陷，**已关闭**）
+
+- 缺陷：楼梯/台阶视觉是坡但行为是整砖墙——玩家被 0.5 高楼梯前脸楔住，无法走上台阶。
+- 三段修复：①`voxel_world.gd::resolve_ground_position` 返回成形表面（`_resolve_block_surface_height`，按 `BlockShapeGeometryScript.get_local_boxes` 取脚下局部 (x,z) 命中的最高 box 顶）②`first_person_player.gd` 新增 `_apply_voxel_step_up`（仅在移动被墙挡住时，向前 0.45m 探测成形地面，0.05<step≤0.55 才抬升；整砖 +1 仍需跳）③**根因**：`ladder_climbing_player.gd` 的 `_physics_process` 无 super 调用完全覆盖基类，基类的 step-up 从不执行——已按该文件 BUG-LAVA-001 同款模式补 `_apply_voxel_step_up` 调用。
+- `VOXEL_GROUND_RECOVERY_DEPTH` 已从 0.55 **回退到 0.4**：0.55 让快照恢复在玩家中心被动漂过楼梯半高边界时瞬间上拽 +0.41，且与 step-up 双机制重复；现在 step-up 是唯一 +0.5 抬升机制。
+- 幻影地面悬浮（BUG-VOID-LEVITATE-001）已修：`voxel_world` 新增 `try_resolve_ground_position`（无地面返回 null），兜底仅留出生放置；玩家足迹采样（±0.3 五点、容差 [-0.4,+0.18]）拒绝假地面。
+- **已验证**：`non_cube_block_geometry_desktop_acceptance` 33/33 PASS（traverse rise 0.5）；正面接近探针 22.07→22.57→23.07 两段爬升复验通过。
+
+## 本轮桌面验收第一遍整改结果（13 失败全部关闭）
+
+- 全部 13 个第一遍失败套件已修复并单独验证 PASS：agriculture_closed_loop、husbandry_closed_loop、rest_closed_loop、bounded_trash_manager、weather（长路径删除）；multi_hostile_danger_batched（56）、ranch_runtime_lifecycle（59，pickup 泵取）；non_cube_block_geometry（33，台阶）；ranged_combat（37，生成坠入未建成 Chunk，BUG-SPAWN-CHUNK-001）；structural_integrity_scale（61，套件契约漂移 BUG-QA-SCALE-FLUSH-CONTRACT-001：pre-flush 合并单次 flush 为 T3+姊妹桌面套件钉定的正式架构，期望 2→1 并新增 `pre_flush_cleanup_count>=1` 钉机制）。
+- ZZBATCH 调试输出已从 `batched_voxel_world.gd` 移除（工作树=HEAD）；全部 zz_ 探针已删除。
+- 工作树当前未提交改动：save_service/protected_save_service（长路径删除）、voxel_world（成形地面+try_resolve）、first_person_player（step-up+足迹+0.4 恢复）、ladder_climbing_player（step-up 调用）、creature_spawner（生成 Chunk 实体化）、structural_integrity_scale 套件（契约对齐）、qa/issues-found.md（六条新记录）、qa/session-state.md。
+- 待办：分组小提交 → 桌面验收 91 套件第二遍全量 → T3 全量重跑（核 +1 台阶跳跃契约）。
 
 ## 地图进度（仅本轮）
 
@@ -44,14 +59,14 @@
 
 ## 最近命令与证据
 
-- 最近一次命令：`tests/run_all.ps1 -Godot build/tools/godot/Godot_v4.7-stable_win64_console.exe`（整改后重跑，运行中）
-- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-remediation/`）
+- 最近一次命令：`run_godot_desktop_test.ps1 ... structural_integrity_scale_desktop_acceptance.gd`（契约对齐后复验 **61/61 PASS**，证据 `desktop-second-pass/`）
+- 本轮证据根目录：`build/commercial-acceptance-20260808/`（整改后 T3：`t3-post-fixes/`；桌面第二遍：`desktop-second-pass/`）
 - 用户真实存档：不得修改；测试使用隔离 `APPDATA`/`LOCALAPPDATA` 重定向（Godot 4.7 无 `--user-data-dir`），前后校验清单。
 
 ## 下一步
 
-1. 桌面验收 91 套件全量执行并审计 summary（进行中）。
-2. 对失败项执行复现—定位—修复—回归。
-3. 重新导出 fresh EXE/PCK（含本轮 game 侧修复），运行五图最终包矩阵与关键桌面内容闭环。
+1. 分组小提交（save 长路径、台阶/悬浮地面、生成 Chunk 实体化、套件契约对齐、QA 记录）。
+2. 桌面验收 91 套件第二遍全量 + game 侧改动后 T3 全量重跑（核 +1 台阶跳跃契约）。
+3. 重新导出 fresh EXE/PCK，运行五图最终包矩阵与关键桌面内容闭环。
 4. 运行本机性能资格与严格 7,200 秒长稳，再更新覆盖矩阵和最终报告。
 5. 最终报告 + 合并 master + tag + release + 同步远程。
